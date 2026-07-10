@@ -12,7 +12,7 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
         CancellationToken cancellationToken = default)
     {
         var existing = await dbContext.AppUsers
-            .FirstOrDefaultAsync(x => x.ExternalId == externalId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.UserId == externalId, cancellationToken);
 
         if (existing is not null)
             return existing;
@@ -20,9 +20,9 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
         var user = new AppUserEntity
         {
             Id = Guid.NewGuid(),
-            ExternalId = externalId,
+            UserId = externalId,
             Email = string.IsNullOrWhiteSpace(email) ? "unknown@local" : email.Trim(),
-            DisplayName = string.IsNullOrWhiteSpace(displayName) ? "Unknown user" : displayName.Trim()
+            Username = string.IsNullOrWhiteSpace(displayName) ? "Unknown user" : displayName.Trim()
         };
 
         dbContext.AppUsers.Add(user);

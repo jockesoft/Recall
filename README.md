@@ -29,6 +29,11 @@ docker cp dump.sql.gz PostgreSQL_receptus:/dump.sql.gz
 docker exec -i PostgreSQL_receptus bash -c "gunzip -c /dump.sql.gz | psql -U postgres -d receptus_db"
 ```
 
+Add update to DB
+```
+dotnet ef migrations add <Any name> --project Recall.Web
+dotnet ef database update --project Recall.Web
+```
 
 If the following error appears:
 ```
