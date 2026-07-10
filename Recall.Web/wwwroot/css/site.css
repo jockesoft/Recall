@@ -29,3 +29,29 @@ body {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/* Attribution for theTvDb.com */
+.thetvdbattribution {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background-color: #365658;
+  border: 1px solid #0d1313;
+  color: #f1f1f1;
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.3;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.thetvdbattribution:hover {
+  background-color: #406264;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.thetvdbattribution img {
+  flex-shrink: 0;
+}

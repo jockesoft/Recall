@@ -24,7 +24,7 @@
                         <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
+                        <a class="nav-link text-dark" asp-area="" asp-page="/Series/Search">Search</a>
                     </li>
                 </ul>
             </div>
@@ -38,8 +38,15 @@
 </div>
 
 <footer class="border-top footer text-muted">
-    <div class="container">
-        &copy; 2026 - Recall.Web - <a asp-area="" asp-page="/Privacy">Privacy</a>
+    <div class="container d-flex flex-wrap justify-content-between align-items-center py-2 gap-2">
+        <div>
+            &copy; 2026 - Recall.Web - <a asp-area="" asp-page="/Privacy">Privacy</a>
+        </div>
+
+        <a class="thetvdbattribution" href="https://thetvdb.com/subscribe" target="_blank" rel="noopener">
+            <img src="/images/attribution/tvdb_logo.png" height="24" alt="TheTVDB logo">
+            <span>Metadata provided by <strong>TheTVDB</strong>. Please consider contributing or subscribing.</span>
+        </a>
     </div>
 </footer>
 

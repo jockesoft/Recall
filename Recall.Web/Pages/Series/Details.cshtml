@@ -1,0 +1,72 @@
+@page "{id:int}"
+@model Recall.Web.Pages.Series.DetailsModel
+@{
+    ViewData["Title"] = Model.Series is null ? "Series Details" : Model.Series.Name;
+}
+
+<div class="mb-3">
+    <a asp-page="/Series/Search" class="btn btn-link ps-0">&larr; Back to search</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert alert-danger" role="alert">
+        @Model.ErrorMessage
+    </div>
+}
+else if (Model.Series is null)
+{
+    <div class="alert alert-warning" role="alert">
+        Series not found.
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        <div class="col-md-4">
+            @if (!string.IsNullOrWhiteSpace(Model.Series.ImageUrl))
+            {
+                <img src="@Model.Series.ImageUrl"
+                     alt="@Model.Series.Name"
+                     class="img-fluid rounded shadow-sm" />
+            }
+            else
+            {
+                <div class="border rounded p-4 text-muted text-center">No image available</div>
+            }
+        </div>
+
+        <div class="col-md-8">
+            <h1 class="mb-2">@Model.Series.Name</h1>
+
+            <dl class="row">
+                <dt class="col-sm-3">TVDB Id</dt>
+                <dd class="col-sm-9">@Model.Series.TvdbId</dd>
+
+                @if (!string.IsNullOrWhiteSpace(Model.Series.Slug))
+                {
+                    <dt class="col-sm-3">Slug</dt>
+                    <dd class="col-sm-9">@Model.Series.Slug</dd>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.Series.FirstAired))
+                {
+                    <dt class="col-sm-3">First aired</dt>
+                    <dd class="col-sm-9">@Model.Series.FirstAired</dd>
+                }
+
+                @if (Model.Series.Score.HasValue)
+                {
+                    <dt class="col-sm-3">Score</dt>
+                    <dd class="col-sm-9">@Model.Series.Score.Value.ToString("0.0")</dd>
+                }
+            </dl>
+
+            @if (!string.IsNullOrWhiteSpace(Model.Series.Overview))
+            {
+                <h5>Overview</h5>
+                <p class="text-muted">@Model.Series.Overview</p>
+            }
+        </div>
+    </div>
+}
