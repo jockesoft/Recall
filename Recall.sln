@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Recall.Web", "Recall.Web\Recall.Web.csproj", "{AE34EC97-81D9-448A-9071-89E06BB2A58A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{78589F6B-FFC4-45B9-B0F0-9F5535C397E4}"
+	ProjectSection(SolutionItems) = preProject
+		compose.yaml = compose.yaml
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Recall.Tests", "Recall.Tests\Recall.Tests.csproj", "{2B5AC015-3D20-429A-984C-553CE6CDCB11}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AE34EC97-81D9-448A-9071-89E06BB2A58A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE34EC97-81D9-448A-9071-89E06BB2A58A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE34EC97-81D9-448A-9071-89E06BB2A58A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE34EC97-81D9-448A-9071-89E06BB2A58A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2B5AC015-3D20-429A-984C-553CE6CDCB11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B5AC015-3D20-429A-984C-553CE6CDCB11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2B5AC015-3D20-429A-984C-553CE6CDCB11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2B5AC015-3D20-429A-984C-553CE6CDCB11}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

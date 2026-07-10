@@ -1,0 +1,35 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+*DotSettings.user
+Recall.Tests/TestResults/
+Recall.Tests/coverage-report/
+
+# Environment specific files
+.env*
+
+# Migrations for the database, always start from fresh
+Recall.Web/Migrations/
+
+# obj and bin
+Recall.Web/bin/
+Recall.Web/obj/
+Recall.Tests/bin/
+Recall.Tests/obj/
+
+# Appsettings files that may contain sensitive data
+Recall.Web/appsettings.Development.json
+Recall.Web/appsettings.json
+
+.DS_Store
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+
+# Jetbrains Rider cache/options directory
+.idea/
+
+#Log files created by the application
+Recall.Web/Logs/

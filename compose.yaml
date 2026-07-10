@@ -1,0 +1,7 @@
+﻿services:
+  recall.web:
+    image: recall.web
+    build:
+      context: .
+      dockerfile: Recall.Web/Dockerfile
+
