@@ -1,38 +1,32 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
-using Recall.Web.Infrastructure.External.TheTvDb;
-using Recall.Web.Infrastructure.External.TheTvDb.Dto.Auth;
+using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Search;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
+using Recall.Web.Mappings;
 
 namespace Recall.Web.Services.External.TheTvDb;
 
 public sealed class TheTvDbApiClient(
     HttpClient httpClient,
-    IOptions<TheTvDbOptions> options,
+    TheTvDbClientState state,
     ILogger<TheTvDbApiClient> logger)
     : ITheTvDbApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly TheTvDbOptions _options = options.Value;
-
-    private string? _bearerToken;
-    private readonly SemaphoreSlim _authLock = new(1, 1);
-
     public async Task<IReadOnlyList<SearchResultDto>> SearchSeriesAsync(string query, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return Array.Empty<SearchResultDto>();
+            return [];
 
-        await EnsureAuthenticatedAsync(cancellationToken);
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<List<SearchResultDto>>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"search?query={Uri.EscapeDataString(query)}&type=series"),
+            cancellationToken);
 
-        var path = $"search?query={Uri.EscapeDataString(query)}&type=series";
-        using var request = new HttpRequestMessage(HttpMethod.Get, path);
-
-        var envelope = await SendAsync<TheTvDbEnvelopeDto<List<SearchResultDto>>>(request, cancellationToken);
         return envelope.Data!;
     }
 
@@ -41,61 +35,269 @@ public sealed class TheTvDbApiClient(
         if (seriesId <= 0)
             throw new ArgumentOutOfRangeException(nameof(seriesId));
 
-        await EnsureAuthenticatedAsync(cancellationToken);
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}");
-        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(request, cancellationToken);
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}"),
+            cancellationToken);
 
         return envelope.Data;
     }
 
-    private async Task EnsureAuthenticatedAsync(CancellationToken cancellationToken)
+    public async Task<SeriesTranslationDataDto?> GetSeriesTranslationByLanguageAsync(
+        int seriesId,
+        string language,
+        CancellationToken cancellationToken = default)
     {
-        if (!string.IsNullOrWhiteSpace(_bearerToken))
-            return;
+        if (seriesId <= 0) throw new ArgumentOutOfRangeException(nameof(seriesId));
+        if (string.IsNullOrWhiteSpace(language)) throw new ArgumentException("Language is required.", nameof(language));
 
-        await _authLock.WaitAsync(cancellationToken);
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesTranslationDataDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/translations/{Uri.EscapeDataString(language)}"),
+            cancellationToken);
+
+        return envelope.Data;
+    }
+
+    public async Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
+        int seriesId,
+        string language = "eng",
+        CancellationToken cancellationToken = default)
+    {
+        var seriesDto = await GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+        if (seriesDto is null) return null;
+
+        SeriesTranslationDataDto? translationDto = null;
         try
         {
-            if (!string.IsNullOrWhiteSpace(_bearerToken))
-                return;
+            translationDto = await GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
+        }
+        catch (TheTvDbApiException ex)
+        {
+            logger.LogInformation(ex,
+                "Translation fetch failed for series {SeriesId}, language {Language}. Falling back.",
+                seriesId, language);
+        }
 
-            if (string.IsNullOrWhiteSpace(_options.ApiKey))
-                throw new TheTvDbApiException("TheTvDb API key is missing in configuration.");
+        IReadOnlyList<EpisodeDto>? fallbackEpisodes = null;
+        if (seriesDto.Episodes is null || seriesDto.Episodes.Count == 0)
+        {
+            fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
+        }
 
-            var login = new LoginRequestDto
+        var aggregate = seriesDto.ToAggregate(translationDto, fallbackEpisodes);
+        var englishEpisodes = await EnrichEpisodesWithEnglishAsync(aggregate.Episodes, cancellationToken);
+
+        // NB: if SeriesAggregate is (or can be) a record, this whole block collapses to:
+        //   aggregate = aggregate with { Episodes = englishEpisodes };
+        // which also avoids silently dropping a field if one gets added later.
+        aggregate = new SeriesAggregate
+        {
+            TvdbId = aggregate.TvdbId,
+            Name = aggregate.Name,
+            Slug = aggregate.Slug,
+            Overview = aggregate.Overview,
+            ImageUrl = aggregate.ImageUrl,
+            FirstAired = aggregate.FirstAired,
+            LastAired = aggregate.LastAired,
+            NextAired = aggregate.NextAired,
+            OriginalCountry = aggregate.OriginalCountry,
+            OriginalLanguage = aggregate.OriginalLanguage,
+            Score = aggregate.Score,
+            Year = aggregate.Year,
+            AverageRuntimeMinutes = aggregate.AverageRuntimeMinutes,
+            Status = aggregate.Status,
+            Aliases = aggregate.Aliases,
+            Seasons = aggregate.Seasons,
+            Episodes = englishEpisodes
+        };
+
+        return aggregate;
+    }
+
+    /// <summary>
+    /// Fallback loader: pulls episodes per season when /series/{id}/extended does not include episodes.
+    /// Seasons are loaded in parallel (each season's pages are still fetched sequentially, since we
+    /// don't know page count up front); overall HTTP concurrency is capped by the shared request throttle.
+    /// </summary>
+    private async Task<IReadOnlyList<EpisodeDto>> LoadEpisodesFromSeasonsAsync(
+        SeriesDataDto seriesDto,
+        CancellationToken cancellationToken)
+    {
+        var seasonNumbers = (seriesDto.Seasons ?? new List<SeasonDto>())
+            .Select(s => s.Number)
+            .Where(n => n.HasValue)
+            .Select(n => n!.Value)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+
+        if (seasonNumbers.Count == 0)
+            return [];
+
+        var seasonTasks = seasonNumbers.Select(seasonNumber =>
+            LoadEpisodesForSeasonAsync(seriesDto.Id, seasonNumber, cancellationToken));
+
+        var perSeasonResults = await Task.WhenAll(seasonTasks);
+
+        return perSeasonResults
+            .SelectMany(episodes => episodes)
+            .Where(e => e.Id.HasValue)
+            .GroupBy(e => e.Id!.Value)
+            .Select(g => g.First())
+            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
+            .ThenBy(e => e.Number ?? int.MaxValue)
+            .ThenBy(e => e.Id ?? int.MaxValue)
+            .ToArray();
+    }
+
+    private async Task<List<EpisodeDto>> LoadEpisodesForSeasonAsync(
+        int seriesId,
+        int seasonNumber,
+        CancellationToken cancellationToken)
+    {
+        var result = new List<EpisodeDto>();
+
+        // Most TV series use "default" season type for normal numbering.
+        // If your API requires a different type (e.g. "official"), switch this.
+        const string seasonType = "default";
+
+        var page = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            TheTvDbEnvelopeDto<EpisodesPageDataDto>? envelope;
+            try
             {
-                ApiKey = _options.ApiKey,
-                Pin = string.IsNullOrWhiteSpace(_options.Pin) ? null : _options.Pin
-            };
-
-            using var response = await httpClient.PostAsJsonAsync("login", login, JsonOptions, cancellationToken);
-            if (!response.IsSuccessStatusCode)
+                envelope = await SendAsync<TheTvDbEnvelopeDto<EpisodesPageDataDto>>(
+                    () => new HttpRequestMessage(
+                        HttpMethod.Get,
+                        $"series/{seriesId}/episodes/{seasonType}?season={seasonNumber}&page={page}"),
+                    cancellationToken);
+            }
+            catch (TheTvDbApiException ex)
             {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                logger.LogError("TheTVDB login failed. StatusCode: {StatusCode}. Body: {Body}", (int)response.StatusCode, body);
-                throw new TheTvDbApiException("TheTVDB login failed.", (int)response.StatusCode);
+                logger.LogWarning(ex,
+                    "Failed loading episodes for series {SeriesId}, season {Season}, page {Page}.",
+                    seriesId, seasonNumber, page);
+                break;
             }
 
-            var envelope = await response.Content.ReadFromJsonAsync<TheTvDbEnvelopeDto<LoginDataDto>>(JsonOptions, cancellationToken);
-            var token = envelope?.Data?.Token;
+            var pageEpisodes = envelope.Data?.Episodes ?? new List<EpisodeDto>();
+            if (pageEpisodes.Count == 0)
+                break;
 
-            if (string.IsNullOrWhiteSpace(token))
-                throw new TheTvDbApiException("TheTVDB login returned an empty token.");
+            result.AddRange(pageEpisodes);
 
-            _bearerToken = token;
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _bearerToken);
-            logger.LogInformation("TheTVDB authentication succeeded.");
+            var hasNext = envelope.Data?.Links?.Next is not null;
+            if (!hasNext)
+                break;
+
+            page++;
+        }
+
+        return result;
+    }
+
+    public async Task<SeriesDataDto?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default)
+    {
+        if (seriesId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(seriesId));
+
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/extended"),
+            cancellationToken);
+
+        return envelope.Data;
+    }
+
+    public async Task<EpisodeTranslationDataDto?> GetEpisodeTranslationByLanguageAsync(
+        int episodeId,
+        string language,
+        CancellationToken cancellationToken = default)
+    {
+        if (episodeId <= 0) throw new ArgumentOutOfRangeException(nameof(episodeId));
+        if (string.IsNullOrWhiteSpace(language)) throw new ArgumentException("Language is required.", nameof(language));
+
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<EpisodeTranslationDataDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"episodes/{episodeId}/translations/{Uri.EscapeDataString(language)}"),
+            cancellationToken);
+
+        return envelope.Data;
+    }
+
+    /// <summary>
+    /// Fetches the English translation for every episode in parallel (bounded by the shared
+    /// request throttle), instead of one HTTP round trip at a time. For a 100+ episode series
+    /// this is the difference between minutes and seconds.
+    /// </summary>
+    private async Task<IReadOnlyList<EpisodeSummary>> EnrichEpisodesWithEnglishAsync(
+        IReadOnlyList<EpisodeSummary> episodes,
+        CancellationToken cancellationToken)
+    {
+        var tasks = episodes.Select(ep => EnrichSingleEpisodeAsync(ep, cancellationToken));
+        return await Task.WhenAll(tasks);
+    }
+
+    private async Task<EpisodeSummary> EnrichSingleEpisodeAsync(EpisodeSummary ep, CancellationToken cancellationToken)
+    {
+        EpisodeTranslationDataDto? tr = null;
+        try
+        {
+            tr = await GetEpisodeTranslationByLanguageAsync(ep.Id, "eng", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not load English translation for episode {EpisodeId}", ep.Id);
+        }
+
+        return new EpisodeSummary
+        {
+            Id = ep.Id,
+            SeasonNumber = ep.SeasonNumber,
+            EpisodeNumber = ep.EpisodeNumber,
+            Name = !string.IsNullOrWhiteSpace(tr?.Name) ? tr.Name! : ep.Name,
+            Overview = !string.IsNullOrWhiteSpace(tr?.Overview) ? tr.Overview : ep.Overview,
+            Aired = ep.Aired,
+            RuntimeMinutes = ep.RuntimeMinutes,
+            IsMovie = ep.IsMovie,
+            FinaleType = ep.FinaleType
+        };
+    }
+
+    /// <summary>
+    /// Sends a request, attaching the current bearer token per-request (never mutating the shared
+    /// HttpClient's default headers, which isn't safe under concurrent calls). Throttles overall
+    /// concurrency via the shared state, and transparently re-authenticates + retries once on 401.
+    /// </summary>
+    private async Task<T> SendAsync<T>(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
+    {
+        await state.RequestThrottle.WaitAsync(cancellationToken);
+        try
+        {
+            return await SendCoreAsync<T>(requestFactory, allowReauth: true, cancellationToken);
         }
         finally
         {
-            _authLock.Release();
+            state.RequestThrottle.Release();
         }
     }
 
-    private async Task<T> SendAsync<T>(HttpRequestMessage request, CancellationToken cancellationToken)
+    private async Task<T> SendCoreAsync<T>(Func<HttpRequestMessage> requestFactory, bool allowReauth, CancellationToken cancellationToken)
     {
+        var token = await state.GetOrRefreshTokenAsync(httpClient, forceRefresh: false, cancellationToken);
+
+        using var request = requestFactory();
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
         using var response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized && allowReauth)
+        {
+            logger.LogInformation("TheTVDB token rejected (401); re-authenticating and retrying once.");
+            await state.GetOrRefreshTokenAsync(httpClient, forceRefresh: true, cancellationToken);
+            return await SendCoreAsync<T>(requestFactory, allowReauth: false, cancellationToken);
+        }
+
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)

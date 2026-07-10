@@ -26,6 +26,21 @@
                     <li class="nav-item">
                         <a class="nav-link text-dark" asp-area="" asp-page="/Series/Search">Search</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-page="/Series/Library">My Library</a>
+                    </li>
+                    @if (User.Identity?.IsAuthenticated ?? false)
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-page="/Account/Logout">Logout</a>
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-page="/Account/Login">Login</a>
+                        </li>
+                    }
                 </ul>
             </div>
         </div>
@@ -33,6 +48,8 @@
 </header>
 <div class="container">
     <main role="main" class="pb-3">
+        <partial name="_ToastMessages" />
+        
         @RenderBody()
     </main>
 </div>

@@ -1,4 +1,5 @@
 using Recall.Web.Infrastructure.External.TheTvDb;
+using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 
@@ -19,6 +20,14 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<ITheTvDbService, TheTvDbService>();
+        return services;
+    }
+
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    {
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ITrackedSeriesRepository, TrackedSeriesRepository>();
 
         return services;
     }

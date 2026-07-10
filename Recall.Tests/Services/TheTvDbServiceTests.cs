@@ -4,6 +4,7 @@ using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using AwesomeAssertions;
+using Recall.Web.Domain.TheTvDb;
 
 namespace Recall.Tests.Services;
 
@@ -68,25 +69,27 @@ public class TheTvDbServiceTests
 
         // Assert
         result.Should().HaveCount(2);
-        result.Select(x => x.TvdbId).Should().BeEquivalentTo(new[] { 11, 12 });
+        result.Select(x => x.TvdbId).Should().BeEquivalentTo([11, 12]);
     }
 
     [Test]
-    public async Task GetSeriesByIdAsync_Should_MapDto_ToDetails()
+    public async Task GetSeriesByIdAsync_Should_MapAggregate_ToDetails()
     {
         // Arrange
         var apiClientMock = new Mock<ITheTvDbApiClient>();
 
         apiClientMock
-            .Setup(x => x.GetSeriesByIdAsync(10, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SeriesDataDto
+            .Setup(x => x.GetSeriesAggregateByIdAsync(
+                10,
+                "eng",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesAggregate
             {
-                Id = 10,
+                TvdbId = 10,
                 Name = "Breaking Bad",
                 Slug = "breaking-bad",
-                Overview = "A chemistry teacher turned meth producer.",
-                Image = "https://example.com/breakingbad.jpg",
-                FirstAired = "2008-01-20",
+                ImageUrl = "https://example.com/breakingbad.jpg",
+                FirstAired = new DateOnly(2008, 1, 20),
                 Score = 9.5
             });
 
@@ -111,8 +114,11 @@ public class TheTvDbServiceTests
         var apiClientMock = new Mock<ITheTvDbApiClient>();
 
         apiClientMock
-            .Setup(x => x.GetSeriesByIdAsync(404, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((SeriesDataDto?)null);
+            .Setup(x => x.GetSeriesAggregateByIdAsync(
+                404,
+                "eng",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SeriesAggregate?)null);
 
         var sut = new TheTvDbService(apiClientMock.Object);
 

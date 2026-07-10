@@ -10,15 +10,11 @@
 
 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
 {
-    <div class="alert alert-danger" role="alert">
-        @Model.ErrorMessage
-    </div>
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
 }
-else if (Model.Series is null)
+else if (Model.Series is null || Model.Aggregate is null)
 {
-    <div class="alert alert-warning" role="alert">
-        Series not found.
-    </div>
+    <div class="alert alert-warning">Series not found.</div>
 }
 else
 {
@@ -26,9 +22,7 @@ else
         <div class="col-md-4">
             @if (!string.IsNullOrWhiteSpace(Model.Series.ImageUrl))
             {
-                <img src="@Model.Series.ImageUrl"
-                     alt="@Model.Series.Name"
-                     class="img-fluid rounded shadow-sm" />
+                <img src="@Model.Series.ImageUrl" alt="@Model.Series.Name" class="img-fluid rounded shadow-sm" />
             }
             else
             {
@@ -39,15 +33,15 @@ else
         <div class="col-md-8">
             <h1 class="mb-2">@Model.Series.Name</h1>
 
+            <form method="post" asp-page-handler="ToggleLibrary" asp-route-id="@Model.Series.TvdbId" asp-route-season="@Model.Season" class="mb-3">
+                <button type="submit" class="btn @(Model.IsTrackedByCurrentUser ? "btn-outline-danger" : "btn-primary")">
+                    @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
+                </button>
+            </form>
+
             <dl class="row">
                 <dt class="col-sm-3">TVDB Id</dt>
                 <dd class="col-sm-9">@Model.Series.TvdbId</dd>
-
-                @if (!string.IsNullOrWhiteSpace(Model.Series.Slug))
-                {
-                    <dt class="col-sm-3">Slug</dt>
-                    <dd class="col-sm-9">@Model.Series.Slug</dd>
-                }
 
                 @if (!string.IsNullOrWhiteSpace(Model.Series.FirstAired))
                 {
@@ -69,4 +63,77 @@ else
             }
         </div>
     </div>
+
+    var seasonNumbers = Model.Aggregate.Seasons
+        .Select(s => s.Number)
+        .Where(n => n.HasValue)
+        .Select(n => n!.Value)
+        .Distinct()
+        .OrderBy(n => n)
+        .ToList();
+
+    var selectedSeason = Model.Season ?? seasonNumbers.FirstOrDefault();
+
+    var filteredEpisodes = Model.Aggregate.Episodes
+        .Where(e => e.SeasonNumber == selectedSeason)
+        .OrderBy(e => e.EpisodeNumber ?? int.MaxValue)
+        .ThenBy(e => e.Id)
+        .ToList();
+
+    @if (seasonNumbers.Count > 0)
+    {
+        <hr class="my-4" />
+
+        <h4 class="mb-3">Seasons</h4>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            @foreach (var seasonNumber in seasonNumbers)
+            {
+                var isActive = seasonNumber == selectedSeason;
+                <a asp-page="/Series/Details"
+                   asp-route-id="@Model.Series.TvdbId"
+                   asp-route-season="@seasonNumber"
+                   class="btn @(isActive ? "btn-dark" : "btn-outline-dark") btn-sm rounded-pill px-3">
+                    Season @seasonNumber
+                </a>
+            }
+        </div>
+
+        <h5 class="mb-3">Episodes - Season @selectedSeason</h5>
+
+        @if (filteredEpisodes.Count == 0)
+        {
+            <div class="alert alert-info">No episodes found for this season.</div>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (var ep in filteredEpisodes)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div>
+                                <div class="fw-semibold">
+                                    E@(ep.EpisodeNumber?.ToString() ?? "?") - @ep.Name
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(ep.Overview))
+                                {
+                                    <div class="text-muted small mt-1">@ep.Overview</div>
+                                }
+                            </div>
+                            <div class="text-end small text-muted">
+                                @if (ep.Aired.HasValue)
+                                {
+                                    <div>@ep.Aired.Value.ToString("yyyy-MM-dd")</div>
+                                }
+                                @if (ep.RuntimeMinutes.HasValue)
+                                {
+                                    <div>@ep.RuntimeMinutes min</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
 }

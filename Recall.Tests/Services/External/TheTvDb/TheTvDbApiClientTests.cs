@@ -252,9 +252,12 @@ public class TheTvDbApiClientTests
             Pin = "1234"
         });
 
+        var statelogger = new Mock<ILogger<TheTvDbClientState>>();
+        var tvdbState = new TheTvDbClientState(options, statelogger.Object);
+        
         var logger = new Mock<ILogger<TheTvDbApiClient>>();
 
-        return new TheTvDbApiClient(httpClient, options, logger.Object);
+        return new TheTvDbApiClient(httpClient, tvdbState, logger.Object);
     }
 
     private static Mock<HttpMessageHandler> CreateHandlerMock(Queue<HttpResponseMessage> responses)

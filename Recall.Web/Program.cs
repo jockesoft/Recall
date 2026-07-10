@@ -1,6 +1,12 @@
-using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Persistence;
+using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Services.External.TheTvDb;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +17,12 @@ builder.Host.UseSerilog((context, services, configuration) =>
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
         .Enrich.FromLogContext();
+});
+
+builder.Services.ConfigureApplicationCookie(o =>
+{
+    o.LoginPath = "/Account/Login";
+    o.LogoutPath = "/Account/Logout";
 });
 
 // Add services to the container.
@@ -49,8 +61,40 @@ builder.Services.AddSession(options =>
 builder.Services.AddControllers().AddViewLocalization();
 builder.Services.AddAntiforgery();
 
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(
+    builder.Configuration.GetConnectionString("DefaultConnection"));
+
+dataSourceBuilder.EnableDynamicJson();
+
+var dataSource = dataSourceBuilder.Build();
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseNpgsql(dataSource, npgsqlOptions =>
+    {
+        npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+    });
+
+    options.ConfigureWarnings(w =>
+        w.Throw(RelationalEventId.MultipleCollectionIncludeWarning));
+});
+
+#if DEBUG
+builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+#endif
+
+builder.Services.AddAuthorization();
+
+builder.Services.AddSingleton<TheTvDbClientState>();
+builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
+{
+    client.BaseAddress = new Uri("https://api4.thetvdb.com/v4/");
+});
 // Add TheTVDB integration
 builder.Services.AddTheTvDb(builder.Configuration);
+builder.Services.AddApplicationServices();
+
+builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 
 var app = builder.Build();
 

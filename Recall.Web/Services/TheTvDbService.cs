@@ -1,20 +1,14 @@
+using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Models;
 
 namespace Recall.Web.Services;
 
-public sealed class TheTvDbService : ITheTvDbService
+public sealed class TheTvDbService(ITheTvDbApiClient apiClient) : ITheTvDbService
 {
-    private readonly ITheTvDbApiClient _apiClient;
-
-    public TheTvDbService(ITheTvDbApiClient apiClient)
-    {
-        _apiClient = apiClient;
-    }
-
     public async Task<IReadOnlyList<TvSeriesSummary>> SearchSeriesAsync(string query, CancellationToken cancellationToken = default)
     {
-        var items = await _apiClient.SearchSeriesAsync(query, cancellationToken);
+        var items = await apiClient.SearchSeriesAsync(query, cancellationToken);
 
         return items
             .Where(x => x.Type is null || x.Type.Equals("series", StringComparison.OrdinalIgnoreCase))
@@ -29,16 +23,21 @@ public sealed class TheTvDbService : ITheTvDbService
 
     public async Task<TvSeriesDetails?> GetSeriesByIdAsync(int seriesId, CancellationToken cancellationToken = default)
     {
-        var data = await _apiClient.GetSeriesByIdAsync(seriesId, cancellationToken);
-        if (data is null) return null;
+        var aggregate = await apiClient.GetSeriesAggregateByIdAsync(seriesId, "eng", cancellationToken);
+        if (aggregate is null) return null;
 
         return new TvSeriesDetails(
-            data.Id,
-            data.Name ?? string.Empty,
-            data.Slug,
-            data.Overview,
-            data.Image,
-            data.FirstAired,
-            data.Score);
+            aggregate.TvdbId,
+            aggregate.Name,
+            aggregate.Slug,
+            aggregate.Overview,
+            aggregate.ImageUrl,
+            aggregate.FirstAired?.ToString("yyyy-MM-dd"),
+            aggregate.Score);
     }
+
+    public Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
+        int seriesId,
+        CancellationToken cancellationToken = default)
+        => apiClient.GetSeriesAggregateByIdAsync(seriesId, "eng", cancellationToken);
 }
