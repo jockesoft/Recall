@@ -32,24 +32,13 @@ public sealed class TheTvDbApiClient(
         return envelope.Data!;
     }
 
-    public async Task<SeriesDataDto?> GetSeriesByIdAsync(int seriesId, CancellationToken cancellationToken = default)
-    {
-        if (seriesId <= 0)
-            throw new ArgumentOutOfRangeException(nameof(seriesId));
-
-        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
-            () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}"),
-            cancellationToken);
-
-        return envelope.Data;
-    }
-
     public async Task<SeriesTranslationDataDto?> GetSeriesTranslationByLanguageAsync(
         int seriesId,
         string language,
         CancellationToken cancellationToken = default)
     {
-        if (seriesId <= 0) throw new ArgumentOutOfRangeException(nameof(seriesId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
+        
         if (string.IsNullOrWhiteSpace(language)) throw new ArgumentException("Language is required.", nameof(language));
 
         var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesTranslationDataDto>>(
@@ -106,27 +95,6 @@ public sealed class TheTvDbApiClient(
         var englishEpisodes = await EnrichEpisodesWithEnglishAsync(aggregate.Episodes, cancellationToken);
 
         aggregate = aggregate with { Episodes = englishEpisodes };
-        
-/*        aggregate = new SeriesAggregate
-        {
-            TvdbId = aggregate.TvdbId,
-            Name = aggregate.Name,
-            Slug = aggregate.Slug,
-            Overview = aggregate.Overview,
-            ImageUrl = aggregate.ImageUrl,
-            FirstAired = aggregate.FirstAired,
-            LastAired = aggregate.LastAired,
-            NextAired = aggregate.NextAired,
-            OriginalCountry = aggregate.OriginalCountry,
-            OriginalLanguage = aggregate.OriginalLanguage,
-            Score = aggregate.Score,
-            Year = aggregate.Year,
-            AverageRuntimeMinutes = aggregate.AverageRuntimeMinutes,
-            Status = aggregate.Status,
-            Aliases = aggregate.Aliases,
-            Seasons = aggregate.Seasons,
-            Episodes = englishEpisodes
-        };*/
 
         var ttl = Jitter(TimeSpan.FromHours(12), 0.10);
 
@@ -148,7 +116,7 @@ public sealed class TheTvDbApiClient(
         SeriesDataDto seriesDto,
         CancellationToken cancellationToken)
     {
-        var seasonNumbers = (seriesDto.Seasons ?? new List<SeasonDto>())
+        var seasonNumbers = (seriesDto.Seasons ?? [])
             .Select(s => s.Number)
             .Where(n => n.HasValue)
             .Select(n => n!.Value)

@@ -48,62 +48,6 @@ public class TheTvDbApiClientTests
     }
 
     [Test]
-    public async Task GetSeriesByIdAsync_Should_Login_Then_MapSeriesResponse()
-    {
-        // Arrange
-        var handlerMock = CreateHandlerMock(new Queue<HttpResponseMessage>(new[]
-        {
-            JsonResponse(HttpStatusCode.OK, """
-            {
-              "status":"success",
-              "data": { "token":"test-token" }
-            }
-            """),
-            JsonResponse(HttpStatusCode.OK, """
-            {
-              "status":"success",
-              "data": {
-                "id": 10,
-                "name":"Breaking Bad",
-                "slug":"breaking-bad",
-                "overview":"overview",
-                "image":"https://example.com/image.jpg",
-                "firstAired":"2008-01-20",
-                "score":9.5
-              }
-            }
-            """)
-        }));
-
-        var sut = CreateSut(handlerMock.Object);
-
-        // Act
-        var result = await sut.GetSeriesByIdAsync(10);
-
-        // Assert
-        result.Should().NotBeNull();
-        result!.Id.Should().Be(10);
-        result.Name.Should().Be("Breaking Bad");
-        result.Slug.Should().Be("breaking-bad");
-        result.FirstAired.Should().Be("2008-01-20");
-        result.Score.Should().Be(9.5);
-    }
-
-    [Test]
-    public void GetSeriesByIdAsync_Should_ThrowArgumentOutOfRange_WhenIdIsInvalid()
-    {
-        // Arrange
-        var handlerMock = CreateHandlerMock(new Queue<HttpResponseMessage>());
-        var sut = CreateSut(handlerMock.Object);
-
-        // Act
-        Func<Task> act = async () => await sut.GetSeriesByIdAsync(0);
-
-        // Assert
-        act.Should().ThrowAsync<ArgumentOutOfRangeException>();
-    }
-
-    [Test]
     public void SearchSeriesAsync_Should_ThrowTheTvDbApiException_WhenLoginFails()
     {
         // Arrange
@@ -178,66 +122,6 @@ public class TheTvDbApiClientTests
             ItExpr.IsAny<CancellationToken>());
     }
 
-    [Test]
-    public async Task Should_LoginOnlyOnce_ForMultipleCalls()
-    {
-        // Arrange
-        var callCount = 0;
-        var handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
-
-        handlerMock
-            .Protected()
-            .Setup<Task<HttpResponseMessage>>(
-                "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync((HttpRequestMessage request, CancellationToken _) =>
-            {
-                callCount++;
-
-                if (request.RequestUri!.AbsolutePath.EndsWith("/login"))
-                {
-                    return JsonResponse(HttpStatusCode.OK, """
-                    {
-                      "status":"success",
-                      "data": { "token":"test-token" }
-                    }
-                    """);
-                }
-
-                if (request.RequestUri!.AbsolutePath.EndsWith("/search"))
-                {
-                    return JsonResponse(HttpStatusCode.OK, """
-                    {
-                      "status":"success",
-                      "data":[]
-                    }
-                    """);
-                }
-
-                if (request.RequestUri!.AbsolutePath.EndsWith("/series/1"))
-                {
-                    return JsonResponse(HttpStatusCode.OK, """
-                    {
-                      "status":"success",
-                      "data": { "id":1, "name":"Series 1" }
-                    }
-                    """);
-                }
-
-                throw new InvalidOperationException($"Unexpected request: {request.RequestUri}");
-            });
-
-        var sut = CreateSut(handlerMock.Object);
-
-        // Act
-        await sut.SearchSeriesAsync("x");
-        await sut.GetSeriesByIdAsync(1);
-
-        // Assert
-        callCount.Should().Be(3); // login + search + series/1
-    }
-    
     private static TheTvDbApiClient CreateSut(HttpMessageHandler handler, Mock<IDistributedCacheJson>? cacheMock = null)
     {
         var httpClient = new HttpClient(handler)
