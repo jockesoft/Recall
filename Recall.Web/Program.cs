@@ -1,15 +1,28 @@
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Caching;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Middleware;
 using Recall.Web.Services.External.TheTvDb;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// appsettings or env var: REDIS_CONNECTION=redis:6379
+var redisConnection = builder.Configuration["REDIS_CONNECTION"] 
+                      ?? builder.Configuration.GetConnectionString("RedisConnection");
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = redisConnection;
+    options.InstanceName = "tvdb:"; // optional prefix
+});
+
+Console.WriteLine("Redis connection string: " + redisConnection);
 
 builder.Host.UseSerilog((context, services, configuration) =>
 {
@@ -85,6 +98,15 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddAuthorization();
 
+// Redis multiplexer for locking (separate from IDistributedCache)
+builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+{
+    var cfg = redisConnection ?? "localhost:6379";
+    return StackExchange.Redis.ConnectionMultiplexer.Connect(cfg);
+});
+
+builder.Services.AddSingleton<IDistributedCacheJson, DistributedCacheJson>();
+
 builder.Services.AddSingleton<TheTvDbClientState>();
 builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
 {
@@ -132,6 +154,7 @@ app.UseRouting();
 
 app.UseSession();
 app.UseAuthentication();
+app.UseMiddleware<DevAuthMiddleware>();
 app.UseAuthorization();
 
 app.MapControllerRoute(

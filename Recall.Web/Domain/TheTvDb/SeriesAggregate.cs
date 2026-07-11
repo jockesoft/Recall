@@ -1,6 +1,6 @@
 namespace Recall.Web.Domain.TheTvDb;
 
-public sealed class SeriesAggregate
+public record SeriesAggregate
 {
     public int TvdbId { get; init; }
     public string Name { get; init; } = string.Empty;

@@ -7,6 +7,7 @@ using Moq.Protected;
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Services.External.TheTvDb;
 using AwesomeAssertions;
+using Recall.Web.Infrastructure.Caching;
 
 namespace Recall.Tests.Services.External.TheTvDb;
 
@@ -17,14 +18,13 @@ public class TheTvDbApiClientTests
     public async Task SearchSeriesAsync_Should_Login_Then_ReturnResults()
     {
         // Arrange
-        var handlerMock = CreateHandlerMock(new Queue<HttpResponseMessage>(new[]
-        {
+        var handlerMock = CreateHandlerMock(new Queue<HttpResponseMessage>([
             JsonResponse(HttpStatusCode.OK, """
-            {
-              "status":"success",
-              "data": { "token":"test-token" }
-            }
-            """),
+                                            {
+                                              "status":"success",
+                                              "data": { "token":"test-token" }
+                                            }
+                                            """),
             JsonResponse(HttpStatusCode.OK, """
             {
               "status":"success",
@@ -33,7 +33,7 @@ public class TheTvDbApiClientTests
               ]
             }
             """)
-        }));
+        ]));
 
         var sut = CreateSut(handlerMock.Object);
 
@@ -237,8 +237,8 @@ public class TheTvDbApiClientTests
         // Assert
         callCount.Should().Be(3); // login + search + series/1
     }
-
-    private static TheTvDbApiClient CreateSut(HttpMessageHandler handler)
+    
+    private static TheTvDbApiClient CreateSut(HttpMessageHandler handler, Mock<IDistributedCacheJson>? cacheMock = null)
     {
         var httpClient = new HttpClient(handler)
         {
@@ -252,12 +252,13 @@ public class TheTvDbApiClientTests
             Pin = "1234"
         });
 
-        var statelogger = new Mock<ILogger<TheTvDbClientState>>();
-        var tvdbState = new TheTvDbClientState(options, statelogger.Object);
-        
-        var logger = new Mock<ILogger<TheTvDbApiClient>>();
+        var stateLogger = new Mock<ILogger<TheTvDbClientState>>();
+        var tvdbState = new TheTvDbClientState(options, stateLogger.Object);
 
-        return new TheTvDbApiClient(httpClient, tvdbState, logger.Object);
+        var logger = new Mock<ILogger<TheTvDbApiClient>>();
+        cacheMock ??= new Mock<IDistributedCacheJson>();
+
+        return new TheTvDbApiClient(httpClient, tvdbState, logger.Object, cacheMock.Object);
     }
 
     private static Mock<HttpMessageHandler> CreateHandlerMock(Queue<HttpResponseMessage> responses)
