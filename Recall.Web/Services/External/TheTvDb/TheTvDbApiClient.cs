@@ -29,7 +29,7 @@ public sealed class TheTvDbApiClient(
             () => new HttpRequestMessage(HttpMethod.Get, $"search?query={Uri.EscapeDataString(query)}&type=series"),
             cancellationToken);
 
-        return envelope.Data!;
+        return envelope.Data ?? [];
     }
 
     public async Task<SeriesTranslationDataDto?> GetSeriesTranslationByLanguageAsync(
@@ -48,64 +48,62 @@ public sealed class TheTvDbApiClient(
         return envelope.Data;
     }
 
-    public async Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
-        int seriesId,
-        string language = "eng",
-        CancellationToken cancellationToken = default)
+public async Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
+    int seriesId,
+    string language = "eng",
+    CancellationToken cancellationToken = default)
+{
+    language = language.Trim().ToLowerInvariant();
+    var cacheKey = $"series:aggregate:v1:{seriesId}:{language}";
+
+    return await GetOrAddAsync<SeriesAggregate>(
+        cacheKey,
+        async ct => await FetchSeriesAggregateAsync(seriesId, language, ct),
+        aggregate => aggregate.Status is { KeepUpdated: false, Name: not null }
+                     && aggregate.Status.Name.Equals("ended", StringComparison.OrdinalIgnoreCase)
+            ? Jitter(TimeSpan.FromDays(7), 0.10)
+            : Jitter(TimeSpan.FromHours(12), 0.10),
+        cancellationToken);
+}
+
+private async Task<SeriesAggregate?> FetchSeriesAggregateAsync(
+    int seriesId,
+    string language,
+    CancellationToken cancellationToken)
+{
+    SeriesDataDto? seriesDto = null;
+    SeriesTranslationDataDto? translationDto = null;
+
+    try
     {
-        language = language.Trim().ToLowerInvariant();
-        var cacheKey = $"series:aggregate:v1:{seriesId}:{language}";
+        var translationDtoTask = GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
+        var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
 
-        var cached = await cacheJson.GetAsync<SeriesAggregate>(cacheKey, cancellationToken);
-        if (cached is not null)
-        {
-            logger.LogDebug("Cache hit for series aggregate {SeriesId}, language {Language}.", seriesId, language);
-            return cached;
-        }
-
-        SeriesDataDto? seriesDto = null;
-        SeriesTranslationDataDto? translationDto = null;
-
-        try
-        {
-            var translationDtoTask = GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
-            var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
-            
-            await Task.WhenAll(seriesDtoTask, translationDtoTask);
-            (seriesDto, translationDto) = (seriesDtoTask.Result, translationDtoTask.Result);
-        }
-        catch (TheTvDbApiException ex)
-        {
-            logger.LogInformation(
-                ex,
-                "Series/Translation fetch failed for series {SeriesId}, language {Language}. Falling back.",
-                seriesId, language);
-        }
-
-        if (seriesDto is null)
-            return null;
-        
-        IReadOnlyList<EpisodeDto>? fallbackEpisodes = null;
-        if (seriesDto.Episodes is null || seriesDto.Episodes.Count == 0)
-        {
-            fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
-        }
-
-        var aggregate = seriesDto.ToAggregate(translationDto, fallbackEpisodes);
-        var englishEpisodes = await EnrichEpisodesWithEnglishAsync(aggregate.Episodes, cancellationToken);
-
-        aggregate = aggregate with { Episodes = englishEpisodes };
-
-        var ttl = Jitter(TimeSpan.FromHours(12), 0.10);
-
-        if (aggregate.Status is { KeepUpdated: false, Name: not null } && aggregate.Status.Name.Equals("ended", StringComparison.OrdinalIgnoreCase))
-        {
-            ttl = Jitter(TimeSpan.FromDays(7), 0.10);
-        }
-        await cacheJson.SetAsync(cacheKey, aggregate, ttl, cancellationToken);
-
-        return aggregate;
+        await Task.WhenAll(seriesDtoTask, translationDtoTask);
+        (seriesDto, translationDto) = (seriesDtoTask.Result, translationDtoTask.Result);
     }
+    catch (TheTvDbApiException ex)
+    {
+        logger.LogInformation(
+            ex,
+            "Series/Translation fetch failed for series {SeriesId}, language {Language}. Falling back.",
+            seriesId, language);
+    }
+
+    if (seriesDto is null)
+        return null;
+
+    IReadOnlyList<EpisodeDto>? fallbackEpisodes = null;
+    if (seriesDto.Episodes is null || seriesDto.Episodes.Count == 0)
+    {
+        fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
+    }
+
+    var aggregate = seriesDto.ToAggregate(translationDto, fallbackEpisodes);
+    var englishEpisodes = await EnrichEpisodesWithEnglishAsync(aggregate.Episodes, cancellationToken);
+
+    return aggregate with { Episodes = englishEpisodes };
+}
 
     /// <summary>
     /// Fallback loader: pulls episodes per season when /series/{id}/extended does not include episodes.
@@ -194,8 +192,7 @@ public sealed class TheTvDbApiClient(
 
     public async Task<SeriesDataDto?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default)
     {
-        if (seriesId <= 0)
-            throw new ArgumentOutOfRangeException(nameof(seriesId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
 
         var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
             () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/extended"),
@@ -224,12 +221,44 @@ public sealed class TheTvDbApiClient(
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(episodeId);
+        const string language = "eng";
+        var cacheKey = $"episode:v1:{episodeId}:{language}"; // own namespace — no collision with series:aggregate keys
 
-        var envelope = await SendAsync<TheTvDbEnvelopeDto<EpisodeDto>>(
+        return await GetOrAddAsync<EpisodeDto>(
+            cacheKey,
+            ct => FetchEpisodeAsync(episodeId, language, ct),
+            _ => Jitter(TimeSpan.FromHours(12), 0.10),
+            cancellationToken);
+    }
+
+    private async Task<EpisodeDto?> FetchEpisodeAsync(
+        int episodeId,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        var episodeTask = SendAsync<TheTvDbEnvelopeDto<EpisodeDto>>(
             () => new HttpRequestMessage(HttpMethod.Get, $"episodes/{episodeId}"),
             cancellationToken);
+        var translationTask = GetEpisodeTranslationByLanguageAsync(episodeId, language, cancellationToken);
 
-        return envelope.Data;
+        EpisodeTranslationDataDto? translation = null;
+        try
+        {
+            translation = await translationTask;
+        }
+        catch (TheTvDbApiException ex)
+        {
+            logger.LogDebug(ex, "Could not load translation for episode {EpisodeId}, language {Language}.", episodeId, language);
+        }
+
+        var episode = (await episodeTask).Data; // let a genuine episode-fetch failure propagate
+        if (episode is null)
+            return null;
+
+        var translatedName = string.IsNullOrWhiteSpace(translation?.Name) ? episode.Name : translation.Name;
+        var translatedOverview = string.IsNullOrWhiteSpace(translation?.Overview) ? episode.Overview : translation.Overview;
+
+        return episode with { Name = translatedName, Overview = translatedOverview };
     }
     
     private static TimeSpan Jitter(TimeSpan baseTtl, double pct)
@@ -330,5 +359,34 @@ public sealed class TheTvDbApiClient(
             logger.LogError(ex, "Failed to deserialize TheTVDB response.");
             throw new TheTvDbApiException("Failed to deserialize TheTVDB response.", null, ex);
         }
+    }
+    
+    /// <summary>
+    /// Cache-aside helper: returns the cached value if present, otherwise invokes
+    /// <paramref name="factory"/>, caches a non-null result using a TTL derived from
+    /// the fetched value, and returns it. Null results from the factory are not cached,
+    /// so a transient miss/failure doesn't get pinned as a false negative.
+    /// </summary>
+    private async Task<T?> GetOrAddAsync<T>(
+        string cacheKey,
+        Func<CancellationToken, Task<T?>> factory,
+        Func<T, TimeSpan> ttlSelector,
+        CancellationToken cancellationToken) where T : class
+    {
+        var cached = await cacheJson.GetAsync<T>(cacheKey, cancellationToken);
+        if (cached is not null)
+        {
+            logger.LogDebug("Cache hit for {CacheKey} ({Type}).", cacheKey, typeof(T).Name);
+            return cached;
+        }
+
+        var value = await factory(cancellationToken);
+        if (value is null)
+            return null;
+
+        var ttl = ttlSelector(value);
+        await cacheJson.SetAsync(cacheKey, value, ttl, cancellationToken);
+
+        return value;
     }
 }

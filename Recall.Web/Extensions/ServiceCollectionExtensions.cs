@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<ITrackedSeriesRepository, TrackedSeriesRepository>();
+        services.AddScoped<IEpisodeWatchRepository, EpisodeWatchRepository>();
 
         return services;
     }

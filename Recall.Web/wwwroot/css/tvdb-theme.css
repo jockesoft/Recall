@@ -1,0 +1,520 @@
+/* =========================================================================
+   TVDB broadcast-slate theme
+   One shared stylesheet for the whole site. Reference it once in
+   _Layout.cshtml (see notes at the bottom of this file) and remove any
+   per-page <style> blocks / font <link> tags — they're superseded by this.
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root {
+    --tvdb-ink: #151b24;          /* page canvas */
+    --tvdb-ink-2: #1f2733;        /* panels sitting on the canvas (nav, media) */
+    --tvdb-ink-3: #29333f;        /* hover state on ink surfaces */
+    --tvdb-line: rgba(255, 255, 255, 0.08);
+
+    --tvdb-paper: #f1ece2;        /* main content sheet */
+    --tvdb-paper-dim: #e6dfd0;    /* recessed rows on paper (list items, dl stripes) */
+    --tvdb-ink-line: rgba(21, 27, 36, 0.12);
+    --tvdb-text: #2c2a24;         /* body text on paper */
+    --tvdb-text-muted: #766c59;
+
+    --tvdb-signal: #e8a33d;       /* amber tally-light — primary accent */
+    --tvdb-signal-ink: #6b3d0f;   /* text-on-amber-tint */
+    --tvdb-ok: #6f9d6f;           /* continuing / tracked / success */
+    --tvdb-ok-ink: #2f4a2f;
+    --tvdb-danger: #b5533c;       /* muted brick, replaces bootstrap's saturated red */
+    --tvdb-danger-ink: #6b2c1f;
+    --tvdb-info: #4f8a93;         /* muted teal, distinct from amber */
+    --tvdb-info-ink: #234047;
+
+    --tvdb-font-display: "Big Shoulders Display", sans-serif;
+    --tvdb-font-body: "Source Serif 4", serif;
+    --tvdb-font-mono: "IBM Plex Mono", monospace;
+    --tvdb-font-ui: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+    --tvdb-radius: 10px;
+}
+
+/* ---- base ------------------------------------------------------------- */
+
+body {
+    background: var(--tvdb-ink);
+    color: var(--tvdb-paper);
+    font-family: var(--tvdb-font-ui);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+a {
+    color: var(--tvdb-signal);
+}
+
+a:hover, a:focus {
+    color: #f2c479;
+}
+
+hr {
+    border-color: var(--tvdb-line);
+    opacity: 1;
+}
+
+:focus-visible {
+    outline: 2px solid var(--tvdb-signal);
+    outline-offset: 2px;
+}
+
+::selection {
+    background: rgba(232, 163, 61, 0.35);
+}
+
+/* thin, on-brand scrollbar (progressive enhancement, ignored where unsupported) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--tvdb-ink); }
+::-webkit-scrollbar-thumb { background: var(--tvdb-ink-3); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--tvdb-signal); }
+
+/* ---- navbar (default ASP.NET Core template markup) --------------------
+   If your nav uses different classes, adjust the selectors below —
+   the goal is just: dark ink bar, amber brand + active link. */
+
+.navbar {
+    background: var(--tvdb-ink-2) !important;
+    border-bottom: 1px solid var(--tvdb-line);
+}
+
+.navbar .navbar-brand,
+.navbar-light .navbar-brand {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--tvdb-paper) !important;
+}
+
+.navbar .nav-link,
+.navbar-light .nav-link {
+    color: rgba(241, 236, 226, 0.75) !important;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
+}
+
+.navbar .nav-link:hover,
+.navbar .nav-link.active {
+    color: var(--tvdb-signal) !important;
+}
+
+/* =========================================================================
+   Content shell — the "paper sheet" that page content sits on.
+   Wrap a page's main content in <div class="tvdb-shell"> ... </div>
+   ========================================================================= */
+
+.tvdb-shell {
+    background: var(--tvdb-paper);
+    color: var(--tvdb-text);
+    border-radius: var(--tvdb-radius);
+    padding: clamp(1.25rem, 3vw, 2.5rem);
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.tvdb-shell .text-muted {
+    color: var(--tvdb-text-muted) !important;
+}
+
+/* a link that sits directly on the dark canvas, above/outside the shell */
+.tvdb-back-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    color: rgba(241, 236, 226, 0.7);
+    text-decoration: none;
+}
+
+.tvdb-back-link:hover, .tvdb-back-link:focus-visible {
+    color: var(--tvdb-signal);
+    text-decoration: underline;
+}
+
+/* ---- headline / prose helpers, usable on either surface ---------------- */
+
+.tvdb-display {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1.03;
+}
+
+.tvdb-eyebrow {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-prose {
+    font-family: var(--tvdb-font-body);
+    font-size: 1.02rem;
+    line-height: 1.55;
+    color: var(--tvdb-text);
+}
+
+.tvdb-mono {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+}
+
+/* =========================================================================
+   Media + slate — poster/still image with the tally-light readout.
+   <div class="tvdb-media"> <img> <div class="tvdb-slate">...</div> </div>
+   ========================================================================= */
+
+.tvdb-media {
+    position: relative;
+    background: linear-gradient(155deg, #0d1117, #232c3a);
+    border-radius: var(--tvdb-radius);
+    overflow: hidden;
+    aspect-ratio: 2 / 3;
+    min-height: 200px;
+}
+
+.tvdb-media.is-wide { aspect-ratio: 16 / 9; }
+
+.tvdb-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.tvdb-media.is-empty::after {
+    content: "No image available";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    color: rgba(241, 236, 226, 0.35);
+    text-align: center;
+    padding: 1rem;
+}
+
+.tvdb-slate {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(10, 13, 18, 0.72);
+    backdrop-filter: blur(2px);
+    border: 1px solid rgba(232, 163, 61, 0.35);
+    border-radius: 5px;
+    padding: 0.3rem 0.65rem;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.76rem;
+    letter-spacing: 0.04em;
+    color: #f2e3c6;
+}
+
+.tvdb-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tvdb-signal);
+    box-shadow: 0 0 6px 1px rgba(232, 163, 61, 0.7);
+    animation: tvdb-pulse 2.2s ease-in-out infinite;
+    flex: none;
+}
+
+.tvdb-dot.is-ok {
+    background: var(--tvdb-ok);
+    box-shadow: 0 0 6px 1px rgba(111, 157, 111, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-dot { animation: none; }
+}
+
+@keyframes tvdb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+/* =========================================================================
+   Badges — finale flags, status chips, etc.
+   ========================================================================= */
+
+.tvdb-badge {
+    display: inline-block;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+}
+
+.tvdb-badge--amber {
+    color: var(--tvdb-signal-ink);
+    background: rgba(232, 163, 61, 0.28);
+    border: 1px solid rgba(232, 163, 61, 0.55);
+}
+
+.tvdb-badge--ok {
+    color: var(--tvdb-ok-ink);
+    background: rgba(111, 157, 111, 0.22);
+    border: 1px solid rgba(111, 157, 111, 0.5);
+}
+
+/* =========================================================================
+   Bootstrap component reskins — applied globally so existing markup
+   (btn, alert, list-group, dl.row, img.rounded) picks up the theme
+   without needing new classes.
+   ========================================================================= */
+
+/* Buttons */
+.btn {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    border-radius: 6px;
+}
+
+.btn-primary {
+    background: var(--tvdb-signal);
+    border-color: var(--tvdb-signal);
+    color: #2a1a05;
+}
+.btn-primary:hover, .btn-primary:focus {
+    background: #d6922e;
+    border-color: #d6922e;
+    color: #2a1a05;
+}
+
+.btn-outline-danger {
+    color: var(--tvdb-danger);
+    border-color: var(--tvdb-danger);
+}
+.btn-outline-danger:hover, .btn-outline-danger:focus {
+    background: var(--tvdb-danger);
+    border-color: var(--tvdb-danger);
+    color: #fff;
+}
+
+.btn-dark {
+    background: var(--tvdb-ink);
+    border-color: var(--tvdb-ink);
+    color: var(--tvdb-paper);
+}
+.btn-dark:hover, .btn-dark:focus {
+    background: var(--tvdb-ink-3);
+    border-color: var(--tvdb-ink-3);
+    color: var(--tvdb-paper);
+}
+
+.btn-outline-dark {
+    color: var(--tvdb-text);
+    border-color: var(--tvdb-ink-line);
+}
+.btn-outline-dark:hover, .btn-outline-dark:focus {
+    background: var(--tvdb-ink);
+    border-color: var(--tvdb-ink);
+    color: var(--tvdb-paper);
+}
+
+.btn-outline-primary {
+    color: var(--tvdb-signal-ink);
+    border-color: var(--tvdb-signal);
+}
+.btn-outline-primary:hover, .btn-outline-primary:focus {
+    background: var(--tvdb-signal);
+    border-color: var(--tvdb-signal);
+    color: #2a1a05;
+}
+
+.btn-outline-secondary {
+    color: var(--tvdb-text-muted);
+    border-color: var(--tvdb-ink-line);
+}
+.btn-outline-secondary:hover, .btn-outline-secondary:focus {
+    background: var(--tvdb-ink);
+    border-color: var(--tvdb-ink);
+    color: var(--tvdb-paper);
+}
+
+/* season chips use .btn-sm.rounded-pill on top of dark/outline-dark above —
+   no extra rule needed, they inherit the reskin. */
+
+.btn-link {
+    font-family: var(--tvdb-font-mono);
+    color: rgba(241, 236, 226, 0.75);
+    text-decoration: none;
+}
+.btn-link:hover, .btn-link:focus {
+    color: var(--tvdb-signal);
+    text-decoration: underline;
+}
+
+/* Alerts */
+.alert {
+    border-radius: 8px;
+    font-family: var(--tvdb-font-ui);
+}
+
+.alert-warning {
+    background: rgba(232, 163, 61, 0.15);
+    border: 1px solid rgba(232, 163, 61, 0.4);
+    color: var(--tvdb-signal-ink);
+}
+
+.alert-info {
+    background: rgba(79, 138, 147, 0.15);
+    border: 1px solid rgba(79, 138, 147, 0.4);
+    color: var(--tvdb-info-ink);
+}
+
+/* List group (episode / result rows) */
+.list-group-item {
+    background: transparent;
+    border-color: var(--tvdb-ink-line);
+    color: var(--tvdb-text);
+}
+.list-group-item:hover {
+    background: rgba(21, 27, 36, 0.04);
+}
+.list-group-item a {
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+.list-group-item a:hover {
+    color: var(--tvdb-signal-ink);
+    text-decoration: underline;
+}
+
+/* Definition lists (dl.row dt/dd metadata blocks) */
+dl.row dt {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+}
+dl.row dd {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.9rem;
+    color: var(--tvdb-text);
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+/* Poster / still images used outside .tvdb-media (kept for any page still
+   using the plain img.rounded.shadow-sm pattern) */
+img.rounded.shadow-sm {
+    border-radius: var(--tvdb-radius) !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* =========================================================================
+   Footer
+   ========================================================================= */
+
+.footer {
+    background: var(--tvdb-ink-2);
+    border-top: 1px solid var(--tvdb-line) !important;
+    color: rgba(241, 236, 226, 0.55);
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+}
+
+/* Bootstrap's .text-muted sets color with !important, which otherwise wins
+   over the rule above and makes footer text blend into the dark background. */
+.footer.text-muted,
+.footer .text-muted {
+    color: rgba(241, 236, 226, 0.55) !important;
+}
+
+.footer a {
+    color: rgba(241, 236, 226, 0.75);
+    text-decoration: none;
+}
+
+.footer a:hover, .footer a:focus-visible {
+    color: var(--tvdb-signal);
+    text-decoration: underline;
+}
+
+.footer .thetvdbattribution {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: rgba(241, 236, 226, 0.55);
+    text-decoration: none;
+}
+
+.footer .thetvdbattribution:hover,
+.footer .thetvdbattribution:focus-visible {
+    color: var(--tvdb-signal);
+}
+
+.footer .thetvdbattribution:hover img,
+.footer .thetvdbattribution:focus-visible img {
+    opacity: 1;
+}
+
+.footer .thetvdbattribution img {
+    opacity: 0.9;
+    transition: opacity 0.15s ease;
+}
+
+.footer .thetvdbattribution strong {
+    color: inherit;
+    font-family: var(--tvdb-font-ui);
+    font-weight: 600;
+}
+
+.footer .thetvdbattribution span {
+    max-width: 46ch;
+}
+
+@media (max-width: 576px) {
+    .footer .thetvdbattribution span {
+        display: none;
+    }
+}
+
+/* =========================================================================
+   NOTES — wiring this into the site
+   =========================================================================
+   1. In _Layout.cshtml <head>, replace any per-page font <link> tags and
+      add this stylesheet AFTER bootstrap.min.css so these rules win:
+
+        <link rel="stylesheet" href="~/css/tvdb-theme.css" />
+
+   2. Wrap each page's main content in a shell so it gets the paper-panel
+      treatment:
+
+        <div class="tvdb-shell">
+            ... existing page markup ...
+        </div>
+
+   3. Nothing else in existing Bootstrap-based markup needs to change —
+      .btn-primary, .alert-warning, .list-group-item, dl.row, etc. are
+      reskinned globally. Use .tvdb-media / .tvdb-slate / .tvdb-badge for
+      the poster-and-tally-light treatment on any new page.
+   ========================================================================= */

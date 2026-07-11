@@ -41,7 +41,7 @@ public sealed class SeasonDto
     public string? Year { get; init; }
 }
 
-public sealed class EpisodeDto
+public record EpisodeDto
 {
     [JsonPropertyName("absoluteNumber")]
     public int? AbsoluteNumber { get; init; }

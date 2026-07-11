@@ -16,6 +16,7 @@ public sealed class DetailsModel(
     ICurrentUserService currentUserService,
     IAppUserRepository appUserRepository,
     ITrackedSeriesRepository trackedSeriesRepository,
+    IEpisodeWatchRepository episodeWatchRepository,
     ILogger<DetailsModel> logger)
     : PageModel
 {
@@ -26,6 +27,7 @@ public sealed class DetailsModel(
     public int? Season { get; set; }
 
     public bool IsTrackedByCurrentUser { get; private set; }
+    public IReadOnlySet<int> WatchedEpisodeIds { get; private set; } = new HashSet<int>();
 
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
         => await LoadPageAsync(id, cancellationToken);
@@ -76,6 +78,50 @@ public sealed class DetailsModel(
         return RedirectToPage(new { id, season = Season });
     }
 
+    public async Task<IActionResult> OnPostToggleEpisodeWatchedAsync(
+        [FromRoute] int id,
+        [FromForm] int episodeId,
+        CancellationToken cancellationToken)
+    {
+        if (episodeId <= 0)
+            return RedirectToPage(new { id, season = Season });
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to track watched episodes.");
+            return RedirectToPage(new { id, season = Season });
+        }
+
+        try
+        {
+            var user = await appUserRepository.GetOrCreateByExternalIdAsync(
+                currentUserService.ExternalUserId!,
+                currentUserService.Email,
+                currentUserService.DisplayName,
+                cancellationToken);
+
+            var isWatched = await episodeWatchRepository.IsWatchedAsync(user.Id, episodeId, cancellationToken);
+
+            if (isWatched)
+            {
+                await episodeWatchRepository.MarkUnwatchedAsync(user.Id, episodeId, cancellationToken);
+                this.SetInfoToast("Episode marked as not watched.");
+            }
+            else
+            {
+                await episodeWatchRepository.MarkWatchedAsync(user.Id, id, episodeId, cancellationToken);
+                this.SetSuccessToast("Episode marked as watched.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed toggling watched state for series {SeriesId}, episode {EpisodeId}.", id, episodeId);
+            this.SetErrorToast("Could not update watched status right now.");
+        }
+
+        return RedirectToPage(new { id, season = Season });
+    }
+
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
     {
         if (id <= 0) return NotFound();
@@ -104,6 +150,7 @@ public sealed class DetailsModel(
                 cancellationToken);
 
             IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(user.Id, id, cancellationToken);
+            WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(user.Id, id, cancellationToken);
             return Page();
         }
         catch (TheTvDbApiException ex)

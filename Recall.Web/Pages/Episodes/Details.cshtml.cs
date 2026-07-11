@@ -2,17 +2,76 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
+using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Web.Pages.Episodes;
 
-public class DetailsModel(ILogger<DetailsModel> logger, ITheTvDbService theTvDbService) : PageModel
+public sealed class DetailsModel(
+    ILogger<DetailsModel> logger,
+    ITheTvDbService theTvDbService,
+    ICurrentUserService currentUserService,
+    IAppUserRepository appUserRepository,
+    IEpisodeWatchRepository episodeWatchRepository)
+    : PageModel
 {
     public EpisodeDto? Episode { get; set; }
+    public bool IsWatchedByCurrentUser { get; private set; }
     
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
         => await LoadPageAsync(id, cancellationToken);
+
+    public async Task<IActionResult> OnPostToggleWatchedAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (id <= 0)
+            return NotFound();
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to track watched episodes.");
+            return RedirectToPage(new { id });
+        }
+
+        try
+        {
+            var user = await appUserRepository.GetOrCreateByExternalIdAsync(
+                currentUserService.ExternalUserId!,
+                currentUserService.Email,
+                currentUserService.DisplayName,
+                cancellationToken);
+
+            var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
+            if (episode is null)
+                return NotFound();
+
+            if (episode.SeriesId is null || episode.SeriesId <= 0)
+            {
+                this.SetErrorToast("Episode does not have a valid series reference.");
+                return RedirectToPage(new { id });
+            }
+
+            var isWatched = await episodeWatchRepository.IsWatchedAsync(user.Id, id, cancellationToken);
+
+            if (isWatched)
+            {
+                await episodeWatchRepository.MarkUnwatchedAsync(user.Id, id, cancellationToken);
+                this.SetInfoToast("Episode marked as not watched.");
+            }
+            else
+            {
+                await episodeWatchRepository.MarkWatchedAsync(user.Id, episode.SeriesId.Value, id, cancellationToken);
+                this.SetSuccessToast("Episode marked as watched.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error while toggling watched status for episode {EpisodeId}.", id);
+            this.SetErrorToast("Could not update watched status right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
 
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
     {
@@ -21,6 +80,19 @@ public class DetailsModel(ILogger<DetailsModel> logger, ITheTvDbService theTvDbS
         try
         {
             Episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
+
+            if (Episode is not null &&
+                currentUserService.IsAuthenticated &&
+                !string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+            {
+                var user = await appUserRepository.GetOrCreateByExternalIdAsync(
+                    currentUserService.ExternalUserId!,
+                    currentUserService.Email,
+                    currentUserService.DisplayName,
+                    cancellationToken);
+
+                IsWatchedByCurrentUser = await episodeWatchRepository.IsWatchedAsync(user.Id, id, cancellationToken);
+            }
 
             return Page();
         }
