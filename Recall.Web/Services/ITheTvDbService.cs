@@ -1,4 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Services.Models;
 
 namespace Recall.Web.Services;
@@ -12,4 +13,5 @@ public interface ITheTvDbService
     Task<TvSeriesDetails?> GetSeriesByIdAsync(int seriesId, CancellationToken cancellationToken = default);
 
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);
+    Task<EpisodeDto?> GetEpisodeDetailsAsync(int episodeId, CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,326 @@
+@page "{id:int}"
+@model Recall.Web.Pages.Episodes.DetailsModel
+@using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series
+@{
+    var ep = Model.Episode;
+    ViewData["Title"] = ep?.Name ?? "Episode";
+
+    // ---- local formatting helpers -------------------------------------
+    string? FormatAired(string? aired)
+    {
+        if (string.IsNullOrWhiteSpace(aired)) return null;
+        return DateOnly.TryParse(aired, out var d) ? d.ToString("MMMM d, yyyy") : aired;
+    }
+
+    string? FormatRuntime(int? minutes)
+    {
+        if (minutes is null or <= 0) return null;
+        var h = minutes.Value / 60;
+        var m = minutes.Value % 60;
+        return h > 0 ? $"{h}h {m:D2}m" : $"{minutes} min";
+    }
+
+    string SlateCode(EpisodeDto e)
+    {
+        if (e.IsMovie == 1) return "MOVIE";
+        var s = e.SeasonNumber?.ToString("D2") ?? "--";
+        var n = e.Number?.ToString("D2") ?? "--";
+        return $"S{s} \u00B7 E{n}";
+    }
+
+    string? FinaleLabel(string? finaleType) => finaleType?.ToLowerInvariant() switch
+    {
+        "series" => "Series finale",
+        "season" => "Season finale",
+        "midseason" => "Midseason finale",
+        _ => null
+    };
+
+    var airedText = ep is null ? null : FormatAired(ep.Aired);
+    var runtimeText = ep is null ? null : FormatRuntime(ep.Runtime);
+    var finaleText = ep is null ? null : FinaleLabel(ep.FinaleType);
+    var eyebrowParts = new List<string>();
+    if (!string.IsNullOrWhiteSpace(ep?.SeasonName)) eyebrowParts.Add(ep!.SeasonName!.ToUpperInvariant());
+    if (!string.IsNullOrWhiteSpace(ep?.Year)) eyebrowParts.Add(ep!.Year!);
+    if (ep?.AbsoluteNumber is not null) eyebrowParts.Add($"ABS #{ep.AbsoluteNumber}");
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+    .ep-detail {
+        --ink: #151b24;
+        --ink-2: #1f2733;
+        --paper: #f1ece2;
+        --paper-dim: #e4ddcd;
+        --signal: #e8a33d;
+        --line: rgba(255, 255, 255, 0.08);
+        --ink-line: rgba(21, 27, 36, 0.12);
+        --muted: #7d746459;
+
+        background: var(--ink);
+        color: var(--paper);
+        padding: clamp(1.5rem, 4vw, 4rem);
+        border-radius: 4px;
+    }
+
+    .ep-detail * { box-sizing: border-box; }
+
+    .ep-card {
+        display: grid;
+        grid-template-columns: minmax(260px, 420px) 1fr;
+        gap: 0;
+        max-width: 1040px;
+        margin: 0 auto;
+        background: var(--ink-2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    @@media (max-width: 720px) {
+        .ep-card { grid-template-columns: 1fr; }
+    }
+
+    /* ---- media / slate ------------------------------------------------ */
+    .ep-media {
+        position: relative;
+        background: linear-gradient(155deg, #0d1117, #232c3a);
+        aspect-ratio: 16 / 9;
+        min-height: 220px;
+    }
+
+    .ep-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .ep-media.is-empty::after {
+        content: "No still available";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        color: rgba(241, 236, 226, 0.35);
+    }
+
+    .ep-slate {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(10, 13, 18, 0.72);
+        backdrop-filter: blur(2px);
+        border: 1px solid rgba(232, 163, 61, 0.35);
+        border-radius: 5px;
+        padding: 0.3rem 0.65rem;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: #f2e3c6;
+    }
+
+    .ep-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--signal);
+        box-shadow: 0 0 6px 1px rgba(232, 163, 61, 0.7);
+        animation: ep-pulse 2.2s ease-in-out infinite;
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .ep-dot { animation: none; }
+    }
+
+    @@keyframes ep-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
+    }
+
+    /* ---- content -------------------------------------------------------- */
+    .ep-content {
+        background: var(--paper);
+        color: var(--ink);
+        padding: clamp(1.25rem, 3vw, 2.25rem);
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+    }
+
+    .ep-eyebrow {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        color: #8a7f6a;
+        text-transform: uppercase;
+    }
+
+    .ep-title {
+        font-family: "Big Shoulders Display", sans-serif;
+        font-weight: 800;
+        font-size: clamp(1.8rem, 3.6vw, 2.6rem);
+        line-height: 1.02;
+        letter-spacing: 0.01em;
+        margin: 0;
+        color: var(--ink);
+    }
+
+    .ep-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1.1rem;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.82rem;
+        color: #4c463a;
+        border-top: 1px solid var(--ink-line);
+        border-bottom: 1px solid var(--ink-line);
+        padding: 0.6rem 0;
+    }
+
+    .ep-meta-item .ep-meta-label {
+        color: #a99b7d;
+        margin-right: 0.35rem;
+    }
+
+    .ep-badge {
+        align-self: flex-start;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #6b3d0f;
+        background: rgba(232, 163, 61, 0.28);
+        border: 1px solid rgba(232, 163, 61, 0.55);
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+    }
+
+    .ep-overview {
+        font-family: "Source Serif 4", serif;
+        font-size: 1.02rem;
+        line-height: 1.55;
+        color: #2c2a24;
+        margin: 0;
+    }
+
+    .ep-overview.is-empty {
+        color: #8a7f6a;
+        font-style: italic;
+    }
+
+    .ep-footer {
+        margin-top: auto;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--ink-line);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+        color: #a99b7d;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem 1rem;
+    }
+
+    .ep-back {
+        display: inline-block;
+        margin-bottom: 1.1rem;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: rgba(241, 236, 226, 0.7);
+        text-decoration: none;
+        max-width: 1040px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .ep-back:hover,
+    .ep-back:focus-visible {
+        color: var(--signal);
+        text-decoration: underline;
+    }
+</style>
+
+<div class="ep-detail">
+
+    @if (ep?.SeriesId is not null)
+    {
+        <a class="ep-back" href="/Series/Details/@ep.SeriesId">&larr; Back to series</a>
+    }
+
+    @if (ep is null)
+    {
+        <div class="ep-card">
+            <div class="ep-content">
+                <p class="ep-overview is-empty">This episode could not be loaded.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="ep-card">
+            <div class="ep-media @(string.IsNullOrWhiteSpace(ep.Image) ? "is-empty" : "")">
+                @if (!string.IsNullOrWhiteSpace(ep.Image))
+                {
+                    <img src="@ep.Image" alt="Still from @ep.Name" loading="lazy" />
+                }
+                <div class="ep-slate">
+                    <span class="ep-dot" aria-hidden="true"></span>
+                    <span>@SlateCode(ep)</span>
+                </div>
+            </div>
+
+            <div class="ep-content">
+                @if (eyebrowParts.Count > 0)
+                {
+                    <div class="ep-eyebrow">@string.Join(" \u00B7 ", eyebrowParts)</div>
+                }
+
+                <h1 class="ep-title">@(ep.Name ?? "Untitled episode")</h1>
+
+                <div class="ep-meta">
+                    @if (airedText is not null)
+                    {
+                        <span class="ep-meta-item"><span class="ep-meta-label">Aired</span>@airedText</span>
+                    }
+                    @if (runtimeText is not null)
+                    {
+                        <span class="ep-meta-item"><span class="ep-meta-label">Runtime</span>@runtimeText</span>
+                    }
+                </div>
+
+                @if (finaleText is not null)
+                {
+                    <span class="ep-badge">@finaleText</span>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(ep.Overview))
+                {
+                    <p class="ep-overview">@ep.Overview</p>
+                }
+                else
+                {
+                    <p class="ep-overview is-empty">No overview available for this episode yet.</p>
+                }
+
+                <div class="ep-footer">
+                    <span>Episode ID @ep.Id</span>
+                    @if (ep.LastUpdated is not null)
+                    {
+                        <span>Updated @ep.LastUpdated</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>

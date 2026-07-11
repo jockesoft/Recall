@@ -25,7 +25,6 @@ public sealed class DetailsModel(
     [BindProperty(SupportsGet = true)]
     public int? Season { get; set; }
 
-    public string? ErrorMessage { get; private set; }
     public bool IsTrackedByCurrentUser { get; private set; }
 
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
@@ -110,14 +109,20 @@ public sealed class DetailsModel(
         catch (TheTvDbApiException ex)
         {
             logger.LogWarning(ex, "TheTVDB API error while loading details for id {SeriesId}.", id);
-            ErrorMessage = "Could not fetch series details from TheTVDB right now.";
+            this.SetErrorToast("Could not fetch series details from TheTVDB right now.");
             return Page();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected error while loading details for id {SeriesId}.", id);
-            ErrorMessage = "An unexpected error occurred.";
+            this.SetErrorToast("An unexpected error occurred.");
             return Page();
         }
+    }
+
+    public string GetSeasonName(int season)
+    {
+        if (season == 0) return "Specials";
+        else return "Season " + season;
     }
 }

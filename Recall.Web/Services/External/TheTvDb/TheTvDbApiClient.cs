@@ -209,7 +209,7 @@ public sealed class TheTvDbApiClient(
         string language,
         CancellationToken cancellationToken = default)
     {
-        if (episodeId <= 0) throw new ArgumentOutOfRangeException(nameof(episodeId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(episodeId);
         if (string.IsNullOrWhiteSpace(language)) throw new ArgumentException("Language is required.", nameof(language));
 
         var envelope = await SendAsync<TheTvDbEnvelopeDto<EpisodeTranslationDataDto>>(
@@ -219,6 +219,19 @@ public sealed class TheTvDbApiClient(
         return envelope.Data;
     }
 
+    public async Task<EpisodeDto?> GetEpisodeInformationByIdAsync(
+        int episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(episodeId);
+
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<EpisodeDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"episodes/{episodeId}"),
+            cancellationToken);
+
+        return envelope.Data;
+    }
+    
     private static TimeSpan Jitter(TimeSpan baseTtl, double pct)
     {
         var factor = 1 + (Random.Shared.NextDouble() * 2 - 1) * pct; // e.g. 0.9..1.1

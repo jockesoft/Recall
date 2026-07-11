@@ -27,4 +27,8 @@ public interface ITheTvDbApiClient
         int episodeId,
         string language,
         CancellationToken cancellationToken = default);
+
+    Task<EpisodeDto?> GetEpisodeInformationByIdAsync(
+        int episodeId,
+        CancellationToken cancellationToken = default);
 }

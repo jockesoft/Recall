@@ -1,4 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Models;
 
@@ -40,4 +41,9 @@ public sealed class TheTvDbService(ITheTvDbApiClient apiClient) : ITheTvDbServic
         int seriesId,
         CancellationToken cancellationToken = default)
         => apiClient.GetSeriesAggregateByIdAsync(seriesId, "eng", cancellationToken);
+    
+    public Task<EpisodeDto?> GetEpisodeDetailsAsync(
+        int episodeId,
+        CancellationToken cancellationToken = default)
+        => apiClient.GetEpisodeInformationByIdAsync(episodeId, cancellationToken);
 }
