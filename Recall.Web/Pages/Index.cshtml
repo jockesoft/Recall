@@ -1,10 +1,173 @@
-﻿@page
+@* -----------------------------------------------------------------------
+   Assumed IndexModel shape — adjust to match your actual PageModel:
+
+   public sealed class IndexModel : PageModel
+   {
+       public int TrackedSeriesCount { get; set; }
+       public int UpcomingThisWeekCount { get; set; }
+       public int UnwatchedCount { get; set; }
+       public List<UpcomingEpisodeItem> UpcomingEpisodes { get; set; } = [];
+       public List<CatchUpItem> CatchUpEpisodes { get; set; } = [];
+
+       public async Task OnGetAsync() { ... }
+
+       public async Task<IActionResult> OnPostMarkWatchedAsync(int episodeId) { ... }
+   }
+
+   public sealed class UpcomingEpisodeItem
+   {
+       public int SeriesId { get; init; }
+       public string SeriesName { get; init; } = "";
+       public int EpisodeId { get; init; }
+       public int? SeasonNumber { get; init; }
+       public int? EpisodeNumber { get; init; }
+       public string Name { get; init; } = "";
+       public string? ImageUrl { get; init; }
+       public DateOnly AiredDate { get; init; }
+   }
+
+   public sealed class CatchUpItem
+   {
+       public int SeriesId { get; init; }
+       public string SeriesName { get; init; } = "";
+       public int EpisodeId { get; init; }
+       public int? SeasonNumber { get; init; }
+       public int? EpisodeNumber { get; init; }
+       public string Name { get; init; } = "";
+       public string? ImageUrl { get; init; }
+   }
+   ----------------------------------------------------------------------- *@
+@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Home";
+
+    string SlateCode(int? season, int? number)
+    {
+        var s = season?.ToString("D2") ?? "--";
+        var n = number?.ToString("D2") ?? "--";
+        return $"S{s} \u00B7 E{n}";
+    }
+
+    string DayGroup(DateOnly aired)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var days = aired.DayNumber - today.DayNumber;
+        return days switch
+        {
+            0 => "Today",
+            1 => "Tomorrow",
+            <= 7 => "This week",
+            _ => "Later"
+        };
+    }
+
+    var hasLibrary = Model.TrackedSeriesCount > 0;
+    var groupedUpcoming = Model.UpcomingEpisodes
+        .GroupBy(e => DayGroup(e.AiredDate))
+        .OrderBy(g => g.Key switch { "Today" => 0, "Tomorrow" => 1, "This week" => 2, _ => 3 });
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="tvdb-shell">
+    <div class="tvdb-eyebrow mb-1">Your channel &middot; @DateTime.Today.ToString("dddd, MMMM d")</div>
+    <h1 class="tvdb-display mb-3">Home</h1>
+
+    @if (!hasLibrary)
+    {
+        <div class="tvdb-empty-state">
+            <div class="tvdb-slate--inline mb-3"><span class="tvdb-dot" aria-hidden="true"></span> NO SIGNAL</div>
+            <h2 class="tvdb-display">Nothing on your schedule yet</h2>
+            <p class="tvdb-prose text-muted">Add a few shows to your library and this page turns into your personal air-date guide.</p>
+            <a asp-page="/Series/Search" class="btn btn-primary mt-2">Find series to track</a>
+        </div>
+    }
+    else
+    {
+        <div class="tvdb-stat-row">
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.TrackedSeriesCount</div>
+                <div class="tvdb-stat-label">Tracked series</div>
+            </div>
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.UpcomingThisWeekCount</div>
+                <div class="tvdb-stat-label">Airing this week</div>
+            </div>
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.UnwatchedCount</div>
+                <div class="tvdb-stat-label">Unwatched episodes</div>
+            </div>
+        </div>
+
+        <h4 class="mb-0">Upcoming</h4>
+
+        @if (Model.UpcomingEpisodes.Count == 0)
+        {
+            <div class="alert alert-info mt-3">Nothing airing soon for the series you track.</div>
+        }
+        else
+        {
+            @foreach (var group in groupedUpcoming)
+            {
+                <div class="tvdb-schedule-day">@group.Key</div>
+                @foreach (var ep in group)
+                {
+                    <div class="tvdb-episode-row">
+                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(ep.ImageUrl) ? "is-empty" : "")">
+                            @if (!string.IsNullOrWhiteSpace(ep.ImageUrl))
+                            {
+                                <img src="@ep.ImageUrl" alt="" class="tvdb-thumb" />
+                            }
+                            else
+                            {
+                                <span>No art</span>
+                            }
+                        </div>
+                        <div>
+                            <div class="tvdb-episode-series">@ep.SeriesName</div>
+                            <div class="tvdb-episode-title">
+                                <span class="tvdb-slate--inline me-1">@SlateCode(ep.SeasonNumber, ep.EpisodeNumber)</span>
+                                <a asp-page="/Episodes/Details" asp-route-id="@ep.EpisodeId">@ep.Name</a>
+                            </div>
+                        </div>
+                        <div class="tvdb-episode-meta">
+                            <span class="tvdb-mono small">@ep.AiredDate.ToString("MMM d")</span>
+                            <a asp-page="/Series/Details" asp-route-id="@ep.SeriesId" class="tvdb-mono small">View series</a>
+                        </div>
+                    </div>
+                }
+            }
+        }
+
+        @if (Model.CatchUpEpisodes.Count > 0)
+        {
+            <h4 class="mt-4 mb-0">Catch up</h4>
+            @foreach (var ep in Model.CatchUpEpisodes)
+            {
+                <div class="tvdb-episode-row">
+                    <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(ep.ImageUrl) ? "is-empty" : "")">
+                        @if (!string.IsNullOrWhiteSpace(ep.ImageUrl))
+                        {
+                            <img src="@ep.ImageUrl" alt="" class="tvdb-thumb" />
+                        }
+                        else
+                        {
+                            <span>No art</span>
+                        }
+                    </div>
+                    <div>
+                        <div class="tvdb-episode-series">@ep.SeriesName</div>
+                        <div class="tvdb-episode-title">
+                            <span class="tvdb-slate--inline me-1">@SlateCode(ep.SeasonNumber, ep.EpisodeNumber)</span>
+                            <a asp-page="/Episodes/Details" asp-route-id="@ep.EpisodeId">@ep.Name</a>
+                        </div>
+                    </div>
+                    <div class="tvdb-episode-meta">
+                        <form method="post" asp-page-handler="MarkWatched" asp-route-episodeId="@ep.EpisodeId">
+                            <button type="submit" class="btn btn-watch">Mark watched</button>
+                        </form>
+                    </div>
+                </div>
+            }
+        }
+    }
 </div>

@@ -499,6 +499,152 @@ img.rounded.shadow-sm {
 }
 
 /* =========================================================================
+   Homepage schedule components
+   ========================================================================= */
+
+.tvdb-stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.tvdb-stat {
+    flex: 1 1 160px;
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+}
+
+.tvdb-stat-value {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    font-size: 1.9rem;
+    line-height: 1;
+    color: var(--tvdb-text);
+}
+
+.tvdb-stat-label {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-schedule-day {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+    margin: 1.5rem 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-schedule-day:first-of-type {
+    margin-top: 0;
+}
+
+.tvdb-episode-row {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.6rem 0.25rem;
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-episode-row:last-child {
+    border-bottom: none;
+}
+
+.tvdb-thumb {
+    flex: none;
+    width: 56px;
+    height: 84px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--tvdb-ink-2);
+}
+
+.tvdb-thumb.is-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.6rem;
+    color: rgba(241, 236, 226, 0.35);
+    text-align: center;
+}
+
+.tvdb-slate--inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--tvdb-ink-2);
+    border: 1px solid rgba(232, 163, 61, 0.35);
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    color: #f2e3c6;
+}
+
+.tvdb-episode-row .tvdb-episode-title {
+    font-weight: 600;
+    color: var(--tvdb-text);
+}
+
+.tvdb-episode-row .tvdb-episode-series {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.75rem;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-episode-meta {
+    margin-left: auto;
+    text-align: right;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+}
+
+.tvdb-episode-meta .tvdb-mono {
+    color: var(--tvdb-text-muted);
+}
+
+.btn-watch {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    color: var(--tvdb-ok-ink);
+    background: rgba(111, 157, 111, 0.16);
+    border: 1px solid rgba(111, 157, 111, 0.45);
+}
+
+.btn-watch:hover, .btn-watch:focus-visible {
+    background: var(--tvdb-ok);
+    border-color: var(--tvdb-ok);
+    color: #1c2b1c;
+}
+
+.tvdb-empty-state {
+    text-align: center;
+    padding: 2.5rem 1rem;
+}
+
+.tvdb-empty-state .tvdb-display {
+    font-size: 1.6rem;
+    margin-bottom: 0.4rem;
+}
+
+/* =========================================================================
    NOTES — wiring this into the site
    =========================================================================
    1. In _Layout.cshtml <head>, replace any per-page font <link> tags and

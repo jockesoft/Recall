@@ -20,7 +20,8 @@ public class DevAuthMiddleware(RequestDelegate next, ILogger<DevAuthMiddleware> 
             {
                 new(ClaimTypes.NameIdentifier, "1"), // or a real test user ID
                 new(ClaimTypes.Name, "dev-user"),
-                new(ClaimTypes.Email, "dev@example.com")
+                new(ClaimTypes.Email, "dev@example.com"),
+                new(ClaimTypes.UserData, Guid.NewGuid().ToString())
             };
 
             var identity = new ClaimsIdentity(claims, "DevAuth");
