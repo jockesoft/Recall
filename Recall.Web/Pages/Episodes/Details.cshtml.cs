@@ -12,7 +12,6 @@ public sealed class DetailsModel(
     ILogger<DetailsModel> logger,
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
-    IAppUserRepository appUserRepository,
     IEpisodeWatchRepository episodeWatchRepository)
     : PageModel
 {
@@ -35,11 +34,7 @@ public sealed class DetailsModel(
 
         try
         {
-            var user = await appUserRepository.GetOrCreateByExternalIdAsync(
-                currentUserService.ExternalUserId!,
-                currentUserService.Email,
-                currentUserService.DisplayName,
-                cancellationToken);
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
             var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
             if (episode is null)
@@ -51,16 +46,16 @@ public sealed class DetailsModel(
                 return RedirectToPage(new { id });
             }
 
-            var isWatched = await episodeWatchRepository.IsWatchedAsync(user.Id, id, cancellationToken);
+            var isWatched = await episodeWatchRepository.IsWatchedAsync(userId, id, cancellationToken);
 
             if (isWatched)
             {
-                await episodeWatchRepository.MarkUnwatchedAsync(user.Id, id, cancellationToken);
+                await episodeWatchRepository.MarkUnwatchedAsync(userId, id, cancellationToken);
                 this.SetInfoToast("Episode marked as not watched.");
             }
             else
             {
-                await episodeWatchRepository.MarkWatchedAsync(user.Id, episode.SeriesId.Value, id, cancellationToken);
+                await episodeWatchRepository.MarkWatchedAsync(userId, episode.SeriesId.Value, id, cancellationToken);
                 this.SetSuccessToast("Episode marked as watched.");
             }
         }
@@ -85,13 +80,9 @@ public sealed class DetailsModel(
                 currentUserService.IsAuthenticated &&
                 !string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
             {
-                var user = await appUserRepository.GetOrCreateByExternalIdAsync(
-                    currentUserService.ExternalUserId!,
-                    currentUserService.Email,
-                    currentUserService.DisplayName,
-                    cancellationToken);
+                var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
-                IsWatchedByCurrentUser = await episodeWatchRepository.IsWatchedAsync(user.Id, id, cancellationToken);
+                IsWatchedByCurrentUser = await episodeWatchRepository.IsWatchedAsync(userId, id, cancellationToken);
             }
 
             return Page();

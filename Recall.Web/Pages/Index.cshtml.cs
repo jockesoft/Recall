@@ -1,27 +1,12 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Web.Pages;
-
-// ---------------------------------------------------------------------------
-// PLACEHOLDER CONTRACTS — you very likely already have equivalents of these
-// two, since /Series/Library and the "ToggleLibrary" handler need library
-// tracking, and you said per-episode watched status already exists. Swap
-// these for whatever you already have; only the method shapes matter here.
-// ---------------------------------------------------------------------------
-
-public interface IWatchedEpisodeRepository
-{
-    /// <summary>Returns the subset of the given episode ids the user has already marked watched.</summary>
-    Task<HashSet<int>> GetWatchedEpisodeIdsAsync(string userId, IEnumerable<int> episodeIds, CancellationToken cancellationToken);
-
-    Task MarkWatchedAsync(string userId, int episodeId, CancellationToken cancellationToken);
-}
 
 // ---------------------------------------------------------------------------
 // View DTOs — match the properties used in Index.cshtml
@@ -59,7 +44,8 @@ public sealed class IndexModel(
     ITheTvDbApiClient tvdbClient,
     ITrackedSeriesRepository libraryRepository,
     IEpisodeWatchRepository watchedRepository,
-    ILogger<IndexModel> logger) : PageModel
+    ILogger<IndexModel> logger,
+    ICurrentUserService currentUserService) : PageModel
 {
     private const int UpcomingWindowDays = 30;
     private const int ThisWeekWindowDays = 7;
@@ -72,7 +58,7 @@ public sealed class IndexModel(
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        var userId = GetUserId();
+        var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
         var trackedSeriesIds = await libraryRepository.GetByUserAsync(userId, cancellationToken);
         TrackedSeriesCount = trackedSeriesIds.Count;
 
@@ -156,7 +142,7 @@ public sealed class IndexModel(
 
     public async Task<IActionResult> OnPostMarkWatchedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
     {
-        var userId = GetUserId();
+        var userId = currentUserService.UserId  ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
         await watchedRepository.MarkWatchedAsync(userId, seriesId, episodeId, cancellationToken);
         return RedirectToPage();
     }
@@ -178,8 +164,4 @@ public sealed class IndexModel(
             return null;
         }
     }
-
-    private Guid GetUserId() =>
-        Guid.TryParse(User.FindFirstValue(ClaimTypes.UserData), out var userId) ? userId
-        : throw new InvalidOperationException("No authenticated user id found on the current request.");
 }

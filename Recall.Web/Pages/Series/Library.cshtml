@@ -11,13 +11,7 @@
         <a asp-page="/Series/Search" class="btn btn-outline-primary">Find series</a>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
-    {
-        <div class="alert alert-danger" role="alert">
-            @Model.ErrorMessage
-        </div>
-    }
-    else if (Model.Items.Count == 0)
+    @if (Model.Items.Count == 0)
     {
         <div class="alert alert-info" role="alert">
             Your library is empty. Search and save series to get started.
@@ -32,6 +26,17 @@
             {
                 <div class="list-group-item">
                     <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "is-empty" : "")">
+                            @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                            {
+                                <img src="@item.ImageUrl" alt="" class="tvdb-thumb" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span>No art</span>
+                            }
+                        </div>
+
                         <div class="flex-grow-1">
                             <h5 class="mb-1">@item.Name</h5>
 

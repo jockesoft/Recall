@@ -4,7 +4,6 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
-using Recall.Web.Pages;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Models;
@@ -14,7 +13,6 @@ namespace Recall.Web.Pages.Series;
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
-    IAppUserRepository appUserRepository,
     ITrackedSeriesRepository trackedSeriesRepository,
     IEpisodeWatchRepository episodeWatchRepository,
     ILogger<DetailsModel> logger)
@@ -42,26 +40,21 @@ public sealed class DetailsModel(
 
         try
         {
-            var user = await appUserRepository.GetOrCreateByExternalIdAsync(
-                currentUserService.ExternalUserId!,
-                currentUserService.Email,
-                currentUserService.DisplayName,
-                cancellationToken);
-
-            var existing = await trackedSeriesRepository.GetByUserAndTvdbIdAsync(user.Id, id, cancellationToken);
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            var existing = await trackedSeriesRepository.GetByUserAndTvdbIdAsync(userId, id, cancellationToken);
 
             if (existing is null)
             {
                 var series = await theTvDbService.GetSeriesByIdAsync(id, cancellationToken);
                 if (series is null) return NotFound();
 
-                var tracked = TrackedSeriesMappings.FromTvDbDetails(user.Id, series);
+                var tracked = TrackedSeriesMappings.FromTvDbDetails(userId, series);
                 await trackedSeriesRepository.AddAsync(tracked, cancellationToken);
                 this.SetSuccessToast("Series saved to your library.");
             }
             else
             {
-                await trackedSeriesRepository.RemoveAsync(user.Id, existing.Id, cancellationToken);
+                await trackedSeriesRepository.RemoveAsync(userId, existing.Id, cancellationToken);
                 this.SetInfoToast("Series removed from your library.");
             }
         }
@@ -94,22 +87,17 @@ public sealed class DetailsModel(
 
         try
         {
-            var user = await appUserRepository.GetOrCreateByExternalIdAsync(
-                currentUserService.ExternalUserId!,
-                currentUserService.Email,
-                currentUserService.DisplayName,
-                cancellationToken);
-
-            var isWatched = await episodeWatchRepository.IsWatchedAsync(user.Id, episodeId, cancellationToken);
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            var isWatched = await episodeWatchRepository.IsWatchedAsync(userId, episodeId, cancellationToken);
 
             if (isWatched)
             {
-                await episodeWatchRepository.MarkUnwatchedAsync(user.Id, episodeId, cancellationToken);
+                await episodeWatchRepository.MarkUnwatchedAsync(userId, episodeId, cancellationToken);
                 this.SetInfoToast("Episode marked as not watched.");
             }
             else
             {
-                await episodeWatchRepository.MarkWatchedAsync(user.Id, id, episodeId, cancellationToken);
+                await episodeWatchRepository.MarkWatchedAsync(userId, id, episodeId, cancellationToken);
                 this.SetSuccessToast("Episode marked as watched.");
             }
         }
@@ -143,14 +131,10 @@ public sealed class DetailsModel(
             if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
                 return Page();
 
-            var user = await appUserRepository.GetOrCreateByExternalIdAsync(
-                currentUserService.ExternalUserId!,
-                currentUserService.Email,
-                currentUserService.DisplayName,
-                cancellationToken);
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
-            IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(user.Id, id, cancellationToken);
-            WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(user.Id, id, cancellationToken);
+            IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
+            WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, id, cancellationToken);
             return Page();
         }
         catch (TheTvDbApiException ex)

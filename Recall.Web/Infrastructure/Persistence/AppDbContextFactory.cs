@@ -1,13 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Npgsql;
-using Recall.Web.Infrastructure.Persistence;
 
-namespace Recall.Web.Infrastructure;
+namespace Recall.Web.Infrastructure.Persistence;
 
-public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+public class AppDbContextFactory //: IDesignTimeDbContextFactory<AppDbContext>
 {
-    public AppDbContext CreateDbContext(string[] args)
+/*    public AppDbContext CreateDbContext(string[] args)
     {
         // Build config manually
         var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
@@ -35,5 +34,5 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
         });
 
         return new AppDbContext(optionsBuilder.Options);
-    }
+    }*/
 }

@@ -6,4 +6,5 @@ public interface ICurrentUserService
     string? ExternalUserId { get; }
     string? Email { get; }
     string? DisplayName { get; }
+    Guid? UserId { get; }
 }

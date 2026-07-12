@@ -10,6 +10,9 @@ public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
     public string? ExternalUserId =>
         httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
+    public Guid? UserId =>
+        Guid.TryParse(ExternalUserId, out var id) ? id : null;
+
     public string? Email =>
         FindFirstValue(ClaimTypes.Email);
 

@@ -4,59 +4,76 @@
     ViewData["Title"] = "Series Search";
 }
 
-<h1 class="mb-3">Search TV Series</h1>
+<div class="tvdb-shell">
+    <h1 class="tvdb-display mb-3">Search TV Series</h1>
 
-<form method="get" class="row g-2 mb-4">
-    <div class="col-md-8">
-        <label asp-for="Query" class="form-label"></label>
-        <input asp-for="Query" class="form-control" placeholder="e.g. Dark, Breaking Bad..." />
-        <span asp-validation-for="Query" class="text-danger"></span>
-    </div>
-    <div class="col-md-4 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary w-100">Search</button>
-    </div>
-</form>
+    <form method="get" class="row g-2 mb-4">
+        <div class="col-md-8">
+            <label asp-for="Query" class="form-label"></label>
+            <input asp-for="Query" class="form-control" placeholder="e.g. Dark, Breaking Bad..." />
+            <span asp-validation-for="Query" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">Search</button>
+        </div>
+    </form>
 
-@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
-{
-    <div class="alert alert-danger" role="alert">
-        @Model.ErrorMessage
-    </div>
-}
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            @Model.ErrorMessage
+        </div>
+    }
 
-@if (Model.HasSearched && Model.Results.Count == 0 && string.IsNullOrWhiteSpace(Model.ErrorMessage))
-{
-    <div class="alert alert-info" role="alert">
-        No series found for <strong>@Model.Query</strong>.
-    </div>
-}
+    @if (Model.HasSearched && Model.Results.Count == 0 && string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-info" role="alert">
+            No series found for <strong>@Model.Query</strong>.
+        </div>
+    }
 
-@if (Model.Results.Count > 0)
-{
-    <p class="text-muted">Found @Model.Results.Count result(s).</p>
+    @if (Model.Results.Count > 0)
+    {
+        <p class="tvdb-mono text-muted">Found @Model.Results.Count result(s).</p>
 
-    <div class="list-group">
-        @foreach (var series in Model.Results)
-        {
-            <a asp-page="/Series/Details"
-               asp-route-id="@series.TvdbId"
-               class="list-group-item list-group-item-action">
-                <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1">@series.Name</h5>
-                    @if (!string.IsNullOrWhiteSpace(series.Year))
-                    {
-                        <small>@series.Year</small>
-                    }
-                </div>
+        <div class="list-group">
+            @foreach (var series in Model.Results)
+            {
+                <a asp-page="/Series/Details"
+                   asp-route-id="@series.TvdbId"
+                   class="list-group-item list-group-item-action">
+                    <div class="d-flex gap-3 align-items-start">
+                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(series.ImageUrl) ? "is-empty" : "")">
+                            @if (!string.IsNullOrWhiteSpace(series.ImageUrl))
+                            {
+                                <img src="@series.ImageUrl" alt="" class="tvdb-thumb" loading="lazy"/>
+                            }
+                            else
+                            {
+                                <span>No art</span>
+                            }
+                        </div>
 
-                @if (!string.IsNullOrWhiteSpace(series.Overview))
-                {
-                    <p class="mb-1 text-muted">@series.Overview</p>
-                }
-            </a>
-        }
-    </div>
-}
+                        <div class="flex-grow-1">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">@series.Name</h5>
+                                @if (!string.IsNullOrWhiteSpace(series.Year))
+                                {
+                                    <small class="tvdb-mono">@series.Year</small>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(series.Overview))
+                            {
+                                <p class="mb-1 tvdb-prose text-muted">@series.Overview</p>
+                            }
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
