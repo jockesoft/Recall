@@ -96,18 +96,49 @@
                         <span class="tvdb-badge tvdb-badge--amber d-inline-block">@finaleText</span>
                     }
 
-                    <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id" class="d-inline">
-                        @if (Model.IsWatchedByCurrentUser)
-                        {
+                    @if (Model.IsWatchedByCurrentUser)
+                    {
+                        <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id" class="d-inline">
                             <button type="submit" class="tvdb-badge tvdb-badge--ok tvdb-watched-toggle" title="Mark as unwatched">
                                 <span aria-hidden="true">&#10003;</span> Watched
                             </button>
-                        }
-                        else
-                        {
+                        </form>
+                    }
+                    else if (Model.PriorUnwatchedCount == 0)
+                    {
+                        <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id" class="d-inline">
                             <button type="submit" class="btn btn-watch">Mark as watched</button>
-                        }
-                    </form>
+                        </form>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-watch" data-bs-toggle="modal" data-bs-target="#markWatchedModal">
+                            Mark as watched
+                        </button>
+
+                        <div class="modal fade" id="markWatchedModal" tabindex="-1" aria-labelledby="markWatchedModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="markWatchedModalLabel">Catch up?</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body tvdb-prose">
+                                        You have <strong>@Model.PriorUnwatchedCount</strong> earlier unwatched episode@(Model.PriorUnwatchedCount == 1 ? "" : "s") in this series.
+                                        Mark @(Model.PriorUnwatchedCount == 1 ? "it" : "those") as watched too?
+                                    </div>
+                                    <div class="modal-footer">
+                                        <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id">
+                                            <button type="submit" class="btn btn-outline-dark">Just this episode</button>
+                                        </form>
+                                        <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@ep.Id">
+                                            <button type="submit" class="btn btn-watch">Mark this &amp; earlier episodes</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(ep.Overview))

@@ -810,6 +810,30 @@ img.rounded.shadow-sm {
 }
 
 /* =========================================================================
+   Modals
+   ========================================================================= */
+
+.modal-content {
+    background: var(--tvdb-paper);
+    color: var(--tvdb-text);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: 10px;
+}
+
+.modal-header, .modal-footer {
+    border-color: var(--tvdb-ink-line);
+}
+
+.modal-title {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+}
+
+/* Modal sits on the paper surface, so Bootstrap's default dark btn-close
+   is already correct here — unlike the toast stack / footer / navbar,
+   this one is intentionally left unstyled. */
+
+/* =========================================================================
    NOTES — wiring this into the site
    =========================================================================
    1. In _Layout.cshtml <head>, replace any per-page font <link> tags and
