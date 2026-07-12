@@ -17,12 +17,16 @@ public sealed class EpisodeWatchRepository(
 
     public async Task<IReadOnlySet<int>> GetWatchedEpisodeIdsAsync(
         Guid userId,
-        int seriesTvdbId,
+        IEnumerable<int> seriesTvdbIds,
         CancellationToken cancellationToken = default)
     {
+        var seriesIds = seriesTvdbIds as ICollection<int> ?? seriesTvdbIds.ToList();
+        if (seriesIds.Count == 0)
+            return new HashSet<int>();
+
         var ids = await dbContext.EpisodeWatches
             .AsNoTracking()
-            .Where(x => x.UserId == userId && x.SeriesTvdbId == seriesTvdbId)
+            .Where(x => x.UserId == userId && seriesIds.Contains(x.SeriesTvdbId))
             .Select(x => x.EpisodeTvdbId)
             .ToListAsync(cancellationToken);
 

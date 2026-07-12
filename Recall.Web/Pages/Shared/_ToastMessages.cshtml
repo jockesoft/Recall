@@ -4,26 +4,48 @@
     var info = TempData["Toast.Info"] as string;
 }
 
-@if (!string.IsNullOrWhiteSpace(success))
-{
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        @success
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
+<div class="tvdb-toast-stack">
+    @if (!string.IsNullOrWhiteSpace(success))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @success
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
 
-@if (!string.IsNullOrWhiteSpace(error))
-{
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        @error
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @error
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
 
-@if (!string.IsNullOrWhiteSpace(info))
+    @if (!string.IsNullOrWhiteSpace(info))
+    {
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            @info
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+</div>
+
+@if (!string.IsNullOrWhiteSpace(success) || !string.IsNullOrWhiteSpace(error) || !string.IsNullOrWhiteSpace(info))
 {
-    <div class="alert alert-info alert-dismissible fade show" role="alert">
-        @info
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+    <script>
+        // Auto-dismiss toasts after a few seconds. Registered on DOMContentLoaded
+        // rather than run immediately, since this partial renders near the top
+        // of <body> — before bootstrap.bundle.min.js loads at the bottom — so
+        // `bootstrap` wouldn't exist yet if this ran inline.
+        document.addEventListener('DOMContentLoaded', function () {
+            var toasts = document.querySelectorAll('.tvdb-toast-stack .alert');
+            toasts.forEach(function (toastEl) {
+                setTimeout(function () {
+                    if (typeof bootstrap === 'undefined') return;
+                    var alert = bootstrap.Alert.getOrCreateInstance(toastEl);
+                    alert.close();
+                }, 5000);
+            });
+        });
+    </script>
 }

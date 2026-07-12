@@ -90,10 +90,25 @@
                     }
                 </div>
 
-                @if (finaleText is not null)
-                {
-                    <span class="tvdb-badge tvdb-badge--amber mb-3 d-inline-block">@finaleText</span>
-                }
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    @if (finaleText is not null)
+                    {
+                        <span class="tvdb-badge tvdb-badge--amber d-inline-block">@finaleText</span>
+                    }
+
+                    <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id" class="d-inline">
+                        @if (Model.IsWatchedByCurrentUser)
+                        {
+                            <button type="submit" class="tvdb-badge tvdb-badge--ok tvdb-watched-toggle" title="Mark as unwatched">
+                                <span aria-hidden="true">&#10003;</span> Watched
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="btn btn-watch">Mark as watched</button>
+                        }
+                    </form>
+                </div>
 
                 @if (!string.IsNullOrWhiteSpace(ep.Overview))
                 {

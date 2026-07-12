@@ -6,7 +6,7 @@ public interface IEpisodeWatchRepository
 
     Task<IReadOnlySet<int>> GetWatchedEpisodeIdsAsync(
         Guid userId,
-        int seriesTvdbId,
+        IEnumerable<int> seriesTvdbIds,
         CancellationToken cancellationToken = default);
 
     Task MarkWatchedAsync(

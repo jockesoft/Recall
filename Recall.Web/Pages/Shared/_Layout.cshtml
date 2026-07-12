@@ -49,8 +49,6 @@
 </header>
 <div class="container">
     <main role="main" class="pb-3">
-        <partial name="_ToastMessages" />
-        
         @RenderBody()
     </main>
 </div>
@@ -67,6 +65,8 @@
         </a>
     </div>
 </footer>
+
+<partial name="_ToastMessages" />
 
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

@@ -71,8 +71,8 @@ public sealed class IndexModel(
             .Select(a => a!)
             .ToList();
 
-        var allEpisodeIds = aggregates.SelectMany(a => a.Episodes).Select(e => e.Id).ToList();
-        var watchedIds = await watchedRepository.GetWatchedEpisodeIdsAsync(userId, allEpisodeIds[0], cancellationToken);
+        var seriesIds = aggregates.Select(a => a.TvdbId).ToList();
+        var watchedIds = await watchedRepository.GetWatchedEpisodeIdsAsync(userId, seriesIds, cancellationToken);
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         var upcomingCutoff = today.AddDays(UpcomingWindowDays);

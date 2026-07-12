@@ -108,6 +108,27 @@ hr {
     color: var(--tvdb-signal) !important;
 }
 
+/* Bootstrap's .text-dark also sets color with !important — used on your
+   actual nav-link markup, and would otherwise render invisible on the
+   now-dark navbar, same root cause as the footer/search-page issues. */
+.navbar .text-dark {
+    color: rgba(241, 236, 226, 0.75) !important;
+}
+.navbar .text-dark:hover,
+.navbar .text-dark:focus {
+    color: var(--tvdb-signal) !important;
+}
+
+/* Hamburger icon on navbar-light is a dark SVG mask — invert it so it's
+   visible on the dark navbar. */
+.navbar-toggler-icon {
+    filter: invert(1) brightness(2);
+}
+
+.navbar-toggler {
+    border-color: var(--tvdb-line);
+}
+
 /* =========================================================================
    Content shell — the "paper sheet" that page content sits on.
    Wrap a page's main content in <div class="tvdb-shell"> ... </div>
@@ -276,6 +297,20 @@ hr {
     color: var(--tvdb-ok-ink);
     background: rgba(111, 157, 111, 0.22);
     border: 1px solid rgba(111, 157, 111, 0.5);
+}
+
+/* Badge-as-button, used for the watched/unwatched toggle */
+button.tvdb-badge {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.tvdb-watched-toggle:hover,
+.tvdb-watched-toggle:focus-visible {
+    background: rgba(181, 83, 60, 0.18);
+    border-color: rgba(181, 83, 60, 0.5);
+    color: var(--tvdb-danger-ink);
 }
 
 /* =========================================================================
@@ -681,6 +716,97 @@ img.rounded.shadow-sm {
 .tvdb-empty-state .tvdb-display {
     font-size: 1.6rem;
     margin-bottom: 0.4rem;
+}
+
+/* =========================================================================
+   Toast messages — floating stack in the bottom-right corner, scoped to
+   its own wrapper so they read clearly regardless of what's behind them,
+   and don't collide with .alert-info/.alert-danger used inside .tvdb-shell.
+   ========================================================================= */
+
+.tvdb-toast-stack {
+    position: fixed;
+    z-index: 1080;
+    bottom: 1rem;
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    width: min(360px, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.tvdb-toast-stack .alert {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    background: rgba(31, 39, 51, 0.92);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--tvdb-line);
+    border-left-width: 4px;
+    border-left-style: solid;
+    border-radius: 8px;
+    color: var(--tvdb-paper) !important;
+    font-family: var(--tvdb-font-ui);
+    font-size: 0.9rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    padding: 0.9rem 2.75rem 0.9rem 1rem;
+    animation: tvdb-toast-in 0.25s ease-out;
+}
+
+@keyframes tvdb-toast-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-toast-stack .alert { animation: none; }
+}
+
+.tvdb-toast-stack .alert-success {
+    border-left-color: var(--tvdb-ok);
+}
+.tvdb-toast-stack .alert-success::before {
+    content: "\2713";
+    color: var(--tvdb-ok);
+    font-family: var(--tvdb-font-mono);
+    font-weight: 700;
+}
+
+.tvdb-toast-stack .alert-danger {
+    border-left-color: var(--tvdb-danger);
+}
+.tvdb-toast-stack .alert-danger::before {
+    content: "\26A0";
+    color: var(--tvdb-danger);
+}
+
+.tvdb-toast-stack .alert-info {
+    border-left-color: var(--tvdb-info);
+}
+.tvdb-toast-stack .alert-info::before {
+    content: "\2139";
+    color: var(--tvdb-info);
+    font-family: var(--tvdb-font-mono);
+    font-weight: 700;
+}
+
+.tvdb-toast-stack .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.6;
+}
+.tvdb-toast-stack .btn-close:hover,
+.tvdb-toast-stack .btn-close:focus-visible {
+    opacity: 1;
+}
+
+@media (max-width: 480px) {
+    .tvdb-toast-stack {
+        left: 1rem;
+        right: 1rem;
+        width: auto;
+    }
 }
 
 /* =========================================================================

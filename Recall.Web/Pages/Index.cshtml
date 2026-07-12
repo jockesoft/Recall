@@ -162,7 +162,7 @@
                         </div>
                     </div>
                     <div class="tvdb-episode-meta">
-                        <form method="post" asp-page-handler="MarkWatched" asp-route-episodeId="@ep.EpisodeId">
+                        <form method="post" asp-page-handler="MarkWatched" asp-route-seriesId="@ep.SeriesId" asp-route-episodeId="@ep.EpisodeId">
                             <button type="submit" class="btn btn-watch">Mark watched</button>
                         </form>
                     </div>

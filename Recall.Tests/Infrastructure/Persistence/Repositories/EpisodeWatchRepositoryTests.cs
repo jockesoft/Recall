@@ -46,7 +46,7 @@ public sealed class EpisodeWatchRepositoryTests
         await sut.MarkWatchedAsync(userId, seriesTvdbId: 100, episodeTvdbId: 1001);
         await sut.MarkWatchedAsync(userId, seriesTvdbId: 200, episodeTvdbId: 2001);
 
-        var watchedInSeries100 = await sut.GetWatchedEpisodeIdsAsync(userId, seriesTvdbId: 100);
+        var watchedInSeries100 = await sut.GetWatchedEpisodeIdsAsync(userId, [100]);
 
         watchedInSeries100.Should().BeEquivalentTo([1001]);
         (await sut.IsWatchedAsync(userId, 1001)).Should().BeTrue();
