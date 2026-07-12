@@ -49,4 +49,12 @@ public sealed class TheTvDbService(ITheTvDbApiClient apiClient) : ITheTvDbServic
         var episodeDto = await apiClient.GetEpisodeInformationByIdAsync(episodeId, cancellationToken);
         return episodeDto?.ToDomain();
     }
+    
+    public async Task<Series?> GetSeriesByIdExtendedAsync(
+        int seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        var seriesDto = await apiClient.GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+        return seriesDto?.ToDomain();
+    }
 }

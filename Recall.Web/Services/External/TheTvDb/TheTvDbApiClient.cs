@@ -48,62 +48,62 @@ public sealed class TheTvDbApiClient(
         return envelope.Data;
     }
 
-public async Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
-    int seriesId,
-    string language = "eng",
-    CancellationToken cancellationToken = default)
-{
-    language = language.Trim().ToLowerInvariant();
-    var cacheKey = $"series:aggregate:v1:{seriesId}:{language}";
-
-    return await GetOrAddAsync<SeriesAggregate>(
-        cacheKey,
-        async ct => await FetchSeriesAggregateAsync(seriesId, language, ct),
-        aggregate => aggregate.Status is { KeepUpdated: false, Name: not null }
-                     && aggregate.Status.Name.Equals("ended", StringComparison.OrdinalIgnoreCase)
-            ? Jitter(TimeSpan.FromDays(7), 0.10)
-            : Jitter(TimeSpan.FromHours(12), 0.10),
-        cancellationToken);
-}
-
-private async Task<SeriesAggregate?> FetchSeriesAggregateAsync(
-    int seriesId,
-    string language,
-    CancellationToken cancellationToken)
-{
-    SeriesDataDto? seriesDto = null;
-    SeriesTranslationDataDto? translationDto = null;
-
-    try
+    public async Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
+        int seriesId,
+        string language = "eng",
+        CancellationToken cancellationToken = default)
     {
-        var translationDtoTask = GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
-        var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+        language = language.Trim().ToLowerInvariant();
+        var cacheKey = $"series:aggregate:v1:{seriesId}:{language}";
 
-        await Task.WhenAll(seriesDtoTask, translationDtoTask);
-        (seriesDto, translationDto) = (seriesDtoTask.Result, translationDtoTask.Result);
-    }
-    catch (TheTvDbApiException ex)
-    {
-        logger.LogInformation(
-            ex,
-            "Series/Translation fetch failed for series {SeriesId}, language {Language}. Falling back.",
-            seriesId, language);
+        return await GetOrAddAsync<SeriesAggregate>(
+            cacheKey,
+            async ct => await FetchSeriesAggregateAsync(seriesId, language, ct),
+            aggregate => aggregate.Status is { KeepUpdated: false, Name: not null }
+                         && aggregate.Status.Name.Equals("ended", StringComparison.OrdinalIgnoreCase)
+                ? Jitter(TimeSpan.FromDays(7), 0.10)
+                : Jitter(TimeSpan.FromHours(12), 0.10),
+            cancellationToken);
     }
 
-    if (seriesDto is null)
-        return null;
-
-    IReadOnlyList<EpisodeDto>? fallbackEpisodes = null;
-    if (seriesDto.Episodes is null || seriesDto.Episodes.Count == 0)
+    private async Task<SeriesAggregate?> FetchSeriesAggregateAsync(
+        int seriesId,
+        string language,
+        CancellationToken cancellationToken)
     {
-        fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
+        SeriesDataDto? seriesDto = null;
+        SeriesTranslationDataDto? translationDto = null;
+
+        try
+        {
+            var translationDtoTask = GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
+            var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+
+            await Task.WhenAll(seriesDtoTask, translationDtoTask);
+            (seriesDto, translationDto) = (seriesDtoTask.Result, translationDtoTask.Result);
+        }
+        catch (TheTvDbApiException ex)
+        {
+            logger.LogInformation(
+                ex,
+                "Series/Translation fetch failed for series {SeriesId}, language {Language}. Falling back.",
+                seriesId, language);
+        }
+
+        if (seriesDto is null)
+            return null;
+
+        IReadOnlyList<EpisodeDto>? fallbackEpisodes = null;
+        if (seriesDto.Episodes is null || seriesDto.Episodes.Count == 0)
+        {
+            fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
+        }
+
+        var aggregate = seriesDto.ToAggregate(translationDto, fallbackEpisodes);
+        var englishEpisodes = await EnrichEpisodesWithEnglishAsync(aggregate.Episodes, cancellationToken);
+
+        return aggregate with { Episodes = englishEpisodes };
     }
-
-    var aggregate = seriesDto.ToAggregate(translationDto, fallbackEpisodes);
-    var englishEpisodes = await EnrichEpisodesWithEnglishAsync(aggregate.Episodes, cancellationToken);
-
-    return aggregate with { Episodes = englishEpisodes };
-}
 
     /// <summary>
     /// Fallback loader: pulls episodes per season when /series/{id}/extended does not include episodes.
@@ -193,12 +193,19 @@ private async Task<SeriesAggregate?> FetchSeriesAggregateAsync(
     public async Task<SeriesDataDto?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
+        var cacheKey = $"series:extended:v1:{seriesId}";
 
-        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
-            () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/extended"),
+        return await GetOrAddAsync<SeriesDataDto>(
+            cacheKey,
+            async ct =>
+            {
+                var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
+                    () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/extended?meta=episodes&short=false"),
+                    ct);
+                return envelope.Data;
+            },
+            _ => Jitter(TimeSpan.FromHours(12), 0.10),
             cancellationToken);
-
-        return envelope.Data;
     }
 
     public async Task<EpisodeTranslationDataDto?> GetEpisodeTranslationByLanguageAsync(

@@ -109,10 +109,19 @@ public sealed class DetailsModel(
             var ordered = await GetOrderedEpisodesAsync(seriesId, cancellationToken);
 
             var currentIndex = ordered.FindIndex(e => e.Id == episode.Id);
-            var idsToMark = currentIndex >= 0
+            
+/*            var idsToMark = currentIndex >= 0
                 ? ordered.Take(currentIndex + 1).Select(e => e.Id).ToList()
-                : (List<int>)[episode.Id!.Value];
+                : (List<int>)[episode.Id!.Value];*/
 
+            var idsToMarkWithNull = currentIndex >= 0
+                ? ordered.Take(currentIndex + 1).Select(e => e.Id).ToList()
+                : (List<int?>)[episode.Id!.Value];
+
+            var idsToMark = idsToMarkWithNull
+                .OfType<int>()
+                .ToList();
+            
             await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesId, idsToMark, cancellationToken);
 
             this.SetSuccessToast(idsToMark.Count > 1
@@ -192,7 +201,7 @@ public sealed class DetailsModel(
 
             var watchedIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesId, cancellationToken);
 
-            return priorIds.Count(pid => !watchedIds.Contains(pid));
+            return priorIds.Count(pid => !watchedIds.Contains(pid.Value));
         }
         catch (Exception ex)
         {
@@ -207,7 +216,7 @@ public sealed class DetailsModel(
     /// mark-through action — kept in one place so those two can never disagree
     /// about which episodes count as "earlier."
     /// </summary>
-    private async Task<List<EpisodeSummary>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken)
+/*    private async Task<List<EpisodeSummary>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken)
     {
         var serie = await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
         var episodes = serie?.Episodes ?? [];
@@ -216,6 +225,17 @@ public sealed class DetailsModel(
             .Where(e => e.IsMovie != true) // null/unset treated as "not a movie", never throws
             .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
             .ThenBy(e => e.EpisodeNumber ?? int.MaxValue)
+            .ToList();
+    }*/
+    private async Task<List<Episode>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken)
+    {
+        var serie = await theTvDbService.GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+        var episodes = serie?.Episodes ?? [];
+
+        return episodes
+            .Where(e => !e.IsMovie)
+            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
+            .ThenBy(e => e.AbsoluteNumber ?? int.MaxValue)
             .ToList();
     }
 }

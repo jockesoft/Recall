@@ -13,4 +13,6 @@ public interface ITheTvDbService
 
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);
     Task<Episode?> GetEpisodeDetailsAsync(int episodeId, CancellationToken cancellationToken = default);
+
+    Task<Series?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default);
 }
