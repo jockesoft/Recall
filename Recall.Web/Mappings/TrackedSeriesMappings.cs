@@ -1,6 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
-using Recall.Web.Services.Models;
 
 namespace Recall.Web.Mappings;
 

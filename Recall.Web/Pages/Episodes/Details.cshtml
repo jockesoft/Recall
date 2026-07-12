@@ -1,6 +1,7 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Episodes.DetailsModel
-@using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series
+@using Recall.Web.Domain.TheTvDb
+
 @{
     var ep = Model.Episode;
     ViewData["Title"] = ep?.Name ?? "Episode";
@@ -19,9 +20,9 @@
         return h > 0 ? $"{h}h {m:D2}m" : $"{minutes} min";
     }
 
-    string SlateCode(EpisodeDto e)
+    string SlateCode(Episode e)
     {
-        if (e.IsMovie == 1) return "MOVIE";
+        if (e.IsMovie) return "MOVIE";
         var s = e.SeasonNumber?.ToString("D2") ?? "--";
         var n = e.Number?.ToString("D2") ?? "--";
         return $"S{s} \u00B7 E{n}";

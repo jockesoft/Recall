@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
-using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
@@ -15,7 +15,7 @@ public sealed class DetailsModel(
     IEpisodeWatchRepository episodeWatchRepository)
     : PageModel
 {
-    public EpisodeDto? Episode { get; set; }
+    public Episode? Episode { get; set; }
     public bool IsWatchedByCurrentUser { get; private set; }
     
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
@@ -40,7 +40,7 @@ public sealed class DetailsModel(
             if (episode is null)
                 return NotFound();
 
-            if (episode.SeriesId is null || episode.SeriesId <= 0)
+            if (episode.SeriesId is null or <= 0)
             {
                 this.SetErrorToast("Episode does not have a valid series reference.");
                 return RedirectToPage(new { id });

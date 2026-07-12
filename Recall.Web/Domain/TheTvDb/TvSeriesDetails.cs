@@ -1,4 +1,4 @@
-namespace Recall.Web.Services.Models;
+namespace Recall.Web.Domain.TheTvDb;
 
 public sealed record TvSeriesDetails(
     int TvdbId,

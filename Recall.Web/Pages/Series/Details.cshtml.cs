@@ -6,7 +6,6 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
-using Recall.Web.Services.Models;
 
 namespace Recall.Web.Pages.Series;
 

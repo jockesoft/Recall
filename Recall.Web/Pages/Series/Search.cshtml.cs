@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
-using Recall.Web.Services.Models;
 
 namespace Recall.Web.Pages.Series;
 
@@ -17,7 +17,7 @@ public sealed class SearchModel(
     [StringLength(100, MinimumLength = 2, ErrorMessage = "Search text must be between 2 and 100 characters.")]
     public string? Query { get; set; }
 
-    public IReadOnlyList<TvSeriesSummary> Results { get; private set; } = Array.Empty<TvSeriesSummary>();
+    public IReadOnlyList<TvSeriesSummary> Results { get; private set; } = [];
 
     public string? ErrorMessage { get; private set; }
 
