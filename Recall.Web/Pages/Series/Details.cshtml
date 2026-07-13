@@ -1,6 +1,5 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Series.DetailsModel
-@using Recall.Web.Pages.Shared
 @{
     ViewData["Title"] = Model.Series is null ? "Series Details" : Model.Series.Name;
     var status = Model.Aggregate?.Status;
@@ -8,6 +7,8 @@
 }
 
 <a asp-page="/Series/Search" class="tvdb-back-link">&larr; Back to search</a>
+
+@Html.AntiForgeryToken()
 
 <div class="tvdb-shell">
     @if (Model.Series is null || Model.Aggregate is null)
@@ -264,24 +265,143 @@
                                         }
                                     </div>
 
-                                    <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
-                                             {
-                                                 Handler = "ToggleEpisodeWatched",
-                                                 RouteId = Model.Series.TvdbId,
-                                                 IsWatched = isWatched,
-                                                 Compact = true,
-                                                 HiddenFields = new Dictionary<string, string>
-                                                 {
-                                                     ["episodeId"] = ep.Id.ToString(),
-                                                     ["Season"] = selectedSeason.ToString()
-                                                 }
-                                             })" />
+                                    @if (isWatched)
+                                    {
+                                        <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline tvdb-watch-form">
+                                            <input type="hidden" name="episodeId" value="@ep.Id" />
+                                            <input type="hidden" name="Season" value="@selectedSeason" />
+                                            <button type="submit"
+                                                    class="tvdb-watch-dot tvdb-watch-dot--on"
+                                                    title="Mark as unwatched"
+                                                    aria-pressed="true"
+                                                    aria-label="Watched. Click to mark as unwatched.">
+                                                <span aria-hidden="true">&#10003;</span>
+                                            </button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="tvdb-watch-dot"
+                                                title="Mark as watched"
+                                                aria-pressed="false"
+                                                aria-label="Mark as watched"
+                                                data-episode-id="@ep.Id"
+                                                data-series-id="@Model.Series.TvdbId"
+                                                data-season="@selectedSeason"
+                                                onclick="handleEpisodeWatchClick(event)">
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         </div>
                     }
                 </div>
             }
+
+            <div class="modal fade" id="seriesCatchUpModal" tabindex="-1" aria-labelledby="seriesCatchUpModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="seriesCatchUpModalLabel">Catch up?</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body tvdb-prose">
+                            You have <strong id="priorEpisodeCount">0</strong> earlier unwatched episode<span id="priorEpisodeCountPlural">s</span> in this season.
+                            Mark <span id="priorEpisodeCountText">those</span> as watched too?
+                        </div>
+                        <div class="modal-footer">
+                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline">
+                                <input type="hidden" name="episodeId" id="modalEpisodeId" />
+                                <input type="hidden" name="Season" id="modalSeason" />
+                                <button type="submit" class="btn btn-outline-dark">Just this episode</button>
+                            </form>
+                            <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@Model.Series.TvdbId" class="d-inline">
+                                <input type="hidden" name="episodeId" id="modalEpisodeIdThrough" />
+                                <input type="hidden" name="Season" id="modalSeasonThrough" />
+                                <button type="submit" class="btn btn-watch">Mark this &amp; earlier episodes</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                async function handleEpisodeWatchClick(event) {
+                    const button = event.currentTarget;
+                    const episodeId = parseInt(button.dataset.episodeId);
+                    const season = parseInt(button.dataset.season);
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('episodeId', episodeId);
+
+                        const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                        if (tokenInput) {
+                            formData.append('__RequestVerificationToken', tokenInput.value);
+                        }
+
+                        const response = await fetch('?handler=CheckPriorEpisodes', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to check prior episodes');
+                        }
+
+                        const data = await response.json();
+                        const priorCount = data.priorUnwatchedCount || 0;
+
+                        if (priorCount > 0) {
+                            document.getElementById('priorEpisodeCount').textContent = priorCount;
+                            document.getElementById('priorEpisodeCountPlural').textContent = priorCount === 1 ? '' : 's';
+                            document.getElementById('priorEpisodeCountText').textContent = priorCount === 1 ? 'it' : 'those';
+                            document.getElementById('modalEpisodeId').value = episodeId;
+                            document.getElementById('modalSeason').value = season;
+                            document.getElementById('modalEpisodeIdThrough').value = episodeId;
+                            document.getElementById('modalSeasonThrough').value = season;
+
+                            const modal = new bootstrap.Modal(document.getElementById('seriesCatchUpModal'));
+                            modal.show();
+                        } else {
+                            markEpisodeWatched(episodeId, season);
+                        }
+                    } catch {
+                        markEpisodeWatched(episodeId, season);
+                    }
+                }
+
+                function markEpisodeWatched(episodeId, season) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '?handler=ToggleEpisodeWatched';
+
+                    const episodeInput = document.createElement('input');
+                    episodeInput.type = 'hidden';
+                    episodeInput.name = 'episodeId';
+                    episodeInput.value = episodeId;
+
+                    const seasonInput = document.createElement('input');
+                    seasonInput.type = 'hidden';
+                    seasonInput.name = 'Season';
+                    seasonInput.value = season;
+
+                    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                    if (tokenInput) {
+                        const tokenCopy = document.createElement('input');
+                        tokenCopy.type = 'hidden';
+                        tokenCopy.name = '__RequestVerificationToken';
+                        tokenCopy.value = tokenInput.value;
+                        form.appendChild(tokenCopy);
+                    }
+
+                    form.appendChild(episodeInput);
+                    form.appendChild(seasonInput);
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            </script>
         }
     }
 </div>

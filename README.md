@@ -58,6 +58,6 @@ docker logs -f aspnetcore_app
 
 If port is in use on localhost:
 ```
-lsof -i :8172
+lsof -i :7123
 kill -9 <PID>
 ```
