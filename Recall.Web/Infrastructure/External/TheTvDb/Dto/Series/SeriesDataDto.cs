@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 
 namespace Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 
@@ -9,6 +10,9 @@ public sealed class SeriesDataDto
 
     [JsonPropertyName("averageRuntime")]
     public int? AverageRuntime { get; init; }
+    
+    [JsonPropertyName("characters")]
+    public List<CharacterDataDto>? Characters { get; init; }
 
     [JsonPropertyName("country")]
     public string? Country { get; init; }

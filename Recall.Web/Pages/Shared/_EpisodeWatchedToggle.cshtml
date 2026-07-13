@@ -1,0 +1,36 @@
+@model Recall.Web.Pages.Shared.EpisodeWatchedToggleModel
+
+<form method="post" asp-page-handler="@Model.Handler" asp-route-id="@Model.RouteId" class="d-inline tvdb-watch-form">
+    @foreach (var field in Model.HiddenFields)
+    {
+        <input type="hidden" name="@field.Key" value="@field.Value" />
+    }
+
+    @if (Model.IsWatched)
+    {
+        <button type="submit"
+                class="@(Model.Compact ? "tvdb-watch-dot tvdb-watch-dot--on" : "tvdb-badge tvdb-badge--ok tvdb-watched-toggle")"
+                title="Mark as unwatched"
+                aria-pressed="true"
+                aria-label="Watched. Click to mark as unwatched.">
+            <span aria-hidden="true">&#10003;</span>
+            @if (!Model.Compact)
+            {
+                <text> Watched</text>
+            }
+        </button>
+    }
+    else
+    {
+        <button type="submit"
+                class="@(Model.Compact ? "tvdb-watch-dot" : "btn btn-watch")"
+                title="Mark as watched"
+                aria-pressed="false"
+                aria-label="Mark as watched">
+            @if (!Model.Compact)
+            {
+                <text>Mark as watched</text>
+            }
+        </button>
+    }
+</form>

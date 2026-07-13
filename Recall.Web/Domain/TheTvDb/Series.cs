@@ -4,6 +4,7 @@ public sealed record Series
 {
     public IReadOnlyList<SeriesAlias> Aliases { get; init; } = [];
     public int? AverageRuntime { get; init; }
+    public List<Character> Characters { get; init; } = [];
     public string? Country { get; init; }
     public int? DefaultSeasonType { get; init; }
     public IReadOnlyList<Episode> Episodes { get; init; } = [];

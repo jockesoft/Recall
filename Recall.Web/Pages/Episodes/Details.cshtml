@@ -1,6 +1,7 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Episodes.DetailsModel
 @using Recall.Web.Domain.TheTvDb
+@using Recall.Web.Pages.Shared
 
 @{
     var ep = Model.Episode;
@@ -98,17 +99,21 @@
 
                     @if (Model.IsWatchedByCurrentUser)
                     {
-                        <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id" class="d-inline">
-                            <button type="submit" class="tvdb-badge tvdb-badge--ok tvdb-watched-toggle" title="Mark as unwatched">
-                                <span aria-hidden="true">&#10003;</span> Watched
-                            </button>
-                        </form>
+                        <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
+                                 {
+                                     Handler = "ToggleWatched",
+                                     RouteId = ep.Id!.Value,
+                                     IsWatched = true
+                                 })" />
                     }
                     else if (Model.PriorUnwatchedCount == 0)
                     {
-                        <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id" class="d-inline">
-                            <button type="submit" class="btn btn-watch">Mark as watched</button>
-                        </form>
+                        <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
+                                 {
+                                     Handler = "ToggleWatched",
+                                     RouteId = ep.Id!.Value,
+                                     IsWatched = false
+                                 })" />
                     }
                     else
                     {

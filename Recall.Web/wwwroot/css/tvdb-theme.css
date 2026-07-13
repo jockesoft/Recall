@@ -313,6 +313,51 @@ button.tvdb-badge {
     color: var(--tvdb-danger-ink);
 }
 
+/* Compact circular watched toggle — used in dense episode list rows
+   (Series/Details) where a full pill button would be too heavy per row. */
+.tvdb-watch-dot {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 26px;
+    height: 26px;
+    flex: none;
+    border-radius: 50%;
+    border: 1px solid var(--tvdb-ink-line);
+    background: transparent;
+    color: transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.tvdb-watch-dot:hover,
+.tvdb-watch-dot:focus-visible {
+    border-color: var(--tvdb-ok);
+    color: var(--tvdb-ok);
+}
+.tvdb-watch-dot--on {
+    background: var(--tvdb-ok);
+    border-color: var(--tvdb-ok);
+    color: #1c2b1c;
+}
+.tvdb-watch-dot--on:hover,
+.tvdb-watch-dot--on:focus-visible {
+    background: var(--tvdb-danger);
+    border-color: var(--tvdb-danger);
+    color: #fff;
+}
+
+/* Subtle "already watched" cue on an episode row */
+.list-group-item.is-watched {
+    background: rgba(111, 157, 111, 0.05);
+}
+.list-group-item.is-watched .fw-semibold {
+    color: var(--tvdb-text-muted);
+}
+
 /* =========================================================================
    Bootstrap component reskins — applied globally so existing markup
    (btn, alert, list-group, dl.row, img.rounded) picks up the theme

@@ -1,5 +1,6 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Series.DetailsModel
+@using Recall.Web.Pages.Shared
 @{
     ViewData["Title"] = Model.Series is null ? "Series Details" : Model.Series.Name;
     var status = Model.Aggregate?.Status;
@@ -65,6 +66,132 @@
                 }
             </div>
         </div>
+    var cast = Model.Aggregate.Characters
+        .Where(c => !string.IsNullOrWhiteSpace(c.PersonName) || !string.IsNullOrWhiteSpace(c.Name))
+        .OrderBy(c => c.Sort ?? int.MaxValue)
+        .ThenBy(c => c.PersonName ?? c.Name)
+        .ToList();
+
+
+        if (cast.Count > 0)
+        {
+            <hr class="my-4" />
+            <h4 class="mb-3">Cast &amp; Characters</h4>
+
+            <div class="cast-container" id="castContainer">
+                <div class="row g-3" id="castGrid">
+                    @foreach (var ch in cast)
+                    {
+                        var personDisplay = string.IsNullOrWhiteSpace(ch.PersonName) ? "Unknown person" : ch.PersonName;
+                        var characterDisplay = string.IsNullOrWhiteSpace(ch.Name) ? null : ch.Name;
+                        var imageUrl = !string.IsNullOrWhiteSpace(ch.PersonImageUrl) ? ch.PersonImageUrl : ch.Image;
+                        var hasLink = !string.IsNullOrWhiteSpace(ch.Url);
+
+                        <div class="col-12 col-sm-6 col-lg-4 cast-item">
+                            <div class="h-100 d-flex p-3 gap-3 align-items-start form-control">
+                                <div class="flex-shrink-0">
+                                    @if (!string.IsNullOrWhiteSpace(imageUrl))
+                                    {
+                                        <img src="@imageUrl"
+                                             alt="@personDisplay"
+                                             class="rounded"
+                                             style="width:72px;height:72px;object-fit:cover;" />
+                                    }
+                                    else
+                                    {
+                                        <div class="rounded d-flex align-items-center justify-content-center tvdb-slate--inline"
+                                             style="width:72px;height:72px;">
+                                            No image
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="min-w-0">
+                                    <div class="fw-semibold text-truncate" style="color:var(--tvdb-text);">@personDisplay</div>
+
+                                    @if (!string.IsNullOrWhiteSpace(characterDisplay))
+                                    {
+                                        <div class="small text-truncate tvdb-mono" style="color:var(--tvdb-text-muted);">
+                                            as @characterDisplay
+                                        </div>
+                                    }
+
+                                    <div class="mt-2 d-flex flex-wrap gap-2">
+                                        @if (ch.IsFeatured)
+                                        {
+                                            <span class="tvdb-badge tvdb-badge--ok">Featured</span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(ch.PeopleType))
+                                        {
+                                            <span class="tvdb-badge tvdb-badge--amber">@ch.PeopleType</span>
+                                        }
+                                    </div>
+
+                                    @if (hasLink)
+                                    {
+                                        <div class="mt-2">
+                                            <a href="@ch.Url"
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               class="tvdb-mono small"
+                                               style="color:var(--tvdb-signal);text-decoration:none;">
+                                                View on TheTVDB ↗
+                                            </a>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (cast.Count > 6)
+                {
+                    <div class="cast-expand-container mt-3">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn" onclick="toggleCast()">
+                            <span class="tvdb-mono">Show @(cast.Count - 6) more</span>
+                            <span class="ms-2" id="castToggleIcon">▼</span>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <style>
+                #castGrid .cast-item:nth-child(n+7) {
+                    display: none;
+                }
+                
+                #castContainer.is-expanded #castGrid .cast-item:nth-child(n+7) {
+                    display: block;
+                }
+                
+                #castToggleIcon {
+                    display: inline-block;
+                    transition: transform 0.3s ease;
+                }
+                
+                #castContainer.is-expanded #castToggleIcon {
+                    transform: rotate(180deg);
+                }
+            </style>
+
+            <script>
+                function toggleCast() {
+                    const container = document.getElementById('castContainer');
+                    const btn = document.getElementById('castToggleBtn');
+                    const isExpanded = container.classList.contains('is-expanded');
+                    
+                    if (isExpanded) {
+                        container.classList.remove('is-expanded');
+                        btn.innerHTML = '<span class="tvdb-mono">Show @(cast.Count - 6) more</span><span class="ms-2" id="castToggleIcon">▼</span>';
+                    } else {
+                        container.classList.add('is-expanded');
+                        btn.innerHTML = '<span class="tvdb-mono">Show less</span><span class="ms-2" id="castToggleIcon">▼</span>';
+                    }
+                }
+            </script>
+        }
         
         var seasonNumbers = Model.Aggregate.Seasons
             .Select(s => s.Number)
@@ -81,7 +208,6 @@
             .OrderBy(e => e.EpisodeNumber ?? int.MaxValue)
             .ThenBy(e => e.Id)
             .ToList();
-
 
         if (seasonNumbers.Count > 0)
         {
@@ -112,19 +238,21 @@
                 <div class="list-group">
                     @foreach (var ep in filteredEpisodes)
                     {
-                        <div class="list-group-item">
-                            <a asp-page="/Episodes/Details" asp-route-id="@ep.Id" style="text-decoration: none;">
-                                <div class="d-flex justify-content-between align-items-start gap-3">
-                                    <div>
-                                        <div class="fw-semibold">
-                                            <span class="tvdb-mono">E@(ep.EpisodeNumber?.ToString() ?? "?")</span>
-                                            &mdash; @ep.Name
-                                        </div>
-                                        @if (!string.IsNullOrWhiteSpace(ep.Overview))
-                                        {
-                                            <div class="text-muted small mt-1">@ep.Overview</div>
-                                        }
+                        var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
+                        <div class="list-group-item @(isWatched ? "is-watched" : "")">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="fw-semibold">
+                                        <span class="tvdb-mono">E@(ep.EpisodeNumber?.ToString() ?? "?")</span>
+                                        &mdash; <a asp-page="/Episodes/Details" asp-route-id="@ep.Id">@ep.Name</a>
                                     </div>
+                                    @if (!string.IsNullOrWhiteSpace(ep.Overview))
+                                    {
+                                        <div class="text-muted small mt-1">@ep.Overview</div>
+                                    }
+                                </div>
+
+                                <div class="d-flex align-items-center gap-3">
                                     <div class="text-end small tvdb-mono text-muted">
                                         @if (ep.Aired.HasValue)
                                         {
@@ -135,8 +263,21 @@
                                             <div>@ep.RuntimeMinutes min</div>
                                         }
                                     </div>
+
+                                    <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
+                                             {
+                                                 Handler = "ToggleEpisodeWatched",
+                                                 RouteId = Model.Series.TvdbId,
+                                                 IsWatched = isWatched,
+                                                 Compact = true,
+                                                 HiddenFields = new Dictionary<string, string>
+                                                 {
+                                                     ["episodeId"] = ep.Id.ToString(),
+                                                     ["Season"] = selectedSeason.ToString()
+                                                 }
+                                             })" />
                                 </div>
-                            </a>
+                            </div>
                         </div>
                     }
                 </div>

@@ -21,9 +21,10 @@ public record SeriesAggregate
 
     public SeriesStatus? Status { get; init; }
 
-    public IReadOnlyList<string> Aliases { get; init; } = Array.Empty<string>();
-    public IReadOnlyList<SeasonSummary> Seasons { get; init; } = Array.Empty<SeasonSummary>();
-    public IReadOnlyList<EpisodeSummary> Episodes { get; init; } = Array.Empty<EpisodeSummary>();
+    public IReadOnlyList<string> Aliases { get; init; } = [];
+    public IReadOnlyList<SeasonSummary> Seasons { get; init; } = [];
+    public IReadOnlyList<EpisodeSummary> Episodes { get; init; } = [];
+    public IReadOnlyList<Character> Characters { get; init; } = [];
 }
 
 public sealed class SeriesStatus
@@ -42,9 +43,8 @@ public sealed class SeasonSummary
     public string? ImageUrl { get; init; }
     public string? Year { get; init; }
     public string? TypeName { get; init; }
-
-    public IReadOnlyList<string> Studios { get; init; } = Array.Empty<string>();
-    public IReadOnlyList<string> Networks { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Studios { get; init; } = [];
+    public IReadOnlyList<string> Networks { get; init; } = [];
 }
 
 public sealed class EpisodeSummary

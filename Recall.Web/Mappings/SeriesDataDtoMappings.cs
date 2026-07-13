@@ -1,4 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 
 namespace Recall.Web.Mappings;
@@ -15,12 +16,16 @@ public static class SeriesDataDtoMappings
 
         var episodesSource = (dto.Episodes is { Count: > 0 })
             ? dto.Episodes
-            : (fallbackEpisodes?.ToList() ?? new List<EpisodeDto>());
+            : (fallbackEpisodes?.ToList() ?? []);
 
+        var characters = (dto.Characters is { Count: > 0 })
+            ? dto.Characters
+            : [];
+        
         return new SeriesAggregate
         {
             TvdbId = dto.Id,
-            Name = !string.IsNullOrWhiteSpace(translatedName) ? translatedName! : (dto.Name ?? string.Empty),
+            Name = !string.IsNullOrWhiteSpace(translatedName) ? translatedName : (dto.Name ?? string.Empty),
             Overview = !string.IsNullOrWhiteSpace(translatedOverview) ? translatedOverview : null,
             Slug = dto.Slug,
             ImageUrl = dto.Image,
@@ -48,7 +53,8 @@ public static class SeriesDataDtoMappings
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
             Seasons = BuildDistinctSeasonSummaries(dto, episodesSource),
-            Episodes = BuildEpisodeSummaries(episodesSource)
+            Episodes = BuildEpisodeSummaries(episodesSource),
+            Characters = BuildCharacters(characters)
         };
     }
 
@@ -121,6 +127,94 @@ public static class SeriesDataDtoMappings
             .ToArray();
     }
 
+    private static Character[] BuildCharacters(IReadOnlyList<CharacterDataDto> characters)
+    {
+        return characters
+            .Where(c => c.Id != 0)
+            .GroupBy(c => c.Id)
+            .Select(g => g.First())
+            .Select(c => new Character()
+            {
+                EpisodeId = c.EpisodeId,
+                Id = c.Id,
+                Image = c.Image,
+                IsFeatured = c.IsFeatured ?? false,
+                MovieId = c.MovieId,
+                Name = c.Name,
+                PeopleId = c.PeopleId,
+                PeopleType = c.PeopleType,
+                PersonName = c.PersonName,
+                PersonImageUrl  = c.PersonImgUrl,
+                SeriesId = c.SeriesId,
+                Sort = c.Sort,
+                Type = c.Type,
+                Url = c.Url
+            })
+            .OrderBy(c => c.Id)
+            .ThenBy(c => c.IsFeatured)
+            .ThenBy(c => c.PersonName ?? string.Empty)
+            .ToArray();
+    }
+    
+    public static Character ToDomain(this CharacterDataDto dto)
+    {
+        return new Character
+        {
+            Id = dto.Id,
+            Name = dto.Name,
+            Image = dto.Image,
+            IsFeatured = dto.IsFeatured ?? false,
+            PeopleId = dto.PeopleId,
+            PersonName = dto.PersonName,
+            PersonImageUrl = dto.PersonImgUrl,
+            PeopleType = dto.PeopleType,
+            Type = dto.Type,
+            Sort = dto.Sort,
+            Url = dto.Url,
+
+            Aliases = dto.Aliases?
+                .Select(a => new CharacterAlias
+                {
+                    Language = a.Language,
+                    Name = a.Name
+                })
+                .ToList() ?? [],
+
+            NameTranslations = dto.NameTranslations ?? [],
+            OverviewTranslations = dto.OverviewTranslations ?? [],
+
+            EpisodeId = dto.EpisodeId,
+            Episode = dto.Episode?.ToDomainRelatedItem(),
+
+            MovieId = dto.MovieId,
+            Movie = dto.Movie?.ToDomainRelatedItem(),
+
+            SeriesId = dto.SeriesId,
+            Series = dto.Series?.ToDomainRelatedItem(),
+
+            TagOptions = dto.TagOptions?
+                .Select(t => new CharacterTagOption
+                {
+                    Id = t.Id,
+                    HelpText = t.HelpText,
+                    Name = t.Name,
+                    Tag = t.Tag,
+                    TagName = t.TagName
+                })
+                .ToList() ?? new List<CharacterTagOption>()
+        };
+    }
+
+    private static RelatedItem ToDomainRelatedItem(this CharacterRelatedItemDto dto)
+    {
+        return new RelatedItem
+        {
+            Name = dto.Name,
+            Image = dto.Image,
+            Year = dto.Year
+        };
+    }
+    
     private static DateOnly? ParseDateOnly(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
