@@ -201,7 +201,7 @@ public sealed class DetailsModel(
 
             var watchedIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesId, cancellationToken);
 
-            return priorIds.Count(pid => !watchedIds.Contains(pid.Value));
+            return priorIds.Count(pid => !watchedIds.Contains(pid!.Value));
         }
         catch (Exception ex)
         {
@@ -216,26 +216,15 @@ public sealed class DetailsModel(
     /// mark-through action — kept in one place so those two can never disagree
     /// about which episodes count as "earlier."
     /// </summary>
-/*    private async Task<List<EpisodeSummary>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken)
-    {
-        var serie = await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
-        var episodes = serie?.Episodes ?? [];
-
-        return episodes
-            .Where(e => e.IsMovie != true) // null/unset treated as "not a movie", never throws
-            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
-            .ThenBy(e => e.EpisodeNumber ?? int.MaxValue)
-            .ToList();
-    }*/
     private async Task<List<Episode>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken)
     {
         var serie = await theTvDbService.GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
         var episodes = serie?.Episodes ?? [];
 
         return episodes
-            .Where(e => !e.IsMovie)
+            .Where(e => e is { Id: not null, IsMovie: false })
             .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
-            .ThenBy(e => e.AbsoluteNumber ?? int.MaxValue)
+            .ThenBy(e => e.Number ?? int.MaxValue)
             .ToList();
     }
 }

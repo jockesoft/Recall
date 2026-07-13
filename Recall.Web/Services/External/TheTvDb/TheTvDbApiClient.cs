@@ -93,8 +93,8 @@ public sealed class TheTvDbApiClient(
         if (seriesDto is null)
             return null;
 
-        IReadOnlyList<EpisodeDto>? fallbackEpisodes = null;
-        if (seriesDto.Episodes is null || seriesDto.Episodes.Count == 0)
+        IReadOnlyList<EpisodeDto>? fallbackEpisodes = seriesDto.Episodes;
+        if (fallbackEpisodes is null || fallbackEpisodes.Count == 0)
         {
             fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
         }
