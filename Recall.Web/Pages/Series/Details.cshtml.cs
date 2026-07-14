@@ -75,12 +75,12 @@ public sealed class DetailsModel(
         {
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
-            var ordered = await GetOrderedEpisodesAsync(id, cancellationToken);
+            var ordered = await episodeWatchRepository.GetOrderedEpisodesAsync(id, cancellationToken);
             var episode = ordered.FirstOrDefault(e => e.Id == episodeId);
             if (episode is null)
                 return NotFound();
 
-            var priorUnwatchedCount = await GetPriorUnwatchedCountAsync(userId, id, episodeId, ordered, cancellationToken);
+            var priorUnwatchedCount = await episodeWatchRepository.GetPriorUnwatchedCountAsync(userId, id, episode, cancellationToken);
 
             return new JsonResult(new { priorUnwatchedCount });
         }
@@ -158,7 +158,7 @@ public sealed class DetailsModel(
             // Make sure the series is in the users library, otherwise why track progress
             await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
             
-            var ordered = await GetOrderedEpisodesAsync(id, cancellationToken);
+            var ordered = await episodeWatchRepository.GetOrderedEpisodesAsync(id, cancellationToken);
             var episode = ordered.FirstOrDefault(e => e.Id == episodeId);
             if (episode is null)
                 return RedirectToPage(new { id, season = Season });
@@ -166,8 +166,12 @@ public sealed class DetailsModel(
             var currentIndex = ordered.FindIndex(e => e.Id == episode.Id);
 
             var idsToMark = currentIndex >= 0
-                ? ordered.Take(currentIndex + 1).Select(e => e.Id).ToList()
-                : [episode.Id];
+                ? ordered.Take(currentIndex + 1)
+                    .Select(e => e.Id)
+                    .Where(eid => eid.HasValue)
+                    .Select(eid => eid!.Value)
+                    .ToList()
+                : episode.Id.HasValue ? new List<int> { episode.Id.Value } : [];
 
             await episodeWatchRepository.MarkWatchedRangeAsync(userId, id, idsToMark, cancellationToken);
 
@@ -229,54 +233,6 @@ public sealed class DetailsModel(
     {
         if (season == 0) return "Specials";
         else return "Season " + season;
-    }
-
-    /// <summary>
-    /// Counts unwatched episodes strictly before <paramref name="currentEpisodeId"/>
-    /// in season/episode order. Fails closed (returns 0, no modal shown) rather
-    /// than letting a transient error here block the whole page.
-    /// </summary>
-    private async Task<int> GetPriorUnwatchedCountAsync(
-        Guid userId,
-        int seriesId,
-        int currentEpisodeId,
-        IReadOnlyList<EpisodeSummary> ordered,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var currentIndex = ordered.ToList().FindIndex(e => e.Id == currentEpisodeId);
-            if (currentIndex <= 0)
-                return 0;
-
-            var priorIds = ordered.Take(currentIndex).Select(e => e.Id).ToList();
-            if (priorIds.Count == 0)
-                return 0;
-
-            var watchedIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, [seriesId], cancellationToken);
-
-            return priorIds.Count(pid => !watchedIds.Contains(pid));
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not compute prior-unwatched count for series {SeriesId}.", seriesId);
-            return 0;
-        }
-    }
-
-    /// <summary>
-    /// Gets episodes in season/episode order, excluding movies.
-    /// </summary>
-    private async Task<List<EpisodeSummary>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken)
-    {
-        var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
-        var episodes = aggregate?.Episodes ?? [];
-
-        return episodes
-            .Where(e => e.IsMovie != true)
-            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
-            .ThenBy(e => e.EpisodeNumber ?? int.MaxValue)
-            .ToList();
     }
 
     private async Task AddToPersonalLibraryAsync(

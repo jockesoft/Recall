@@ -1,3 +1,5 @@
+using Recall.Web.Domain.TheTvDb;
+
 namespace Recall.Web.Infrastructure.Persistence.Repositories;
 
 public interface IEpisodeWatchRepository
@@ -32,4 +34,12 @@ public interface IEpisodeWatchRepository
         int seriesTvdbId,
         IEnumerable<int> episodeTvdbIds,
         CancellationToken cancellationToken = default);
+
+    Task<int> GetPriorUnwatchedCountAsync(
+        Guid userId,
+        int seriesId,
+        Episode currentEpisode,
+        CancellationToken cancellationToken);
+    
+    Task<List<Episode>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken);
 }

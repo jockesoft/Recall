@@ -5,6 +5,8 @@ using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using AwesomeAssertions;
+using Moq;
+using Recall.Web.Services;
 
 namespace Recall.Tests.Infrastructure.Persistence.Repositories;
 
@@ -40,8 +42,10 @@ public sealed class EpisodeWatchRepositoryTests
         var userId = Guid.NewGuid();
         await SeedUserAsync(userId);
 
+        var tvDbServiceMock = new Mock<ITheTvDbService>(MockBehavior.Strict);
+        
         await using var dbContext = new AppDbContext(_dbOptions);
-        var sut = new EpisodeWatchRepository(dbContext, NullLogger<EpisodeWatchRepository>.Instance);
+        var sut = new EpisodeWatchRepository(dbContext, tvDbServiceMock.Object, NullLogger<EpisodeWatchRepository>.Instance);
 
         await sut.MarkWatchedAsync(userId, seriesTvdbId: 100, episodeTvdbId: 1001);
         await sut.MarkWatchedAsync(userId, seriesTvdbId: 200, episodeTvdbId: 2001);
@@ -59,8 +63,9 @@ public sealed class EpisodeWatchRepositoryTests
         var userId = Guid.NewGuid();
         await SeedUserAsync(userId);
 
+        var tvDbServiceMock = new Mock<ITheTvDbService>(MockBehavior.Strict);
         await using var dbContext = new AppDbContext(_dbOptions);
-        var sut = new EpisodeWatchRepository(dbContext, NullLogger<EpisodeWatchRepository>.Instance);
+        var sut = new EpisodeWatchRepository(dbContext, tvDbServiceMock.Object, NullLogger<EpisodeWatchRepository>.Instance);
 
         await sut.MarkWatchedAsync(userId, seriesTvdbId: 300, episodeTvdbId: 3001);
         (await sut.IsWatchedAsync(userId, 3001)).Should().BeTrue();

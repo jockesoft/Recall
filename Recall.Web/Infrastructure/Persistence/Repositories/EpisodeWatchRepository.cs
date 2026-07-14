@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
+using Recall.Web.Services;
 
 namespace Recall.Web.Infrastructure.Persistence.Repositories;
 
 public sealed class EpisodeWatchRepository(
     AppDbContext dbContext,
+    ITheTvDbService theTvDbService,
     ILogger<EpisodeWatchRepository> logger)
     : IEpisodeWatchRepository
 {
@@ -122,6 +125,59 @@ public sealed class EpisodeWatchRepository(
 
         await dbContext.EpisodeWatches.AddRangeAsync(toInsert, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    
+    /// <summary>
+    /// Counts unwatched episodes strictly before <paramref name="currentEpisode"/>
+    /// in season/episode order. Fails closed (returns 0, no modal shown) rather
+    /// than letting a transient error here block the whole page — this is a
+    /// nice-to-have prompt, not something worth a broken page over.
+    /// </summary>
+    public async Task<int> GetPriorUnwatchedCountAsync(
+        Guid userId,
+        int seriesId,
+        Episode currentEpisode,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ordered = await GetOrderedEpisodesAsync(seriesId, cancellationToken);
+
+            var currentIndex = ordered.FindIndex(e => e.Id == currentEpisode.Id);
+            if (currentIndex <= 0)
+                return 0;
+
+            var priorIds = ordered.Take(currentIndex).Select(e => e.Id).ToList();
+            if (priorIds.Count == 0)
+                return 0;
+
+            var watchedIds = await GetWatchedEpisodeIdsAsync(userId, seriesId, cancellationToken);
+
+            return priorIds.Count(pid => !watchedIds.Contains(pid!.Value));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not compute prior-unwatched count for episode {EpisodeId}.", currentEpisode.Id);
+            return 0;
+        }
+    }
+    
+    /// <summary>
+    /// Single source of truth for "the ordered, non-movie episode list for a series."
+    /// Used by both the count shown in the confirmation modal and the actual
+    /// mark-through action — kept in one place so those two can never disagree
+    /// about which episodes count as "earlier."
+    /// </summary>
+    public async Task<List<Episode>> GetOrderedEpisodesAsync(int seriesId, CancellationToken cancellationToken)
+    {
+        var serie = await theTvDbService.GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+        var episodes = serie?.Episodes ?? [];
+
+        return episodes
+            .Where(e => e is { Id: not null, IsMovie: false })
+            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
+            .ThenBy(e => e.Number ?? int.MaxValue)
+            .ToList();
     }
 }
 
