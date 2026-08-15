@@ -22,6 +22,10 @@ public static class SeriesDataDtoMappings
             ? dto.Characters
             : [];
         
+        var remoteIds = (dto.RemoteIds is { Count: > 0 })
+            ? dto.RemoteIds
+            : [];
+        
         return new SeriesAggregate
         {
             TvdbId = dto.Id,
@@ -54,7 +58,15 @@ public static class SeriesDataDtoMappings
                 .ToArray(),
             Seasons = BuildDistinctSeasonSummaries(dto, episodesSource),
             Episodes = BuildEpisodeSummaries(episodesSource),
-            Characters = BuildCharacters(characters)
+            Characters = BuildCharacters(characters),
+            RemoteIds = remoteIds
+                .Where(r => !string.IsNullOrWhiteSpace(r.SourceName) && !string.IsNullOrWhiteSpace(r.Id))
+                .Select(r => new SeriesRemoteId
+                {
+                    SourceName = r.SourceName!,
+                    Id = r.Id!
+                })
+                .ToArray()
         };
     }
 

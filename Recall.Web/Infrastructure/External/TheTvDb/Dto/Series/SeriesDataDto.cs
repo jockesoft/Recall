@@ -14,6 +14,9 @@ public sealed class SeriesDataDto
     [JsonPropertyName("characters")]
     public List<CharacterDataDto>? Characters { get; init; }
 
+    [JsonPropertyName("companies")]
+    public List<CompanyDto>? Companies { get; init; }
+
     [JsonPropertyName("country")]
     public string? Country { get; init; }
 
@@ -25,6 +28,9 @@ public sealed class SeriesDataDto
 
     [JsonPropertyName("firstAired")]
     public string? FirstAired { get; init; }
+
+    [JsonPropertyName("genres")]
+    public List<GenreDto>? Genres { get; init; }
 
     [JsonPropertyName("id")]
     public int Id { get; init; }
@@ -41,6 +47,9 @@ public sealed class SeriesDataDto
     [JsonPropertyName("lastUpdated")]
     public string? LastUpdated { get; init; }
 
+    [JsonPropertyName("lists")]
+    public List<SeriesListDto>? Lists { get; init; }
+
     [JsonPropertyName("name")]
     public string? Name { get; init; }
 
@@ -56,8 +65,14 @@ public sealed class SeriesDataDto
     [JsonPropertyName("originalLanguage")]
     public string? OriginalLanguage { get; init; }
 
+    [JsonPropertyName("overview")]
+    public string? Overview { get; init; }
+
     [JsonPropertyName("overviewTranslations")]
     public List<string>? OverviewTranslations { get; init; }
+
+    [JsonPropertyName("remoteIds")]
+    public List<RemoteIdDto>? RemoteIds { get; init; }
 
     [JsonPropertyName("score")]
     public double? Score { get; init; }

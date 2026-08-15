@@ -1,5 +1,4 @@
 using Recall.Web.Domain.TheTvDb;
-using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Mappings;
 using Recall.Web.Services.External.TheTvDb;
 
@@ -34,7 +33,8 @@ public sealed class TheTvDbService(ITheTvDbApiClient apiClient) : ITheTvDbServic
             aggregate.Overview,
             aggregate.ImageUrl,
             aggregate.FirstAired?.ToString("yyyy-MM-dd"),
-            aggregate.Score);
+            aggregate.Score,
+            aggregate.Status != null ? aggregate.Status.Name : "");
     }
 
     public Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
@@ -47,6 +47,7 @@ public sealed class TheTvDbService(ITheTvDbApiClient apiClient) : ITheTvDbServic
         CancellationToken cancellationToken = default)
     {
         var episodeDto = await apiClient.GetEpisodeInformationByIdAsync(episodeId, cancellationToken);
+        // episodeDto is EpisodeExtendedDto — the more-specific overload in EpisodeMappings maps Score, Awards, ContentRatings.
         return episodeDto?.ToDomain();
     }
     

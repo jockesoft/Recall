@@ -42,7 +42,11 @@
                         @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
                     </button>
                 </form>
-
+                
+                <a href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">
+                    <img src="~/images/attribution/imdb_logo.png" alt="IMDB Logo" height="24" />
+                </a>
+                
                 <dl class="row">
                     <dt class="col-sm-3">TVDB Id</dt>
                     <dd class="col-sm-9">@Model.Series.TvdbId</dd>
@@ -53,10 +57,10 @@
                         <dd class="col-sm-9">@Model.Series.FirstAired</dd>
                     }
 
-                    @if (Model.Series.Score.HasValue)
+                    @if (Model.Series.Status is not null)
                     {
-                        <dt class="col-sm-3">Score</dt>
-                        <dd class="col-sm-9">@Model.Series.Score.Value.ToString("0.0")</dd>
+                        <dt class="col-sm-3">Status</dt>
+                        <dd class="col-sm-9">@Model.Series.Status</dd>
                     }
                 </dl>
 

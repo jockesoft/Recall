@@ -197,14 +197,24 @@ public sealed class DetailsModel(
             Aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(id, cancellationToken);
             if (Aggregate is null) return NotFound();
 
-            Series = new TvSeriesDetails(
-                Aggregate.TvdbId,
-                Aggregate.Name,
-                Aggregate.Slug,
-                Aggregate.Overview,
-                Aggregate.ImageUrl,
-                Aggregate.FirstAired?.ToString("yyyy-MM-dd"),
-                Aggregate.Score);
+            foreach(var remoteInfo in Aggregate.RemoteIds ?? [])
+            {
+                logger.LogInformation("Loading series with remote site {SourceName} with remote site ID:{RemoteId}.", remoteInfo.SourceName, remoteInfo.Id);
+            }
+
+            if (Aggregate.RemoteIds != null)
+                Series = new TvSeriesDetails(
+                    Aggregate.TvdbId,
+                    Aggregate.Name,
+                    Aggregate.Slug,
+                    Aggregate.Overview,
+                    Aggregate.ImageUrl,
+                    Aggregate.FirstAired?.ToString("yyyy-MM-dd"),
+                    Aggregate.Score,
+                    Aggregate.Status != null ? Aggregate.Status.Name : "",
+                    Aggregate.RemoteIds
+                        .Where(r => r.SourceName?.ToLowerInvariant() == "imdb" && !string.IsNullOrWhiteSpace(r.Id))
+                        .Select(r => r.Id).FirstOrDefault());
 
             if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
                 return Page();

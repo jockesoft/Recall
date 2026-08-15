@@ -1,4 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 
 namespace Recall.Web.Mappings;
@@ -34,6 +35,42 @@ public static class EpisodeMappings
             SeriesId = dto.SeriesId,
             SeasonName = dto.SeasonName,
             Year = dto.Year
+        };
+    }
+
+    /// <summary>
+    /// Maps the extended episode DTO (from /episodes/{id}/extended) including
+    /// score, content ratings, and awards.
+    /// </summary>
+    public static Episode ToDomain(this EpisodeExtendedDto dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        // Start from the base mapping, then layer in the extended fields.
+        var baseEpisode = ((EpisodeDto)dto).ToDomain();
+
+        return baseEpisode with
+        {
+            Score = dto.Score,
+            ContentRatings = dto.ContentRatings?
+                .Select(r => new EpisodeContentRating
+                {
+                    Name = r.Name,
+                    Country = r.Country,
+                    Description = r.Description,
+                    FullName = r.FullName
+                })
+                .ToArray() ?? [],
+            Awards = dto.Awards?
+                .Select(a => new EpisodeAward
+                {
+                    Id = a.Id,
+                    Name = a.Name,
+                    Year = a.Year,
+                    Category = a.Category,
+                    IsWinner = a.IsWinner ?? false
+                })
+                .ToArray() ?? []
         };
     }
 }

@@ -83,11 +83,23 @@
                 <div class="d-flex flex-wrap gap-3 tvdb-mono text-muted mb-3 pb-2" style="border-bottom: 1px solid var(--tvdb-ink-line);">
                     @if (airedText is not null)
                     {
-                        <span>Aired &nbsp;@airedText</span>
+                        <span>Aired&nbsp;@airedText</span>
                     }
                     @if (runtimeText is not null)
                     {
-                        <span>Runtime &nbsp;@runtimeText</span>
+                        <span>Runtime&nbsp;@runtimeText</span>
+                    }
+                    @if (ep.Score is > 0)
+                    {
+                        <span title="Community score from TheTVDB">&#9733;&nbsp;@ep.Score!.Value.ToString("0.#")</span>
+                    }
+                    @foreach (var rating in ep.ContentRatings)
+                    {
+                        <span title="@rating.Description">@(rating.Name ?? rating.FullName)</span>
+                    }
+                    @foreach (var award in ep.Awards)
+                    {
+                        <span>@award.Name [@award.Year]</span>
                     }
                 </div>
 
@@ -153,6 +165,35 @@
                 else
                 {
                     <p class="tvdb-prose text-muted fst-italic">No overview available for this episode yet.</p>
+                }
+
+                @if (ep.Awards.Count > 0)
+                {
+                    <div class="mt-4">
+                        <h2 class="tvdb-heading mb-2">Awards</h2>
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var award in ep.Awards)
+                            {
+                                <li class="d-flex align-items-start gap-2 mb-1">
+                                    @if (award.IsWinner)
+                                    {
+                                        <span class="tvdb-badge tvdb-badge--amber flex-shrink-0">Won</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="tvdb-badge tvdb-badge--neutral flex-shrink-0">Nominated</span>
+                                    }
+                                    <span class="tvdb-mono small">
+                                        @award.Name@(award.Year is not null ? $" ({award.Year})" : "")
+                                        @if (!string.IsNullOrWhiteSpace(award.Category))
+                                        {
+                                            <span class="text-muted"> &mdash; @award.Category</span>
+                                        }
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
                 }
 
                 <div class="tvdb-mono text-muted small mt-4 pt-2" style="border-top: 1px solid var(--tvdb-ink-line);">

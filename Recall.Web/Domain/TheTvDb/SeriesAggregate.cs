@@ -25,6 +25,7 @@ public record SeriesAggregate
     public IReadOnlyList<SeasonSummary> Seasons { get; init; } = [];
     public IReadOnlyList<EpisodeSummary> Episodes { get; init; } = [];
     public IReadOnlyList<Character> Characters { get; init; } = [];
+    public IReadOnlyList<SeriesRemoteId> RemoteIds { get; init; } = [];
 }
 
 public sealed class SeriesStatus
@@ -58,4 +59,11 @@ public sealed class EpisodeSummary
     public int? RuntimeMinutes { get; init; }
     public bool? IsMovie { get; init; }
     public string? FinaleType { get; init; }
+}
+
+public sealed class SeriesRemoteId
+{
+    public string? Id { get; init; }
+    public int? Type { get; init; }
+    public string? SourceName { get; init; }
 }

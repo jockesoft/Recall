@@ -7,4 +7,6 @@ public sealed record TvSeriesDetails(
     string? Overview,
     string? ImageUrl,
     string? FirstAired,
-    double? Score);
+    double? Score,
+    string? Status,
+    string? ImdbId = null);

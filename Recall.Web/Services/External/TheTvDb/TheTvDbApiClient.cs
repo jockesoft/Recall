@@ -223,28 +223,28 @@ public sealed class TheTvDbApiClient(
         return envelope.Data;
     }
 
-    public async Task<EpisodeDto?> GetEpisodeInformationByIdAsync(
+    public async Task<EpisodeExtendedDto?> GetEpisodeInformationByIdAsync(
         int episodeId,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(episodeId);
         const string language = "eng";
-        var cacheKey = $"episode:v1:{episodeId}:{language}"; // own namespace — no collision with series:aggregate keys
+        var cacheKey = $"episode:extended:v1:{episodeId}:{language}";
 
-        return await GetOrAddAsync<EpisodeDto>(
+        return await GetOrAddAsync<EpisodeExtendedDto>(
             cacheKey,
             ct => FetchEpisodeAsync(episodeId, language, ct),
             _ => Jitter(TimeSpan.FromHours(12), 0.10),
             cancellationToken);
     }
 
-    private async Task<EpisodeDto?> FetchEpisodeAsync(
+    private async Task<EpisodeExtendedDto?> FetchEpisodeAsync(
         int episodeId,
         string language,
         CancellationToken cancellationToken)
     {
-        var episodeTask = SendAsync<TheTvDbEnvelopeDto<EpisodeDto>>(
-            () => new HttpRequestMessage(HttpMethod.Get, $"episodes/{episodeId}"),
+        var episodeTask = SendAsync<TheTvDbEnvelopeDto<EpisodeExtendedDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"episodes/{episodeId}/extended"),
             cancellationToken);
         var translationTask = GetEpisodeTranslationByLanguageAsync(episodeId, language, cancellationToken);
 

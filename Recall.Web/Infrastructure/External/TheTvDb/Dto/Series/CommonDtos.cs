@@ -65,6 +65,72 @@ public sealed class TagOptionDto
     public string? TagName { get; init; }
 }
 
+public sealed class RemoteIdDto
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
+
+    [JsonPropertyName("type")]
+    public int? Type { get; init; }
+
+    [JsonPropertyName("sourceName")]
+    public string? SourceName { get; init; }
+}
+
+public sealed class GenreDto
+{
+    [JsonPropertyName("id")]
+    public int? Id { get; init; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
+
+    [JsonPropertyName("slug")]
+    public string? Slug { get; init; }
+}
+
+public sealed class SeriesListDto
+{
+    [JsonPropertyName("aliases")]
+    public List<AliasDto>? Aliases { get; init; }
+
+    [JsonPropertyName("id")]
+    public int? Id { get; init; }
+
+    [JsonPropertyName("image")]
+    public string? Image { get; init; }
+
+    [JsonPropertyName("imageIsFallback")]
+    public bool? ImageIsFallback { get; init; }
+
+    [JsonPropertyName("isOfficial")]
+    public bool? IsOfficial { get; init; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
+
+    [JsonPropertyName("nameTranslations")]
+    public List<string>? NameTranslations { get; init; }
+
+    [JsonPropertyName("overview")]
+    public string? Overview { get; init; }
+
+    [JsonPropertyName("overviewTranslations")]
+    public List<string>? OverviewTranslations { get; init; }
+
+    [JsonPropertyName("remoteIds")]
+    public List<RemoteIdDto>? RemoteIds { get; init; }
+
+    [JsonPropertyName("tags")]
+    public List<TagOptionDto>? Tags { get; init; }
+
+    [JsonPropertyName("score")]
+    public double? Score { get; init; }
+
+    [JsonPropertyName("url")]
+    public string? Url { get; init; }
+}
+
 public sealed class CompanyDto
 {
     [JsonPropertyName("activeDate")]

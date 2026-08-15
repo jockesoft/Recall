@@ -5,15 +5,158 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using Recall.Web.Infrastructure.External.TheTvDb;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Services.External.TheTvDb;
 using AwesomeAssertions;
 using Recall.Web.Infrastructure.Caching;
+using System.Text.Json;
 
 namespace Recall.Tests.Services.External.TheTvDb;
 
 [TestFixture]
 public class TheTvDbApiClientTests
 {
+    [Test]
+    public void SeriesDataDto_Should_Deserialize_Lists_Genres_RemoteIds_Overview_And_Companies()
+    {
+        // Arrange
+        const string json = """
+        {
+          "status": "success",
+          "data": {
+            "id": 42,
+            "name": "Example Series",
+            "overview": "Series overview text.",
+            "image": "/banners/series/42.jpg",
+            "isOrderRandomized": true,
+            "lastAired": "2024-10-01",
+            "lastUpdated": "2024-10-05",
+            "nameTranslations": ["eng"],
+            "companies": [
+              {
+                "activeDate": "2020-01-01",
+                "aliases": [
+                  {
+                    "language": "eng",
+                    "name": "Example Co Alias"
+                  }
+                ],
+                "country": "us",
+                "id": 7,
+                "inactiveDate": null,
+                "name": "Example Company",
+                "nameTranslations": ["eng"],
+                "overviewTranslations": ["eng"],
+                "primaryCompanyType": 1,
+                "slug": "example-company",
+                "parentCompany": {
+                  "id": 8,
+                  "name": "Parent Company",
+                  "relation": {
+                    "id": 9,
+                    "typeName": "parent"
+                  }
+                },
+                "tagOptions": [
+                  {
+                    "helpText": "help",
+                    "id": 10,
+                    "name": "tag-name",
+                    "tag": 11,
+                    "tagName": "tag-group"
+                  }
+                ]
+              }
+            ],
+            "genres": [
+              {
+                "id": 12,
+                "name": "Drama",
+                "slug": "drama"
+              }
+            ],
+            "remoteIds": [
+              {
+                "id": "tt1234567",
+                "type": 2,
+                "sourceName": "IMDB"
+              }
+            ],
+            "lists": [
+              {
+                "aliases": [
+                  {
+                    "language": "eng",
+                    "name": "Prestige TV"
+                  }
+                ],
+                "id": 13,
+                "image": "/banners/lists/13.jpg",
+                "imageIsFallback": true,
+                "isOfficial": true,
+                "name": "Top Lists",
+                "nameTranslations": ["eng"],
+                "overview": "List overview",
+                "overviewTranslations": ["eng"],
+                "remoteIds": [
+                  {
+                    "id": "list-remote-1",
+                    "type": 3,
+                    "sourceName": "TVDB"
+                  }
+                ],
+                "tags": [
+                  {
+                    "helpText": "tag help",
+                    "id": 14,
+                    "name": "featured",
+                    "tag": 15,
+                    "tagName": "curation"
+                  }
+                ],
+                "score": 8.9,
+                "url": "https://example.test/lists/13"
+              }
+            ]
+          }
+        }
+        """;
+
+        // Act
+        var envelope = JsonSerializer.Deserialize<TheTvDbEnvelopeDto<SeriesDataDto>>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        // Assert
+        envelope.Should().NotBeNull();
+        envelope!.Data.Should().NotBeNull();
+
+        var dto = envelope.Data!;
+        dto.Id.Should().Be(42);
+        dto.Overview.Should().Be("Series overview text.");
+        dto.Companies.Should().ContainSingle();
+        dto.Companies![0].Name.Should().Be("Example Company");
+        dto.Companies[0].ParentCompany!.Name.Should().Be("Parent Company");
+        dto.Companies[0].TagOptions.Should().ContainSingle();
+
+        dto.Genres.Should().ContainSingle();
+        dto.Genres![0].Name.Should().Be("Drama");
+        dto.Genres[0].Slug.Should().Be("drama");
+
+        dto.RemoteIds.Should().ContainSingle();
+        dto.RemoteIds![0].Id.Should().Be("tt1234567");
+        dto.RemoteIds[0].SourceName.Should().Be("IMDB");
+
+        dto.Lists.Should().ContainSingle();
+        dto.Lists![0].Id.Should().Be(13);
+        dto.Lists[0].IsOfficial.Should().BeTrue();
+        dto.Lists[0].ImageIsFallback.Should().BeTrue();
+        dto.Lists[0].Score.Should().Be(8.9);
+        dto.Lists[0].RemoteIds.Should().ContainSingle();
+        dto.Lists[0].RemoteIds![0].Id.Should().Be("list-remote-1");
+        dto.Lists[0].Tags.Should().ContainSingle();
+        dto.Lists[0].Tags![0].Name.Should().Be("featured");
+    }
+
     [Test]
     public async Task SearchSeriesAsync_Should_Login_Then_ReturnResults()
     {
