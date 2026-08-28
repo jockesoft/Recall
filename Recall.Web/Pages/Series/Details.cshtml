@@ -32,41 +32,47 @@
                         </div>
                     }
                 </div>
+
+                @if (Model.Series.ImdbId is not null)
+                {
+                    <div class="mt-2">
+                        <a class="tvdb-extlink" href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">
+                            <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
+                            <span>View on IMDb</span>
+                            <span class="tvdb-extlink-arrow" aria-hidden="true">&#8599;</span>
+                        </a>
+                    </div>
+                }
             </div>
 
             <div class="col-md-8">
                 <h1 class="tvdb-display mb-2">@Model.Series.Name</h1>
 
-                <form method="post" asp-page-handler="ToggleLibrary" asp-route-id="@Model.Series.TvdbId" asp-route-season="@Model.Season" class="mb-3">
-                    <button type="submit" class="btn @(Model.IsTrackedByCurrentUser ? "btn-outline-danger" : "btn-primary")">
-                        @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
-                    </button>
-                </form>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <form method="post" asp-page-handler="ToggleLibrary" asp-route-id="@Model.Series.TvdbId" asp-route-season="@Model.Season">
+                        <button type="submit" class="btn @(Model.IsTrackedByCurrentUser ? "btn-outline-danger" : "btn-primary")">
+                            @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
+                        </button>
+                    </form>
 
-                @if (Model.WatchProgress is { HasEpisodes: true } progress)
-                {
-                    if (progress.IsUpToDate)
+                    @if (Model.WatchProgress is { HasEpisodes: true } progress)
                     {
-                        <button type="button" class="btn btn-outline-secondary mb-3" disabled>You are up to date</button>
+                        if (progress.IsUpToDate)
+                        {
+                            <button type="button" class="btn btn-outline-secondary" disabled>You are up to date</button>
+                        }
+                        else
+                        {
+                            var next = progress.NextUnwatchedEpisode!;
+                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId">
+                                <input type="hidden" name="episodeId" value="@next.Id" />
+                                <input type="hidden" name="Season" value="@next.SeasonNumber" />
+                                <button type="submit" class="btn btn-watch">Mark @next.SlateCode() as watched</button>
+                            </form>
+                        }
                     }
-                    else
-                    {
-                        var next = progress.NextUnwatchedEpisode!;
-                        <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="mb-3">
-                            <input type="hidden" name="episodeId" value="@next.Id" />
-                            <input type="hidden" name="Season" value="@next.SeasonNumber" />
-                            <button type="submit" class="btn btn-watch">Mark @next.SlateCode() as watched</button>
-                        </form>
-                    }
-                }
+                </div>
 
-                @if (Model.Series.ImdbId is not null)
-                {
-                    <a href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">
-                        <img src="~/images/attribution/imdb_logo.png" alt="IMDB Logo" height="24"/>
-                    </a>
-                }
-                
                 <dl class="row">
                     <dt class="col-sm-3">TVDB Id</dt>
                     <dd class="col-sm-9">@Model.Series.TvdbId</dd>

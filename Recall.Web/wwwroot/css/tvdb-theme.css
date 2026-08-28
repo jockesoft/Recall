@@ -163,6 +163,42 @@ hr {
     text-decoration: underline;
 }
 
+/* External-source link with a brand mark (IMDb, etc.). A dark ink chip so
+   third-party logos keep their own colours without clashing with the paper
+   sheet or the amber accent. */
+.tvdb-extlink {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    background: var(--tvdb-ink-2);
+    border: 1px solid var(--tvdb-line);
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.03em;
+    color: rgba(241, 236, 226, 0.8);
+    text-decoration: none;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.tvdb-extlink:hover, .tvdb-extlink:focus-visible {
+    border-color: rgba(232, 163, 61, 0.55);
+    color: var(--tvdb-signal);
+}
+
+.tvdb-extlink img {
+    height: 15px;
+    width: auto;
+    display: block;
+    flex: none;
+}
+
+.tvdb-extlink .tvdb-extlink-arrow {
+    margin-left: 0.1rem;
+    opacity: 0.55;
+}
+
 /* ---- headline / prose helpers, usable on either surface ---------------- */
 
 .tvdb-display {
@@ -299,18 +335,17 @@ hr {
     border: 1px solid rgba(111, 157, 111, 0.5);
 }
 
-/* Badge-as-button, used for the watched/unwatched toggle */
+.tvdb-badge--neutral {
+    color: var(--tvdb-text-muted);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+}
+
+/* Badge-as-button (e.g. an inline status chip rendered as a <button>) */
 button.tvdb-badge {
     appearance: none;
     -webkit-appearance: none;
     cursor: pointer;
-}
-
-.tvdb-watched-toggle:hover,
-.tvdb-watched-toggle:focus-visible {
-    background: rgba(181, 83, 60, 0.18);
-    border-color: rgba(181, 83, 60, 0.5);
-    color: var(--tvdb-danger-ink);
 }
 
 /* Compact circular watched toggle — used in dense episode list rows
@@ -432,6 +467,33 @@ button.tvdb-badge {
     background: var(--tvdb-ink);
     border-color: var(--tvdb-ink);
     color: var(--tvdb-paper);
+}
+
+/* "Mark as watched" action — a first-class button variant (green tally cue),
+   same size/shape as the buttons above. Use `.btn.btn-watch` for the
+   not-yet-watched action; add `.btn-sm` inside dense list rows. */
+.btn-watch {
+    color: var(--tvdb-ok-ink);
+    background: rgba(111, 157, 111, 0.16);
+    border-color: rgba(111, 157, 111, 0.45);
+}
+.btn-watch:hover, .btn-watch:focus {
+    background: var(--tvdb-ok);
+    border-color: var(--tvdb-ok);
+    color: #1c2b1c;
+}
+
+/* The watched state of the same toggle: filled green, reverts to brick on
+   hover to signal "click to un-watch". */
+.btn-watch--on {
+    color: #1c2b1c;
+    background: var(--tvdb-ok);
+    border-color: var(--tvdb-ok);
+}
+.btn-watch--on:hover, .btn-watch--on:focus {
+    background: var(--tvdb-danger);
+    border-color: var(--tvdb-danger);
+    color: #fff;
 }
 
 /* season chips use .btn-sm.rounded-pill on top of dark/outline-dark above —
@@ -734,23 +796,6 @@ img.rounded.shadow-sm {
 
 .tvdb-episode-meta .tvdb-mono {
     color: var(--tvdb-text-muted);
-}
-
-.btn-watch {
-    font-family: var(--tvdb-font-mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.04em;
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-    color: var(--tvdb-ok-ink);
-    background: rgba(111, 157, 111, 0.16);
-    border: 1px solid rgba(111, 157, 111, 0.45);
-}
-
-.btn-watch:hover, .btn-watch:focus-visible {
-    background: var(--tvdb-ok);
-    border-color: var(--tvdb-ok);
-    color: #1c2b1c;
 }
 
 .tvdb-empty-state {

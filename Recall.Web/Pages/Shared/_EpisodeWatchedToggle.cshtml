@@ -9,7 +9,7 @@
     @if (Model.IsWatched)
     {
         <button type="submit"
-                class="@(Model.Compact ? "tvdb-watch-dot tvdb-watch-dot--on" : "tvdb-badge tvdb-badge--ok tvdb-watched-toggle")"
+                class="@(Model.Compact ? "tvdb-watch-dot tvdb-watch-dot--on" : "btn btn-watch--on")"
                 title="Mark as unwatched"
                 aria-pressed="true"
                 aria-label="Watched. Click to mark as unwatched.">

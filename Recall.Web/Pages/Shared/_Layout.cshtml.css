@@ -7,21 +7,9 @@ a.navbar-brand {
   word-break: break-all;
 }
 
-a {
-  color: #0077cc;
-}
-
-.btn-primary {
-  color: #fff;
-  background-color: #1b6ec2;
-  border-color: #1861ac;
-}
-
-.nav-pills .nav-link.active, .nav-pills .show > .nav-link {
-  color: #fff;
-  background-color: #1b6ec2;
-  border-color: #1861ac;
-}
+/* Link, button and nav colours are owned by css/tvdb-theme.css so the whole
+   site stays on one palette — the default-template overrides that used to
+   live here (blue links / blue .btn-primary) were removed. */
 
 .border-top {
   border-top: 1px solid #e5e5e5;
