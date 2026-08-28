@@ -43,8 +43,11 @@ jobs:
           dotnet msbuild Recall.Tests/Recall.Tests.csproj -getProperty:EnableDefaultEmbeddedResourceItems
           dotnet msbuild Recall.Tests/Recall.Tests.csproj -getItem:EmbeddedResource
 
-      - name: Build (Release)
-        run: dotnet build Recall.sln --configuration Release
+      - name: Build Web
+        run: dotnet build Recall.Web/Recall.Web.csproj --configuration Release
+
+      - name: Build Tests
+        run: dotnet build Recall.Tests/Recall.Tests.csproj --configuration Release
 
       - name: Test with Coverage
         run: dotnet test Recall.sln --configuration Release --no-restore --settings Recall.Tests/coverlet.runsettings --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
