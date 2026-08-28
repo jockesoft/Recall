@@ -36,6 +36,13 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore Recall.sln
 
+      - name: Diagnose MSBuild resources
+        run: |
+          dotnet msbuild Recall.Web/Recall.Web.csproj -getProperty:EnableDefaultEmbeddedResourceItems
+          dotnet msbuild Recall.Web/Recall.Web.csproj -getItem:EmbeddedResource
+          dotnet msbuild Recall.Tests/Recall.Tests.csproj -getProperty:EnableDefaultEmbeddedResourceItems
+          dotnet msbuild Recall.Tests/Recall.Tests.csproj -getItem:EmbeddedResource
+
       - name: Build (Release)
         run: dotnet build Recall.sln --configuration Release
 

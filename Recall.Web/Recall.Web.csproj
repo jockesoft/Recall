@@ -6,7 +6,6 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <UserSecretsId>57afc07c-68a8-465e-b5c0-6a48f04f182a</UserSecretsId>
-        <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
   </PropertyGroup>
 
     <ItemGroup>
