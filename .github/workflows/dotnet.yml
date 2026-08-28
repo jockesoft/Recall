@@ -36,18 +36,33 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore Recall.sln
 
-      - name: Diagnose MSBuild resources
+      - name: Prepare build directory
+        run: mkdir -p Recall.Web/bin/Release
+
+      - name: Inspect filesystem
         run: |
-          dotnet msbuild Recall.Web/Recall.Web.csproj -getProperty:EnableDefaultEmbeddedResourceItems
-          dotnet msbuild Recall.Web/Recall.Web.csproj -getItem:EmbeddedResource
-          dotnet msbuild Recall.Tests/Recall.Tests.csproj -getProperty:EnableDefaultEmbeddedResourceItems
-          dotnet msbuild Recall.Tests/Recall.Tests.csproj -getItem:EmbeddedResource
+          echo "=== Web directory ==="
+          find Recall.Web -maxdepth 2 -type d -print
+
+          echo "=== Root directories ==="
+          find . -maxdepth 2 -type d -print
+
+          echo "=== Files/directories containing backslashes ==="
+          find . -print0 | while IFS= read -r -d '' f; do
+            if [[ "$f" == *'\'* ]]; then
+              printf '%s\n' "$f"
+            fi
+          done
+
+          echo "=== Files/directories containing colon ==="
+          find . -print0 | while IFS= read -r -d '' f; do
+            if [[ "$f" == *':'* ]]; then
+              printf '%s\n' "$f"
+            fi
+          done
 
       - name: Build Web
         run: dotnet build Recall.Web/Recall.Web.csproj --configuration Release
-
-      - name: Build Tests
-        run: dotnet build Recall.Tests/Recall.Tests.csproj --configuration Release
 
       - name: Test with Coverage
         run: dotnet test Recall.sln --configuration Release --no-restore --settings Recall.Tests/coverlet.runsettings --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
