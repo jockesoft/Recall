@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
-using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages;
@@ -42,7 +41,7 @@ public sealed class CatchUpItem
 
 [Authorize]
 public sealed class IndexModel(
-    ITheTvDbApiClient tvdbClient,
+    ITheTvDbService theTvDbService,
     ITrackedSeriesRepository libraryRepository,
     IEpisodeWatchRepository watchedRepository,
     IWatchProgressService watchProgressService,
@@ -143,7 +142,7 @@ public sealed class IndexModel(
     {
         try
         {
-            return await tvdbClient.GetSeriesAggregateByIdAsync(seriesId, cancellationToken: cancellationToken);
+            return await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

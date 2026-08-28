@@ -9,7 +9,6 @@ using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Services.External.TheTvDb;
 using AwesomeAssertions;
-using Recall.Web.Infrastructure.Caching;
 using System.Text.Json;
 
 namespace Recall.Tests.Services.External.TheTvDb;
@@ -265,7 +264,7 @@ public class TheTvDbApiClientTests
             ItExpr.IsAny<CancellationToken>());
     }
 
-    private static TheTvDbApiClient CreateSut(HttpMessageHandler handler, Mock<IDistributedCacheJson>? cacheMock = null)
+    private static TheTvDbApiClient CreateSut(HttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler)
         {
@@ -283,9 +282,8 @@ public class TheTvDbApiClientTests
         var tvdbState = new TheTvDbClientState(options, stateLogger.Object);
 
         var logger = new Mock<ILogger<TheTvDbApiClient>>();
-        cacheMock ??= new Mock<IDistributedCacheJson>();
 
-        return new TheTvDbApiClient(httpClient, tvdbState, logger.Object, cacheMock.Object);
+        return new TheTvDbApiClient(httpClient, tvdbState, logger.Object);
     }
 
     private static Mock<HttpMessageHandler> CreateHandlerMock(Queue<HttpResponseMessage> responses)

@@ -9,6 +9,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TrackedSeriesEntity> TrackedSeries => Set<TrackedSeriesEntity>();
     public DbSet<AppUserEntity> AppUsers => Set<AppUserEntity>();
     public DbSet<EpisodeWatchEntity> EpisodeWatches => Set<EpisodeWatchEntity>();
+
+    // Durable TheTVDB snapshots — fallback tier below Redis (read: cache -> DB -> API).
+    public DbSet<CachedSeriesAggregateEntity> CachedSeriesAggregates => Set<CachedSeriesAggregateEntity>();
+    public DbSet<CachedSeriesExtendedEntity> CachedSeriesExtended => Set<CachedSeriesExtendedEntity>();
+    public DbSet<CachedEpisodeExtendedEntity> CachedEpisodesExtended => Set<CachedEpisodeExtendedEntity>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

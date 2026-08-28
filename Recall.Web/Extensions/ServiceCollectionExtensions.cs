@@ -1,5 +1,6 @@
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
@@ -31,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrackedSeriesRepository, TrackedSeriesRepository>();
         services.AddScoped<IEpisodeWatchRepository, EpisodeWatchRepository>();
         services.AddScoped<IWatchProgressService, WatchProgressService>();
+        services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
 
         return services;
     }

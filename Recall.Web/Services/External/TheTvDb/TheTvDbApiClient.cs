@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Recall.Web.Domain.TheTvDb;
-using Recall.Web.Infrastructure.Caching;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Search;
@@ -11,11 +10,14 @@ using Recall.Web.Mappings;
 
 namespace Recall.Web.Services.External.TheTvDb;
 
+/// <summary>
+/// Pure HTTP transport for TheTVDB. Caching (Redis + local DB) lives one layer
+/// up in <see cref="TheTvDbService"/>.
+/// </summary>
 public sealed class TheTvDbApiClient(
     HttpClient httpClient,
     TheTvDbClientState state,
-    ILogger<TheTvDbApiClient> logger,
-    IDistributedCacheJson cacheJson)
+    ILogger<TheTvDbApiClient> logger)
     : ITheTvDbApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -48,22 +50,13 @@ public sealed class TheTvDbApiClient(
         return envelope.Data;
     }
 
-    public async Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
+    public Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
         int seriesId,
         string language = "eng",
         CancellationToken cancellationToken = default)
     {
         language = language.Trim().ToLowerInvariant();
-        var cacheKey = $"series:aggregate:v1:{seriesId}:{language}";
-
-        return await GetOrAddAsync<SeriesAggregate>(
-            cacheKey,
-            async ct => await FetchSeriesAggregateAsync(seriesId, language, ct),
-            aggregate => aggregate.Status is { KeepUpdated: false, Name: not null }
-                         && aggregate.Status.Name.Equals("ended", StringComparison.OrdinalIgnoreCase)
-                ? Jitter(TimeSpan.FromDays(7), 0.10)
-                : Jitter(TimeSpan.FromHours(12), 0.10),
-            cancellationToken);
+        return FetchSeriesAggregateAsync(seriesId, language, cancellationToken);
     }
 
     private async Task<SeriesAggregate?> FetchSeriesAggregateAsync(
@@ -193,19 +186,12 @@ public sealed class TheTvDbApiClient(
     public async Task<SeriesDataDto?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
-        var cacheKey = $"series:extended:v1:{seriesId}";
 
-        return await GetOrAddAsync<SeriesDataDto>(
-            cacheKey,
-            async ct =>
-            {
-                var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
-                    () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/extended?meta=episodes&short=false"),
-                    ct);
-                return envelope.Data;
-            },
-            _ => Jitter(TimeSpan.FromHours(12), 0.10),
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/extended?meta=episodes&short=false"),
             cancellationToken);
+
+        return envelope.Data;
     }
 
     public async Task<EpisodeTranslationDataDto?> GetEpisodeTranslationByLanguageAsync(
@@ -223,19 +209,12 @@ public sealed class TheTvDbApiClient(
         return envelope.Data;
     }
 
-    public async Task<EpisodeExtendedDto?> GetEpisodeInformationByIdAsync(
+    public Task<EpisodeExtendedDto?> GetEpisodeInformationByIdAsync(
         int episodeId,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(episodeId);
-        const string language = "eng";
-        var cacheKey = $"episode:extended:v1:{episodeId}:{language}";
-
-        return await GetOrAddAsync<EpisodeExtendedDto>(
-            cacheKey,
-            ct => FetchEpisodeAsync(episodeId, language, ct),
-            _ => Jitter(TimeSpan.FromHours(12), 0.10),
-            cancellationToken);
+        return FetchEpisodeAsync(episodeId, "eng", cancellationToken);
     }
 
     private async Task<EpisodeExtendedDto?> FetchEpisodeAsync(
@@ -267,14 +246,7 @@ public sealed class TheTvDbApiClient(
 
         return episode with { Name = translatedName, Overview = translatedOverview };
     }
-    
-    private static TimeSpan Jitter(TimeSpan baseTtl, double pct)
-    {
-        var factor = 1 + (Random.Shared.NextDouble() * 2 - 1) * pct; // e.g. 0.9..1.1
-        var ms = Math.Max(1000, baseTtl.TotalMilliseconds * factor);
-        return TimeSpan.FromMilliseconds(ms);
-    }
-    
+
     /// <summary>
     /// Fetches the English translation for every episode in parallel (bounded by the shared
     /// request throttle), instead of one HTTP round trip at a time. For a 100+ episode series
@@ -366,34 +338,5 @@ public sealed class TheTvDbApiClient(
             logger.LogError(ex, "Failed to deserialize TheTVDB response.");
             throw new TheTvDbApiException("Failed to deserialize TheTVDB response.", null, ex);
         }
-    }
-    
-    /// <summary>
-    /// Cache-aside helper: returns the cached value if present, otherwise invokes
-    /// <paramref name="factory"/>, caches a non-null result using a TTL derived from
-    /// the fetched value, and returns it. Null results from the factory are not cached,
-    /// so a transient miss/failure doesn't get pinned as a false negative.
-    /// </summary>
-    private async Task<T?> GetOrAddAsync<T>(
-        string cacheKey,
-        Func<CancellationToken, Task<T?>> factory,
-        Func<T, TimeSpan> ttlSelector,
-        CancellationToken cancellationToken) where T : class
-    {
-        var cached = await cacheJson.GetAsync<T>(cacheKey, cancellationToken);
-        if (cached is not null)
-        {
-            logger.LogDebug("Cache hit for {CacheKey} ({Type}).", cacheKey, typeof(T).Name);
-            return cached;
-        }
-
-        var value = await factory(cancellationToken);
-        if (value is null)
-            return null;
-
-        var ttl = ttlSelector(value);
-        await cacheJson.SetAsync(cacheKey, value, ttl, cancellationToken);
-
-        return value;
     }
 }
