@@ -42,10 +42,30 @@
                         @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
                     </button>
                 </form>
-                
-                <a href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">
-                    <img src="~/images/attribution/imdb_logo.png" alt="IMDB Logo" height="24" />
-                </a>
+
+                @if (Model.WatchProgress is { HasEpisodes: true } progress)
+                {
+                    if (progress.IsUpToDate)
+                    {
+                        <button type="button" class="btn btn-outline-secondary mb-3" disabled>You are up to date</button>
+                    }
+                    else
+                    {
+                        var next = progress.NextUnwatchedEpisode!;
+                        <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="mb-3">
+                            <input type="hidden" name="episodeId" value="@next.Id" />
+                            <input type="hidden" name="Season" value="@next.SeasonNumber" />
+                            <button type="submit" class="btn btn-watch">Mark @next.SlateCode() as watched</button>
+                        </form>
+                    }
+                }
+
+                @if (Model.Series.ImdbId is not null)
+                {
+                    <a href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">
+                        <img src="~/images/attribution/imdb_logo.png" alt="IMDB Logo" height="24"/>
+                    </a>
+                }
                 
                 <dl class="row">
                     <dt class="col-sm-3">TVDB Id</dt>
@@ -57,9 +77,9 @@
                         <dd class="col-sm-9">@Model.Series.FirstAired</dd>
                     }
 
-                    @if (Model.Series.Status is not null)
+                    @if (Model.IsTrackedByCurrentUser)
                     {
-                        <dt class="col-sm-3">Status</dt>
+                        <dt class="col-sm-3">Next episode</dt>
                         <dd class="col-sm-9">@Model.Series.Status</dd>
                     }
                 </dl>

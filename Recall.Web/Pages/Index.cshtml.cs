@@ -5,6 +5,7 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages;
 
@@ -44,6 +45,7 @@ public sealed class IndexModel(
     ITheTvDbApiClient tvdbClient,
     ITrackedSeriesRepository libraryRepository,
     IEpisodeWatchRepository watchedRepository,
+    IWatchProgressService watchProgressService,
     ILogger<IndexModel> logger,
     ICurrentUserService currentUserService) : PageModel
 {
@@ -84,57 +86,42 @@ public sealed class IndexModel(
 
         foreach (var aggregate in aggregates)
         {
-            var orderedEpisodes = aggregate.Episodes
-                .Where(e => e.Aired.HasValue)
-                .OrderBy(e => e.Aired)
-                .ThenBy(e => e.SeasonNumber ?? int.MaxValue)
-                .ThenBy(e => e.EpisodeNumber ?? int.MaxValue)
-                .ToList();
-
-            foreach (var ep in orderedEpisodes)
+            foreach (var ep in aggregate.Episodes.Where(e => e.Aired is { } aired && aired >= today && aired <= upcomingCutoff))
             {
-                var aired = ep.Aired!.Value;
-
-                if (aired >= today && aired <= upcomingCutoff)
+                upcoming.Add(new UpcomingEpisodeItem
                 {
-                    upcoming.Add(new UpcomingEpisodeItem
-                    {
-                        SeriesId = aggregate.TvdbId,
-                        SeriesName = aggregate.Name,
-                        EpisodeId = ep.Id,
-                        SeasonNumber = ep.SeasonNumber,
-                        EpisodeNumber = ep.EpisodeNumber,
-                        Name = ep.Name,
-                        ImageUrl = aggregate.ImageUrl,
-                        AiredDate = aired
-                    });
-                }
-
-                // Strictly before today, so an episode airing today shows up
-                // in Upcoming only — never duplicated into Catch up.
-                if (aired < today && !watchedIds.Contains(ep.Id))
-                {
-                    unwatchedTotal++;
-                }
+                    SeriesId = aggregate.TvdbId,
+                    SeriesName = aggregate.Name,
+                    EpisodeId = ep.Id,
+                    SeasonNumber = ep.SeasonNumber,
+                    EpisodeNumber = ep.EpisodeNumber,
+                    Name = ep.Name,
+                    ImageUrl = aggregate.ImageUrl,
+                    AiredDate = ep.Aired!.Value
+                });
             }
 
-            var nextUnwatched = orderedEpisodes.FirstOrDefault(e => e.Aired!.Value < today && !watchedIds.Contains(e.Id));
-            if (nextUnwatched is not null)
+            // Next episode to watch + unwatched count: shared logic, same rule as
+            // the series page (earliest aired episode not marked watched).
+            var progress = watchProgressService.BuildProgress(aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedIds);
+            unwatchedTotal += progress.UnwatchedReleasedCount;
+
+            if (progress.NextUnwatchedEpisode is { } next)
             {
                 catchUp.Add(new CatchUpItem
                 {
                     SeriesId = aggregate.TvdbId,
                     SeriesName = aggregate.Name,
-                    EpisodeId = nextUnwatched.Id,
-                    SeasonNumber = nextUnwatched.SeasonNumber,
-                    EpisodeNumber = nextUnwatched.EpisodeNumber,
-                    Name = nextUnwatched.Name,
+                    EpisodeId = next.Id,
+                    SeasonNumber = next.SeasonNumber,
+                    EpisodeNumber = next.EpisodeNumber,
+                    Name = next.Name,
                     ImageUrl = aggregate.ImageUrl
                 });
             }
         }
 
-        UpcomingEpisodes = upcoming.OrderBy(e => e.AiredDate).ToList();
+        UpcomingEpisodes = [.. upcoming.OrderBy(e => e.AiredDate)];
         CatchUpEpisodes = catchUp;
         UpcomingThisWeekCount = upcoming.Count(e => e.AiredDate <= thisWeekCutoff);
         UnwatchedCount = unwatchedTotal;

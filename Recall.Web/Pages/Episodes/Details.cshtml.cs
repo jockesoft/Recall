@@ -5,6 +5,7 @@ using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages.Episodes;
 
@@ -12,7 +13,8 @@ public sealed class DetailsModel(
     ILogger<DetailsModel> logger,
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
-    IEpisodeWatchRepository episodeWatchRepository)
+    IEpisodeWatchRepository episodeWatchRepository,
+    IWatchProgressService watchProgressService)
     : PageModel
 {
     public Episode? Episode { get; set; }
@@ -106,26 +108,10 @@ public sealed class DetailsModel(
 
             var seriesId = episode.SeriesId.Value;
 
-            var ordered = await episodeWatchRepository.GetOrderedEpisodesAsync(seriesId, cancellationToken);
+            var result = await watchProgressService.MarkWatchedThroughAsync(userId, seriesId, id, cancellationToken);
 
-            var currentIndex = ordered.FindIndex(e => e.Id == episode.Id);
-            
-/*            var idsToMark = currentIndex >= 0
-                ? ordered.Take(currentIndex + 1).Select(e => e.Id).ToList()
-                : (List<int>)[episode.Id!.Value];*/
-
-            var idsToMarkWithNull = currentIndex >= 0
-                ? ordered.Take(currentIndex + 1).Select(e => e.Id).ToList()
-                : (List<int?>)[episode.Id!.Value];
-
-            var idsToMark = idsToMarkWithNull
-                .OfType<int>()
-                .ToList();
-            
-            await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesId, idsToMark, cancellationToken);
-
-            this.SetSuccessToast(idsToMark.Count > 1
-                ? $"Marked {idsToMark.Count} episodes as watched."
+            this.SetSuccessToast(result.MarkedCount > 1
+                ? $"Marked {result.MarkedCount} episodes as watched."
                 : "Episode marked as watched.");
         }
         catch (Exception ex)
@@ -155,7 +141,7 @@ public sealed class DetailsModel(
 
                 if (!IsWatchedByCurrentUser && Episode.SeriesId is > 0)
                 {
-                    PriorUnwatchedCount = await episodeWatchRepository.GetPriorUnwatchedCountAsync(userId, Episode.SeriesId.Value, Episode, cancellationToken);
+                    PriorUnwatchedCount = await watchProgressService.GetPriorUnwatchedCountAsync(userId, Episode.SeriesId.Value, id, cancellationToken);
                 }
             }
 

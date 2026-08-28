@@ -6,6 +6,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages.Series;
 
@@ -14,6 +15,7 @@ public sealed class DetailsModel(
     ICurrentUserService currentUserService,
     ITrackedSeriesRepository trackedSeriesRepository,
     IEpisodeWatchRepository episodeWatchRepository,
+    IWatchProgressService watchProgressService,
     ILogger<DetailsModel> logger)
     : PageModel
 {
@@ -25,6 +27,12 @@ public sealed class DetailsModel(
 
     public bool IsTrackedByCurrentUser { get; private set; }
     public IReadOnlySet<int> WatchedEpisodeIds { get; private set; } = new HashSet<int>();
+
+    /// <summary>
+    /// Where the signed-in user is in this series (next episode to watch / up to
+    /// date). Null when not signed in.
+    /// </summary>
+    public SeriesWatchProgress? WatchProgress { get; private set; }
 
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
         => await LoadPageAsync(id, cancellationToken);
@@ -75,12 +83,7 @@ public sealed class DetailsModel(
         {
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
-            var ordered = await episodeWatchRepository.GetOrderedEpisodesAsync(id, cancellationToken);
-            var episode = ordered.FirstOrDefault(e => e.Id == episodeId);
-            if (episode is null)
-                return NotFound();
-
-            var priorUnwatchedCount = await episodeWatchRepository.GetPriorUnwatchedCountAsync(userId, id, episode, cancellationToken);
+            var priorUnwatchedCount = await watchProgressService.GetPriorUnwatchedCountAsync(userId, id, episodeId, cancellationToken);
 
             return new JsonResult(new { priorUnwatchedCount });
         }
@@ -157,26 +160,11 @@ public sealed class DetailsModel(
 
             // Make sure the series is in the users library, otherwise why track progress
             await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
-            
-            var ordered = await episodeWatchRepository.GetOrderedEpisodesAsync(id, cancellationToken);
-            var episode = ordered.FirstOrDefault(e => e.Id == episodeId);
-            if (episode is null)
-                return RedirectToPage(new { id, season = Season });
 
-            var currentIndex = ordered.FindIndex(e => e.Id == episode.Id);
+            var result = await watchProgressService.MarkWatchedThroughAsync(userId, id, episodeId, cancellationToken);
 
-            var idsToMark = currentIndex >= 0
-                ? ordered.Take(currentIndex + 1)
-                    .Select(e => e.Id)
-                    .Where(eid => eid.HasValue)
-                    .Select(eid => eid!.Value)
-                    .ToList()
-                : episode.Id.HasValue ? new List<int> { episode.Id.Value } : [];
-
-            await episodeWatchRepository.MarkWatchedRangeAsync(userId, id, idsToMark, cancellationToken);
-
-            this.SetSuccessToast(idsToMark.Count > 1
-                ? $"Marked {idsToMark.Count} episodes as watched."
+            this.SetSuccessToast(result.MarkedCount > 1
+                ? $"Marked {result.MarkedCount} episodes as watched."
                 : "Episode marked as watched.");
         }
         catch (Exception ex)
@@ -223,6 +211,9 @@ public sealed class DetailsModel(
 
             IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
             WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, [id], cancellationToken);
+
+            // Reuse the aggregate already loaded above — no extra TheTVDB call.
+            WatchProgress = watchProgressService.BuildProgress(id, Aggregate.ToWatchableEpisodes(), WatchedEpisodeIds);
             return Page();
         }
         catch (TheTvDbApiException ex)
