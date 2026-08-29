@@ -81,7 +81,7 @@ dataSourceBuilder.EnableDynamicJson();
 
 var dataSource = dataSourceBuilder.Build();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+void ConfigureAppDbContext(DbContextOptionsBuilder options)
 {
     options.UseNpgsql(dataSource, npgsqlOptions =>
     {
@@ -90,7 +90,18 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
     options.ConfigureWarnings(w =>
         w.Throw(RelationalEventId.MultipleCollectionIncludeWarning));
-});
+}
+
+// The scoped AppDbContext still serves the per-request repositories. Its options
+// must be singleton so the singleton factory below can share them.
+builder.Services.AddDbContext<AppDbContext>(
+    ConfigureAppDbContext,
+    optionsLifetime: ServiceLifetime.Singleton);
+
+// A factory lets callers that fan out work in parallel within a single request
+// (e.g. the home dashboard loading many series aggregates at once) each take
+// their own short-lived context instead of racing on the scoped instance.
+builder.Services.AddDbContextFactory<AppDbContext>(ConfigureAppDbContext);
 
 #if DEBUG
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();

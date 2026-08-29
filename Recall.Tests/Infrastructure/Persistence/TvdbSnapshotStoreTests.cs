@@ -32,7 +32,16 @@ public sealed class TvdbSnapshotStoreTests
     [TearDown]
     public async Task TearDownAsync() => await _connection.DisposeAsync();
 
-    private TvdbSnapshotStore NewStore(AppDbContext db) => new(db, NullLogger<TvdbSnapshotStore>.Instance);
+    private TvdbSnapshotStore NewStore() =>
+        new(new PooledLikeFactory(_dbOptions), NullLogger<TvdbSnapshotStore>.Instance);
+
+    // Minimal IDbContextFactory over the shared in-memory SQLite connection —
+    // every CreateDbContext() call hands back a context bound to the same DB.
+    private sealed class PooledLikeFactory(DbContextOptions<AppDbContext> options)
+        : IDbContextFactory<AppDbContext>
+    {
+        public AppDbContext CreateDbContext() => new(options);
+    }
 
     [Test]
     public async Task SaveThenGet_SeriesAggregate_RoundTripsTheGraph()
@@ -49,11 +58,9 @@ public sealed class TvdbSnapshotStoreTests
             ]
         };
 
-        await using (var write = new AppDbContext(_dbOptions))
-            await NewStore(write).SaveSeriesAggregateAsync(aggregate, "eng");
+        await NewStore().SaveSeriesAggregateAsync(aggregate, "eng");
 
-        await using var read = new AppDbContext(_dbOptions);
-        var loaded = await NewStore(read).GetSeriesAggregateAsync(100, "eng");
+        var loaded = await NewStore().GetSeriesAggregateAsync(100, "eng");
 
         loaded.Should().NotBeNull();
         loaded!.Name.Should().Be("Round Trip Show");
@@ -66,14 +73,10 @@ public sealed class TvdbSnapshotStoreTests
     [Test]
     public async Task SaveSeriesAggregate_IsInsertOnly_DoesNotOverwriteExisting()
     {
-        await using (var first = new AppDbContext(_dbOptions))
-            await NewStore(first).SaveSeriesAggregateAsync(new SeriesAggregate { TvdbId = 200, Name = "Original" }, "eng");
+        await NewStore().SaveSeriesAggregateAsync(new SeriesAggregate { TvdbId = 200, Name = "Original" }, "eng");
+        await NewStore().SaveSeriesAggregateAsync(new SeriesAggregate { TvdbId = 200, Name = "Replacement" }, "eng");
 
-        await using (var second = new AppDbContext(_dbOptions))
-            await NewStore(second).SaveSeriesAggregateAsync(new SeriesAggregate { TvdbId = 200, Name = "Replacement" }, "eng");
-
-        await using var read = new AppDbContext(_dbOptions);
-        var loaded = await NewStore(read).GetSeriesAggregateAsync(200, "eng");
+        var loaded = await NewStore().GetSeriesAggregateAsync(200, "eng");
 
         loaded!.Name.Should().Be("Original");
     }
@@ -81,8 +84,7 @@ public sealed class TvdbSnapshotStoreTests
     [Test]
     public async Task GetSeriesAggregate_ReturnsNull_WhenMissing()
     {
-        await using var db = new AppDbContext(_dbOptions);
-        (await NewStore(db).GetSeriesAggregateAsync(999, "eng")).Should().BeNull();
+        (await NewStore().GetSeriesAggregateAsync(999, "eng")).Should().BeNull();
     }
 
     [Test]
@@ -101,22 +103,17 @@ public sealed class TvdbSnapshotStoreTests
             await seed.SaveChangesAsync();
         }
 
-        await using var db = new AppDbContext(_dbOptions);
-        (await NewStore(db).GetSeriesAggregateAsync(300, "eng")).Should().BeNull();
+        (await NewStore().GetSeriesAggregateAsync(300, "eng")).Should().BeNull();
     }
 
     [Test]
     public async Task SaveThenGet_SeriesExtended_And_EpisodeExtended_RoundTrip()
     {
-        await using (var write = new AppDbContext(_dbOptions))
-        {
-            var store = NewStore(write);
-            await store.SaveSeriesExtendedAsync(new Series { Id = 400, Name = "Extended", Slug = "ext" });
-            await store.SaveEpisodeExtendedAsync(new Episode { Id = 4001, SeriesId = 400, Name = "Ep One" });
-        }
+        var store = NewStore();
+        await store.SaveSeriesExtendedAsync(new Series { Id = 400, Name = "Extended", Slug = "ext" });
+        await store.SaveEpisodeExtendedAsync(new Episode { Id = 4001, SeriesId = 400, Name = "Ep One" });
 
-        await using var read = new AppDbContext(_dbOptions);
-        var readStore = NewStore(read);
+        var readStore = NewStore();
 
         var series = await readStore.GetSeriesExtendedAsync(400);
         series!.Name.Should().Be("Extended");
@@ -130,8 +127,7 @@ public sealed class TvdbSnapshotStoreTests
     [Test]
     public async Task SaveEpisodeExtended_WithNullId_IsNoOp()
     {
-        await using (var write = new AppDbContext(_dbOptions))
-            await NewStore(write).SaveEpisodeExtendedAsync(new Episode { Id = null, Name = "No Id" });
+        await NewStore().SaveEpisodeExtendedAsync(new Episode { Id = null, Name = "No Id" });
 
         await using var read = new AppDbContext(_dbOptions);
         (await read.CachedEpisodesExtended.CountAsync()).Should().Be(0);

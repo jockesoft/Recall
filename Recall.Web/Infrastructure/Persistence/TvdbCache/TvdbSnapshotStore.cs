@@ -7,7 +7,7 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 namespace Recall.Web.Infrastructure.Persistence.TvdbCache;
 
 public sealed class TvdbSnapshotStore(
-    AppDbContext dbContext,
+    IDbContextFactory<AppDbContext> dbContextFactory,
     ILogger<TvdbSnapshotStore> logger)
     : ITvdbSnapshotStore
 {
@@ -15,9 +15,15 @@ public sealed class TvdbSnapshotStore(
     // round-trips through this, so the JSON shapes stay in lockstep.
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    // Each operation takes its own context. Callers fan this store out in
+    // parallel within a single request, so a shared (scoped) context would
+    // throw "a second operation was started on this context instance".
+
     public async Task<SeriesAggregate?> GetSeriesAggregateAsync(
         int tvdbId, string language, CancellationToken cancellationToken = default)
     {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
         var row = await dbContext.CachedSeriesAggregates
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.TvdbId == tvdbId && x.Language == language, cancellationToken);
@@ -28,6 +34,8 @@ public sealed class TvdbSnapshotStore(
     public async Task SaveSeriesAggregateAsync(
         SeriesAggregate aggregate, string language, CancellationToken cancellationToken = default)
     {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
         var exists = await dbContext.CachedSeriesAggregates
             .AsNoTracking()
             .AnyAsync(x => x.TvdbId == aggregate.TvdbId && x.Language == language, cancellationToken);
@@ -45,11 +53,13 @@ public sealed class TvdbSnapshotStore(
             RetrievedUtc = DateTime.UtcNow
         };
 
-        await InsertAsync(entity, aggregate.TvdbId, cancellationToken);
+        await InsertAsync(dbContext, entity, aggregate.TvdbId, cancellationToken);
     }
 
     public async Task<Series?> GetSeriesExtendedAsync(int tvdbId, CancellationToken cancellationToken = default)
     {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
         var row = await dbContext.CachedSeriesExtended
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.TvdbId == tvdbId, cancellationToken);
@@ -59,6 +69,8 @@ public sealed class TvdbSnapshotStore(
 
     public async Task SaveSeriesExtendedAsync(Series series, CancellationToken cancellationToken = default)
     {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
         var exists = await dbContext.CachedSeriesExtended
             .AsNoTracking()
             .AnyAsync(x => x.TvdbId == series.Id, cancellationToken);
@@ -73,11 +85,13 @@ public sealed class TvdbSnapshotStore(
             RetrievedUtc = DateTime.UtcNow
         };
 
-        await InsertAsync(entity, series.Id, cancellationToken);
+        await InsertAsync(dbContext, entity, series.Id, cancellationToken);
     }
 
     public async Task<Episode?> GetEpisodeExtendedAsync(int episodeTvdbId, CancellationToken cancellationToken = default)
     {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
         var row = await dbContext.CachedEpisodesExtended
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.EpisodeTvdbId == episodeTvdbId, cancellationToken);
@@ -92,6 +106,8 @@ public sealed class TvdbSnapshotStore(
             logger.LogWarning("Skipping episode snapshot save — episode has no id.");
             return;
         }
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         var exists = await dbContext.CachedEpisodesExtended
             .AsNoTracking()
@@ -108,10 +124,10 @@ public sealed class TvdbSnapshotStore(
             RetrievedUtc = DateTime.UtcNow
         };
 
-        await InsertAsync(entity, episodeTvdbId, cancellationToken);
+        await InsertAsync(dbContext, entity, episodeTvdbId, cancellationToken);
     }
 
-    private async Task InsertAsync(object entity, int id, CancellationToken cancellationToken)
+    private async Task InsertAsync(AppDbContext dbContext, object entity, int id, CancellationToken cancellationToken)
     {
         dbContext.Add(entity);
 
