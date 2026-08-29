@@ -10,8 +10,6 @@ Recall.Tests/coverage-report/
 # Environment specific files
 .env*
 
-# Migrations for the database, always start from fresh
-Recall.Web/Migrations/
 
 # obj and bin
 Recall.Web/bin/

@@ -148,6 +148,9 @@ builder.Services.AddQuartzHostedService(
 
 var app = builder.Build();
 
+// Bring the database schema up to the current model before serving traffic.
+await app.MigrateDatabaseAsync();
+
 //app.UseSerilogRequestLogging();
 
 // Configure the HTTP request pipeline.
