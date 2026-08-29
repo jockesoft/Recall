@@ -95,17 +95,16 @@ jobs:
             ghcr.io/${{ secrets.GHCR_USERNAME }}/recall:latest
             ghcr.io/${{ secrets.GHCR_USERNAME }}/recall:${{ env.BUILD_NUMBER }}
 
-#      - name: Deploy on remote server
-#        uses: appleboy/ssh-action@v1
-#        with:
-#          host: ${{ secrets.SSH_HOST }}
-#          username: ${{ secrets.SSH_USER }}
-#          key: ${{ secrets.SSH_PRIVATE_KEY }}
-#          script: |
-#            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io \
-#              -u "${{ secrets.GHCR_USERNAME }}" \
-#              --password-stdin
-#            cd /home/${{ secrets.SSH_USER }}/recall-deploy
-#            bash dump_db.sh
-#            docker compose --env-file .env.prod -f compose.prod.yml up -d --pull always --quiet-pull
-#            docker image prune -f
+      - name: Deploy on remote server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io \
+              -u "${{ secrets.GHCR_USERNAME }}" \
+              --password-stdin
+            cd /home/${{ secrets.SSH_USER }}/recall-deploy
+            docker compose --env-file .env.prod -f compose.prod.yml up -d --pull always --quiet-pull
+            docker image prune -f

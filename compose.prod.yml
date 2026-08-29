@@ -9,7 +9,7 @@ services:
       - .env.prod
     volumes:
       - ./logs:/var/log/recallapp  # local path:docker path
-#      - ./dataprotection-keys:/home/app/.aspnet/DataProtection-Keys
+      - ./dataprotection-keys:/home/app/.aspnet/DataProtection-Keys
 #      - ./images/recipes:/app/wwwroot/images/recipes
     depends_on:
       postgres:
@@ -32,6 +32,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: # Not needed in prod?? According to AI but needed to be able to connect from host machine for testing/debugging. Can be removed if not needed.
+      - "127.0.0.1:5433:${POSTGRES_PORT}"
     volumes:
       - pgdata:/var/lib/postgresql
     networks:
@@ -39,7 +41,6 @@ services:
 
   redis:
     image: redis:7
-    container_name: redis_cache
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping"]
