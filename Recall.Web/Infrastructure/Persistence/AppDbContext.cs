@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AppUserEntity> AppUsers => Set<AppUserEntity>();
     public DbSet<EpisodeWatchEntity> EpisodeWatches => Set<EpisodeWatchEntity>();
     public DbSet<EmailEntity> Emails => Set<EmailEntity>();
+    public DbSet<LoginTokenEntity> LoginTokens => Set<LoginTokenEntity>();
 
     // Durable TheTVDB snapshots — fallback tier below Redis (read: cache -> DB -> API).
     public DbSet<CachedSeriesAggregateEntity> CachedSeriesAggregates => Set<CachedSeriesAggregateEntity>();
@@ -78,6 +79,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         }
 
         foreach (var entry in ChangeTracker.Entries<EmailEntity>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedUtc = now;
+                entry.Entity.UpdatedUtc = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedUtc = now;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<LoginTokenEntity>())
         {
             if (entry.State == EntityState.Added)
             {

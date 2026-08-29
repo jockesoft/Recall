@@ -1,8 +1,10 @@
+using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.Mail;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
+using Recall.Web.Services.Authentication;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
 
@@ -47,6 +49,20 @@ public static class ServiceCollectionExtensions
         services.Configure<MailOptions>(configuration.GetSection(MailOptions.SectionName));
         services.AddScoped<IEmailRepository, EmailRepository>();
         services.AddScoped<IMailService, MailService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Passwordless (magic-link) sign-in: the token repository plus
+    /// <see cref="IPasswordlessAuthService"/>. Cookie authentication itself is
+    /// wired up separately in <c>Program.cs</c>.
+    /// </summary>
+    public static IServiceCollection AddPasswordlessAuth(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<LoginTokenOptions>(configuration.GetSection(LoginTokenOptions.SectionName));
+        services.AddScoped<ILoginTokenRepository, LoginTokenRepository>();
+        services.AddScoped<IPasswordlessAuthService, PasswordlessAuthService>();
 
         return services;
     }

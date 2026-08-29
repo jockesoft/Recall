@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -34,11 +35,24 @@ builder.Host.UseSerilog((context, services, configuration) =>
         .Enrich.FromLogContext();
 });
 
-builder.Services.ConfigureApplicationCookie(o =>
-{
-    o.LoginPath = "/Account/Login";
-    o.LogoutPath = "/Account/Logout";
-});
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.AccessDeniedPath = "/Account/Login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
+        options.Cookie.Name = "Recall.Auth";
+        options.Cookie.HttpOnly = true;
+        // Lax (not Strict) so the cookie survives the top-level GET navigation
+        // from the emailed sign-in link.
+        options.Cookie.SameSite = SameSiteMode.Lax;
+#if !DEBUG
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+#endif
+    });
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -129,6 +143,7 @@ builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
 builder.Services.AddTheTvDb(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddMail(builder.Configuration);
+builder.Services.AddPasswordlessAuth(builder.Configuration);
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 

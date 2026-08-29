@@ -17,4 +17,5 @@ public sealed class AppUserEntity
 
     public ICollection<TrackedSeriesEntity> TrackedSeries { get; set; } = new List<TrackedSeriesEntity>();
     public ICollection<EpisodeWatchEntity> EpisodeWatches { get; set; } = new List<EpisodeWatchEntity>();
+    public ICollection<LoginTokenEntity> LoginTokens { get; set; } = new List<LoginTokenEntity>();
 }
