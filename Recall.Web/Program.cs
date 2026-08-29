@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
+using Quartz;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Caching;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Infrastructure.Timers;
 using Recall.Web.Middleware;
 using Recall.Web.Services.External.TheTvDb;
 using Serilog;
@@ -128,6 +130,21 @@ builder.Services.AddTheTvDb(builder.Configuration);
 builder.Services.AddApplicationServices();
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
+
+// Add the required Quartz.NET services
+builder.Services.AddQuartz(q =>
+{
+    q.ScheduleJob<UpdateTvDbInfoTimer>(trigger => trigger
+        .WithIdentity("UpdateTvDbInfoTimer-trigger")
+        .StartAt(DateTimeOffset.UtcNow.AddSeconds(10))
+        .WithDailyTimeIntervalSchedule(60, IntervalUnit.Second)
+        .WithDescription("Check for new TVDB info every 12 hours"));
+});
+
+// Add the Quartz.NET hosted service
+
+builder.Services.AddQuartzHostedService(
+    q => q.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 
