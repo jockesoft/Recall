@@ -137,8 +137,8 @@ builder.Services.AddQuartz(q =>
     q.ScheduleJob<UpdateTvDbInfoTimer>(trigger => trigger
         .WithIdentity("UpdateTvDbInfoTimer-trigger")
         .StartAt(DateTimeOffset.UtcNow.AddSeconds(10))
-        .WithDailyTimeIntervalSchedule(60, IntervalUnit.Second)
-        .WithDescription("Check for new TVDB info every 12 hours"));
+        .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
+        .WithDescription("Check for new TVDB info every 60 minutes, but only refresh series that are due for a refresh."));
 });
 
 // Add the Quartz.NET hosted service

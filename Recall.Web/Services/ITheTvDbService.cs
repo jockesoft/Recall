@@ -12,6 +12,14 @@ public interface ITheTvDbService
     Task<TvSeriesDetails?> GetSeriesByIdAsync(int seriesId, CancellationToken cancellationToken = default);
 
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bypasses the read tiers: fetches the series aggregate straight from
+    /// TheTVDB and overwrites both the local snapshot and the Redis entry.
+    /// Returns <c>false</c> when the API has nothing for the id.
+    /// </summary>
+    Task<bool> RefreshSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);
+
     Task<Episode?> GetEpisodeDetailsAsync(int episodeId, CancellationToken cancellationToken = default);
 
     Task<Series?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default);

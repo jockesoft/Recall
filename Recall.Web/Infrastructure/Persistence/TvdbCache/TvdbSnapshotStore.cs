@@ -56,6 +56,43 @@ public sealed class TvdbSnapshotStore(
         await InsertAsync(dbContext, entity, aggregate.TvdbId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<CachedAggregateKey>> GetAggregatesNeedingRefreshAsync(
+        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        return await dbContext.CachedSeriesAggregates
+            .AsNoTracking()
+            .Where(x => x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
+            .OrderBy(x => x.RetrievedUtc)
+            .Take(limit)
+            .Select(x => new CachedAggregateKey(x.TvdbId, x.Language))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task UpsertSeriesAggregateAsync(
+        SeriesAggregate aggregate, string language, CancellationToken cancellationToken = default)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var row = await dbContext.CachedSeriesAggregates
+            .FirstOrDefaultAsync(x => x.TvdbId == aggregate.TvdbId && x.Language == language, cancellationToken);
+
+        if (row is null)
+        {
+            row = new CachedSeriesAggregateEntity { TvdbId = aggregate.TvdbId, Language = language };
+            dbContext.CachedSeriesAggregates.Add(row);
+        }
+
+        row.Name = aggregate.Name;
+        row.StatusName = aggregate.Status?.Name;
+        row.KeepUpdated = aggregate.Status?.KeepUpdated;
+        row.Payload = JsonSerializer.Serialize(aggregate, JsonOptions);
+        row.RetrievedUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<Series?> GetSeriesExtendedAsync(int tvdbId, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);

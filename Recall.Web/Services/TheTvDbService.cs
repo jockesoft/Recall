@@ -50,16 +50,37 @@ public sealed class TheTvDbService(
             aggregate.Status?.Name ?? "");
     }
 
+    private static string AggregateCacheKey(int seriesId, string language) =>
+        $"series:aggregate:v1:{seriesId}:{language}";
+
     public Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
         int seriesId,
         CancellationToken cancellationToken = default)
         => GetLayeredAsync<SeriesAggregate>(
-            $"series:aggregate:v1:{seriesId}:{Language}",
+            AggregateCacheKey(seriesId, Language),
             ct => store.GetSeriesAggregateAsync(seriesId, Language, ct),
             ct => apiClient.GetSeriesAggregateByIdAsync(seriesId, Language, ct),
             aggregate => store.SaveSeriesAggregateAsync(aggregate, Language, cancellationToken),
             AggregateTtl,
             cancellationToken);
+
+    public async Task<bool> RefreshSeriesAggregateByIdAsync(
+        int seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        var fresh = await apiClient.GetSeriesAggregateByIdAsync(seriesId, Language, cancellationToken);
+        if (fresh is null)
+        {
+            logger.LogWarning("Refresh skipped for series {SeriesId} — TheTVDB returned no aggregate.", seriesId);
+            return false;
+        }
+
+        await store.UpsertSeriesAggregateAsync(fresh, Language, cancellationToken);
+        await cache.SetAsync(AggregateCacheKey(seriesId, Language), fresh, AggregateTtl(fresh), cancellationToken);
+
+        logger.LogInformation("Refreshed series aggregate {SeriesId} ({EpisodeCount} episodes).", seriesId, fresh.Episodes.Count);
+        return true;
+    }
 
     public Task<Series?> GetSeriesByIdExtendedAsync(
         int seriesId,

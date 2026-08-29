@@ -2,8 +2,8 @@ namespace Recall.Web.Infrastructure.Persistence.Entities;
 
 /// <summary>
 /// Persistent snapshot of a <c>SeriesAggregate</c> for one series + language.
-/// Acts as a durable fallback tier below Redis so a series is fetched from
-/// TheTVDB at most once. Refreshing is out of scope — rows are insert-only.
+/// Acts as a durable fallback tier below Redis. First reads insert a row; the
+/// background refresh job overwrites rows whose <c>KeepUpdated</c> flag is set.
 /// </summary>
 public sealed class CachedSeriesAggregateEntity
 {

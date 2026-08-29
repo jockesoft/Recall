@@ -4,8 +4,9 @@ namespace Recall.Web.Infrastructure.Persistence.TvdbCache;
 
 /// <summary>
 /// Durable local store for TheTVDB domain snapshots — the middle tier between
-/// Redis and the API. Writes are insert-if-absent (no overwrite); a refresh
-/// path is out of scope for now.
+/// Redis and the API. Reads fall through cache → DB → API; first-time writes are
+/// insert-if-absent. The background refresh job additionally overwrites existing
+/// aggregate rows via <see cref="UpsertSeriesAggregateAsync"/>.
 /// </summary>
 public interface ITvdbSnapshotStore
 {
@@ -17,4 +18,21 @@ public interface ITvdbSnapshotStore
 
     Task<Episode?> GetEpisodeExtendedAsync(int episodeTvdbId, CancellationToken cancellationToken = default);
     Task SaveEpisodeExtendedAsync(Episode episode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cached aggregate rows flagged <c>keep_updated</c> whose snapshot was last
+    /// retrieved before <paramref name="staleBeforeUtc"/>, oldest first and
+    /// capped at <paramref name="limit"/>. Feeds the background refresh job.
+    /// </summary>
+    Task<IReadOnlyList<CachedAggregateKey>> GetAggregatesNeedingRefreshAsync(
+        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Inserts the aggregate snapshot for one series + language, or overwrites it
+    /// (payload, denormalized columns and <c>retrieved_utc</c>) if a row exists.
+    /// </summary>
+    Task UpsertSeriesAggregateAsync(SeriesAggregate aggregate, string language, CancellationToken cancellationToken = default);
 }
+
+/// <summary>Composite key of a <c>cached_series_aggregate</c> row.</summary>
+public readonly record struct CachedAggregateKey(int TvdbId, string Language);
