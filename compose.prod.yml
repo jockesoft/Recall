@@ -1,0 +1,57 @@
+services:
+  recall:
+    container_name: recall_app
+    restart: unless-stopped
+    image: ghcr.io/jockesoft/recall:latest
+    ports:
+      - "8701:8701"
+    env_file:
+      - .env.prod
+    volumes:
+      - ./logs:/var/log/recallapp  # local path:docker path
+#      - ./dataprotection-keys:/home/app/.aspnet/DataProtection-Keys
+#      - ./images/recipes:/app/wwwroot/images/recipes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - recall_prodnet
+
+  postgres:
+    image: postgres:18.1
+    container_name: ${POSTGRES_HOST}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    networks:
+      - recall_prodnet
+
+  redis:
+    image: redis:7
+    container_name: redis_cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - recall_prodnet
+
+volumes:
+  pgdata:
+  dataprotection-keys:
+
+networks:
+  recall_prodnet:

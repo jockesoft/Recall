@@ -20,6 +20,10 @@ Launch the application in your dev environment
 dotnet watch run --project Recall.Web --launch-profile Recall.Web
 ```
 
+On the server after first deploy run:
+mkdir -p logs dataprotection-keys && sudo chown -R 64198:64198 logs dataprotection-keys
+
+
 Take database dump from postgres container
 
 ```

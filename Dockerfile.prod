@@ -1,0 +1,59 @@
+# ============================================
+# BUILD STAGE
+# ============================================
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+# Copy everything
+COPY . .
+# Copy the build.txt file to the image
+# COPY build.txt /app/build.txt
+
+# Restore + publish (Release)
+RUN dotnet restore
+WORKDIR /src/Recall.Web
+RUN dotnet publish Recall.Web.csproj -c Release -o /app/publish --no-restore
+
+# Copy build.txt to the publish directory
+COPY build.txt /app/publish/build.txt
+
+# ============================================
+# RUNTIME STAGE (small, secure)
+# ============================================
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+
+# Install locale + fonts (same as dev)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        tzdata \
+        locales \
+        fonts-dejavu \
+        fonts-liberation \
+        fontconfig \
+        procps && \
+    sed -i '/sv_SE.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV TZ=UTC
+ENV LANG=sv_SE.UTF-8 \
+    LANGUAGE=sv_SE:sv \
+    LC_ALL=sv_SE.UTF-8
+
+# Log folder
+RUN mkdir -p /var/log/recallapp && chmod -R 777 /var/log/recallapp
+
+WORKDIR /app
+
+# Copy published output from build stage
+COPY --from=build /app/publish .
+
+# Switch to non-root user
+USER app
+
+# Expose production port (match your ASPNETCORE_URLS)
+EXPOSE 8701
+
+# Run the app
+ENTRYPOINT ["dotnet", "Recall.Web.dll"]
