@@ -128,6 +128,7 @@ builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
 // Add TheTVDB integration
 builder.Services.AddTheTvDb(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddMail(builder.Configuration);
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 
@@ -139,6 +140,12 @@ builder.Services.AddQuartz(q =>
         .StartAt(DateTimeOffset.UtcNow.AddSeconds(10))
         .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
         .WithDescription("Check for new TVDB info every 60 minutes, but only refresh series that are due for a refresh."));
+
+    q.ScheduleJob<MailTimer>(trigger => trigger
+        .WithIdentity("MailTimer-trigger")
+        .StartAt(DateTimeOffset.UtcNow.AddSeconds(30))
+        .WithSimpleSchedule(s => s.WithIntervalInMinutes(1).RepeatForever())
+        .WithDescription("Drain the outbound email queue once a minute."));
 });
 
 // Add the Quartz.NET hosted service

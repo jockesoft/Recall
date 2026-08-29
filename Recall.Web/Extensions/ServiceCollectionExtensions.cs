@@ -1,4 +1,5 @@
 using Recall.Web.Infrastructure.External.TheTvDb;
+using Recall.Web.Infrastructure.Mail;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
@@ -33,6 +34,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEpisodeWatchRepository, EpisodeWatchRepository>();
         services.AddScoped<IWatchProgressService, WatchProgressService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Outbound mail: the queue repository plus <see cref="MailService"/>, which
+    /// both the app (to enqueue) and the <c>MailTimer</c> job (to send) resolve.
+    /// </summary>
+    public static IServiceCollection AddMail(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<MailOptions>(configuration.GetSection(MailOptions.SectionName));
+        services.AddScoped<IEmailRepository, EmailRepository>();
+        services.AddScoped<IMailService, MailService>();
 
         return services;
     }
