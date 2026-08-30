@@ -687,6 +687,29 @@ dl.row dd {
     border-bottom: 1px solid var(--tvdb-ink-line);
 }
 
+/* A link inside a metadata value reads as part of the value: same ink colour,
+   a quiet underline that warms to the amber signal on hover, plus a small
+   external-link cue. Keeps it from rendering as a raw amber browser link. */
+dl.row dd a {
+    color: var(--tvdb-text);
+    text-decoration: underline;
+    text-decoration-color: rgba(21, 27, 36, 0.28);
+    text-underline-offset: 0.15em;
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+dl.row dd a:hover,
+dl.row dd a:focus-visible {
+    color: var(--tvdb-signal-ink);
+    text-decoration-color: var(--tvdb-signal);
+}
+
+dl.row dd a[target="_blank"]::after {
+    content: " \2197"; /* ↗ */
+    color: var(--tvdb-text-muted);
+    font-size: 0.8em;
+}
+
 /* Poster / still images used outside .tvdb-media (kept for any page still
    using the plain img.rounded.shadow-sm pattern) */
 img.rounded.shadow-sm {

@@ -75,18 +75,12 @@
 
                 <dl class="row">
                     <dt class="col-sm-3">TVDB Id</dt>
-                    <dd class="col-sm-9">@Model.Series.TvdbId</dd>
+                    <dd class="col-sm-9"><a href="https://www.thetvdb.com/series/@Model.Series.Slug" target="_blank" rel="noopener">@Model.Series.TvdbId</a></dd>
 
                     @if (!string.IsNullOrWhiteSpace(Model.Series.FirstAired))
                     {
                         <dt class="col-sm-3">First aired</dt>
                         <dd class="col-sm-9">@Model.Series.FirstAired</dd>
-                    }
-
-                    @if (Model.IsTrackedByCurrentUser)
-                    {
-                        <dt class="col-sm-3">Next episode</dt>
-                        <dd class="col-sm-9">@Model.Series.Status</dd>
                     }
                 </dl>
 

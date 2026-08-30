@@ -15,6 +15,6 @@ public sealed record WatchableEpisode(
     /// <summary>True when the episode has an air date on or before <paramref name="date"/>.</summary>
     public bool HasAiredBy(DateOnly date) => Aired is { } aired && aired <= date;
 
-    /// <summary>"S2E6"-style slate code; missing numbers render as "?".</summary>
-    public string SlateCode() => $"S{SeasonNumber?.ToString() ?? "?"}E{EpisodeNumber?.ToString() ?? "?"}";
+    /// <summary>"S02E06"-style slate code; missing numbers render as "??".</summary>
+    public string SlateCode() => $"S{SeasonNumber?.ToString("D2") ?? "??"}E{EpisodeNumber?.ToString("D2") ?? "??"}";
 }
