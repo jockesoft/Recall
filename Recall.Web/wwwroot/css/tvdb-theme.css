@@ -781,15 +781,37 @@ img.rounded.shadow-sm {
     color: #f2e3c6;
 }
 
+/* Middle column of an episode row. min-width:0 lets it shrink below its
+   content width so a long, unbreakable title wraps instead of pushing the
+   row wider than the shell. */
+.tvdb-episode-body {
+    flex: 1;
+    min-width: 0;
+}
+
 .tvdb-episode-row .tvdb-episode-title {
     font-weight: 600;
     color: var(--tvdb-text);
+    overflow-wrap: anywhere;
 }
 
 .tvdb-episode-row .tvdb-episode-series {
     font-family: var(--tvdb-font-mono);
     font-size: 0.75rem;
     color: var(--tvdb-text-muted);
+    overflow-wrap: anywhere;
+}
+
+/* The series name is a link; keep it in the muted row style with no
+   underline until hover (was a repeated inline style per row). */
+.tvdb-episode-row .tvdb-episode-series a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.tvdb-episode-row .tvdb-episode-series a:hover,
+.tvdb-episode-row .tvdb-episode-series a:focus-visible {
+    text-decoration: underline;
 }
 
 .tvdb-episode-meta {

@@ -230,7 +230,11 @@ app.UseRateLimiter();
 
 app.UseSession();
 app.UseAuthentication();
-//app.UseMiddleware<DevAuthMiddleware>();
+
+#if DEBUG
+app.UseMiddleware<DevAuthMiddleware>();
+#endif
+
 app.UseAuthorization();
 
 app.MapControllerRoute(

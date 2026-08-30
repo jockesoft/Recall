@@ -122,8 +122,8 @@
                                 <span>No art</span>
                             }
                         </div>
-                        <div>
-                            <div class="tvdb-episode-series"><a class="tvdb-episode-series" style="text-decoration: none;" href="/Series/Details/@ep.SeriesId">@ep.SeriesName</a></div>
+                        <div class="tvdb-episode-body">
+                            <div class="tvdb-episode-series"><a href="/Series/Details/@ep.SeriesId">@ep.SeriesName</a></div>
                             <div class="tvdb-episode-title">
                                 <span class="tvdb-slate--inline me-1">@SlateCode(ep.SeasonNumber, ep.EpisodeNumber)</span>
                                 <a asp-page="/Episodes/Details" asp-route-id="@ep.EpisodeId">@ep.Name</a>
@@ -154,8 +154,8 @@
                             <span>No art</span>
                         }
                     </div>
-                    <div>
-                        <div class="tvdb-episode-series"><a class="tvdb-episode-series" style="text-decoration: none;" href="/Series/Details/@ep.SeriesId">@ep.SeriesName</a></div>
+                    <div class="tvdb-episode-body">
+                        <div class="tvdb-episode-series"><a href="/Series/Details/@ep.SeriesId">@ep.SeriesName</a></div>
                         <div class="tvdb-episode-title">
                             <span class="tvdb-slate--inline me-1">@SlateCode(ep.SeasonNumber, ep.EpisodeNumber)</span>
                             <a asp-page="/Episodes/Details" asp-route-id="@ep.EpisodeId">@ep.Name</a>

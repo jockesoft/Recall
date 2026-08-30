@@ -15,6 +15,19 @@ html {
 html {
   position: relative;
   min-height: 100%;
+  /* Always reserve room for the vertical scrollbar so the centered .container
+     doesn't shift a few px sideways when navigating between a page that needs
+     scrolling (e.g. a full Home schedule) and one that doesn't. */
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
+/* Modern engines honour scrollbar-gutter and only paint the bar when needed,
+   so the reserved-but-empty track above can be hidden there. */
+@supports (scrollbar-gutter: stable) {
+  html {
+    overflow-y: auto;
+  }
 }
 
 body {
