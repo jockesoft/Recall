@@ -33,7 +33,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports: # Not needed in prod?? According to AI but needed to be able to connect from host machine for testing/debugging. Can be removed if not needed.
-      - "127.0.0.1:5433:${POSTGRES_PORT}"
+      - "5433:${POSTGRES_PORT}"
     volumes:
       - pgdata:/var/lib/postgresql
     networks:

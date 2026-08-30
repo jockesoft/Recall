@@ -4,9 +4,10 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
-
+using Microsoft.AspNetCore.Authorization;
 namespace Recall.Web.Pages.Series;
 
+[Authorize]
 public sealed class SearchModel(
     ITheTvDbService theTvDbService,
     ILogger<SearchModel> logger)

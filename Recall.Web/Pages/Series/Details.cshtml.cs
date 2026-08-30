@@ -7,9 +7,11 @@ using Recall.Web.Mappings;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Recall.Web.Pages.Series;
 
+[Authorize]
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,

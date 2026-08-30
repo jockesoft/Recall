@@ -4,9 +4,10 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
-
+using Microsoft.AspNetCore.Authorization;
 namespace Recall.Web.Pages.Series;
 
+[Authorize]
 public sealed class LibraryModel(
     ICurrentUserService currentUserService,
     ITrackedSeriesRepository trackedSeriesRepository,

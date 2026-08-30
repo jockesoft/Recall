@@ -527,6 +527,14 @@ button.tvdb-badge {
     color: var(--tvdb-info-ink);
 }
 
+/* In-page success alert (distinct from the toast stack, which is scoped to
+   .tvdb-toast-stack and overrides these with higher specificity). */
+.alert-success {
+    background: rgba(111, 157, 111, 0.15);
+    border: 1px solid rgba(111, 157, 111, 0.4);
+    color: var(--tvdb-ok-ink);
+}
+
 /* List group (episode / result rows) */
 .list-group-item {
     background: transparent;

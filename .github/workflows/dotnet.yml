@@ -106,5 +106,6 @@ jobs:
               -u "${{ secrets.GHCR_USERNAME }}" \
               --password-stdin
             cd /home/${{ secrets.SSH_USER }}/recall-deploy
+            bash dump_db.sh
             docker compose --env-file .env.prod -f compose.prod.yml up -d --pull always --quiet-pull
             docker image prune -f
