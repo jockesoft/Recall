@@ -37,6 +37,17 @@ public sealed class PasswordlessAuthService(
         ArgumentNullException.ThrowIfNull(loginLinkFactory);
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
+
+        // Registration allowlist: while the app is invite-only, silently drop
+        // requests for any address that isn't explicitly permitted. No account
+        // row is created and no email is sent.
+        if (!IsEmailAllowed(normalizedEmail))
+        {
+            logger.LogWarning(
+                "Passwordless sign-in request rejected: {Email} is not on the allowlist.", normalizedEmail);
+            return;
+        }
+
         var user = await userRepository.GetOrCreateByEmailAsync(normalizedEmail, cancellationToken);
 
         var nowUtc = DateTime.UtcNow;
@@ -110,6 +121,23 @@ public sealed class PasswordlessAuthService(
 
         logger.LogInformation("Passwordless sign-in succeeded for user {UserId}.", user.Id);
         return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username);
+    }
+
+    private bool IsEmailAllowed(string normalizedEmail)
+    {
+        if (_options.AllowedEmails is not { Length: > 0 } allowed)
+            return true;
+
+        foreach (var entry in allowed)
+        {
+            if (!string.IsNullOrWhiteSpace(entry) &&
+                string.Equals(entry.Trim(), normalizedEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string GenerateRawToken() =>

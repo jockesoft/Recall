@@ -23,4 +23,11 @@ public sealed class LoginTokenOptions
     /// that account, so only the most recent email works.
     /// </summary>
     public bool InvalidatePreviousTokens { get; set; } = true;
+
+    /// <summary>
+    /// Email addresses permitted to request a sign-in link (and, on first use,
+    /// have an account provisioned). Matched case-insensitively after trimming.
+    /// When empty, any address is allowed.
+    /// </summary>
+    public string[] AllowedEmails { get; set; } = [];
 }

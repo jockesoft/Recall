@@ -223,6 +223,52 @@ public sealed class PasswordlessAuthServiceTests
             Times.Once);
     }
 
+    [Test]
+    public async Task RequestLoginAsync_Should_DoNothing_WhenEmailNotOnAllowlist()
+    {
+        _options.AllowedEmails = ["allowed@test.local"];
+
+        await _sut.RequestLoginAsync("intruder@test.local", _ => "https://recall.test/x");
+
+        _userRepository.Verify(
+            x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mailService.Verify(
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task RequestLoginAsync_Should_SendLink_WhenEmailIsOnAllowlist_CaseInsensitively()
+    {
+        _options.AllowedEmails = ["allowed@test.local"];
+        var user = User(Guid.NewGuid(), "allowed@test.local", "allowed");
+        _userRepository
+            .Setup(x => x.GetOrCreateByEmailAsync("allowed@test.local", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+
+        await _sut.RequestLoginAsync("  Allowed@Test.LOCAL ", _ => "https://recall.test/x");
+
+        _mailService.Verify(
+            x => x.QueueEmailAsync("allowed@test.local", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RequestLoginAsync_Should_AllowAnyEmail_WhenAllowlistEmpty()
+    {
+        _options.AllowedEmails = [];
+        _userRepository
+            .Setup(x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(Guid.NewGuid(), "anyone@test.local", "anyone"));
+
+        await _sut.RequestLoginAsync("anyone@test.local", _ => "https://recall.test/x");
+
+        _mailService.Verify(
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     // ---- RedeemAsync -----------------------------------------------------
 
     [TestCase(null)]
