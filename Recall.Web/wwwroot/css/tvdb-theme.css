@@ -95,6 +95,31 @@ hr {
     color: var(--tvdb-paper) !important;
 }
 
+/* Banner logo lockup used as the brand. Sized here (not baked into the file)
+   so height is easy to tweak; change --navbar-logo-h and reload.
+   The image is a wide transparent PNG (~3.6:1). */
+.navbar-brand {
+    --navbar-logo-h: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.navbar-brand .navbar-logo {
+    height: var(--navbar-logo-h);
+    width: auto;
+    display: block;
+    /* Lifts the dark-navy part of the artwork off the dark ink bar. */
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+
+@media (max-width: 575.98px) {
+    .navbar-brand {
+        --navbar-logo-h: 1.9rem;
+    }
+}
+
 .navbar .nav-link,
 .navbar-light .nav-link {
     color: rgba(241, 236, 226, 0.75) !important;
