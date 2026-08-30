@@ -5,6 +5,7 @@
 // <author>Joakim Fredlund</author>
 //-----------------------------------------------------------------------
 
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.WebUtilities;
@@ -88,7 +89,8 @@ public sealed class PasswordlessAuthService(
         await mailService.QueueEmailAsync(
             user.Email,
             "Your Recall sign-in link",
-            BuildEmailBody(link, _options.TokenLifetimeMinutes),
+            BuildTextBody(link, _options.TokenLifetimeMinutes),
+            BuildHtmlBody(link, _options.TokenLifetimeMinutes),
             MailService.NormalPriority,
             cancellationToken);
 
@@ -146,14 +148,82 @@ public sealed class PasswordlessAuthService(
     private static string Hash(string rawToken) =>
         Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
 
-    private static string BuildEmailBody(string link, int lifetimeMinutes) =>
+    private static string BuildTextBody(string link, int lifetimeMinutes) =>
         $"""
-         Hi,
+         Sign in to Recall
 
-         Use the link below to sign in to Recall. It works once and expires in {lifetimeMinutes} minutes.
+         Open the link below to finish signing in. It works once and expires in {lifetimeMinutes} minutes.
 
          {link}
 
-         If you didn't ask to sign in, you can ignore this email.
+         If you didn't ask to sign in, you can ignore this email — nothing will happen.
+
+         Recall · Track your shows · Never miss an episode
          """;
+
+    /// <summary>
+    /// A self-contained, table-based HTML email in the recall.nu palette
+    /// (dark "broadcast slate" ink, paper card, amber signal). All styling is
+    /// inline for mail-client compatibility.
+    /// </summary>
+    private static string BuildHtmlBody(string link, int lifetimeMinutes)
+    {
+        var href = WebUtility.HtmlEncode(link);
+        const string sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+        const string mono = "'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace";
+
+        return $"""
+                <!DOCTYPE html>
+                <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+                <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <meta name="color-scheme" content="light">
+                <meta name="supported-color-schemes" content="light">
+                <title>Your Recall sign-in link</title>
+                </head>
+                <body style="margin:0;padding:0;background:#151b24;">
+                <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">Your sign-in link — works once, expires in {lifetimeMinutes} minutes.</div>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#151b24;">
+                  <tr>
+                    <td align="center" style="padding:32px 16px;">
+                      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+                        <tr>
+                          <td style="background:#1f2733;border-radius:12px 12px 0 0;padding:22px 32px;border-bottom:2px solid #e8a33d;">
+                            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e8a33d;vertical-align:middle;"></span>
+                            <span style="font-family:{sans};font-weight:700;letter-spacing:.22em;font-size:15px;color:#f1ece2;text-transform:uppercase;vertical-align:middle;padding-left:10px;">Recall</span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="background:#f1ece2;padding:34px 32px;font-family:{sans};color:#2c2a24;">
+                            <h1 style="margin:0 0 12px;font-size:22px;line-height:1.25;color:#2c2a24;">Sign in to Recall</h1>
+                            <p style="margin:0 0 26px;font-size:15px;line-height:1.6;color:#4a4638;">
+                              Tap the button to finish signing in. This link works once and expires in {lifetimeMinutes} minutes.
+                            </p>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px;">
+                              <tr>
+                                <td align="center" bgcolor="#e8a33d" style="border-radius:6px;">
+                                  <a href="{href}" target="_blank" style="display:inline-block;padding:14px 30px;font-family:{sans};font-size:15px;font-weight:700;line-height:1;color:#2a1a05;text-decoration:none;border-radius:6px;">Sign in to Recall</a>
+                                </td>
+                              </tr>
+                            </table>
+                            <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#766c59;">Button not working? Paste this address into your browser:</p>
+                            <p style="margin:0 0 26px;font-size:12px;line-height:1.5;word-break:break-all;font-family:{mono};color:#4a4638;">{href}</p>
+                            <hr style="border:0;border-top:1px solid rgba(21,27,36,.14);margin:0 0 16px;">
+                            <p style="margin:0;font-size:12px;line-height:1.5;color:#766c59;">If you didn't ask to sign in, you can ignore this email — nothing will happen.</p>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="background:#1f2733;border-radius:0 0 12px 12px;padding:18px 32px;font-family:{sans};font-size:11px;letter-spacing:.05em;color:rgba(241,236,226,.5);">
+                            Recall &middot; Track your shows &middot; Never miss an episode
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+                </body>
+                </html>
+                """;
+    }
 }

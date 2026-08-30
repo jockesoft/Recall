@@ -34,6 +34,10 @@ public sealed class EmailEntityConfiguration : IEntityTypeConfiguration<EmailEnt
             .HasMaxLength(2000)
             .IsRequired();
 
+        builder.Property(x => x.HtmlBody)
+            .HasColumnName("html_body")
+            .HasColumnType("text");
+
         builder.Property(x => x.SendAttempts)
             .HasColumnName("send_attempts")
             .HasDefaultValue(0)

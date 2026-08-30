@@ -64,14 +64,15 @@ public sealed class PasswordlessAuthServiceTests
             .Callback<LoginToken, CancellationToken>((t, _) => storedToken = t)
             .Returns(Task.CompletedTask);
 
-        string? queuedTo = null, queuedBody = null;
+        string? queuedTo = null, queuedBody = null, queuedHtml = null;
         _mailService
             .Setup(x => x.QueueEmailAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string, string, int, CancellationToken>((to, _, body, _, _) =>
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, string, string?, int, CancellationToken>((to, _, body, html, _, _) =>
             {
                 queuedTo = to;
                 queuedBody = body;
+                queuedHtml = html;
             })
             .Returns(Task.CompletedTask);
 
@@ -94,6 +95,11 @@ public sealed class PasswordlessAuthServiceTests
 
         queuedTo.Should().Be(user.Email);
         queuedBody.Should().Contain($"https://recall.test/Account/Verify?token={rawToken}");
+
+        queuedHtml.Should().NotBeNullOrWhiteSpace();
+        queuedHtml.Should().Contain($"https://recall.test/Account/Verify?token={rawToken}");
+        queuedHtml.Should().Contain("<a href=", "the HTML email links the token behind a button");
+        queuedHtml.Should().Contain("Sign in to Recall");
     }
 
     [Test]
@@ -172,7 +178,7 @@ public sealed class PasswordlessAuthServiceTests
         _tokenRepository.Verify(x => x.InvalidateActiveForUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
         _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Never);
         _mailService.Verify(
-            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -199,7 +205,7 @@ public sealed class PasswordlessAuthServiceTests
 
         _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Once);
         _mailService.Verify(
-            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -218,7 +224,7 @@ public sealed class PasswordlessAuthServiceTests
             x => x.GetMostRecentActiveForUserAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _mailService.Verify(
-            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -233,7 +239,7 @@ public sealed class PasswordlessAuthServiceTests
             x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Never);
         _mailService.Verify(
-            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -249,7 +255,7 @@ public sealed class PasswordlessAuthServiceTests
         await _sut.RequestLoginAsync("  Allowed@Test.LOCAL ", _ => "https://recall.test/x");
 
         _mailService.Verify(
-            x => x.QueueEmailAsync("allowed@test.local", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            x => x.QueueEmailAsync("allowed@test.local", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -264,7 +270,7 @@ public sealed class PasswordlessAuthServiceTests
         await _sut.RequestLoginAsync("anyone@test.local", _ => "https://recall.test/x");
 
         _mailService.Verify(
-            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

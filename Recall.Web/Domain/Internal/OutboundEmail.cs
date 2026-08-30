@@ -16,7 +16,11 @@ public sealed class OutboundEmail
 
     public string Subject { get; init; } = string.Empty;
 
+    /// <summary>Plain-text body — always set; the fallback part of the message.</summary>
     public string Body { get; init; } = string.Empty;
+
+    /// <summary>Optional HTML body; when set the message is sent multipart/alternative.</summary>
+    public string? HtmlBody { get; init; }
 
     public int SendAttempts { get; init; }
 

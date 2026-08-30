@@ -19,10 +19,16 @@ public interface IMailService
     /// the next <see cref="SendPendingEmailsAsync"/> run — this method never talks
     /// to an SMTP server itself, so callers don't block on delivery.
     /// </summary>
+    /// <param name="body">Plain-text body. Always required — it's the fallback part.</param>
+    /// <param name="htmlBody">
+    /// Optional HTML body. When given, the message is sent as
+    /// <c>multipart/alternative</c> with <paramref name="body"/> as the text part.
+    /// </param>
     Task QueueEmailAsync(
         string to,
         string subject,
         string body,
+        string? htmlBody = null,
         int priority = MailService.NormalPriority,
         CancellationToken cancellationToken = default);
 

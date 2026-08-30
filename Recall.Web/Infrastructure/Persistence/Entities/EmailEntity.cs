@@ -17,7 +17,14 @@ public sealed class EmailEntity
 
     public string Subject { get; set; } = string.Empty;
 
+    /// <summary>Plain-text body. Always set — it's the fallback part of the message.</summary>
     public string Body { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional HTML body. When present the message is sent as
+    /// <c>multipart/alternative</c> with <see cref="Body"/> as the text part.
+    /// </summary>
+    public string? HtmlBody { get; set; }
 
     /// <summary>Incremented every time delivery is attempted and fails.</summary>
     public int SendAttempts { get; set; }

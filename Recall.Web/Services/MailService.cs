@@ -7,6 +7,8 @@
 
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
+using System.Text;
 using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Internal;
 using Recall.Web.Infrastructure.Mail;
@@ -39,6 +41,7 @@ public sealed class MailService(
         string to,
         string subject,
         string body,
+        string? htmlBody = null,
         int priority = NormalPriority,
         CancellationToken cancellationToken = default)
     {
@@ -52,6 +55,7 @@ public sealed class MailService(
             ToAddress = to,
             Subject = subject,
             Body = body ?? string.Empty,
+            HtmlBody = string.IsNullOrWhiteSpace(htmlBody) ? null : htmlBody,
             CreatedUtc = DateTime.UtcNow,
             UpdatedUtc = DateTime.UtcNow
         };
@@ -119,12 +123,27 @@ public sealed class MailService(
                 ? new MailAddress(_options.FromAddress)
                 : new MailAddress(_options.FromAddress, _options.FromDisplayName),
             Subject = email.Subject,
-            Body = email.Body,
-            IsBodyHtml = false
+            SubjectEncoding = Encoding.UTF8,
+            BodyEncoding = Encoding.UTF8
         };
 
         // MailAddressCollection.Add accepts a comma-separated list.
         message.To.Add(email.ToAddress);
+
+        if (string.IsNullOrWhiteSpace(email.HtmlBody))
+        {
+            message.Body = email.Body;
+            message.IsBodyHtml = false;
+            return message;
+        }
+
+        // multipart/alternative: least-preferred part (plain text) first so
+        // clients that support HTML pick the last one.
+        message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(
+            email.Body, Encoding.UTF8, MediaTypeNames.Text.Plain));
+        message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(
+            email.HtmlBody, Encoding.UTF8, MediaTypeNames.Text.Html));
+
         return message;
     }
 

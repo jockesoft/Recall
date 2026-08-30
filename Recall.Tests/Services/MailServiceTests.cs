@@ -100,6 +100,22 @@ public sealed class MailServiceTests
         captured!.Body.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task QueueEmailAsync_Should_PersistHtmlBody_WhenProvided_AndNullifyBlank()
+    {
+        var captured = new List<OutboundEmail>();
+        _repository
+            .Setup(x => x.AddAsync(It.IsAny<OutboundEmail>(), It.IsAny<CancellationToken>()))
+            .Callback<OutboundEmail, CancellationToken>((e, _) => captured.Add(e))
+            .Returns(Task.CompletedTask);
+
+        await _sut.QueueEmailAsync("user@test.local", "Hello", "text", htmlBody: "<p>hi</p>");
+        await _sut.QueueEmailAsync("user@test.local", "Hello", "text", htmlBody: "   ");
+
+        captured[0].HtmlBody.Should().Be("<p>hi</p>");
+        captured[1].HtmlBody.Should().BeNull("whitespace-only HTML is treated as no HTML");
+    }
+
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]
@@ -173,6 +189,24 @@ public sealed class MailServiceTests
     }
 
     [Test]
+    public async Task SendPendingEmailsAsync_Should_SendMultipartAlternative_WhenHtmlBodyPresent()
+    {
+        var email = Pending("a@test.local", "Welcome", htmlBody: "<html><body><a href=\"https://recall.test\">Sign in</a></body></html>");
+        _repository
+            .Setup(x => x.GetPendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([email]);
+
+        await _sut.SendPendingEmailsAsync();
+
+        _repository.Verify(x => x.MarkSentAsync(email.Id, It.IsAny<CancellationToken>()), Times.Once);
+
+        var eml = await File.ReadAllTextAsync(Directory.GetFiles(_pickupDirectory, "*.eml").Single());
+        eml.Should().Contain("multipart/alternative");
+        eml.Should().Contain("text/plain");
+        eml.Should().Contain("text/html");
+    }
+
+    [Test]
     public async Task SendPendingEmailsAsync_Should_RecordFailedAttempt_ForBadMessage_AndKeepGoing()
     {
         var good = Pending("good@test.local", "Fine");
@@ -188,12 +222,13 @@ public sealed class MailServiceTests
         _repository.Verify(x => x.RecordFailedAttemptAsync(bad.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    private static OutboundEmail Pending(string to, string subject) => new()
+    private static OutboundEmail Pending(string to, string subject, string? htmlBody = null) => new()
     {
         Id = Guid.NewGuid(),
         ToAddress = to,
         Subject = subject,
         Body = "body",
+        HtmlBody = htmlBody,
         SentUtc = null,
         SendAttempts = 0,
         CreatedUtc = DateTime.UtcNow,
