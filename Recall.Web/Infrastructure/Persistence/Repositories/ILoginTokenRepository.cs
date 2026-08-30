@@ -7,6 +7,16 @@ public interface ILoginTokenRepository
     Task AddAsync(LoginToken token, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The newest still-usable (unconsumed, unexpired as of
+    /// <paramref name="nowUtc"/>) token for a user, or <c>null</c>. Used to
+    /// enforce a per-account resend cooldown.
+    /// </summary>
+    Task<LoginToken?> GetMostRecentActiveForUserAsync(
+        Guid userId,
+        DateTime nowUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The token for <paramref name="tokenHash"/> if it exists, has not been
     /// consumed, and has not expired as of <paramref name="nowUtc"/>; otherwise
     /// <c>null</c>.

@@ -12,6 +12,13 @@ public sealed class LoginTokenOptions
     public int TokenLifetimeMinutes { get; set; } = 15;
 
     /// <summary>
+    /// Minimum gap between sign-in emails to the same address. A repeat request
+    /// inside this window is accepted but sends nothing, so the form can't be
+    /// used to flood an inbox. Set to 0 to disable.
+    /// </summary>
+    public int ResendCooldownSeconds { get; set; } = 120;
+
+    /// <summary>
     /// When true, requesting a new link consumes any earlier unused links for
     /// that account, so only the most recent email works.
     /// </summary>

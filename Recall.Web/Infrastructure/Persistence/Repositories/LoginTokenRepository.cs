@@ -26,6 +26,21 @@ public sealed class LoginTokenRepository(AppDbContext dbContext) : ILoginTokenRe
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<LoginToken?> GetMostRecentActiveForUserAsync(
+        Guid userId,
+        DateTime nowUtc,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.LoginTokens
+            .AsNoTracking()
+            .Where(x => x.UserId == userId
+                        && x.ConsumedUtc == null
+                        && x.ExpiresUtc > nowUtc)
+            .OrderByDescending(x => x.CreatedUtc)
+            .Select(x => x.ToDomain())
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task MarkConsumedAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await dbContext.LoginTokens

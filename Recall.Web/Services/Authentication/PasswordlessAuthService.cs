@@ -39,6 +39,24 @@ public sealed class PasswordlessAuthService(
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var user = await userRepository.GetOrCreateByEmailAsync(normalizedEmail, cancellationToken);
 
+        var nowUtc = DateTime.UtcNow;
+
+        // Resend cooldown: if a link is already outstanding and was issued
+        // moments ago, don't send another. Stops the form being used to bomb an
+        // inbox regardless of how many requests come in.
+        if (_options.ResendCooldownSeconds > 0)
+        {
+            var mostRecent = await tokenRepository.GetMostRecentActiveForUserAsync(user.Id, nowUtc, cancellationToken);
+            if (mostRecent is not null &&
+                mostRecent.CreatedUtc > nowUtc.AddSeconds(-_options.ResendCooldownSeconds))
+            {
+                logger.LogInformation(
+                    "Passwordless sign-in request for user {UserId} ignored: within the {Cooldown}s resend cooldown.",
+                    user.Id, _options.ResendCooldownSeconds);
+                return;
+            }
+        }
+
         if (_options.InvalidatePreviousTokens)
             await tokenRepository.InvalidateActiveForUserAsync(user.Id, cancellationToken);
 
@@ -50,7 +68,7 @@ public sealed class PasswordlessAuthService(
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
                 TokenHash = Hash(rawToken),
-                ExpiresUtc = DateTime.UtcNow.AddMinutes(_options.TokenLifetimeMinutes)
+                ExpiresUtc = nowUtc.AddMinutes(_options.TokenLifetimeMinutes)
             },
             cancellationToken);
 

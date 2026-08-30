@@ -1,5 +1,7 @@
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
@@ -145,6 +147,25 @@ builder.Services.AddApplicationServices();
 builder.Services.AddMail(builder.Configuration);
 builder.Services.AddPasswordlessAuth(builder.Configuration);
 
+// Throttle the sign-in form per client IP so it can't be scripted to spray
+// login emails. Applied via [EnableRateLimiting("login-email")] on LoginModel.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("login-email", httpContext =>
+    {
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 8,
+            Window = TimeSpan.FromMinutes(5),
+            QueueLimit = 0
+        });
+    });
+});
+
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 
 // Add the required Quartz.NET services
@@ -204,6 +225,8 @@ app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 app.UseStaticFiles(); // important for runtime-created files
 app.UseRouting();
+
+app.UseRateLimiter();
 
 app.UseSession();
 app.UseAuthentication();

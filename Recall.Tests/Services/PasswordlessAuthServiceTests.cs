@@ -149,6 +149,80 @@ public sealed class PasswordlessAuthServiceTests
         _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Test]
+    public async Task RequestLoginAsync_Should_SendNothing_WhenWithinResendCooldown()
+    {
+        _options.ResendCooldownSeconds = 120;
+        var user = User(Guid.NewGuid(), "user@test.local", "user");
+        _userRepository
+            .Setup(x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+        _tokenRepository
+            .Setup(x => x.GetMostRecentActiveForUserAsync(user.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginToken
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenHash = "x",
+                CreatedUtc = DateTime.UtcNow.AddSeconds(-30),
+                ExpiresUtc = DateTime.UtcNow.AddMinutes(14)
+            });
+
+        await _sut.RequestLoginAsync("user@test.local", _ => "https://recall.test/x");
+
+        _tokenRepository.Verify(x => x.InvalidateActiveForUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mailService.Verify(
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task RequestLoginAsync_Should_SendEmail_WhenCooldownHasElapsed()
+    {
+        _options.ResendCooldownSeconds = 120;
+        var user = User(Guid.NewGuid(), "user@test.local", "user");
+        _userRepository
+            .Setup(x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+        _tokenRepository
+            .Setup(x => x.GetMostRecentActiveForUserAsync(user.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LoginToken
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenHash = "x",
+                CreatedUtc = DateTime.UtcNow.AddSeconds(-200),
+                ExpiresUtc = DateTime.UtcNow.AddMinutes(11)
+            });
+
+        await _sut.RequestLoginAsync("user@test.local", _ => "https://recall.test/x");
+
+        _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mailService.Verify(
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RequestLoginAsync_Should_IgnoreCooldown_WhenDisabled()
+    {
+        _options.ResendCooldownSeconds = 0;
+        var user = User(Guid.NewGuid(), "user@test.local", "user");
+        _userRepository
+            .Setup(x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+
+        await _sut.RequestLoginAsync("user@test.local", _ => "https://recall.test/x");
+
+        _tokenRepository.Verify(
+            x => x.GetMostRecentActiveForUserAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _mailService.Verify(
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     // ---- RedeemAsync -----------------------------------------------------
 
     [TestCase(null)]
