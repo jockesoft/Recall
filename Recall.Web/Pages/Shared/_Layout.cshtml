@@ -1,4 +1,5 @@
-﻿@{
+﻿@inject Recall.Web.Services.ICurrentUserService CurrentUser
+@{
     string buildNumber = "unknown";
     string path = System.IO.Path.Combine(AppContext.BaseDirectory, "build.txt");
     if (System.IO.File.Exists(path))
@@ -32,8 +33,8 @@
                     aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                <ul class="navbar-nav flex-grow-1">
+            <div class="navbar-collapse collapse">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
                     </li>
@@ -43,10 +44,32 @@
                     <li class="nav-item">
                         <a class="nav-link text-dark" asp-page="/Series/Library">My Library</a>
                     </li>
-                    @if (User.Identity?.IsAuthenticated ?? false)
+                </ul>
+                <ul class="navbar-nav align-items-sm-center">
+                    @if (CurrentUser.IsAuthenticated)
                     {
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-page="/Account/Logout">Logout</a>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link nav-avatar dropdown-toggle" href="#" id="accountMenu" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">
+                                <img src="~/images/mysteryman.jpg" asp-append-version="true" width="32" height="32"
+                                     class="nav-avatar-img" alt="Account menu" />
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenu">
+                                <li class="dropdown-header">
+                                    <span class="d-block text-truncate">@(CurrentUser.DisplayName ?? "Signed in")</span>
+                                    @if (!string.IsNullOrEmpty(CurrentUser.Email))
+                                    {
+                                        <span class="dropdown-header-sub d-block text-truncate">@CurrentUser.Email</span>
+                                    }
+                                </li>
+                                <li><a class="dropdown-item" asp-page="/Account/Profile">Profile</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form method="post" asp-page="/Account/Logout">
+                                        <button type="submit" class="dropdown-item">Logout</button>
+                                    </form>
+                                </li>
+                            </ul>
                         </li>
                     }
                     else

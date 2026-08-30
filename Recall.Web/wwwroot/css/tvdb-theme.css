@@ -154,6 +154,96 @@ hr {
     border-color: var(--tvdb-line);
 }
 
+/* ---- account menu (avatar dropdown, shown when signed in) ------------- */
+
+.navbar .nav-avatar.nav-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem;
+}
+
+.nav-avatar-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    background: var(--tvdb-ink-3);
+    border: 1px solid var(--tvdb-line);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nav-avatar:hover .nav-avatar-img,
+.nav-avatar:focus-visible .nav-avatar-img,
+.nav-item.dropdown.show .nav-avatar-img {
+    border-color: var(--tvdb-signal);
+    box-shadow: 0 0 0 2px rgba(232, 163, 61, 0.35);
+}
+
+/* the avatar is the affordance — drop Bootstrap's caret */
+.nav-avatar.dropdown-toggle::after {
+    display: none;
+}
+
+.navbar .dropdown-menu {
+    background: var(--tvdb-paper);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    padding: 0.35rem;
+    margin-top: 0.5rem;
+    min-width: 12rem;
+}
+
+.navbar .dropdown-header {
+    padding: 0.45rem 0.6rem 0.35rem;
+    font-family: var(--tvdb-font-ui);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvdb-text);
+    line-height: 1.3;
+}
+
+.navbar .dropdown-header .dropdown-header-sub {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--tvdb-text-muted);
+}
+
+.navbar .dropdown-item {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    color: var(--tvdb-text);
+    border: 0;
+    border-radius: 5px;
+    padding: 0.5rem 0.6rem;
+}
+
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item:focus {
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-signal-ink);
+}
+
+.navbar .dropdown-divider {
+    border-top-color: var(--tvdb-ink-line);
+    margin: 0.35rem 0.25rem;
+}
+
+/* Profile page avatar */
+.profile-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--tvdb-ink-line);
+    background: var(--tvdb-paper-dim);
+    flex: none;
+}
+
 /* =========================================================================
    Content shell — the "paper sheet" that page content sits on.
    Wrap a page's main content in <div class="tvdb-shell"> ... </div>
