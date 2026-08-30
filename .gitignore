@@ -18,8 +18,8 @@ Recall.Tests/bin/
 Recall.Tests/obj/
 
 # Appsettings files that may contain sensitive data
-Recall.Web/appsettings.Development.json
-Recall.Web/appsettings.json
+# Recall.Web/appsettings.Development.json
+# Recall.Web/appsettings.json
 
 # Mail pickup folder (used in development)
 Recall.Web/mail-pickup/
