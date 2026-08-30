@@ -8,7 +8,6 @@ public static class UserMappings
     public static UserItem ToDomain(this AppUserEntity e) => new()
     {
         Id = e.Id,
-        UserId = e.UserId,
         Username = e.Username,
         Email = e.Email,
         CreatedUtc = e.CreatedUtc,

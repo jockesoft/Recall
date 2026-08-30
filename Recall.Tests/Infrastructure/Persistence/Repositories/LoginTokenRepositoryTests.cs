@@ -164,10 +164,8 @@ public sealed class LoginTokenRepositoryTests
         dbContext.AppUsers.Add(new AppUserEntity
         {
             Id = userId,
-            UserId = $"external-{userId}",
             Username = $"user-{userId:N}",
-            Email = $"{userId:N}@test.local",
-            Password = "placeholder"
+            Email = $"{userId:N}@test.local"
         });
 
         await dbContext.SaveChangesAsync();

@@ -44,7 +44,6 @@ public sealed class PasswordlessAuthServiceTests
     private static AppUserEntity User(Guid id, string email, string username) => new()
     {
         Id = id,
-        UserId = id.ToString(),
         Email = email,
         Username = username
     };

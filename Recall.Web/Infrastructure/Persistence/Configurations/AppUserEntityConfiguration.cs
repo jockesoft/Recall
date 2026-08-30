@@ -13,13 +13,6 @@ public sealed class AppUserEntityConfiguration : IEntityTypeConfiguration<AppUse
 
         builder.Property(x => x.Id).HasColumnName("id");
 
-        builder.Property(x => x.UserId)
-            .HasColumnName("user_id")
-            .HasMaxLength(200)
-            .IsRequired();
-
-        builder.HasIndex(x => x.UserId).IsUnique();
-
         builder.Property(x => x.Username)
             .HasColumnName("user_name")
             .HasMaxLength(200)
@@ -30,13 +23,6 @@ public sealed class AppUserEntityConfiguration : IEntityTypeConfiguration<AppUse
             .HasMaxLength(320)
             .IsRequired();
 
-        builder.HasIndex(x => x.Email);
-
-        builder.Property(x => x.Password)
-            .HasColumnName("password_hash")
-            .HasMaxLength(130)
-            .IsRequired();
-        
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")
@@ -46,8 +32,7 @@ public sealed class AppUserEntityConfiguration : IEntityTypeConfiguration<AppUse
             .HasColumnName("updated_utc")
             .HasColumnType("timestamp with time zone")
             .IsRequired();
-        
-        builder.HasIndex(x => x.UserId).IsUnique();
+
         builder.HasIndex(x => x.Email).IsUnique();
         builder.HasIndex(x => x.Username).IsUnique();
     }

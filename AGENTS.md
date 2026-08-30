@@ -62,7 +62,7 @@ Current `ITheTvDbService` methods:
 - DbSets: `AppUsers`, `TrackedSeries`, `EpisodeWatches`
 
 **Entities** (`Infrastructure/Persistence/Entities/`):
-- `AppUserEntity` — app-managed user with `UserId` (reserved for future Identity), `Username`, `Email`, `Password`
+- `AppUserEntity` — app-managed user: `Id` (Guid PK, also the `NameIdentifier` claim), `Username`, `Email`, audit timestamps. Passwordless — no password or external-id column.
 - `TrackedSeriesEntity` — links a user to a TVDB series; has `uint Version` for PostgreSQL xmin-backed optimistic concurrency
 - `EpisodeWatchEntity` — records that a user watched a specific episode
 
@@ -330,5 +330,5 @@ docker exec -u root <container> chown -R 1000:1000 /home/devuser/.aspnet/.
 - **Redis 7+**: Required at startup; connection via `REDIS_CONNECTION` env var or `ConnectionStrings:RedisConnection`
 - **Serilog Sinks**: Console and File sinks configured
 - **Npgsql**: PostgreSQL provider with dynamic JSON support enabled
-- **BCrypt.Net-Next**: Used for password hashing (`AppUserEntity.Password`)
+- **Authentication**: passwordless magic-link sign-in (`IPasswordlessAuthService` + `login_token` table); no password hashing
 

@@ -29,7 +29,6 @@ public class DevAuthMiddleware(RequestDelegate next, ILogger<DevAuthMiddleware> 
                 devUser = new AppUserEntity
                 {
                     Id = FixedDevUserId,
-                    UserId = string.Empty, // keep for now if you plan Identity later
                     Username = "dev-user",
                     Email = "dev@example.com",
                     CreatedUtc = DateTime.UtcNow,

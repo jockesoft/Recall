@@ -5,32 +5,6 @@ namespace Recall.Web.Infrastructure.Persistence.Repositories;
 
 public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserRepository
 {
-    public async Task<AppUserEntity> GetOrCreateByExternalIdAsync(
-        string externalId,
-        string? email,
-        string? displayName,
-        CancellationToken cancellationToken = default)
-    {
-        var existing = await dbContext.AppUsers
-            .FirstOrDefaultAsync(x => x.UserId == externalId, cancellationToken);
-
-        if (existing is not null)
-            return existing;
-
-        var user = new AppUserEntity
-        {
-            Id = Guid.NewGuid(),
-            UserId = externalId,
-            Email = string.IsNullOrWhiteSpace(email) ? "unknown@local" : email.Trim(),
-            Username = string.IsNullOrWhiteSpace(displayName) ? "Unknown user" : displayName.Trim()
-        };
-
-        dbContext.AppUsers.Add(user);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return user;
-    }
-
     public Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
@@ -50,16 +24,11 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
         if (existing is not null)
             return existing;
 
-        var id = Guid.NewGuid();
         var user = new AppUserEntity
         {
-            Id = id,
-            // No external identity provider — the surrogate id doubles as the
-            // (required, unique) external key.
-            UserId = id.ToString(),
+            Id = Guid.NewGuid(),
             Email = normalized,
-            Username = await BuildUniqueUsernameAsync(normalized, cancellationToken),
-            Password = string.Empty // passwordless — never set
+            Username = await BuildUniqueUsernameAsync(normalized, cancellationToken)
         };
 
         dbContext.AppUsers.Add(user);
