@@ -10,6 +10,12 @@ dotnet user-secrets set "TheTvDb:ApiKey" "YOUR_REAL_API_KEY" --project ./Recall.
 dotnet user-secrets set "TheTvDb:Pin" "YOUR_PIN_IF_ANY" --project ./Recall.Web
 ```
 
+Set your allowed email addresses
+```
+dotnet user-secrets set "Login:AllowedEmails:0" "dev@email.com" --project Recall.Web
+dotnet user-secrets set "Login:AllowedEmails:1" "user@email.com" --project Recall.Web
+```
+
 Start redis container
 ```
 docker run --name my-redis -p 6379:6379 -d redis:7
