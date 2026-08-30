@@ -21,6 +21,9 @@ Recall.Tests/obj/
 Recall.Web/appsettings.Development.json
 Recall.Web/appsettings.json
 
+# Mail pickup folder (used in development)
+Recall.Web/mail-pickup/
+
 .DS_Store
 
 # Visual Studio 2015/2017 cache/options directory

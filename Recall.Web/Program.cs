@@ -207,7 +207,7 @@ app.UseRouting();
 
 app.UseSession();
 app.UseAuthentication();
-app.UseMiddleware<DevAuthMiddleware>();
+//app.UseMiddleware<DevAuthMiddleware>();
 app.UseAuthorization();
 
 app.MapControllerRoute(
