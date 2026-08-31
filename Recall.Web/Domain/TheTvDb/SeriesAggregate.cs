@@ -55,6 +55,10 @@ public sealed class EpisodeSummary
     public int? EpisodeNumber { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? Overview { get; init; }
+
+    /// <summary>Still/thumbnail image for this specific episode (full URL), when TheTVDB has one.</summary>
+    public string? Image { get; init; }
+
     public DateOnly? Aired { get; init; }
     public int? RuntimeMinutes { get; init; }
     public bool? IsMovie { get; init; }

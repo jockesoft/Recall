@@ -1087,6 +1087,186 @@ img.rounded.shadow-sm {
 }
 
 /* =========================================================================
+   Catch-up grid — a responsive grid of "next episode to watch" tiles. Each
+   tile is a 16:9 episode still with the show / S·E code / episode name
+   overlaid bottom-left and a circular "mark watched" button bottom-right.
+   Wrap a run of <partial name="_CatchUpCard" ...> in
+   <div class="tvdb-catchup-grid">. Stills are wider than posters, so the
+   column count stays lower: 1 -> 2 -> 3 from phone to desktop.
+   ========================================================================= */
+
+.tvdb-catchup-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+@media (min-width: 576px) {
+    .tvdb-catchup-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 992px) {
+    .tvdb-catchup-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.tvdb-catchup-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--tvdb-radius);
+    overflow: hidden;
+    background: linear-gradient(155deg, #0d1117, #232c3a);
+    border: 1px solid var(--tvdb-ink-line);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.tvdb-catchup-card:hover .tvdb-catchup-media,
+.tvdb-catchup-card:focus-within .tvdb-catchup-media {
+    border-color: rgba(232, 163, 61, 0.5);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tvdb-catchup-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.tvdb-catchup-card:hover .tvdb-catchup-media img {
+    transform: scale(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-catchup-media img { transition: none; }
+    .tvdb-catchup-card:hover .tvdb-catchup-media img { transform: none; }
+}
+
+.tvdb-catchup-media.is-empty::after {
+    content: "No still";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    color: rgba(241, 236, 226, 0.35);
+}
+
+/* Full-tile link (opens the episode). Sits below the caption + button. */
+.tvdb-catchup-hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+.tvdb-catchup-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    /* generous top pad = the scrim fade; right pad clears the round button */
+    padding: 2.75rem 3.4rem 0.65rem 0.85rem;
+    background: linear-gradient(to top,
+        rgba(10, 13, 18, 0.92),
+        rgba(10, 13, 18, 0.55) 45%,
+        transparent);
+    /* let taps on the dead area of the caption fall through to the tile link */
+    pointer-events: none;
+}
+
+.tvdb-catchup-show {
+    pointer-events: auto;
+    align-self: flex-start;
+    max-width: 100%;
+    font-family: var(--tvdb-font-ui);
+    font-weight: 700;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    color: #f6f1e7;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tvdb-catchup-show:hover,
+.tvdb-catchup-show:focus-visible {
+    color: var(--tvdb-signal);
+    text-decoration: none;
+}
+
+.tvdb-catchup-slate {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: rgba(242, 227, 198, 0.9);
+}
+
+.tvdb-catchup-ep {
+    font-family: var(--tvdb-font-ui);
+    font-size: 0.8rem;
+    line-height: 1.25;
+    color: rgba(246, 241, 231, 0.82);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tvdb-catchup-check {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    z-index: 3;
+    margin: 0;
+}
+
+/* Circular "confirm watched" button — a filled checkmark that reads clearly
+   on top of a photo. Reusable anywhere an action marks something watched;
+   pair it with a POST <form> that carries the ids. (Distinct from
+   .tvdb-watch-dot, which is the empty-until-hover toggle used in list rows.) */
+.tvdb-watch-badge {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(241, 236, 226, 0.5);
+    background: rgba(10, 13, 18, 0.55);
+    backdrop-filter: blur(3px);
+    color: #f1ece2;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.tvdb-watch-badge:hover,
+.tvdb-watch-badge:focus-visible {
+    background: var(--tvdb-ok);
+    border-color: var(--tvdb-ok);
+    color: #1c2b1c;
+    transform: scale(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-watch-badge { transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+    .tvdb-watch-badge:hover,
+    .tvdb-watch-badge:focus-visible { transform: none; }
+}
+
+/* =========================================================================
    Toast messages — floating stack in the bottom-right corner, scoped to
    its own wrapper so they read clearly regardless of what's behind them,
    and don't collide with .alert-info/.alert-danger used inside .tvdb-shell.

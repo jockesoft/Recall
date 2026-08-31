@@ -38,6 +38,7 @@
    }
    ----------------------------------------------------------------------- *@
 @page
+@using Recall.Web.Pages.Shared
 @model IndexModel
 @{
     ViewData["Title"] = "Home";
@@ -83,6 +84,26 @@
     }
     else
     {
+        @if (Model.CatchUpEpisodes.Count > 0)
+        {
+            <h4 class="mb-3">Catch up</h4>
+            <div class="tvdb-catchup-grid mb-4">
+                @foreach (var ep in Model.CatchUpEpisodes)
+                {
+                    <partial name="_CatchUpCard" model="@(new CatchUpCardModel
+                             {
+                                 SeriesId = ep.SeriesId,
+                                 SeriesName = ep.SeriesName,
+                                 EpisodeId = ep.EpisodeId,
+                                 SeasonNumber = ep.SeasonNumber,
+                                 EpisodeNumber = ep.EpisodeNumber,
+                                 EpisodeName = ep.Name,
+                                 ImageUrl = ep.ImageUrl
+                             })" />
+                }
+            </div>
+        }
+
         <div class="tvdb-stat-row">
             <div class="tvdb-stat">
                 <div class="tvdb-stat-value">@Model.TrackedSeriesCount</div>
@@ -135,38 +156,6 @@
                         </div>
                     </div>
                 }
-            }
-        }
-
-        @if (Model.CatchUpEpisodes.Count > 0)
-        {
-            <h4 class="mt-4 mb-0">Catch up</h4>
-            @foreach (var ep in Model.CatchUpEpisodes)
-            {
-                <div class="tvdb-episode-row">
-                    <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(ep.ImageUrl) ? "is-empty" : "")">
-                        @if (!string.IsNullOrWhiteSpace(ep.ImageUrl))
-                        {
-                            <img src="@ep.ImageUrl" alt="" class="tvdb-thumb" />
-                        }
-                        else
-                        {
-                            <span>No art</span>
-                        }
-                    </div>
-                    <div class="tvdb-episode-body">
-                        <div class="tvdb-episode-series"><a href="/Series/Details/@ep.SeriesId">@ep.SeriesName</a></div>
-                        <div class="tvdb-episode-title">
-                            <span class="tvdb-slate--inline me-1">@SlateCode(ep.SeasonNumber, ep.EpisodeNumber)</span>
-                            <a asp-page="/Episodes/Details" asp-route-id="@ep.EpisodeId">@ep.Name</a>
-                        </div>
-                    </div>
-                    <div class="tvdb-episode-meta">
-                        <form method="post" asp-page-handler="MarkWatched" asp-route-seriesId="@ep.SeriesId" asp-route-episodeId="@ep.EpisodeId">
-                            <button type="submit" class="btn btn-watch btn-sm">Mark watched</button>
-                        </form>
-                    </div>
-                </div>
             }
         }
     }

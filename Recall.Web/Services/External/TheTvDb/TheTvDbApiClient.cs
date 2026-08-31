@@ -279,6 +279,7 @@ public sealed class TheTvDbApiClient(
             EpisodeNumber = ep.EpisodeNumber,
             Name = !string.IsNullOrWhiteSpace(tr?.Name) ? tr.Name! : ep.Name,
             Overview = !string.IsNullOrWhiteSpace(tr?.Overview) ? tr.Overview : ep.Overview,
+            Image = ep.Image,
             Aired = ep.Aired,
             RuntimeMinutes = ep.RuntimeMinutes,
             IsMovie = ep.IsMovie,

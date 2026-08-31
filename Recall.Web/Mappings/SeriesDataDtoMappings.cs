@@ -128,6 +128,7 @@ public static class SeriesDataDtoMappings
                 EpisodeNumber = e.Number,
                 Name = string.IsNullOrWhiteSpace(e.Name) ? $"Episode {e.Number}" : e.Name!,
                 Overview = e.Overview,
+                Image = e.Image,
                 Aired = ParseDateOnly(e.Aired),
                 RuntimeMinutes = e.Runtime,
                 IsMovie = e.IsMovie.HasValue ? e.IsMovie.Value != 0 : null,

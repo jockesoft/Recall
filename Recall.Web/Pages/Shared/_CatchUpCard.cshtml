@@ -1,0 +1,34 @@
+@model Recall.Web.Pages.Shared.CatchUpCardModel
+
+<div class="tvdb-catchup-card">
+    <div class="tvdb-catchup-media @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="" loading="lazy" />
+        }
+
+        @* Stretched link — the whole still opens the episode. Sits under the
+           caption + button, which raise themselves above it. *@
+        <a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeId"
+           class="tvdb-catchup-hit" aria-label="@Model.EpisodeName"></a>
+
+        <div class="tvdb-catchup-caption">
+            <a asp-page="/Series/Details" asp-route-id="@Model.SeriesId" class="tvdb-catchup-show">@Model.SeriesName</a>
+            @if (Model.SlateCode is not null)
+            {
+                <span class="tvdb-catchup-slate">@Model.SlateCode</span>
+            }
+            <span class="tvdb-catchup-ep">@Model.EpisodeName</span>
+        </div>
+
+        <form method="post" asp-page-handler="@Model.MarkWatchedHandler"
+              asp-route-seriesId="@Model.SeriesId" asp-route-episodeId="@Model.EpisodeId"
+              class="tvdb-catchup-check">
+            <button type="submit" class="tvdb-watch-badge"
+                    title="Mark as watched"
+                    aria-label="Mark @Model.EpisodeName as watched">
+                <span aria-hidden="true">&#10003;</span>
+            </button>
+        </form>
+    </div>
+</div>

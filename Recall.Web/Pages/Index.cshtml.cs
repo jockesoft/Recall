@@ -24,7 +24,7 @@ public sealed class UpcomingEpisodeItem
     public DateOnly AiredDate { get; init; }
 }
 
-public sealed class CatchUpItem
+public sealed record CatchUpItem
 {
     public int SeriesId { get; init; }
     public string SeriesName { get; init; } = "";
@@ -32,6 +32,8 @@ public sealed class CatchUpItem
     public int? SeasonNumber { get; init; }
     public int? EpisodeNumber { get; init; }
     public string Name { get; init; } = "";
+
+    /// <summary>Still for the next episode (full URL); falls back to the series cover.</summary>
     public string? ImageUrl { get; init; }
 }
 
@@ -107,6 +109,12 @@ public sealed class IndexModel(
 
             if (progress.NextUnwatchedEpisode is { } next)
             {
+                // Prefer any still already on the aggregate; fall back to the
+                // series cover for now — EnrichCatchUpImagesAsync then swaps in
+                // the real per-episode screencap from the episode endpoint.
+                var summaryImage = aggregate.Episodes
+                    .FirstOrDefault(e => e.Id == next.Id)?.Image;
+
                 catchUp.Add(new CatchUpItem
                 {
                     SeriesId = aggregate.TvdbId,
@@ -115,15 +123,52 @@ public sealed class IndexModel(
                     SeasonNumber = next.SeasonNumber,
                     EpisodeNumber = next.EpisodeNumber,
                     Name = next.Name,
-                    ImageUrl = aggregate.ImageUrl
+                    ImageUrl = string.IsNullOrWhiteSpace(summaryImage) ? aggregate.ImageUrl : summaryImage
                 });
             }
         }
 
         UpcomingEpisodes = [.. upcoming.OrderBy(e => e.AiredDate)];
-        CatchUpEpisodes = catchUp;
+        CatchUpEpisodes = await EnrichCatchUpImagesAsync(catchUp, cancellationToken);
         UpcomingThisWeekCount = upcoming.Count(e => e.AiredDate <= thisWeekCutoff);
         UnwatchedCount = unwatchedTotal;
+    }
+
+    /// <summary>
+    /// The series-extended payload doesn't carry per-episode stills, so the
+    /// "Catch up" cards would otherwise show the series poster. Fetch each next
+    /// episode from the (layered-cached) episode endpoint — the same source
+    /// Episodes/Details uses — and swap in its screencap when it has one.
+    /// </summary>
+    private async Task<List<CatchUpItem>> EnrichCatchUpImagesAsync(
+        List<CatchUpItem> items,
+        CancellationToken cancellationToken)
+    {
+        if (items.Count == 0)
+            return items;
+
+        var episodes = await Task.WhenAll(
+            items.Select(item => TryGetEpisodeAsync(item.EpisodeId, cancellationToken)));
+
+        return items
+            .Zip(episodes, (item, episode) =>
+                string.IsNullOrWhiteSpace(episode?.Image)
+                    ? item
+                    : item with { ImageUrl = episode.Image })
+            .ToList();
+    }
+
+    private async Task<Episode?> TryGetEpisodeAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await theTvDbService.GetEpisodeDetailsAsync(episodeId, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to load episode {EpisodeId} for the home catch-up image.", episodeId);
+            return null;
+        }
     }
 
     public async Task<IActionResult> OnPostMarkWatchedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
