@@ -71,7 +71,6 @@
 
 <div class="tvdb-shell">
     <div class="tvdb-eyebrow mb-1">Your channel &middot; @DateTime.Today.ToString("dddd, MMMM d")</div>
-    <h1 class="tvdb-display mb-3">Home</h1>
 
     @if (!hasLibrary)
     {
@@ -84,6 +83,21 @@
     }
     else
     {
+        <div class="tvdb-stat-row">
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.TrackedSeriesCount</div>
+                <div class="tvdb-stat-label">Tracked series</div>
+            </div>
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.UpcomingThisWeekCount</div>
+                <div class="tvdb-stat-label">Airing this week</div>
+            </div>
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.UnwatchedCount</div>
+                <div class="tvdb-stat-label">Unwatched episodes</div>
+            </div>
+        </div>
+
         @if (Model.CatchUpEpisodes.Count > 0)
         {
             <h4 class="mb-3">Catch up</h4>
@@ -103,21 +117,6 @@
                 }
             </div>
         }
-
-        <div class="tvdb-stat-row">
-            <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.TrackedSeriesCount</div>
-                <div class="tvdb-stat-label">Tracked series</div>
-            </div>
-            <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.UpcomingThisWeekCount</div>
-                <div class="tvdb-stat-label">Airing this week</div>
-            </div>
-            <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.UnwatchedCount</div>
-                <div class="tvdb-stat-label">Unwatched episodes</div>
-            </div>
-        </div>
 
         <h4 class="mb-0">Upcoming</h4>
 
