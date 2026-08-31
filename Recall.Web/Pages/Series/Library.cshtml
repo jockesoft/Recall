@@ -1,4 +1,5 @@
 @page
+@using Recall.Web.Pages.Shared
 @model Recall.Web.Pages.Series.LibraryModel
 @{
     ViewData["Title"] = "My Library";
@@ -21,54 +22,16 @@
     {
         <p class="tvdb-mono text-muted">You have @Model.Items.Count tracked series.</p>
 
-        <div class="list-group">
+        <div class="tvdb-series-grid">
             @foreach (var item in Model.Items)
             {
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-start gap-3">
-                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "is-empty" : "")">
-                            @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
-                            {
-                                <img src="@item.ImageUrl" alt="" class="tvdb-thumb" loading="lazy" />
-                            }
-                            else
-                            {
-                                <span>No art</span>
-                            }
-                        </div>
-
-                        <div class="flex-grow-1">
-                            <h5 class="mb-1">@item.Name</h5>
-
-                            <div class="tvdb-mono small text-muted mb-2">
-                                TVDB: @item.TvdbId
-                                @if (item.FirstAired.HasValue)
-                                {
-                                    <span> &middot; First aired: @item.FirstAired.Value.ToString("yyyy-MM-dd")</span>
-                                }
-                            </div>
-
-                            @if (!string.IsNullOrWhiteSpace(item.Overview))
-                            {
-                                <p class="mb-0 tvdb-prose text-muted">@item.Overview</p>
-                            }
-                        </div>
-
-                        <div class="d-flex flex-column gap-2">
-                            <a asp-page="/Series/Details"
-                               asp-route-id="@item.TvdbId"
-                               class="btn btn-sm btn-outline-primary">
-                                View
-                            </a>
-
-                            <form method="post" asp-page-handler="Remove" asp-route-id="@item.Id">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    Remove
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+                <partial name="_SeriesCard" model="@(new SeriesCardModel
+                         {
+                             TvdbId = item.TvdbId,
+                             Name = item.Name,
+                             ImageUrl = item.ImageUrl,
+                             FirstAired = item.FirstAired
+                         })" />
             }
         </div>
     }

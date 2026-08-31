@@ -1,0 +1,17 @@
+@model Recall.Web.Pages.Shared.SeriesCardModel
+
+<a asp-page="/Series/Details" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
+    <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="" loading="lazy" />
+        }
+    </span>
+
+    <span class="tvdb-series-title">@Model.Name</span>
+
+    @if (Model.FirstAired.HasValue)
+    {
+        <span class="tvdb-series-year">@Model.FirstAired.Value.Year</span>
+    }
+</a>

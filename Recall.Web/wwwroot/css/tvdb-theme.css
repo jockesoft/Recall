@@ -977,6 +977,116 @@ img.rounded.shadow-sm {
 }
 
 /* =========================================================================
+   Series poster grid — a responsive grid of poster tiles (cover + title +
+   year), each linking to Series/Details. Wrap a run of <partial
+   name="_SeriesCard" ...> in <div class="tvdb-series-grid"> to use it.
+   Column count ramps 3 -> 4 -> 5 -> 6 from phone to desktop.
+   ========================================================================= */
+
+.tvdb-series-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(0.75rem, 2vw, 1.4rem);
+}
+
+@media (min-width: 576px) {
+    .tvdb-series-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (min-width: 768px) {
+    .tvdb-series-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+@media (min-width: 992px) {
+    .tvdb-series-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+.tvdb-series-card {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: var(--tvdb-text);
+}
+
+.tvdb-series-card:hover,
+.tvdb-series-card:focus-visible {
+    text-decoration: none;
+    color: var(--tvdb-text);
+}
+
+.tvdb-series-poster {
+    position: relative;
+    display: block;
+    aspect-ratio: 2 / 3;
+    border-radius: 8px;
+    overflow: hidden;
+    background: linear-gradient(155deg, #0d1117, #232c3a);
+    border: 1px solid var(--tvdb-ink-line);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.tvdb-series-card:hover .tvdb-series-poster,
+.tvdb-series-card:focus-visible .tvdb-series-poster {
+    transform: translateY(-2px);
+    border-color: rgba(232, 163, 61, 0.55);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-series-poster { transition: border-color 0.15s ease; }
+    .tvdb-series-card:hover .tvdb-series-poster,
+    .tvdb-series-card:focus-visible .tvdb-series-poster { transform: none; }
+}
+
+.tvdb-series-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.tvdb-series-poster.is-empty::after {
+    content: "No art";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    color: rgba(241, 236, 226, 0.35);
+    text-align: center;
+    padding: 0.75rem;
+}
+
+.tvdb-series-title {
+    margin-top: 0.5rem;
+    font-family: var(--tvdb-font-ui);
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.25;
+    color: var(--tvdb-text);
+    /* keep tiles aligned: clamp long titles to two lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.tvdb-series-card:hover .tvdb-series-title,
+.tvdb-series-card:focus-visible .tvdb-series-title {
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-series-year {
+    margin-top: 0.15rem;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.75rem;
+    color: var(--tvdb-text-muted);
+}
+
+/* =========================================================================
    Toast messages — floating stack in the bottom-right corner, scoped to
    its own wrapper so they read clearly regardless of what's behind them,
    and don't collide with .alert-info/.alert-danger used inside .tvdb-shell.
