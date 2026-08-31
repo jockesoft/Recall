@@ -23,6 +23,7 @@ public static class WatchProgressCalculator
     {
         var ordered = Order(episodes);
         var released = ordered.Where(e => e.HasAiredBy(today)).ToList();
+        var watchedReleased = released.Count(e => watchedEpisodeIds.Contains(e.Id));
 
         return new SeriesWatchProgress
         {
@@ -30,7 +31,9 @@ public static class WatchProgressCalculator
             OrderedEpisodes = ordered,
             WatchedEpisodeIds = watchedEpisodeIds,
             NextUnwatchedEpisode = released.FirstOrDefault(e => !watchedEpisodeIds.Contains(e.Id)),
-            UnwatchedReleasedCount = released.Count(e => !watchedEpisodeIds.Contains(e.Id)),
+            UnwatchedReleasedCount = released.Count - watchedReleased,
+            ReleasedCount = released.Count,
+            WatchedReleasedCount = watchedReleased,
         };
     }
 

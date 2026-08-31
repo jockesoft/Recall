@@ -1,10 +1,26 @@
 @model Recall.Web.Pages.Shared.SeriesCardModel
+@{
+    var showProgress = Model.WatchedEpisodes > 0 && Model.ReleasedEpisodes > 0;
+    var watched = Math.Min(Model.WatchedEpisodes, Model.ReleasedEpisodes);
+    var percent = showProgress ? (int)Math.Round(100.0 * watched / Model.ReleasedEpisodes) : 0;
+    var isComplete = showProgress && watched >= Model.ReleasedEpisodes;
+}
 
 <a asp-page="/Series/Details" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
     <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
         @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
         {
             <img src="@Model.ImageUrl" alt="" loading="lazy" />
+        }
+
+        @if (showProgress)
+        {
+            <span class="tvdb-series-progress @(isComplete ? "is-complete" : "")"
+                  role="progressbar"
+                  aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
+                  aria-label="@Model.WatchedEpisodes of @Model.ReleasedEpisodes episodes watched">
+                <span class="tvdb-series-progress-fill" style="width: @percent%"></span>
+            </span>
         }
     </span>
 

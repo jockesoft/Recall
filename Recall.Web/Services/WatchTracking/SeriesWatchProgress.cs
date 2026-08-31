@@ -22,6 +22,12 @@ public sealed class SeriesWatchProgress
     /// <summary>Count of released episodes not yet marked watched.</summary>
     public int UnwatchedReleasedCount { get; init; }
 
+    /// <summary>Count of episodes that have aired as of the build date.</summary>
+    public int ReleasedCount { get; init; }
+
+    /// <summary>Count of aired episodes the user has marked watched.</summary>
+    public int WatchedReleasedCount { get; init; }
+
     public bool HasEpisodes => OrderedEpisodes.Count > 0;
 
     public bool IsUpToDate => NextUnwatchedEpisode is null;

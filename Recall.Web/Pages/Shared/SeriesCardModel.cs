@@ -20,4 +20,14 @@ public sealed class SeriesCardModel
     /// year line entirely.
     /// </summary>
     public DateOnly? FirstAired { get; init; }
+
+    /// <summary>
+    /// Aired episodes the user has marked watched. With <see cref="ReleasedEpisodes"/>
+    /// this drives the thin progress bar along the bottom of the poster. When it
+    /// is 0 (or either value is unknown) no bar is drawn.
+    /// </summary>
+    public int WatchedEpisodes { get; init; }
+
+    /// <summary>Total aired episodes — the denominator for the progress bar.</summary>
+    public int ReleasedEpisodes { get; init; }
 }

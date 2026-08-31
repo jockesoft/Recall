@@ -1080,6 +1080,35 @@ img.rounded.shadow-sm {
     padding: 0.75rem;
 }
 
+/* Thin watch-progress bar along the bottom edge of the poster. Only rendered
+   when at least one episode is watched. Amber while in progress, green once
+   every aired episode is watched. */
+.tvdb-series-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(10, 13, 18, 0.5);
+    overflow: hidden;
+}
+
+.tvdb-series-progress-fill {
+    display: block;
+    height: 100%;
+    min-width: 3px;
+    background: var(--tvdb-signal);
+    transition: width 0.25s ease;
+}
+
+.tvdb-series-progress.is-complete .tvdb-series-progress-fill {
+    background: var(--tvdb-ok);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-series-progress-fill { transition: none; }
+}
+
 .tvdb-series-title {
     margin-top: 0.5rem;
     font-family: var(--tvdb-font-ui);

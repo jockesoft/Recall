@@ -25,12 +25,15 @@
         <div class="tvdb-series-grid">
             @foreach (var item in Model.Items)
             {
+                var progress = Model.ProgressByTvdbId.TryGetValue(item.TvdbId, out var p) ? p : default;
                 <partial name="_SeriesCard" model="@(new SeriesCardModel
                          {
                              TvdbId = item.TvdbId,
                              Name = item.Name,
                              ImageUrl = item.ImageUrl,
-                             FirstAired = item.FirstAired
+                             FirstAired = item.FirstAired,
+                             WatchedEpisodes = progress.WatchedReleased,
+                             ReleasedEpisodes = progress.Released
                          })" />
             }
         </div>
