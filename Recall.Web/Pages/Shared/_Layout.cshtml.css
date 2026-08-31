@@ -27,10 +27,10 @@ button.accept-policy {
   line-height: inherit;
 }
 
+/* Sticky footer via the flex column on <body> (see css/site.css). It is no
+   longer absolutely positioned, so it grows with its content instead of being
+   clipped to a fixed height when it wraps on small screens. */
 .footer {
-  position: absolute;
-  bottom: 0;
+  flex-shrink: 0;
   width: 100%;
-  white-space: nowrap;
-  line-height: 60px;
 }

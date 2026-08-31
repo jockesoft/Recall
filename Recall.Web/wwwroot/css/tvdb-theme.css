@@ -823,6 +823,14 @@ img.rounded.shadow-sm {
     .footer .thetvdbattribution span {
         display: none;
     }
+
+    /* Not enough room for the copyright line and the attribution chip side by
+       side — they wrap. Centre both rows so the stack reads as intentional. */
+    .footer .container {
+        justify-content: center;
+        text-align: center;
+        row-gap: 0.5rem;
+    }
 }
 
 /* =========================================================================
@@ -931,6 +939,18 @@ img.rounded.shadow-sm {
     font-weight: 600;
     color: var(--tvdb-text);
     overflow-wrap: anywhere;
+}
+
+/* Collapsed "S02 · E01-E08" range rendered as a link to the first episode —
+   keep the slate chip's own styling, drop the default link underline. */
+.tvdb-episode-title a.tvdb-episode-range {
+    text-decoration: none;
+}
+
+.tvdb-episode-title a.tvdb-episode-range:hover .tvdb-slate--inline,
+.tvdb-episode-title a.tvdb-episode-range:focus-visible .tvdb-slate--inline {
+    border-color: rgba(232, 163, 61, 0.65);
+    color: #f7ead0;
 }
 
 .tvdb-episode-row .tvdb-episode-series {

@@ -43,11 +43,14 @@
 @{
     ViewData["Title"] = "Home";
 
-    string SlateCode(int? season, int? number)
+    string SlateRange(int? season, int? from, int? to)
     {
         var s = season?.ToString("D2") ?? "--";
-        var n = number?.ToString("D2") ?? "--";
-        return $"S{s} \u00B7 E{n}";
+        if (from is null)
+            return $"S{s} \u00B7 E--";
+        return to is null || to == from
+            ? $"S{s} \u00B7 E{from.Value:D2}"
+            : $"S{s} \u00B7 E{from.Value:D2}-E{to.Value:D2}";
     }
 
     string DayGroup(DateOnly aired)
@@ -64,8 +67,41 @@
     }
 
     var hasLibrary = Model.TrackedSeriesCount > 0;
-    var groupedUpcoming = Model.UpcomingEpisodes
-        .GroupBy(e => DayGroup(e.AiredDate))
+
+    // Collapse multiple episodes of the same series airing on the same date
+    // (same season) into a single row — e.g. 8 rows of "The Gentlemen S02" on
+    // one day become one row reading "S02 · E01-E08".
+    var upcomingRows = Model.UpcomingEpisodes
+        .GroupBy(e => new { e.SeriesId, e.AiredDate, e.SeasonNumber })
+        .Select(g =>
+        {
+            var ordered = g
+                .OrderBy(e => e.EpisodeNumber ?? int.MaxValue)
+                .ThenBy(e => e.EpisodeId)
+                .ToList();
+            var head = ordered[0];
+            var numbers = ordered
+                .Where(e => e.EpisodeNumber.HasValue)
+                .Select(e => e.EpisodeNumber!.Value)
+                .ToList();
+            return new
+            {
+                head.SeriesId,
+                head.SeriesName,
+                head.ImageUrl,
+                head.SeasonNumber,
+                head.AiredDate,
+                LinkEpisodeId = head.EpisodeId,
+                Count = ordered.Count,
+                EpisodeFrom = numbers.Count > 0 ? numbers.Min() : (int?)null,
+                EpisodeTo = numbers.Count > 0 ? numbers.Max() : (int?)null,
+                SingleName = ordered.Count == 1 ? head.Name : null
+            };
+        })
+        .ToList();
+
+    var groupedUpcoming = upcomingRows
+        .GroupBy(r => DayGroup(r.AiredDate))
         .OrderBy(g => g.Key switch { "Today" => 0, "Tomorrow" => 1, "This week" => 2, _ => 3 });
 }
 
@@ -129,13 +165,16 @@
             @foreach (var group in groupedUpcoming)
             {
                 <div class="tvdb-schedule-day">@group.Key</div>
-                @foreach (var ep in group)
+                @foreach (var row in group
+                    .OrderBy(r => r.AiredDate)
+                    .ThenBy(r => r.SeriesName)
+                    .ThenBy(r => r.SeasonNumber ?? int.MaxValue))
                 {
                     <div class="tvdb-episode-row">
-                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(ep.ImageUrl) ? "is-empty" : "")">
-                            @if (!string.IsNullOrWhiteSpace(ep.ImageUrl))
+                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(row.ImageUrl) ? "is-empty" : "")">
+                            @if (!string.IsNullOrWhiteSpace(row.ImageUrl))
                             {
-                                <img src="@ep.ImageUrl" alt="" class="tvdb-thumb" />
+                                <img src="@row.ImageUrl" alt="" class="tvdb-thumb" />
                             }
                             else
                             {
@@ -143,15 +182,24 @@
                             }
                         </div>
                         <div class="tvdb-episode-body">
-                            <div class="tvdb-episode-series"><a href="/Series/Details/@ep.SeriesId">@ep.SeriesName</a></div>
+                            <div class="tvdb-episode-series"><a href="/Series/Details/@row.SeriesId">@row.SeriesName</a></div>
                             <div class="tvdb-episode-title">
-                                <span class="tvdb-slate--inline me-1">@SlateCode(ep.SeasonNumber, ep.EpisodeNumber)</span>
-                                <a asp-page="/Episodes/Details" asp-route-id="@ep.EpisodeId">@ep.Name</a>
+                                @if (row.SingleName is not null)
+                                {
+                                    <span class="tvdb-slate--inline me-1">@SlateRange(row.SeasonNumber, row.EpisodeFrom, row.EpisodeTo)</span>
+                                    <a asp-page="/Episodes/Details" asp-route-id="@row.LinkEpisodeId">@row.SingleName</a>
+                                }
+                                else
+                                {
+                                    <a asp-page="/Episodes/Details" asp-route-id="@row.LinkEpisodeId" class="tvdb-episode-range">
+                                        <span class="tvdb-slate--inline">@SlateRange(row.SeasonNumber, row.EpisodeFrom, row.EpisodeTo)</span>
+                                    </a>
+                                }
                             </div>
                         </div>
                         <div class="tvdb-episode-meta">
-                            <span class="tvdb-mono small">@ep.AiredDate.ToString("MMM d")</span>
-                            <a asp-page="/Series/Details" asp-route-id="@ep.SeriesId" class="tvdb-mono small">View series</a>
+                            <span class="tvdb-mono small">@row.AiredDate.ToString("MMM d")</span>
+                            <a asp-page="/Series/Details" asp-route-id="@row.SeriesId" class="tvdb-mono small">View series</a>
                         </div>
                     </div>
                 }

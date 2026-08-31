@@ -13,8 +13,6 @@ html {
 }
 
 html {
-  position: relative;
-  min-height: 100%;
   /* Always reserve room for the vertical scrollbar so the centered .container
      doesn't shift a few px sideways when navigating between a page that needs
      scrolling (e.g. a full Home schedule) and one that doesn't. */
@@ -30,8 +28,20 @@ html {
   }
 }
 
+/* Flexbox sticky footer: <body> fills at least the viewport and stacks its
+   children in a column, so the footer follows the content and grows with it.
+   (The old approach absolutely positioned the footer and reserved a fixed
+   60px here — a footer that wrapped to two rows on a phone then covered the
+   last part of the page.) */
 body {
-  margin-bottom: 60px;
+  min-height: 100vh;
+  min-height: 100dvh; /* tracks the mobile URL bar; vh is the fallback */
+  display: flex;
+  flex-direction: column;
+}
+
+body > .container {
+  flex: 1 0 auto;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
