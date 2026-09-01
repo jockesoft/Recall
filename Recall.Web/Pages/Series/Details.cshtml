@@ -15,6 +15,8 @@
     var omdbGenres = (OmdbValue(Model.Omdb?.Genre) ?? "")
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     var omdbAwards = OmdbValue(Model.Omdb?.Awards);
+    var omdbRating = OmdbValue(Model.Omdb?.ImdbRating);
+    var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
 <a asp-page="/Series/Search" class="tvdb-back-link">&larr; Back to search</a>
@@ -102,6 +104,21 @@
                     {
                         <dt class="col-sm-3">First aired</dt>
                         <dd class="col-sm-9">@Model.Series.FirstAired</dd>
+                    }
+
+                    @if (omdbRating is not null)
+                    {
+                        <dt class="col-sm-3">IMDb rating</dt>
+                        <dd class="col-sm-9">
+                            <span class="tvdb-rating">
+                                <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                                <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
+                                @if (omdbVotes is not null)
+                                {
+                                    <span class="tvdb-rating-votes">@omdbVotes votes</span>
+                                }
+                            </span>
+                        </dd>
                     }
                 </dl>
 

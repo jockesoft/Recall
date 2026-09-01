@@ -550,6 +550,28 @@ button.tvdb-badge {
     opacity: 0.7;
 }
 
+/* IMDb rating value (Series/Details dl row — from OMDb imdbRating). */
+.tvdb-rating {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.45rem;
+}
+
+.tvdb-rating-star {
+    color: var(--tvdb-signal);
+    align-self: center;
+}
+
+.tvdb-rating-score strong {
+    font-size: 1.1em;
+    color: var(--tvdb-text);
+}
+
+.tvdb-rating-votes {
+    font-size: 0.85em;
+    color: var(--tvdb-text-muted);
+}
+
 /* Compact circular watched toggle — used in dense episode list rows
    (Series/Details) where a full pill button would be too heavy per row. */
 .tvdb-watch-dot {
