@@ -382,6 +382,12 @@ hr {
 
 .tvdb-media {
     position: relative;
+    /* Explicit width so the aspect-ratio can't widen the box past its column
+       when min-height kicks in on a narrow screen (was pushing the image off
+       to the right on phones). */
+    width: 100%;
+    max-width: 100%;
+    margin-inline: auto;
     background: linear-gradient(155deg, #0d1117, #232c3a);
     border-radius: var(--tvdb-radius);
     overflow: hidden;
@@ -391,9 +397,16 @@ hr {
 
 .tvdb-media.is-wide { aspect-ratio: 16 / 9; }
 
+/* On small screens let the aspect-ratio fully govern the height — the fixed
+   min-height only exists to keep the "no image" placeholder roomy on desktop. */
+@media (max-width: 575.98px) {
+    .tvdb-media { min-height: 0; }
+}
+
 .tvdb-media img {
     width: 100%;
     height: 100%;
+    max-width: 100%;
     object-fit: cover;
     display: block;
 }
