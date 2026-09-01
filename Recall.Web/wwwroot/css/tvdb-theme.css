@@ -344,6 +344,23 @@ hr {
     letter-spacing: 0.02em;
 }
 
+/* Series name shown above an episode title, linking back to the series. */
+.tvdb-episode-series-link {
+    display: inline-block;
+    margin-bottom: 0.15rem;
+    font-family: var(--tvdb-font-ui);
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+
+.tvdb-episode-series-link:hover,
+.tvdb-episode-series-link:focus-visible {
+    color: var(--tvdb-signal-ink);
+    text-decoration: underline;
+}
+
 /* =========================================================================
    Media + slate — poster/still image with the tally-light readout.
    <div class="tvdb-media"> <img> <div class="tvdb-slate">...</div> </div>

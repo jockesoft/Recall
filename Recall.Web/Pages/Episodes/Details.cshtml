@@ -7,10 +7,16 @@
     var ep = Model.Episode;
     ViewData["Title"] = ep?.Name ?? "Episode";
 
-    string? FormatAired(string? aired)
+    string FormatAirMoment(DateOnly date, string? airsTime)
     {
-        if (string.IsNullOrWhiteSpace(aired)) return null;
-        return DateOnly.TryParse(aired, out var d) ? d.ToString("MMMM d, yyyy") : aired;
+        var text = date.ToString("ddd, MMM d");
+        if (!string.IsNullOrWhiteSpace(airsTime)
+            && TimeOnly.TryParse(airsTime, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var t))
+        {
+            text += " · " + t.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return text;
     }
 
     string? FormatRuntime(int? minutes)
@@ -37,13 +43,8 @@
         _ => null
     };
 
-    var airedText = ep is null ? null : FormatAired(ep.Aired);
     var runtimeText = ep is null ? null : FormatRuntime(ep.Runtime);
     var finaleText = ep is null ? null : FinaleLabel(ep.FinaleType);
-    var eyebrowParts = new List<string>();
-    if (!string.IsNullOrWhiteSpace(ep?.SeasonName)) eyebrowParts.Add(ep.SeasonName!.ToUpperInvariant());
-    if (!string.IsNullOrWhiteSpace(ep?.Year)) eyebrowParts.Add(ep.Year!);
-    if (ep?.AbsoluteNumber is not null) eyebrowParts.Add($"ABS #{ep.AbsoluteNumber}");
 }
 
 @if (ep?.SeriesId is not null)
@@ -73,17 +74,17 @@
             </div>
 
             <div class="col-md-7">
-                @if (eyebrowParts.Count > 0)
+                @if (!string.IsNullOrWhiteSpace(Model.SeriesName) && ep.SeriesId is not null)
                 {
-                    <div class="tvdb-eyebrow mb-1">@string.Join(" \u00B7 ", eyebrowParts)</div>
+                    <a class="tvdb-episode-series-link" href="/Series/Details/@ep.SeriesId">@Model.SeriesName</a>
                 }
 
                 <h1 class="tvdb-display mb-2">@(ep.Name ?? "Untitled episode")</h1>
 
                 <div class="d-flex flex-wrap gap-3 tvdb-mono text-muted mb-3 pb-2" style="border-bottom: 1px solid var(--tvdb-ink-line);">
-                    @if (airedText is not null)
+                    @if (Model.AiredDate is { } airDate)
                     {
-                        <span>Aired&nbsp;@airedText</span>
+                        <span>@(Model.HasAired ? "Aired" : "Airs")&nbsp;@FormatAirMoment(airDate, Model.AirsTime)</span>
                     }
                     @if (runtimeText is not null)
                     {
@@ -109,7 +110,14 @@
                         <span class="tvdb-badge tvdb-badge--amber d-inline-block">@finaleText</span>
                     }
 
-                    @if (Model.IsWatchedByCurrentUser)
+                    @if (!Model.HasAired)
+                    {
+                        <button type="button" class="btn btn-watch" disabled>
+                            <i class="fa-regular fa-clock me-2" aria-hidden="true"></i>
+                            <span>Airs&nbsp;@FormatAirMoment(Model.AiredDate!.Value, Model.AirsTime)</span>
+                        </button>
+                    }
+                    else if (Model.IsWatchedByCurrentUser)
                     {
                         <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
                                  {

@@ -9,6 +9,10 @@ public sealed record Series
     public int? DefaultSeasonType { get; init; }
     public IReadOnlyList<Episode> Episodes { get; init; } = [];
     public string? FirstAired { get; init; }
+
+    /// <summary>Series broadcast time in its home timezone, e.g. "20:00". May be null.</summary>
+    public string? AirsTime { get; init; }
+
     public int Id { get; init; }
     public string? Image { get; init; }
     public bool? IsOrderRandomized { get; init; }

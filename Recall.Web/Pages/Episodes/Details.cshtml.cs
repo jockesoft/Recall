@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +22,22 @@ public sealed class DetailsModel(
 {
     public Episode? Episode { get; set; }
     public bool IsWatchedByCurrentUser { get; private set; }
+
+    /// <summary>Name of the series this episode belongs to (for the header link).</summary>
+    public string? SeriesName { get; private set; }
+
+    /// <summary>Parsed air date, when the episode has one.</summary>
+    public DateOnly? AiredDate { get; private set; }
+
+    /// <summary>Series broadcast time in its home timezone, e.g. "20:00". May be null.</summary>
+    public string? AirsTime { get; private set; }
+
+    /// <summary>
+    /// True unless the episode has a known air date that is still in the future.
+    /// Drives "Aired" vs "Airs" wording and whether the watched button is enabled.
+    /// </summary>
+    public bool HasAired =>
+        AiredDate is not { } aired || aired <= DateOnly.FromDateTime(DateTime.Today);
 
     /// <summary>
     /// How many episodes before this one (by season/episode order) the current
@@ -125,6 +142,25 @@ public sealed class DetailsModel(
         return RedirectToPage(new { id });
     }
 
+    /// <summary>
+    /// Pulls the series name (for the header link) and its broadcast time from
+    /// the layered-cached extended series. Best-effort — a failure here must not
+    /// break the episode page.
+    /// </summary>
+    private async Task LoadSeriesHeaderAsync(int seriesId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var series = await theTvDbService.GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+            SeriesName = series?.Name;
+            AirsTime = series?.AirsTime;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not load series {SeriesId} for the episode header.", seriesId);
+        }
+    }
+
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
     {
         if (id <= 0) return NotFound();
@@ -132,6 +168,15 @@ public sealed class DetailsModel(
         try
         {
             Episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
+
+            if (Episode is not null)
+            {
+                if (DateOnly.TryParse(Episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired))
+                    AiredDate = aired;
+
+                if (Episode.SeriesId is > 0)
+                    await LoadSeriesHeaderAsync(Episode.SeriesId.Value, cancellationToken);
+            }
 
             if (Episode is not null &&
                 currentUserService.IsAuthenticated &&

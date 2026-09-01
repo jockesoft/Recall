@@ -10,7 +10,10 @@ public sealed class SeriesDataDto
 
     [JsonPropertyName("averageRuntime")]
     public int? AverageRuntime { get; init; }
-    
+
+    [JsonPropertyName("airsTime")]
+    public string? AirsTime { get; init; }
+
     [JsonPropertyName("characters")]
     public List<CharacterDataDto>? Characters { get; init; }
 
