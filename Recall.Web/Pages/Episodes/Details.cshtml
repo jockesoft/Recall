@@ -102,10 +102,20 @@
                         <span class="tvdb-badge tvdb-badge--amber d-inline-block">@finaleText</span>
                     }
 
-                    @foreach (var rating in ep.ContentRatings)
+                    @{
+                        // TheTVDB returns a content rating per country — show just one.
+                        // Prefer the US rating; otherwise fall back to the first available.
+                        static bool IsUs(string? c) =>
+                            string.Equals(c, "usa", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(c, "us", StringComparison.OrdinalIgnoreCase);
+
+                        var rating = ep.ContentRatings.FirstOrDefault(r => IsUs(r.Country))
+                                     ?? ep.ContentRatings.FirstOrDefault();
+                        var ratingLabel = rating is null ? null : (rating.Name ?? rating.FullName);
+                    }
+                    @if (!string.IsNullOrWhiteSpace(ratingLabel))
                     {
-                        var ratingLabel = rating.Name ?? rating.FullName;
-                        var ratingTitle = string.Join(" — ", new[] { rating.Country, rating.Description }
+                        var ratingTitle = string.Join(" — ", new[] { rating!.Country, rating.Description }
                             .Where(x => !string.IsNullOrWhiteSpace(x)));
                         <span class="tvdb-badge tvdb-badge--neutral d-inline-block"
                               title="@(string.IsNullOrWhiteSpace(ratingTitle) ? "Content rating" : ratingTitle)">@ratingLabel</span>
