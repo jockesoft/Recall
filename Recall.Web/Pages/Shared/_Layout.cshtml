@@ -95,10 +95,18 @@
             &copy; 2026 - Recall.nu - <a asp-area="" asp-page="/Privacy">Privacy</a> - Version: @buildNumber
         </div>
 
-        <a class="thetvdbattribution" href="https://thetvdb.com/subscribe" target="_blank" rel="noopener">
-            <img src="/images/attribution/tvdb_logo.png" height="24" alt="TheTVDB logo">
-            <span>Metadata provided by <strong>TheTVDB</strong></span>
-        </a>
+        <div class="footer-attributions d-flex flex-wrap align-items-center gap-2">
+            <a class="thetvdbattribution" href="https://thetvdb.com/subscribe" target="_blank" rel="noopener">
+                <img src="/images/attribution/tvdb_logo.png" height="24" alt="TheTVDB logo">
+                <span>Metadata provided by <strong>TheTVDB</strong></span>
+            </a>
+
+            <span class="omdbattribution" title="Some series data is adapted from OMDb API and used under the CC BY-NC 4.0 licence.">
+                <span class="omdb-lead">Data adapted from </span><a href="https://www.omdbapi.com/" target="_blank" rel="noopener"><strong>OMDb API</strong></a>
+                <span class="omdb-sep" aria-hidden="true">&middot;</span>
+                <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="license noopener">CC&nbsp;BY-NC&nbsp;4.0</a>
+            </span>
+        </div>
     </div>
 </footer>
 

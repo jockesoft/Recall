@@ -863,14 +863,47 @@ img.rounded.shadow-sm {
     max-width: 46ch;
 }
 
+/* OMDb data attribution — CC BY-NC 4.0 requires crediting the source and
+   linking the licence. Text chip (OMDb has no logo asset) paired with the
+   TheTVDB chip. */
+.footer .omdbattribution {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: var(--tvdb-ink-3);
+    border: 1px solid var(--tvdb-line);
+    color: rgba(241, 236, 226, 0.55);
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.footer .omdbattribution strong {
+    color: inherit;
+    font-family: var(--tvdb-font-ui);
+    font-weight: 600;
+}
+
+.footer .omdbattribution .omdb-sep {
+    opacity: 0.5;
+}
+
 @media (max-width: 576px) {
     .footer .thetvdbattribution span {
         display: none;
     }
 
-    /* Not enough room for the copyright line and the attribution chip side by
-       side — they wrap. Centre both rows so the stack reads as intentional. */
-    .footer .container {
+    /* No lead-in text on a phone — the OMDb chip collapses to
+       "OMDb API · CC BY-NC 4.0". */
+    .footer .omdbattribution .omdb-lead {
+        display: none;
+    }
+
+    /* Not enough room for the copyright line and the attribution chips side by
+       side — they wrap. Centre every row so the stack reads as intentional. */
+    .footer .container,
+    .footer .footer-attributions {
         justify-content: center;
         text-align: center;
         row-gap: 0.5rem;
