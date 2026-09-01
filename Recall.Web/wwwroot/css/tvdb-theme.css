@@ -883,18 +883,6 @@ img.rounded.shadow-sm {
     margin-top: 0;
 }
 
-.tvdb-episode-row {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-    padding: 0.6rem 0.25rem;
-    border-bottom: 1px solid var(--tvdb-ink-line);
-}
-
-.tvdb-episode-row:last-child {
-    border-bottom: none;
-}
-
 .tvdb-thumb {
     flex: none;
     width: 56px;
@@ -927,62 +915,117 @@ img.rounded.shadow-sm {
     color: #f2e3c6;
 }
 
-/* Middle column of an episode row. min-width:0 lets it shrink below its
-   content width so a long, unbreakable title wraps instead of pushing the
-   row wider than the shell. */
-.tvdb-episode-body {
-    flex: 1;
-    min-width: 0;
+/* =========================================================================
+   Upcoming episode card — a rounded card per upcoming broadcast (Home page,
+   reusable via the _UpcomingEpisodeCard partial). Left accent stripe: green
+   when the viewer is caught up on the series, amber otherwise. The whole card
+   is a link to the episode; the series name is a nested link that opts back in.
+   ========================================================================= */
+
+.tvdb-upcoming-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
 }
 
-.tvdb-episode-row .tvdb-episode-title {
-    font-weight: 600;
+.tvdb-upcoming-card {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    padding: 0.8rem 0.9rem;
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-left: 3px solid var(--tvdb-signal);
+    border-radius: var(--tvdb-radius);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tvdb-upcoming-card.is-current {
+    border-left-color: var(--tvdb-ok);
+}
+
+.tvdb-upcoming-card:hover,
+.tvdb-upcoming-card:focus-within {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+/* Stretched link covering the whole card. */
+.tvdb-upcoming-hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+}
+
+.tvdb-upcoming-card .tvdb-thumb {
+    position: relative;
+    z-index: 0;
+}
+
+/* Text column. pointer-events:none lets clicks fall through to the stretched
+   link; the series name below opts back in. min-width:0 so long titles wrap. */
+.tvdb-upcoming-body {
+    flex: 1;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    pointer-events: none;
+}
+
+.tvdb-upcoming-series {
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
+    align-self: flex-start;
+    max-width: 100%;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.75rem;
+    color: var(--tvdb-text-muted);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tvdb-upcoming-series:hover,
+.tvdb-upcoming-series:focus-visible {
+    color: var(--tvdb-signal-ink);
+    text-decoration: underline;
+}
+
+.tvdb-upcoming-slate {
+    margin-top: 0.1rem;
+}
+
+.tvdb-upcoming-epname {
+    font-family: var(--tvdb-font-body);
+    font-size: 0.92rem;
+    line-height: 1.3;
     color: var(--tvdb-text);
     overflow-wrap: anywhere;
 }
 
-/* Collapsed "S02 · E01-E08" range rendered as a link to the first episode —
-   keep the slate chip's own styling, drop the default link underline. */
-.tvdb-episode-title a.tvdb-episode-range {
-    text-decoration: none;
-}
-
-.tvdb-episode-title a.tvdb-episode-range:hover .tvdb-slate--inline,
-.tvdb-episode-title a.tvdb-episode-range:focus-visible .tvdb-slate--inline {
-    border-color: rgba(232, 163, 61, 0.65);
-    color: #f7ead0;
-}
-
-.tvdb-episode-row .tvdb-episode-series {
-    font-family: var(--tvdb-font-mono);
-    font-size: 0.75rem;
-    color: var(--tvdb-text-muted);
-    overflow-wrap: anywhere;
-}
-
-/* The series name is a link; keep it in the muted row style with no
-   underline until hover (was a repeated inline style per row). */
-.tvdb-episode-row .tvdb-episode-series a {
-    color: inherit;
-    text-decoration: none;
-}
-
-.tvdb-episode-row .tvdb-episode-series a:hover,
-.tvdb-episode-row .tvdb-episode-series a:focus-visible {
-    text-decoration: underline;
-}
-
-.tvdb-episode-meta {
-    margin-left: auto;
-    text-align: right;
-    flex: none;
+.tvdb-upcoming-tags {
+    margin-top: auto;
+    padding-top: 0.45rem;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-wrap: wrap;
     gap: 0.35rem;
 }
 
-.tvdb-episode-meta .tvdb-mono {
+.tvdb-upcoming-date {
+    flex: none;
+    z-index: 2;
+    pointer-events: none;
+    font-family: var(--tvdb-font-mono);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.tvdb-upcoming-date .tvdb-mono {
     color: var(--tvdb-text-muted);
 }
 

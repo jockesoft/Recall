@@ -22,6 +22,12 @@ public sealed class UpcomingEpisodeItem
     public string Name { get; init; } = "";
     public string? ImageUrl { get; init; }
     public DateOnly AiredDate { get; init; }
+
+    /// <summary>TheTVDB finale marker ("season", "series", "midseason"), if any.</summary>
+    public string? FinaleType { get; init; }
+
+    /// <summary>True when the user has watched every aired episode of this series.</summary>
+    public bool SeriesCaughtUp { get; init; }
 }
 
 public sealed record CatchUpItem
@@ -87,6 +93,13 @@ public sealed class IndexModel(
 
         foreach (var aggregate in aggregates)
         {
+            // Next episode to watch + unwatched count: shared logic, same rule as
+            // the series page (earliest aired episode not marked watched).
+            var progress = watchProgressService.BuildProgress(aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedIds);
+            unwatchedTotal += progress.UnwatchedReleasedCount;
+
+            var seriesCaughtUp = progress.UnwatchedReleasedCount == 0;
+
             foreach (var ep in aggregate.Episodes.Where(e => e.Aired is { } aired && aired >= today && aired <= upcomingCutoff))
             {
                 upcoming.Add(new UpcomingEpisodeItem
@@ -98,14 +111,11 @@ public sealed class IndexModel(
                     EpisodeNumber = ep.EpisodeNumber,
                     Name = ep.Name,
                     ImageUrl = aggregate.ImageUrl,
-                    AiredDate = ep.Aired!.Value
+                    AiredDate = ep.Aired!.Value,
+                    FinaleType = ep.FinaleType,
+                    SeriesCaughtUp = seriesCaughtUp
                 });
             }
-
-            // Next episode to watch + unwatched count: shared logic, same rule as
-            // the series page (earliest aired episode not marked watched).
-            var progress = watchProgressService.BuildProgress(aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedIds);
-            unwatchedTotal += progress.UnwatchedReleasedCount;
 
             if (progress.NextUnwatchedEpisode is { } next)
             {

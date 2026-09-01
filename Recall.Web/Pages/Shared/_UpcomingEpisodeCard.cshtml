@@ -1,0 +1,54 @@
+@model Recall.Web.Pages.Shared.UpcomingEpisodeCardModel
+
+<div class="tvdb-upcoming-card @(Model.SeriesCaughtUp ? "is-current" : "")">
+    @* Stretched link — click anywhere on the card to open the episode. Sits
+       under the series-name link, which raises itself above it. *@
+    <a asp-page="/Episodes/Details" asp-route-id="@Model.LinkEpisodeId"
+       class="tvdb-upcoming-hit"
+       aria-label="@Model.SeriesName@(Model.SlateCode is null ? "" : $" {Model.SlateCode}")"></a>
+
+    <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="" class="tvdb-thumb" loading="lazy" />
+        }
+        else
+        {
+            <span>No art</span>
+        }
+    </div>
+
+    <div class="tvdb-upcoming-body">
+        <a asp-page="/Series/Details" asp-route-id="@Model.SeriesId" class="tvdb-upcoming-series">@Model.SeriesName</a>
+
+        @if (Model.SlateCode is not null)
+        {
+            <div class="tvdb-upcoming-slate">
+                <span class="tvdb-slate--inline">@Model.SlateCode</span>
+            </div>
+        }
+
+        @if (Model.DisplayEpisodeName is not null)
+        {
+            <div class="tvdb-upcoming-epname">@Model.DisplayEpisodeName</div>
+        }
+
+        @if (Model.IsPremiere || Model.IsFinale)
+        {
+            <div class="tvdb-upcoming-tags">
+                @if (Model.IsPremiere)
+                {
+                    <span class="tvdb-badge tvdb-badge--ok">Premiere</span>
+                }
+                @if (Model.IsFinale)
+                {
+                    <span class="tvdb-badge tvdb-badge--amber">Finale</span>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="tvdb-upcoming-date">
+        <span class="tvdb-mono">@Model.AiredDate.ToString("ddd, MMM d")</span>
+    </div>
+</div>
