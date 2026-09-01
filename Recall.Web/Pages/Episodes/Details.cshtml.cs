@@ -144,16 +144,17 @@ public sealed class DetailsModel(
 
     /// <summary>
     /// Pulls the series name (for the header link) and its broadcast time from
-    /// the layered-cached extended series. Best-effort — a failure here must not
-    /// break the episode page.
+    /// the layered-cached series aggregate — the same snapshot the background
+    /// refresh timer keeps current, so no extra TheTVDB call is made here.
+    /// Best-effort: a failure must not break the episode page.
     /// </summary>
     private async Task LoadSeriesHeaderAsync(int seriesId, CancellationToken cancellationToken)
     {
         try
         {
-            var series = await theTvDbService.GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
-            SeriesName = series?.Name;
-            AirsTime = series?.AirsTime;
+            var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
+            SeriesName = aggregate?.Name;
+            AirsTime = aggregate?.AirsTime;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

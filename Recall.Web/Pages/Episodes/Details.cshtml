@@ -9,12 +9,12 @@
 
     string FormatAirMoment(DateOnly date, string? airsTime)
     {
-        var text = date.ToString("ddd, MMM d");
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        var text = date.ToString("ddd, MMM d", ci);
         if (!string.IsNullOrWhiteSpace(airsTime)
-            && TimeOnly.TryParse(airsTime, System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var t))
+            && TimeOnly.TryParse(airsTime, ci, System.Globalization.DateTimeStyles.None, out var t))
         {
-            text += " · " + t.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            text += " · " + t.ToString("h:mm tt", ci);
         }
         return text;
     }
@@ -81,7 +81,7 @@
 
                 <h1 class="tvdb-display mb-2">@(ep.Name ?? "Untitled episode")</h1>
 
-                <div class="d-flex flex-wrap gap-3 tvdb-mono text-muted mb-3 pb-2" style="border-bottom: 1px solid var(--tvdb-ink-line);">
+                <div class="tvdb-meta-inline tvdb-mono text-muted mb-3 pb-2" style="border-bottom: 1px solid var(--tvdb-ink-line);">
                     @if (Model.AiredDate is { } airDate)
                     {
                         <span>@(Model.HasAired ? "Aired" : "Airs")&nbsp;@FormatAirMoment(airDate, Model.AirsTime)</span>
@@ -94,20 +94,21 @@
                     {
                         <span title="Community score from TheTVDB">&#9733;&nbsp;@ep.Score!.Value.ToString("0.#")</span>
                     }
-                    @foreach (var rating in ep.ContentRatings)
-                    {
-                        <span title="@rating.Description">@(rating.Name ?? rating.FullName)</span>
-                    }
-                    @foreach (var award in ep.Awards)
-                    {
-                        <span>@award.Name [@award.Year]</span>
-                    }
                 </div>
 
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                     @if (finaleText is not null)
                     {
                         <span class="tvdb-badge tvdb-badge--amber d-inline-block">@finaleText</span>
+                    }
+
+                    @foreach (var rating in ep.ContentRatings)
+                    {
+                        var ratingLabel = rating.Name ?? rating.FullName;
+                        var ratingTitle = string.Join(" — ", new[] { rating.Country, rating.Description }
+                            .Where(x => !string.IsNullOrWhiteSpace(x)));
+                        <span class="tvdb-badge tvdb-badge--neutral d-inline-block"
+                              title="@(string.IsNullOrWhiteSpace(ratingTitle) ? "Content rating" : ratingTitle)">@ratingLabel</span>
                     }
 
                     @if (!Model.HasAired)

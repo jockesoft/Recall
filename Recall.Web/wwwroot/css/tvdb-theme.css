@@ -361,6 +361,20 @@ hr {
     text-decoration: underline;
 }
 
+/* Inline metadata strip: aired · runtime · score, middot-separated. */
+.tvdb-meta-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.tvdb-meta-inline > * + *::before {
+    content: "·";
+    margin: 0 0.6rem;
+    color: var(--tvdb-text-muted);
+    opacity: 0.6;
+}
+
 /* =========================================================================
    Media + slate — poster/still image with the tally-light readout.
    <div class="tvdb-media"> <img> <div class="tvdb-slate">...</div> </div>

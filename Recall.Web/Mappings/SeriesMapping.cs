@@ -19,7 +19,6 @@ public static class SeriesMapping
             DefaultSeasonType = dto.DefaultSeasonType,
             Episodes = dto.Episodes?.Select(episode => episode.ToDomain()).ToArray() ?? [],
             FirstAired = dto.FirstAired,
-            AirsTime = dto.AirsTime,
             Id = dto.Id,
             Image = "https://artworks.thetvdb.com" + dto.Image,
             IsOrderRandomized = dto.IsOrderRandomized,

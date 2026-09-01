@@ -17,6 +17,9 @@ public record SeriesAggregate
     public double? Score { get; init; }
     public string? Year { get; init; }
 
+    /// <summary>Series broadcast time in its home timezone, e.g. "20:00". May be null.</summary>
+    public string? AirsTime { get; init; }
+
     public int? AverageRuntimeMinutes { get; init; }
 
     public SeriesStatus? Status { get; init; }

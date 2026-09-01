@@ -40,6 +40,7 @@ public static class SeriesDataDtoMappings
             OriginalLanguage = dto.OriginalLanguage,
             Score = dto.Score,
             Year = dto.Year,
+            AirsTime = dto.AirsTime,
             AverageRuntimeMinutes = dto.AverageRuntime,
             Status = dto.Status is null
                 ? null
