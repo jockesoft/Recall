@@ -32,6 +32,11 @@ public interface IEpisodeWatchRepository
         IEnumerable<int> seriesTvdbIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Distinct TVDB series ids the user has watched at least one episode of.</summary>
+    Task<IReadOnlyList<int>> GetWatchedSeriesTvdbIdsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Marks multiple episodes watched in one round trip, skipping any that
     /// are already marked. Used by "mark this and every earlier episode."

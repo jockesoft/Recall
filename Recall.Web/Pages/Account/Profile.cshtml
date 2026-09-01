@@ -16,6 +16,17 @@
                 </div>
             </div>
 
+            @if (Model.WatchTime.HasData)
+            {
+                <div class="mb-4">
+                    <div class="tvdb-eyebrow mb-1">Total watch time</div>
+                    <div class="tvdb-watchtime-value">@Model.WatchTime.Formatted</div>
+                    <div class="tvdb-mono text-muted small mt-1">
+                        across @Model.WatchTime.EpisodeCount watched episode@(Model.WatchTime.EpisodeCount == 1 ? "" : "s")
+                    </div>
+                </div>
+            }
+
             <dl class="row mb-4">
                 <dt class="col-sm-4">Display name</dt>
                 <dd class="col-sm-8">@Model.DisplayName</dd>

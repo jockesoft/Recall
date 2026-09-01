@@ -108,6 +108,18 @@ public sealed class EpisodeWatchRepository(
         return rows.ToDictionary(r => r.SeriesTvdbId, r => r.LastWatchedUtc);
     }
 
+    public async Task<IReadOnlyList<int>> GetWatchedSeriesTvdbIdsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.EpisodeWatches
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.SeriesTvdbId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task MarkWatchedRangeAsync(
         Guid userId,
         int seriesTvdbId,
