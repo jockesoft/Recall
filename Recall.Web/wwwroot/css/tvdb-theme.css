@@ -507,6 +507,49 @@ button.tvdb-badge {
     cursor: pointer;
 }
 
+/* Genre pills (Series/Details — from OMDb). A wrapping row of neutral badges. */
+.tvdb-genre-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* Awards callout (Series/Details — OMDb "Awards" line). Amber-tinted note. */
+.tvdb-awards {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    margin-top: 1rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid rgba(232, 163, 61, 0.4);
+    background: rgba(232, 163, 61, 0.1);
+    border-radius: 8px;
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-awards > i {
+    flex: none;
+    margin-top: 0.15rem;
+    font-size: 1.05rem;
+    color: var(--tvdb-signal);
+}
+
+.tvdb-awards p {
+    font-family: var(--tvdb-font-body);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.tvdb-awards-src {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
 /* Compact circular watched toggle — used in dense episode list rows
    (Series/Details) where a full pill button would be too heavy per row. */
 .tvdb-watch-dot {

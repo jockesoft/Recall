@@ -1,9 +1,20 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Series.DetailsModel
+@functions {
+    // OMDb uses the literal string "N/A" for missing values.
+    static string? OmdbValue(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : raw.Trim();
+}
 @{
     ViewData["Title"] = Model.Series is null ? "Series Details" : Model.Series.Name;
     var status = Model.Aggregate?.Status;
     var isContinuing = status is { KeepUpdated: true };
+
+    var omdbGenres = (OmdbValue(Model.Omdb?.Genre) ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var omdbAwards = OmdbValue(Model.Omdb?.Awards);
 }
 
 <a asp-page="/Series/Search" class="tvdb-back-link">&larr; Back to search</a>
@@ -48,6 +59,16 @@
             <div class="col-md-8">
                 <h1 class="tvdb-display mb-2">@Model.Series.Name</h1>
 
+                @if (omdbGenres.Length > 0)
+                {
+                    <div class="tvdb-genre-list mb-3">
+                        @foreach (var genre in omdbGenres)
+                        {
+                            <span class="tvdb-badge tvdb-badge--neutral">@genre</span>
+                        }
+                    </div>
+                }
+
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                     <form method="post" asp-page-handler="ToggleLibrary" asp-route-id="@Model.Series.TvdbId" asp-route-season="@Model.Season">
                         <button type="submit" class="btn @(Model.IsTrackedByCurrentUser ? "btn-outline-danger" : "btn-primary")">
@@ -88,6 +109,17 @@
                 {
                     <h5>Overview</h5>
                     <p class="tvdb-prose">@Model.Series.Overview</p>
+                }
+
+                @if (omdbAwards is not null)
+                {
+                    <div class="tvdb-awards">
+                        <i class="fa-solid fa-award" aria-hidden="true"></i>
+                        <div>
+                            <p class="mb-0">@omdbAwards</p>
+                            <span class="tvdb-awards-src">via OMDb</span>
+                        </div>
+                    </div>
                 }
             </div>
         </div>

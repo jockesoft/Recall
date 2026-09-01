@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
 using Recall.Web.Services;
@@ -18,11 +20,15 @@ public sealed class DetailsModel(
     ITrackedSeriesRepository trackedSeriesRepository,
     IEpisodeWatchRepository episodeWatchRepository,
     IWatchProgressService watchProgressService,
+    IOmdbSnapshotStore omdbSnapshotStore,
     ILogger<DetailsModel> logger)
     : PageModel
 {
     public TvSeriesDetails? Series { get; private set; }
     public SeriesAggregate? Aggregate { get; private set; }
+
+    /// <summary>OMDb enrichment for this series, when the background job has stored it.</summary>
+    public OmdbSeries? Omdb { get; private set; }
 
     [BindProperty(SupportsGet = true)]
     public int? Season { get; set; }
@@ -205,6 +211,10 @@ public sealed class DetailsModel(
                     Aggregate.RemoteIds
                         .Where(r => r.SourceName?.ToLowerInvariant() == "imdb" && !string.IsNullOrWhiteSpace(r.Id))
                         .Select(r => r.Id).FirstOrDefault());
+
+            // OMDb enrichment (genre, awards, …) — local snapshot only, populated
+            // by UpdateOmdbInfoTimer. Absent until the job has run for this series.
+            Omdb = await omdbSnapshotStore.GetAsync(id, cancellationToken);
 
             if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
                 return Page();
