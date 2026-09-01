@@ -24,6 +24,15 @@ public interface IEpisodeWatchRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The most recent <c>WatchedUtc</c> per series for the given user, across the
+    /// supplied series. Series with no watched episodes are absent from the map.
+    /// </summary>
+    Task<IReadOnlyDictionary<int, DateTime>> GetLastWatchedUtcBySeriesAsync(
+        Guid userId,
+        IEnumerable<int> seriesTvdbIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Marks multiple episodes watched in one round trip, skipping any that
     /// are already marked. Used by "mark this and every earlier episode."
     /// </summary>

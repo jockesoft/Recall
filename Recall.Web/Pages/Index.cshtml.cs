@@ -129,7 +129,22 @@ public sealed class IndexModel(
         }
 
         UpcomingEpisodes = [.. upcoming.OrderBy(e => e.AiredDate)];
-        CatchUpEpisodes = await EnrichCatchUpImagesAsync(catchUp, cancellationToken);
+
+        // Order "Catch up" by how recently the user last watched an episode of
+        // that series (most recent first) — the show you're mid-binge on floats
+        // to the top, where its next episode is the most likely thing you want.
+        // Series with nothing watched yet fall to the end, alphabetically.
+        var lastWatchedBySeries = await watchedRepository.GetLastWatchedUtcBySeriesAsync(
+            userId, catchUp.Select(c => c.SeriesId), cancellationToken);
+
+        var orderedCatchUp = catchUp
+            .OrderByDescending(c => lastWatchedBySeries.TryGetValue(c.SeriesId, out var watchedUtc)
+                ? watchedUtc
+                : DateTime.MinValue)
+            .ThenBy(c => c.SeriesName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        CatchUpEpisodes = await EnrichCatchUpImagesAsync(orderedCatchUp, cancellationToken);
         UpcomingThisWeekCount = upcoming.Count(e => e.AiredDate <= thisWeekCutoff);
         UnwatchedCount = unwatchedTotal;
     }

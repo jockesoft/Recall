@@ -89,6 +89,25 @@ public sealed class EpisodeWatchRepository(
         return ids.ToHashSet();
     }
 
+    public async Task<IReadOnlyDictionary<int, DateTime>> GetLastWatchedUtcBySeriesAsync(
+        Guid userId,
+        IEnumerable<int> seriesTvdbIds,
+        CancellationToken cancellationToken = default)
+    {
+        var seriesIds = seriesTvdbIds as ICollection<int> ?? seriesTvdbIds.ToList();
+        if (seriesIds.Count == 0)
+            return new Dictionary<int, DateTime>();
+
+        var rows = await dbContext.EpisodeWatches
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && seriesIds.Contains(x.SeriesTvdbId))
+            .GroupBy(x => x.SeriesTvdbId)
+            .Select(g => new { SeriesTvdbId = g.Key, LastWatchedUtc = g.Max(x => x.WatchedUtc) })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(r => r.SeriesTvdbId, r => r.LastWatchedUtc);
+    }
+
     public async Task MarkWatchedRangeAsync(
         Guid userId,
         int seriesTvdbId,
