@@ -73,7 +73,9 @@ public sealed class PasswordlessAuthService(
             await tokenRepository.InvalidateActiveForUserAsync(user.Id, cancellationToken);
 
         var rawToken = GenerateRawToken();
-
+#if DEBUG
+        logger.LogDebug(rawToken);
+#endif
         await tokenRepository.AddAsync(
             new LoginToken
             {
