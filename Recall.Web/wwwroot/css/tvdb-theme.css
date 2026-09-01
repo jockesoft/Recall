@@ -932,8 +932,8 @@ img.rounded.shadow-sm {
     position: relative;
     display: flex;
     align-items: flex-start;
-    gap: 0.9rem;
-    padding: 0.8rem 0.9rem;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
     background: var(--tvdb-paper-dim);
     border: 1px solid var(--tvdb-ink-line);
     border-left: 3px solid var(--tvdb-signal);
@@ -981,9 +981,10 @@ img.rounded.shadow-sm {
     pointer-events: auto;
     align-self: flex-start;
     max-width: 100%;
-    font-family: var(--tvdb-font-mono);
-    font-size: 0.75rem;
-    color: var(--tvdb-text-muted);
+    font-family: var(--tvdb-font-ui);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tvdb-text);
     text-decoration: none;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1001,8 +1002,9 @@ img.rounded.shadow-sm {
 }
 
 .tvdb-upcoming-epname {
-    font-family: var(--tvdb-font-body);
-    font-size: 0.92rem;
+    font-family: var(--tvdb-font-ui);
+    font-size: 0.75rem;
+    font-weight: 400;
     line-height: 1.3;
     color: var(--tvdb-text);
     overflow-wrap: anywhere;
@@ -1010,22 +1012,56 @@ img.rounded.shadow-sm {
 
 .tvdb-upcoming-tags {
     margin-top: auto;
-    padding-top: 0.45rem;
+    padding-top: 0.25rem;
     display: flex;
     flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+/* Smaller badges than the site default — they sit in a dense card. */
+.tvdb-upcoming-tags .tvdb-badge {
+    font-size: 0.58rem;
+    padding: 0.1rem 0.4rem;
+    letter-spacing: 0.06em;
+}
+
+/* Right rail: air date pinned top, day-countdown pinned bottom. */
+.tvdb-upcoming-aside {
+    flex: none;
+    align-self: stretch;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    text-align: right;
     gap: 0.35rem;
 }
 
 .tvdb-upcoming-date {
-    flex: none;
-    z-index: 2;
-    pointer-events: none;
-    font-family: var(--tvdb-font-mono);
-    text-align: right;
+    color: var(--tvdb-text-muted);
     white-space: nowrap;
 }
 
-.tvdb-upcoming-date .tvdb-mono {
+.tvdb-upcoming-countdown {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1;
+}
+
+.tvdb-upcoming-countdown-num {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    font-size: 1.45rem;
+    color: var(--tvdb-text);
+}
+
+.tvdb-upcoming-countdown-label {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--tvdb-text-muted);
 }
 

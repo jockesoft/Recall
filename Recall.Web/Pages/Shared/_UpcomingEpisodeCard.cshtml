@@ -48,7 +48,19 @@
         }
     </div>
 
-    <div class="tvdb-upcoming-date">
-        <span class="tvdb-mono">@Model.AiredDate.ToString("ddd, MMM d")</span>
+    <div class="tvdb-upcoming-aside">
+        <span class="tvdb-upcoming-date tvdb-mono">@Model.AiredDate.ToString("ddd, MMM d")</span>
+
+        <span class="tvdb-upcoming-countdown">
+            @if (Model.DaysUntilAired == 0)
+            {
+                <span class="tvdb-upcoming-countdown-label">Today</span>
+            }
+            else
+            {
+                <span class="tvdb-upcoming-countdown-num">@Model.DaysUntilAired</span>
+                <span class="tvdb-upcoming-countdown-label">@(Model.DaysUntilAired == 1 ? "day" : "days")</span>
+            }
+        </span>
     </div>
 </div>

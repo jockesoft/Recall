@@ -66,4 +66,8 @@ public sealed class UpcomingEpisodeCardModel
             || string.Equals(EpisodeName.Trim(), "TBA", StringComparison.OrdinalIgnoreCase)
                 ? null
                 : EpisodeName.Trim();
+
+    /// <summary>Whole days from today until the episode airs (never negative).</summary>
+    public int DaysUntilAired =>
+        Math.Max(0, AiredDate.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber);
 }
