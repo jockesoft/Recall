@@ -143,6 +143,7 @@ builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
 });
 // Add TheTVDB integration
 builder.Services.AddTheTvDb(builder.Configuration);
+builder.Services.AddOmdb(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddMail(builder.Configuration);
 builder.Services.AddPasswordlessAuth(builder.Configuration);
@@ -182,6 +183,12 @@ builder.Services.AddQuartz(q =>
         .StartAt(DateTimeOffset.UtcNow.AddSeconds(30))
         .WithSimpleSchedule(s => s.WithIntervalInMinutes(1).RepeatForever())
         .WithDescription("Drain the outbound email queue once a minute."));
+
+    q.ScheduleJob<UpdateOmdbInfoTimer>(trigger => trigger
+        .WithIdentity("UpdateOmdbInfoTimer-trigger")
+        .StartAt(DateTimeOffset.UtcNow.AddSeconds(20))
+        .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
+        .WithDescription("Refresh OMDb data for cached series — at most 30 requests/hour, each series at most monthly."));
 });
 
 // Add the Quartz.NET hosted service

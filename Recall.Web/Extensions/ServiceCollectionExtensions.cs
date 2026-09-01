@@ -1,10 +1,14 @@
+using Microsoft.Extensions.Options;
 using Recall.Web.Infrastructure.Authentication;
+using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.Mail;
+using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
 
@@ -25,6 +29,26 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<ITheTvDbService, TheTvDbService>();
+        return services;
+    }
+
+    /// <summary>
+    /// OMDb enrichment: the typed API client plus the snapshot store. Fetching is
+    /// driven by <c>UpdateOmdbInfoTimer</c>; nothing calls OMDb on a request path.
+    /// </summary>
+    public static IServiceCollection AddOmdb(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<OmdbOptions>(configuration.GetSection(OmdbOptions.SectionName));
+
+        services.AddHttpClient<IOmdbApiClient, OmdbApiClient>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<OmdbOptions>>().Value;
+            client.BaseAddress = new Uri(options.BaseUrl);
+            client.DefaultRequestHeaders.Accept.Add(new("application/json"));
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+
+        services.AddScoped<IOmdbSnapshotStore, OmdbSnapshotStore>();
         return services;
     }
 

@@ -10,6 +10,11 @@ dotnet user-secrets set "TheTvDb:ApiKey" "YOUR_REAL_API_KEY" --project ./Recall.
 dotnet user-secrets set "TheTvDb:Pin" "YOUR_PIN_IF_ANY" --project ./Recall.Web
 ```
 
+Set your OMDb values
+```
+dotnet user-secrets set "Omdb:ApiKey" "<your-key>" --project Recall.Web
+```
+
 Set your allowed email addresses
 ```
 dotnet user-secrets set "Login:AllowedEmails:0" "dev@email.com" --project Recall.Web
