@@ -40,6 +40,12 @@ public sealed class UpcomingEpisodeCardModel
     /// <summary>Season or series finale — renders the FINALE badge.</summary>
     public bool IsFinale { get; init; }
 
+    /// <summary>How many episodes this card stands in for (1 unless several were collapsed).</summary>
+    public int EpisodeCount { get; init; } = 1;
+
+    /// <summary>Episodes beyond the linked one — drives the discreet "+N more" tag.</summary>
+    public int ExtraEpisodeCount => Math.Max(0, EpisodeCount - 1);
+
     /// <summary>Viewer has watched every aired episode of this series (green stripe).</summary>
     public bool SeriesCaughtUp { get; init; }
 

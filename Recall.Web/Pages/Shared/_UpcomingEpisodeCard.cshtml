@@ -33,7 +33,7 @@
             <div class="tvdb-upcoming-epname">@Model.DisplayEpisodeName</div>
         }
 
-        @if (Model.IsPremiere || Model.IsFinale)
+        @if (Model.IsPremiere || Model.IsFinale || Model.ExtraEpisodeCount > 0)
         {
             <div class="tvdb-upcoming-tags">
                 @if (Model.IsPremiere)
@@ -43,6 +43,10 @@
                 @if (Model.IsFinale)
                 {
                     <span class="tvdb-badge tvdb-badge--amber">Finale</span>
+                }
+                @if (Model.ExtraEpisodeCount > 0)
+                {
+                    <span class="tvdb-badge tvdb-badge--neutral">+@Model.ExtraEpisodeCount more</span>
                 }
             </div>
         }
