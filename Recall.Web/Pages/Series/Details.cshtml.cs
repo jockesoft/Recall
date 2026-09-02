@@ -265,8 +265,8 @@ public sealed class DetailsModel(
 
     public string GetSeasonName(int season)
     {
-        if (season == 0) return "Specials";
-        else return "Season " + season;
+        if (season == 0) return "SP";
+        else return "S" + season.ToString("D2");
     }
 
     /// <summary>
