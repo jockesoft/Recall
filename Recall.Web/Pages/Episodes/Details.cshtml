@@ -216,7 +216,14 @@
                 }
 
                 <div class="tvdb-mono text-muted small mt-4 pt-2" style="border-top: 1px solid var(--tvdb-ink-line);">
-                    Episode ID @ep.Id
+                    @if (!string.IsNullOrWhiteSpace(Model.SeriesSlug))
+                    {
+                        <a class="tvdb-metalink" href="https://www.thetvdb.com/series/@Model.SeriesSlug/episodes/@ep.Id" target="_blank" rel="noopener">Episode ID @ep.Id</a>
+                    }
+                    else
+                    {
+                        <text>Episode ID @ep.Id</text>
+                    }
                     @if (ep.LastUpdated is not null)
                     {
                         <span class="ms-3">Updated @ep.LastUpdated</span>

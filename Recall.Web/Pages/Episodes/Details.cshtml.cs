@@ -26,6 +26,9 @@ public sealed class DetailsModel(
     /// <summary>Name of the series this episode belongs to (for the header link).</summary>
     public string? SeriesName { get; private set; }
 
+    /// <summary>Series slug, used to build the TheTVDB episode link.</summary>
+    public string? SeriesSlug { get; private set; }
+
     /// <summary>Parsed air date, when the episode has one.</summary>
     public DateOnly? AiredDate { get; private set; }
 
@@ -154,6 +157,7 @@ public sealed class DetailsModel(
         {
             var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
             SeriesName = aggregate?.Name;
+            SeriesSlug = aggregate?.Slug;
             AirsTime = aggregate?.AirsTime;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

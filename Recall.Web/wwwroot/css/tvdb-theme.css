@@ -809,7 +809,8 @@ dl.row dd {
 /* A link inside a metadata value reads as part of the value: same ink colour,
    a quiet underline that warms to the amber signal on hover, plus a small
    external-link cue. Keeps it from rendering as a raw amber browser link. */
-dl.row dd a {
+dl.row dd a,
+.tvdb-metalink {
     color: var(--tvdb-text);
     text-decoration: underline;
     text-decoration-color: rgba(21, 27, 36, 0.28);
@@ -818,12 +819,15 @@ dl.row dd a {
 }
 
 dl.row dd a:hover,
-dl.row dd a:focus-visible {
+dl.row dd a:focus-visible,
+.tvdb-metalink:hover,
+.tvdb-metalink:focus-visible {
     color: var(--tvdb-signal-ink);
     text-decoration-color: var(--tvdb-signal);
 }
 
-dl.row dd a[target="_blank"]::after {
+dl.row dd a[target="_blank"]::after,
+.tvdb-metalink[target="_blank"]::after {
     content: " \2197"; /* ↗ */
     color: var(--tvdb-text-muted);
     font-size: 0.8em;
