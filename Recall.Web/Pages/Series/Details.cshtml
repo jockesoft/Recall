@@ -19,7 +19,8 @@
     var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
-<a asp-page="/Series/Search" class="tvdb-back-link">&larr; Back to search</a>
+<a asp-page="/Series/Search" class="tvdb-back-link"
+   onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">&larr; Back</a>
 
 @Html.AntiForgeryToken()
 
