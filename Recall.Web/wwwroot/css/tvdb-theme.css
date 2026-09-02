@@ -607,6 +607,16 @@ button.tvdb-badge {
     border-color: var(--tvdb-ok);
     color: var(--tvdb-ok);
 }
+/* Episode that hasn't aired yet — the toggle is inert until it does. */
+.tvdb-watch-dot:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+.tvdb-watch-dot:disabled:hover,
+.tvdb-watch-dot:disabled:focus-visible {
+    border-color: var(--tvdb-ink-line);
+    color: transparent;
+}
 .tvdb-watch-dot--on {
     background: var(--tvdb-ok);
     border-color: var(--tvdb-ok);

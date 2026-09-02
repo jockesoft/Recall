@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.Omdb;
@@ -129,6 +130,12 @@ public sealed class DetailsModel(
             }
             else
             {
+                if (!await HasEpisodeAiredAsync(episodeId, cancellationToken))
+                {
+                    this.SetErrorToast("You can't mark an episode as watched before it has aired.");
+                    return RedirectToPage(new { id, season = Season });
+                }
+
                 // Make sure the series is in the users library, otherwise why track progress
                 await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
                 await episodeWatchRepository.MarkWatchedAsync(userId, id, episodeId, cancellationToken);
@@ -165,6 +172,12 @@ public sealed class DetailsModel(
         try
         {
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+            if (!await HasEpisodeAiredAsync(episodeId, cancellationToken))
+            {
+                this.SetErrorToast("You can't mark an episode as watched before it has aired.");
+                return RedirectToPage(new { id, season = Season });
+            }
 
             // Make sure the series is in the users library, otherwise why track progress
             await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
@@ -246,6 +259,27 @@ public sealed class DetailsModel(
     {
         if (season == 0) return "Specials";
         else return "Season " + season;
+    }
+
+    /// <summary>
+    /// True only when the episode has a known air date that is today or earlier.
+    /// An unknown/unparseable or future air date counts as "not aired", so it
+    /// can't be marked watched. Mirrors the client-side guard in the view.
+    /// </summary>
+    private async Task<bool> HasEpisodeAiredAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var episode = await theTvDbService.GetEpisodeDetailsAsync(episodeId, cancellationToken);
+            return episode is not null
+                && DateOnly.TryParse(episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired)
+                && aired <= DateOnly.FromDateTime(DateTime.Today);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not verify air date for episode {EpisodeId}; treating as not aired.", episodeId);
+            return false;
+        }
     }
 
     private async Task AddToPersonalLibraryAsync(

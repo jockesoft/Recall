@@ -325,6 +325,7 @@
                     @foreach (var ep in filteredEpisodes)
                     {
                         var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
+                        var hasAired = ep.Aired is { } airedOn && airedOn <= DateOnly.FromDateTime(DateTime.Today);
                         <div class="list-group-item @(isWatched ? "is-watched" : "")">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
@@ -363,6 +364,16 @@
                                                 <span aria-hidden="true">&#10003;</span>
                                             </button>
                                         </form>
+                                    }
+                                    else if (!hasAired)
+                                    {
+                                        <button type="button"
+                                                class="tvdb-watch-dot"
+                                                title="Hasn't aired yet"
+                                                aria-pressed="false"
+                                                aria-label="Can't mark as watched — episode hasn't aired yet"
+                                                disabled>
+                                        </button>
                                     }
                                     else
                                     {
