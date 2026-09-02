@@ -106,6 +106,16 @@
                         <dd class="col-sm-9">@Model.Series.FirstAired</dd>
                     }
 
+                    @if (Model.IsTrackedByCurrentUser)
+                    {
+                        <dt class="col-sm-3">Last watched</dt>
+                        <dd class="col-sm-9">
+                            @(Model.WatchedDatesByEpisodeId.Count > 0
+                                ? Model.WatchedDatesByEpisodeId.Values.Max().ToString("yyyy-MM-dd")
+                                : "Not started yet")
+                        </dd>
+                    }
+
                     @if (omdbRating is not null)
                     {
                         <dt class="col-sm-3">IMDb rating</dt>
