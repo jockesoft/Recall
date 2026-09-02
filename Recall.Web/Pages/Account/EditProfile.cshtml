@@ -1,0 +1,178 @@
+@page
+@using Recall.Web.Pages.Account
+@model EditProfileModel
+@{
+    ViewData["Title"] = "Edit profile";
+}
+
+<div class="tvdb-shell">
+    <div class="row justify-content-center">
+        <div class="col-sm-10 col-md-8 col-lg-6">
+            <a asp-page="/Account/Profile" class="tvdb-back-link">&larr; Back to profile</a>
+
+            <h1 class="tvdb-display mb-1">Edit profile</h1>
+            <p class="tvdb-prose text-muted mb-4">
+                Your username is how you show up across Recall. It has to be unique and
+                at least @EditProfileModel.UsernameMinLength characters long.
+            </p>
+
+            <form method="post" novalidate
+                  id="editProfileForm"
+                  data-check-url="@Url.Page("/Account/EditProfile", "CheckUsername")"
+                  data-current-username="@Model.CurrentUsername">
+                <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                <div class="mb-3 tvdb-field">
+                    <label asp-for="Input.Username" class="form-label">Username</label>
+                    <div class="tvdb-input-affix">
+                        <input asp-for="Input.Username"
+                               class="form-control"
+                               autocomplete="username"
+                               autocapitalize="none"
+                               spellcheck="false"
+                               autofocus
+                               minlength="@EditProfileModel.UsernameMinLength"
+                               maxlength="@EditProfileModel.UsernameMaxLength"
+                               aria-describedby="usernameHint usernameStatus" />
+                        <span class="tvdb-input-affix-icon" id="usernameAffixIcon" aria-hidden="true"></span>
+                    </div>
+
+                    @* Server-side / unobtrusive validation message (source of truth). *@
+                    <span asp-validation-for="Input.Username" class="text-danger d-block mt-1"></span>
+
+                    @* Live availability feedback, driven by the script below. *@
+                    <span id="usernameStatus" class="tvdb-field-status mt-1" role="status" aria-live="polite" hidden></span>
+
+                    <span id="usernameHint" class="form-text tvdb-mono">
+                        @EditProfileModel.UsernameMinLength&ndash;@EditProfileModel.UsernameMaxLength characters &middot; letters, numbers, and <code>. - _</code>
+                    </span>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary" id="editProfileSubmit">Save changes</button>
+                    <a asp-page="/Account/Profile" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const form = document.getElementById('editProfileForm');
+            if (!form) return;
+
+            const input = form.querySelector('#Input_Username');
+            const status = document.getElementById('usernameStatus');
+            const affix = document.getElementById('usernameAffixIcon');
+            const submit = document.getElementById('editProfileSubmit');
+            const checkUrl = form.dataset.checkUrl;
+            const current = (form.dataset.currentUsername || '').trim();
+            const min = @EditProfileModel.UsernameMinLength, max = @EditProfileModel.UsernameMaxLength;
+            const pattern = /@Html.Raw(Recall.Web.Pages.Account.EditProfileModel.UsernamePattern)/;
+
+            let timer = null;
+            let seq = 0;
+
+            const ICONS = {
+                checking: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
+                ok: '✓',
+                bad: '✕'
+            };
+
+            function setState(state, message) {
+                // state: 'idle' | 'checking' | 'ok' | 'bad' | 'unchanged'
+                input.classList.remove('is-valid', 'is-invalid');
+                status.classList.remove('is-ok', 'is-bad', 'is-checking');
+                affix.innerHTML = '';
+
+                if (state === 'idle') {
+                    status.hidden = true;
+                    status.textContent = '';
+                    submit.disabled = true;
+                    return;
+                }
+
+                status.hidden = false;
+                status.textContent = message || '';
+
+                if (state === 'checking') {
+                    status.classList.add('is-checking');
+                    affix.innerHTML = ICONS.checking;
+                    submit.disabled = true;
+                } else if (state === 'ok') {
+                    input.classList.add('is-valid');
+                    status.classList.add('is-ok');
+                    affix.textContent = ICONS.ok;
+                    submit.disabled = false;
+                } else if (state === 'unchanged') {
+                    status.classList.add('is-checking');
+                    submit.disabled = true;
+                } else { // bad
+                    input.classList.add('is-invalid');
+                    status.classList.add('is-bad');
+                    affix.textContent = ICONS.bad;
+                    submit.disabled = true;
+                }
+            }
+
+            function localProblem(value) {
+                if (value.length < min || value.length > max)
+                    return `Username must be between ${min} and ${max} characters.`;
+                if (!pattern.test(value))
+                    return 'Only letters, numbers, dots, hyphens and underscores are allowed.';
+                return null;
+            }
+
+            async function check() {
+                const value = input.value.trim();
+
+                if (value.length === 0) { setState('idle'); return; }
+                if (value === current) { setState('unchanged', 'This is your current username.'); return; }
+
+                const problem = localProblem(value);
+                if (problem) { setState('bad', problem); return; }
+
+                const mySeq = ++seq;
+                setState('checking', 'Checking availability…');
+
+                try {
+                    const res = await fetch(`${checkUrl}&username=${encodeURIComponent(value)}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (mySeq !== seq) return; // a newer keystroke already superseded this
+                    if (!res.ok) { setState('idle'); return; }
+
+                    const data = await res.json();
+                    setState(data.available ? 'ok' : 'bad', data.message);
+                } catch {
+                    if (mySeq === seq) setState('idle');
+                }
+            }
+
+            input.addEventListener('input', function () {
+                clearTimeout(timer);
+                timer = setTimeout(check, 350);
+            });
+
+            // Don't let a submit through while the name is unusable.
+            form.addEventListener('submit', function (e) {
+                const value = input.value.trim();
+                if (value !== current && (localProblem(value) || input.classList.contains('is-invalid'))) {
+                    e.preventDefault();
+                    check();
+                }
+            });
+
+            setState('idle');
+
+            // After a server-side validation bounce the field holds the rejected
+            // value — re-run the check so the user sees why straight away.
+            if (input.value.trim().length > 0 && input.value.trim() !== current) {
+                check();
+            }
+        })();
+    </script>
+}

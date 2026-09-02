@@ -28,8 +28,13 @@
             }
 
             <dl class="row mb-4">
-                <dt class="col-sm-4">Display name</dt>
-                <dd class="col-sm-8">@Model.DisplayName</dd>
+                <dt class="col-sm-4">Username</dt>
+                <dd class="col-sm-8">
+                    <span class="d-inline-flex align-items-center gap-2 flex-wrap">
+                        @Model.DisplayName
+                        <a asp-page="/Account/EditProfile" class="tvdb-inline-edit">Edit</a>
+                    </span>
+                </dd>
 
                 <dt class="col-sm-4">Email</dt>
                 <dd class="col-sm-8">@Model.Email</dd>
@@ -38,9 +43,12 @@
                 <dd class="col-sm-8">Passwordless magic link &mdash; no password is stored.</dd>
             </dl>
 
-            <form method="post" asp-page="/Account/Logout">
-                <button type="submit" class="btn btn-outline-danger">Sign out</button>
-            </form>
+            <div class="d-flex flex-wrap gap-2">
+                <a asp-page="/Account/EditProfile" class="btn btn-primary">Edit profile</a>
+                <form method="post" asp-page="/Account/Logout">
+                    <button type="submit" class="btn btn-outline-danger">Sign out</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>

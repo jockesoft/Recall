@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Recall.Web.Infrastructure.Persistence.Entities;
 
 namespace Recall.Web.Infrastructure.Persistence.Repositories;
@@ -7,6 +8,54 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
 {
     public Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    public async Task<bool> IsUsernameAvailableAsync(
+        string username,
+        Guid excludingUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = username.Trim().ToLowerInvariant();
+
+        return !await dbContext.AppUsers.AnyAsync(
+            x => x.Id != excludingUserId && x.Username.ToLower() == normalized,
+            cancellationToken);
+    }
+
+    public async Task<UsernameUpdateResult> UpdateUsernameAsync(
+        Guid userId,
+        string username,
+        CancellationToken cancellationToken = default)
+    {
+        var trimmed = username.Trim();
+
+        var user = await dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        if (user is null)
+            return UsernameUpdateResult.UserNotFound;
+
+        if (string.Equals(user.Username, trimmed, StringComparison.Ordinal))
+            return UsernameUpdateResult.Updated;
+
+        var taken = await dbContext.AppUsers.AnyAsync(
+            x => x.Id != userId && x.Username.ToLower() == trimmed.ToLower(),
+            cancellationToken);
+        if (taken)
+            return UsernameUpdateResult.Taken;
+
+        user.Username = trimmed;
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return UsernameUpdateResult.Updated;
+        }
+        catch (DbUpdateException ex)
+            when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Lost a race to another request claiming the same name.
+            dbContext.Entry(user).State = EntityState.Unchanged;
+            return UsernameUpdateResult.Taken;
+        }
+    }
 
     public Task<AppUserEntity?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {

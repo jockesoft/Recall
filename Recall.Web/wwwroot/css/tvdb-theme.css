@@ -1005,6 +1005,103 @@ img.rounded.shadow-sm {
     color: var(--tvdb-danger-ink) !important;
 }
 
+.form-text {
+    color: var(--tvdb-text-muted);
+}
+.form-text code {
+    color: var(--tvdb-text);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: 4px;
+    padding: 0 0.25rem;
+}
+
+/* Text input with a trailing status icon (used on Edit profile for the live
+   username check). The icon sits inside the field's right padding. */
+.tvdb-input-affix {
+    position: relative;
+}
+.tvdb-input-affix .form-control {
+    padding-right: 2.4rem;
+}
+.tvdb-input-affix-icon {
+    position: absolute;
+    top: 50%;
+    right: 0.75rem;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* We supply our own valid/invalid affix icon, so drop Bootstrap's background
+   SVG + its extra right padding and just keep the border colour cue. */
+.tvdb-shell .form-control.is-valid,
+.tvdb-shell .form-control.is-invalid {
+    background-image: none;
+    padding-right: 2.4rem;
+}
+.tvdb-shell .form-control.is-valid {
+    border-color: var(--tvdb-ok);
+}
+.tvdb-shell .form-control.is-valid:focus {
+    border-color: var(--tvdb-ok);
+    box-shadow: 0 0 0 0.2rem rgba(111, 157, 111, 0.25);
+}
+.tvdb-shell .form-control.is-invalid {
+    border-color: var(--tvdb-danger);
+}
+.tvdb-shell .form-control.is-invalid:focus {
+    border-color: var(--tvdb-danger);
+    box-shadow: 0 0 0 0.2rem rgba(181, 83, 60, 0.25);
+}
+.tvdb-input-affix .form-control.is-valid + .tvdb-input-affix-icon {
+    color: var(--tvdb-ok);
+}
+.tvdb-input-affix .form-control.is-invalid + .tvdb-input-affix-icon {
+    color: var(--tvdb-danger);
+}
+
+/* Live field-status line under an input. */
+.tvdb-field-status {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+}
+.tvdb-field-status.is-ok {
+    color: var(--tvdb-ok-ink);
+}
+.tvdb-field-status.is-bad {
+    color: var(--tvdb-danger-ink);
+}
+.tvdb-field-status.is-checking {
+    color: var(--tvdb-text-muted);
+}
+
+/* Small "Edit" affordance next to a value in a definition list. */
+.tvdb-inline-edit {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--tvdb-signal);
+    text-decoration: none;
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    line-height: 1.4;
+}
+.tvdb-inline-edit:hover,
+.tvdb-inline-edit:focus-visible {
+    color: var(--tvdb-signal-ink);
+    border-color: var(--tvdb-signal);
+}
+
 /* Clickable list rows (search results, etc.) */
 .list-group-item-action:hover,
 .list-group-item-action:focus {
