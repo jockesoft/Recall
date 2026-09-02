@@ -275,7 +275,19 @@
             .OrderBy(n => n)
             .ToList();
 
-        var selectedSeason = Model.Season ?? seasonNumbers.FirstOrDefault();
+        // With no explicit ?season= in the URL, open the tab where the user
+        // currently is in their watch history: the season of their most recently
+        // watched episode (falling back to the next episode they should watch for
+        // a series they haven't started). Only then fall back to the first tab.
+        int? watchPositionSeason = null;
+        if (Model.WatchProgress is { HasEpisodes: true } wp)
+        {
+            var lastWatched = wp.OrderedEpisodes.LastOrDefault(e => wp.WatchedEpisodeIds.Contains(e.Id));
+            watchPositionSeason = lastWatched?.SeasonNumber ?? wp.NextUnwatchedEpisode?.SeasonNumber;
+        }
+
+        var selectedSeason = Model.Season
+            ?? (watchPositionSeason is { } s && seasonNumbers.Contains(s) ? s : seasonNumbers.FirstOrDefault());
 
         var filteredEpisodes = Model.Aggregate.Episodes
             .Where(e => e.SeasonNumber == selectedSeason)
