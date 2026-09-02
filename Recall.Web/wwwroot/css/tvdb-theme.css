@@ -144,6 +144,31 @@ hr {
     color: var(--tvdb-signal) !important;
 }
 
+/* Collapsed hamburger menu (phones): the 0.85rem mono links read as tiny and
+   are awkward to tap. Scale them up and give each row a proper tap target. */
+@media (max-width: 575.98px) {
+    .navbar .navbar-collapse .navbar-nav .nav-link:not(.nav-avatar),
+    .navbar-light .navbar-collapse .navbar-nav .nav-link:not(.nav-avatar) {
+        font-size: 1.05rem;
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+    }
+
+    .navbar .navbar-collapse .navbar-nav {
+        padding-top: 0.35rem;
+        padding-bottom: 0.35rem;
+    }
+
+    .navbar .navbar-collapse .dropdown-menu .dropdown-item,
+    .navbar .navbar-collapse .dropdown-menu .dropdown-header {
+        font-size: 0.95rem;
+    }
+
+    .navbar .navbar-collapse .dropdown-menu .dropdown-header .dropdown-header-sub {
+        font-size: 0.82rem;
+    }
+}
+
 /* Hamburger icon on navbar-light is a dark SVG mask — invert it so it's
    visible on the dark navbar. */
 .navbar-toggler-icon {
