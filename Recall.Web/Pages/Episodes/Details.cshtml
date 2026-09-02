@@ -232,6 +232,54 @@
                         <span class="ms-3">Updated @ep.LastUpdated</span>
                     }
                 </div>
+
+                <div class="tvdb-epnav-bar mt-4 pt-3">
+                    @if (Model.PreviousEpisode is { } prev)
+                    {
+                        <a class="tvdb-epnav tvdb-epnav--prev" href="/Episodes/Details/@prev.Id">
+                            <span class="tvdb-epnav-arrow" aria-hidden="true">&larr;</span>
+                            <span class="tvdb-epnav-text">
+                                <strong class="tvdb-epnav-label">Prev episode</strong>
+                                @if (prev.SlateCode is { } prevCode)
+                                {
+                                    <span class="tvdb-epnav-slate tvdb-mono">@prevCode</span>
+                                }
+                            </span>
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="tvdb-epnav tvdb-epnav--prev is-disabled" aria-disabled="true">
+                            <span class="tvdb-epnav-arrow" aria-hidden="true">&larr;</span>
+                            <span class="tvdb-epnav-text">
+                                <strong class="tvdb-epnav-label">Prev episode</strong>
+                            </span>
+                        </span>
+                    }
+
+                    @if (Model.NextEpisode is { } next)
+                    {
+                        <a class="tvdb-epnav tvdb-epnav--next" href="/Episodes/Details/@next.Id">
+                            <span class="tvdb-epnav-text">
+                                <strong class="tvdb-epnav-label">Next episode</strong>
+                                @if (next.SlateCode is { } nextCode)
+                                {
+                                    <span class="tvdb-epnav-slate tvdb-mono">@nextCode</span>
+                                }
+                            </span>
+                            <span class="tvdb-epnav-arrow" aria-hidden="true">&rarr;</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="tvdb-epnav tvdb-epnav--next is-disabled" aria-disabled="true">
+                            <span class="tvdb-epnav-text">
+                                <strong class="tvdb-epnav-label">Next episode</strong>
+                            </span>
+                            <span class="tvdb-epnav-arrow" aria-hidden="true">&rarr;</span>
+                        </span>
+                    }
+                </div>
             </div>
         </div>
     }

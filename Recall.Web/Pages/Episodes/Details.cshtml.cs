@@ -52,6 +52,15 @@ public sealed class DetailsModel(
     /// </summary>
     public int PriorUnwatchedCount { get; private set; }
 
+    /// <summary>
+    /// Previous / next episode in season/episode order, for the page-foot nav.
+    /// Null when the current episode sits at that end of the series (or isn't a
+    /// tracked, non-movie episode present in the aggregate).
+    /// </summary>
+    public EpisodeNavLink? PreviousEpisode { get; private set; }
+
+    public EpisodeNavLink? NextEpisode { get; private set; }
+
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
         => await LoadPageAsync(id, cancellationToken);
 
@@ -154,7 +163,7 @@ public sealed class DetailsModel(
     /// refresh timer keeps current, so no extra TheTVDB call is made here.
     /// Best-effort: a failure must not break the episode page.
     /// </summary>
-    private async Task LoadSeriesHeaderAsync(int seriesId, CancellationToken cancellationToken)
+    private async Task<SeriesAggregate?> LoadSeriesHeaderAsync(int seriesId, CancellationToken cancellationToken)
     {
         try
         {
@@ -162,11 +171,46 @@ public sealed class DetailsModel(
             SeriesName = aggregate?.Name;
             SeriesSlug = aggregate?.Slug;
             AirsTime = aggregate?.AirsTime;
+            return aggregate;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Could not load series {SeriesId} for the episode header.", seriesId);
+            return null;
         }
+    }
+
+    /// <summary>
+    /// Fills <see cref="PreviousEpisode"/> / <see cref="NextEpisode"/> from the
+    /// series aggregate, using the same season/episode ordering as the rest of
+    /// the app. Leaves them null when the current episode isn't in the ordered
+    /// list or has no neighbour on that side.
+    /// </summary>
+    private void SetEpisodeNav(SeriesAggregate aggregate, int currentEpisodeId)
+    {
+        var ordered = WatchProgressCalculator.Order(aggregate.ToWatchableEpisodes());
+
+        var index = -1;
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            if (ordered[i].Id == currentEpisodeId)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0)
+            return;
+
+        if (index > 0)
+            PreviousEpisode = ToNavLink(ordered[index - 1]);
+
+        if (index < ordered.Count - 1)
+            NextEpisode = ToNavLink(ordered[index + 1]);
+
+        static EpisodeNavLink ToNavLink(WatchableEpisode e) =>
+            new(e.Id, e.SeasonNumber, e.EpisodeNumber);
     }
 
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
@@ -183,7 +227,11 @@ public sealed class DetailsModel(
                     AiredDate = aired;
 
                 if (Episode.SeriesId is > 0)
-                    await LoadSeriesHeaderAsync(Episode.SeriesId.Value, cancellationToken);
+                {
+                    var aggregate = await LoadSeriesHeaderAsync(Episode.SeriesId.Value, cancellationToken);
+                    if (aggregate is not null && Episode.Id is { } currentId)
+                        SetEpisodeNav(aggregate, currentId);
+                }
             }
 
             if (Episode is not null &&
@@ -216,4 +264,17 @@ public sealed class DetailsModel(
             return Page();
         }
     }
+}
+
+/// <summary>Target for a prev/next episode nav button on the episode detail page.</summary>
+public sealed record EpisodeNavLink(int Id, int? SeasonNumber, int? EpisodeNumber)
+{
+    /// <summary>
+    /// "S04 · E03"-style label, or null when either number is missing (the nav
+    /// button then shows just its "Prev/Next episode" line).
+    /// </summary>
+    public string? SlateCode =>
+        SeasonNumber is { } s && EpisodeNumber is { } e
+            ? $"S{s:D2} · E{e:D2}"
+            : null;
 }

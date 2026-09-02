@@ -371,6 +371,72 @@ hr {
     text-decoration: underline;
 }
 
+/* Prev / next episode nav at the foot of the episode-detail info column.
+   Prev hugs the left edge, next the right; each is an arrow vertically
+   centred against a two-row label (bold "Prev/Next episode" + slate code). */
+.tvdb-epnav-bar {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    border-top: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-epnav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: var(--tvdb-radius);
+    border: 1px solid var(--tvdb-ink-line);
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-text);
+    text-decoration: none;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.tvdb-epnav--next {
+    text-align: right;
+}
+
+.tvdb-epnav:hover,
+.tvdb-epnav:focus-visible {
+    border-color: var(--tvdb-signal);
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-epnav-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.tvdb-epnav-label {
+    font-family: var(--tvdb-font-ui);
+    font-size: 0.9rem;
+}
+
+.tvdb-epnav-slate {
+    font-size: 0.78rem;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-epnav-arrow {
+    flex: none;
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+.tvdb-epnav.is-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.tvdb-epnav.is-disabled:hover,
+.tvdb-epnav.is-disabled:focus-visible {
+    border-color: var(--tvdb-ink-line);
+    color: var(--tvdb-text);
+}
+
 /* Inline metadata strip: aired · runtime · score, middot-separated. */
 .tvdb-meta-inline {
     display: flex;
