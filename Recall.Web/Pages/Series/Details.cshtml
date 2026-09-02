@@ -288,7 +288,7 @@
         // With no explicit ?season= in the URL, open the tab where the user
         // currently is in their watch history: the season of their most recently
         // watched episode (falling back to the next episode they should watch for
-        // a series they haven't started). Only then fall back to the first tab.
+        // a series they haven't started). Only then fall back to the default tab.
         int? watchPositionSeason = null;
         if (Model.WatchProgress is { HasEpisodes: true } wp)
         {
@@ -296,8 +296,12 @@
             watchPositionSeason = lastWatched?.SeasonNumber ?? wp.NextUnwatchedEpisode?.SeasonNumber;
         }
 
+        // Prefer the first real season over Specials (season 0); only land on
+        // Specials when it's the only season there is.
+        var defaultSeason = seasonNumbers.FirstOrDefault(n => n != 0, seasonNumbers.FirstOrDefault());
+
         var selectedSeason = Model.Season
-            ?? (watchPositionSeason is { } s && seasonNumbers.Contains(s) ? s : seasonNumbers.FirstOrDefault());
+            ?? (watchPositionSeason is { } s && seasonNumbers.Contains(s) ? s : defaultSeason);
 
         var filteredEpisodes = Model.Aggregate.Episodes
             .Where(e => e.SeasonNumber == selectedSeason)
