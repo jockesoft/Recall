@@ -299,15 +299,31 @@
         {
             <hr class="my-4"/>
 
+            // Seasons where the user has watched every episode — the tab gets a green check.
+            var fullyWatchedSeasons = seasonNumbers
+                .Where(n =>
+                {
+                    var seasonEpisodes = Model.Aggregate.Episodes.Where(e => e.SeasonNumber == n).ToList();
+                    return seasonEpisodes.Count > 0
+                           && seasonEpisodes.All(e => Model.WatchedEpisodeIds.Contains(e.Id));
+                })
+                .ToHashSet();
+
             <h4 class="mb-3">Seasons</h4>
             <div class="d-flex flex-wrap gap-2 mb-4">
                 @foreach (var seasonNumber in seasonNumbers)
                 {
                     var isActive = seasonNumber == selectedSeason;
+                    var isFullyWatched = fullyWatchedSeasons.Contains(seasonNumber);
                     <a asp-page="/Series/Details"
                        asp-route-id="@Model.Series.TvdbId"
                        asp-route-season="@seasonNumber"
-                       class="btn @(isActive ? "btn-dark" : "btn-outline-dark") btn-sm rounded-pill px-3">
+                       class="btn @(isActive ? "btn-dark" : "btn-outline-dark") btn-sm rounded-pill px-3"
+                       title="@(isFullyWatched ? "All episodes watched" : null)">
+                        @if (isFullyWatched)
+                        {
+                            <span class="tvdb-season-check" aria-hidden="true">&#10003;</span>
+                        }
                         @Model.GetSeasonName(seasonNumber)
                     </a>
                 }

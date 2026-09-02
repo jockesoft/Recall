@@ -809,6 +809,18 @@ button.tvdb-badge {
 /* season chips use .btn-sm.rounded-pill on top of dark/outline-dark above —
    no extra rule needed, they inherit the reskin. */
 
+/* Green tally check on a season chip whose every episode is watched. Sits to
+   the left of the season name; stays legible on both the dark (active) and
+   outline (inactive) chip. */
+.tvdb-season-check {
+    margin-right: 0.35rem;
+    font-weight: 700;
+    color: var(--tvdb-ok);
+}
+.btn-dark .tvdb-season-check {
+    color: #8fc98f;
+}
+
 .btn-link {
     font-family: var(--tvdb-font-mono);
     color: rgba(241, 236, 226, 0.75);
