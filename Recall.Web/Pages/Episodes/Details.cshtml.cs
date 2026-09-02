@@ -23,6 +23,9 @@ public sealed class DetailsModel(
     public Episode? Episode { get; set; }
     public bool IsWatchedByCurrentUser { get; private set; }
 
+    /// <summary>When the current user marked this episode watched, if they have.</summary>
+    public DateTime? WatchedOnUtc { get; private set; }
+
     /// <summary>Name of the series this episode belongs to (for the header link).</summary>
     public string? SeriesName { get; private set; }
 
@@ -189,7 +192,8 @@ public sealed class DetailsModel(
             {
                 var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
-                IsWatchedByCurrentUser = await episodeWatchRepository.IsWatchedAsync(userId, id, cancellationToken);
+                WatchedOnUtc = await episodeWatchRepository.GetWatchedUtcAsync(userId, id, cancellationToken);
+                IsWatchedByCurrentUser = WatchedOnUtc is not null;
 
                 if (!IsWatchedByCurrentUser && Episode.SeriesId is > 0)
                 {

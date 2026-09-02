@@ -30,6 +30,13 @@ public sealed class EpisodeWatchedToggleModel
     public required bool IsWatched { get; init; }
 
     /// <summary>
+    /// Text for the non-compact "watched" button. Defaults to "Watched"; pass
+    /// e.g. "Watched on Aug 27, 2026" to surface when it was watched. Ignored
+    /// when <see cref="Compact"/> is true.
+    /// </summary>
+    public string? WatchedLabel { get; init; }
+
+    /// <summary>
     /// Compact = small circular checkmark toggle for dense list rows.
     /// Non-compact = full pill button, as used on the episode detail page.
     /// </summary>

@@ -16,7 +16,7 @@
             <span aria-hidden="true">&#10003;</span>
             @if (!Model.Compact)
             {
-                <text> Watched</text>
+                <text> @(Model.WatchedLabel ?? "Watched")</text>
             }
         </button>
     }

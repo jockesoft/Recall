@@ -24,6 +24,24 @@ public interface IEpisodeWatchRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// <c>WatchedUtc</c> keyed by episode TVDB id for the given user, scoped to
+    /// one series. Episodes the user hasn't watched are absent from the map.
+    /// </summary>
+    Task<IReadOnlyDictionary<int, DateTime>> GetWatchedUtcByEpisodeAsync(
+        Guid userId,
+        int seriesTvdbId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// When the given user marked the given episode watched, or <c>null</c> if
+    /// they haven't watched it.
+    /// </summary>
+    Task<DateTime?> GetWatchedUtcAsync(
+        Guid userId,
+        int episodeTvdbId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The most recent <c>WatchedUtc</c> per series for the given user, across the
     /// supplied series. Series with no watched episodes are absent from the map.
     /// </summary>

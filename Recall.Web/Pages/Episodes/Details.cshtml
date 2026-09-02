@@ -134,7 +134,10 @@
                                  {
                                      Handler = "ToggleWatched",
                                      RouteId = ep.Id!.Value,
-                                     IsWatched = true
+                                     IsWatched = true,
+                                     WatchedLabel = Model.WatchedOnUtc is { } w
+                                         ? $"Watched on {w.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)}"
+                                         : "Watched"
                                  })" />
                     }
                     else if (Model.PriorUnwatchedCount == 0)

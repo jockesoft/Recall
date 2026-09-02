@@ -38,6 +38,13 @@ public sealed class DetailsModel(
     public IReadOnlySet<int> WatchedEpisodeIds { get; private set; } = new HashSet<int>();
 
     /// <summary>
+    /// When the current user marked each watched episode, keyed by episode TVDB
+    /// id. Used to show a "Watched on …" line under watched rows.
+    /// </summary>
+    public IReadOnlyDictionary<int, DateTime> WatchedDatesByEpisodeId { get; private set; }
+        = new Dictionary<int, DateTime>();
+
+    /// <summary>
     /// Where the signed-in user is in this series (next episode to watch / up to
     /// date). Null when not signed in.
     /// </summary>
@@ -236,6 +243,7 @@ public sealed class DetailsModel(
 
             IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
             WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, [id], cancellationToken);
+            WatchedDatesByEpisodeId = await episodeWatchRepository.GetWatchedUtcByEpisodeAsync(userId, id, cancellationToken);
 
             // Reuse the aggregate already loaded above — no extra TheTVDB call.
             WatchProgress = watchProgressService.BuildProgress(id, Aggregate.ToWatchableEpisodes(), WatchedEpisodeIds);

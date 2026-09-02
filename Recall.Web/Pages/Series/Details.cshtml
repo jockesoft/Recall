@@ -390,6 +390,13 @@
                                     }
                                 </div>
                             </div>
+
+                            @if (isWatched && Model.WatchedDatesByEpisodeId.TryGetValue(ep.Id, out var watchedOn))
+                            {
+                                <div class="text-muted small tvdb-mono mt-2">
+                                    Watched on @watchedOn.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)
+                                </div>
+                            }
                         </div>
                     }
                 </div>
