@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Authorization;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
@@ -17,11 +18,15 @@ public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
     IEpisodeWatchRepository episodeWatchRepository,
-    IWatchProgressService watchProgressService)
+    IWatchProgressService watchProgressService,
+    ILikeRepository likeRepository)
     : PageModel
 {
     public Episode? Episode { get; set; }
     public bool IsWatchedByCurrentUser { get; private set; }
+
+    /// <summary>Whether the current user has hearted this episode.</summary>
+    public bool IsLikedByCurrentUser { get; private set; }
 
     /// <summary>When the current user marked this episode watched, if they have.</summary>
     public DateTime? WatchedOnUtc { get; private set; }
@@ -63,6 +68,35 @@ public sealed class DetailsModel(
 
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
         => await LoadPageAsync(id, cancellationToken);
+
+    public async Task<IActionResult> OnPostToggleLikeAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (id <= 0)
+            return NotFound();
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to like an episode.");
+            return RedirectToPage(new { id });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+            var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
+            var seriesId = episode?.SeriesId is > 0 ? episode.SeriesId.Value : id;
+
+            await likeRepository.ToggleAsync(userId, LikeTargetType.Episode, id, seriesId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed toggling like for episode {EpisodeId}.", id);
+            this.SetErrorToast("Could not update your like right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
 
     public async Task<IActionResult> OnPostToggleWatchedAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
@@ -242,6 +276,8 @@ public sealed class DetailsModel(
 
                 WatchedOnUtc = await episodeWatchRepository.GetWatchedUtcAsync(userId, id, cancellationToken);
                 IsWatchedByCurrentUser = WatchedOnUtc is not null;
+
+                IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Episode, id, cancellationToken);
 
                 if (!IsWatchedByCurrentUser && Episode.SeriesId is > 0)
                 {

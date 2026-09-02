@@ -27,6 +27,7 @@
     --tvdb-danger-ink: #6b2c1f;
     --tvdb-info: #4f8a93;         /* muted teal, distinct from amber */
     --tvdb-info-ink: #234047;
+    --tvdb-like: #d9536a;         /* rose — the "heart" like accent */
 
     --tvdb-font-display: "Big Shoulders Display", sans-serif;
     --tvdb-font-body: "Source Serif 4", serif;
@@ -671,6 +672,62 @@ button.tvdb-badge {
 .tvdb-rating-votes {
     font-size: 0.85em;
     color: var(--tvdb-text-muted);
+}
+
+/* "Heart" like toggle — outline heart that fills when liked. Used on the
+   Series/Details and Episodes/Details action rows. */
+.tvdb-heart {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--tvdb-ink-line);
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-text-muted);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.tvdb-heart .tvdb-heart-icon {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+}
+
+.tvdb-heart:hover,
+.tvdb-heart:focus-visible {
+    color: var(--tvdb-like);
+    border-color: var(--tvdb-like);
+}
+
+.tvdb-heart:active {
+    transform: scale(0.92);
+}
+
+.tvdb-heart--on {
+    color: var(--tvdb-like);
+    border-color: rgba(217, 83, 106, 0.45);
+    background: rgba(217, 83, 106, 0.12);
+}
+
+.tvdb-heart--on .tvdb-heart-icon {
+    fill: currentColor;
+}
+
+.tvdb-heart--on:hover,
+.tvdb-heart--on:focus-visible {
+    color: var(--tvdb-like);
+    border-color: var(--tvdb-like);
+}
+
+.tvdb-like-form {
+    display: inline-flex;
 }
 
 /* Compact circular watched toggle — used in dense episode list rows

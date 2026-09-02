@@ -95,6 +95,15 @@
                             </form>
                         }
                     }
+
+                    <partial name="_LikeToggle" model="@(new Recall.Web.Pages.Shared.LikeToggleModel
+                             {
+                                 Handler = "ToggleSeriesLike",
+                                 RouteId = Model.Series.TvdbId,
+                                 HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty },
+                                 IsLiked = Model.IsLikedByCurrentUser,
+                                 TargetNoun = "series"
+                             })" />
                 </div>
 
                 <dl class="row">

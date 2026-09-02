@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
@@ -21,6 +22,7 @@ public sealed class DetailsModel(
     ITrackedSeriesRepository trackedSeriesRepository,
     IEpisodeWatchRepository episodeWatchRepository,
     IWatchProgressService watchProgressService,
+    ILikeRepository likeRepository,
     IOmdbSnapshotStore omdbSnapshotStore,
     ILogger<DetailsModel> logger)
     : PageModel
@@ -35,6 +37,10 @@ public sealed class DetailsModel(
     public int? Season { get; set; }
 
     public bool IsTrackedByCurrentUser { get; private set; }
+
+    /// <summary>Whether the current user has hearted this series.</summary>
+    public bool IsLikedByCurrentUser { get; private set; }
+
     public IReadOnlySet<int> WatchedEpisodeIds { get; private set; } = new HashSet<int>();
 
     /// <summary>
@@ -75,6 +81,28 @@ public sealed class DetailsModel(
         {
             logger.LogError(ex, "Failed toggling library state for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your library right now.");
+        }
+
+        return RedirectToPage(new { id, season = Season });
+    }
+
+    public async Task<IActionResult> OnPostToggleSeriesLikeAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to like a series.");
+            return RedirectToPage(new { id, season = Season });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            await likeRepository.ToggleAsync(userId, LikeTargetType.Series, id, id, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
+            this.SetErrorToast("Could not update your like right now.");
         }
 
         return RedirectToPage(new { id, season = Season });
@@ -242,6 +270,7 @@ public sealed class DetailsModel(
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
             IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
+            IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Series, id, cancellationToken);
             WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, [id], cancellationToken);
             WatchedDatesByEpisodeId = await episodeWatchRepository.GetWatchedUtcByEpisodeAsync(userId, id, cancellationToken);
 

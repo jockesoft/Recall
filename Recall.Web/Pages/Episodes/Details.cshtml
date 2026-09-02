@@ -178,6 +178,14 @@
                             </div>
                         </div>
                     }
+
+                    <partial name="_LikeToggle" model="@(new LikeToggleModel
+                             {
+                                 Handler = "ToggleLike",
+                                 RouteId = ep.Id!.Value,
+                                 IsLiked = Model.IsLikedByCurrentUser,
+                                 TargetNoun = "episode"
+                             })" />
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(ep.Overview))

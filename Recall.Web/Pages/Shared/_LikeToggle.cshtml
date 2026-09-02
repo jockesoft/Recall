@@ -1,0 +1,19 @@
+@model Recall.Web.Pages.Shared.LikeToggleModel
+
+<form method="post" asp-page-handler="@Model.Handler" asp-route-id="@Model.RouteId" class="d-inline tvdb-like-form">
+    @foreach (var field in Model.HiddenFields)
+    {
+        <input type="hidden" name="@field.Key" value="@field.Value" />
+    }
+
+    <button type="submit"
+            class="tvdb-heart @(Model.IsLiked ? "tvdb-heart--on" : "")"
+            aria-pressed="@(Model.IsLiked ? "true" : "false")"
+            title="@(Model.IsLiked ? $"Unlike this {Model.TargetNoun}" : $"Like this {Model.TargetNoun}")"
+            aria-label="@(Model.IsLiked ? $"Liked. Click to unlike this {Model.TargetNoun}." : $"Like this {Model.TargetNoun}")">
+        <svg class="tvdb-heart-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M12 20.25C12 20.25 3.75 15.5 3.75 9.31A4.06 4.06 0 0 1 12 6.9a4.06 4.06 0 0 1 8.25 2.41C20.25 15.5 12 20.25 12 20.25Z"
+                  stroke-linejoin="round" />
+        </svg>
+    </button>
+</form>
