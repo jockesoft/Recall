@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Recall.Web.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Recall.Web.Infrastructure.Persistence;
 namespace Recall.Web.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260903134754_AddNotifications")]
+    partial class AddNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -347,12 +350,6 @@ namespace Recall.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_utc");
 
-                    b.Property<int>("EpisodeCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("episode_count");
-
                     b.Property<int?>("EpisodeTvdbId")
                         .HasColumnType("integer")
                         .HasColumnName("episode_tvdb_id");
@@ -395,38 +392,11 @@ namespace Recall.Web.Migrations
 
                     b.HasIndex("UserId", "IsRead");
 
+                    b.HasIndex("UserId", "Type", "EpisodeTvdbId")
+                        .IsUnique()
+                        .HasFilter("episode_tvdb_id IS NOT NULL");
+
                     b.ToTable("notification", (string)null);
-                });
-
-            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.NotifiedEpisodeEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_utc");
-
-                    b.Property<int>("EpisodeTvdbId")
-                        .HasColumnType("integer")
-                        .HasColumnName("episode_tvdb_id");
-
-                    b.Property<int>("SeriesTvdbId")
-                        .HasColumnType("integer")
-                        .HasColumnName("series_tvdb_id");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "EpisodeTvdbId")
-                        .IsUnique();
-
-                    b.ToTable("notified_episode", (string)null);
                 });
 
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedSeriesEntity", b =>
@@ -563,15 +533,6 @@ namespace Recall.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.NotifiedEpisodeEntity", b =>
-                {
-                    b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedSeriesEntity", b =>

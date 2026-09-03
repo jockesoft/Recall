@@ -10,6 +10,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AppUserEntity> AppUsers => Set<AppUserEntity>();
     public DbSet<EpisodeWatchEntity> EpisodeWatches => Set<EpisodeWatchEntity>();
     public DbSet<UserLikeEntity> UserLikes => Set<UserLikeEntity>();
+    public DbSet<NotificationEntity> Notifications => Set<NotificationEntity>();
+    public DbSet<NotifiedEpisodeEntity> NotifiedEpisodes => Set<NotifiedEpisodeEntity>();
     public DbSet<EmailEntity> Emails => Set<EmailEntity>();
     public DbSet<LoginTokenEntity> LoginTokens => Set<LoginTokenEntity>();
 
@@ -83,6 +85,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         }
 
         foreach (var entry in ChangeTracker.Entries<UserLikeEntity>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedUtc = now;
+                entry.Entity.UpdatedUtc = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedUtc = now;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<NotificationEntity>())
         {
             if (entry.State == EntityState.Added)
             {

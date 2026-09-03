@@ -37,6 +37,25 @@ public sealed class TrackedSeriesRepository(
             .AnyAsync(x => x.UserId == userId && x.TvdbId == tvdbId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<int>> GetDistinctTrackedTvdbIdsAsync(CancellationToken cancellationToken = default)
+    {
+        return await dbContext.TrackedSeries
+            .AsNoTracking()
+            .Select(x => x.TvdbId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetUserIdsTrackingAsync(int tvdbId, CancellationToken cancellationToken = default)
+    {
+        return await dbContext.TrackedSeries
+            .AsNoTracking()
+            .Where(x => x.TvdbId == tvdbId)
+            .Select(x => x.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(TrackedSeries trackedSeries, CancellationToken cancellationToken = default)
     {
         dbContext.TrackedSeries.Add(trackedSeries.ToEntity());

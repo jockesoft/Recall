@@ -11,6 +11,7 @@ using Recall.Web.Services.Authentication;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Favorites;
+using Recall.Web.Services.Notifications;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Extensions;
@@ -64,6 +65,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IWatchTimeService, WatchTimeService>();
         services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// In-app notifications: the repository plus <see cref="NotificationService"/>.
+    /// The app resolves the service to read/mark notifications; the
+    /// <c>NewEpisodeNotificationTimer</c> job resolves it to raise them.
+    /// </summary>
+    public static IServiceCollection AddNotifications(this IServiceCollection services)
+    {
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }

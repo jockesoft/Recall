@@ -48,6 +48,7 @@
                 <ul class="navbar-nav align-items-sm-center">
                     @if (CurrentUser.IsAuthenticated)
                     {
+                        <partial name="_NotificationBell" />
                         <li class="nav-item dropdown">
                             <a class="nav-link nav-avatar dropdown-toggle" href="#" id="accountMenu" role="button"
                                data-bs-toggle="dropdown" aria-expanded="false">
@@ -63,6 +64,7 @@
                                     }
                                 </li>
                                 <li><a class="dropdown-item" asp-page="/Account/Profile">Profile</a></li>
+                                <li><a class="dropdown-item" asp-page="/Account/Notifications">Notifications</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <form method="post" asp-page="/Account/Logout">

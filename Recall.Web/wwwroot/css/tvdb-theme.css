@@ -259,6 +259,162 @@ hr {
     margin: 0.35rem 0.25rem;
 }
 
+/* ---- notification bell (navbar, left of the avatar) ------------------ */
+
+.navbar .nav-bell.nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    font-size: 1.05rem;
+    color: var(--tvdb-paper) !important;
+    border-radius: 50%;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.navbar .nav-bell.nav-link:hover,
+.navbar .nav-bell.nav-link:focus-visible,
+.navbar .nav-bell.nav-link.active {
+    color: var(--tvdb-signal) !important;
+    background: var(--tvdb-ink-3);
+}
+
+.navbar .nav-bell.has-unread {
+    color: var(--tvdb-signal) !important;
+}
+
+.nav-bell-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.28rem;
+    border-radius: 999px;
+    background: var(--tvdb-signal);
+    color: var(--tvdb-signal-ink);
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.05rem;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--tvdb-ink-2);
+}
+
+/* On the collapsed phone menu the bell sits in the vertical list — let it
+   read as a normal row rather than a floating circle. */
+@media (max-width: 575.98px) {
+    .navbar .navbar-collapse .navbar-nav .nav-bell.nav-link {
+        width: auto;
+        height: auto;
+        justify-content: flex-start;
+        border-radius: 5px;
+        padding: 0.6rem 0.25rem;
+    }
+
+    .navbar .navbar-collapse .navbar-nav .nav-bell.nav-link::after {
+        content: "Notifications";
+        margin-left: 0.6rem;
+        font-family: var(--tvdb-font-mono);
+        font-size: 1.05rem;
+    }
+
+    .nav-bell-badge {
+        position: static;
+        margin-left: 0.5rem;
+        box-shadow: none;
+    }
+}
+
+/* ---- notifications page --------------------------------------------- */
+
+.tvdb-notification-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tvdb-notification {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius);
+    background: var(--tvdb-paper);
+    color: var(--tvdb-text);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.05s ease;
+}
+
+.tvdb-notification:hover,
+.tvdb-notification:focus-visible {
+    border-color: var(--tvdb-signal);
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-text);
+}
+
+.tvdb-notification:active {
+    transform: translateY(1px);
+}
+
+.tvdb-notification.is-unread {
+    border-left: 3px solid var(--tvdb-signal);
+    background: var(--tvdb-paper-dim);
+}
+
+.tvdb-notification-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    background: var(--tvdb-ink-2);
+    color: var(--tvdb-signal);
+    font-size: 0.95rem;
+}
+
+.tvdb-notification-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.tvdb-notification-title {
+    font-family: var(--tvdb-font-ui);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.tvdb-notification.is-unread .tvdb-notification-title::after {
+    content: "";
+    display: inline-block;
+    width: 0.45rem;
+    height: 0.45rem;
+    margin-left: 0.4rem;
+    border-radius: 50%;
+    background: var(--tvdb-signal);
+    vertical-align: middle;
+}
+
+.tvdb-notification-text {
+    font-family: var(--tvdb-font-body);
+    font-size: 0.92rem;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-notification-time {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    color: var(--tvdb-text-muted);
+}
+
 /* Profile page — headline "total watch time" figure. */
 .tvdb-watchtime-value {
     font-family: var(--tvdb-font-display);

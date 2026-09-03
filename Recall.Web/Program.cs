@@ -145,6 +145,7 @@ builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
 builder.Services.AddTheTvDb(builder.Configuration);
 builder.Services.AddOmdb(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddNotifications();
 builder.Services.AddMail(builder.Configuration);
 builder.Services.AddPasswordlessAuth(builder.Configuration);
 
@@ -189,6 +190,12 @@ builder.Services.AddQuartz(q =>
         .StartAt(DateTimeOffset.UtcNow.AddSeconds(20))
         .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
         .WithDescription("Refresh OMDb data for cached series — at most 30 requests/hour, each series at most monthly."));
+
+    q.ScheduleJob<NewEpisodeNotificationTimer>(trigger => trigger
+        .WithIdentity("NewEpisodeNotificationTimer-trigger")
+        .StartAt(DateTimeOffset.UtcNow.AddSeconds(45))
+        .WithSimpleSchedule(s => s.WithIntervalInHours(6).RepeatForever())
+        .WithDescription("Notify users when a series they track has an episode that aired in the last few days."));
 });
 
 // Add the Quartz.NET hosted service

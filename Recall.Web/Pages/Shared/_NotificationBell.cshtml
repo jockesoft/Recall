@@ -1,0 +1,32 @@
+@inject Recall.Web.Services.ICurrentUserService CurrentUser
+@inject Recall.Web.Services.Notifications.INotificationService NotificationService
+@{
+    var unread = 0;
+
+    if (CurrentUser.UserId is { } bellUserId)
+    {
+        try
+        {
+            unread = await NotificationService.GetUnreadCountAsync(bellUserId, Context.RequestAborted);
+        }
+        catch
+        {
+            // The bell must never take down a page render.
+            unread = 0;
+        }
+    }
+
+    var badgeText = unread > 99 ? "99+" : unread.ToString();
+}
+
+<li class="nav-item">
+    <a class="nav-link nav-bell position-relative @(unread > 0 ? "has-unread" : null)"
+       asp-page="/Account/Notifications" title="Notifications" aria-label="Notifications">
+        <i class="fa-regular fa-bell" aria-hidden="true"></i>
+        @if (unread > 0)
+        {
+            <span class="nav-bell-badge" aria-hidden="true">@badgeText</span>
+            <span class="visually-hidden">@unread unread notifications</span>
+        }
+    </a>
+</li>
