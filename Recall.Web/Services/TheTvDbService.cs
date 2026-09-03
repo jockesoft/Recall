@@ -93,16 +93,39 @@ public sealed class TheTvDbService(
             _ => Jitter(TimeSpan.FromHours(12), 0.10),
             cancellationToken);
 
+    private static string EpisodeCacheKey(int episodeId, string language) =>
+        $"episode:extended:v2:{episodeId}:{language}";
+
+    private static TimeSpan EpisodeTtl() => Jitter(TimeSpan.FromHours(12), 0.10);
+
     public Task<Episode?> GetEpisodeDetailsAsync(
         int episodeId,
         CancellationToken cancellationToken = default)
         => GetLayeredAsync<Episode>(
-            $"episode:extended:v2:{episodeId}:{Language}",
+            EpisodeCacheKey(episodeId, Language),
             ct => store.GetEpisodeExtendedAsync(episodeId, ct),
             async ct => (await apiClient.GetEpisodeInformationByIdAsync(episodeId, ct))?.ToDomain(),
             episode => store.SaveEpisodeExtendedAsync(episode, cancellationToken),
-            _ => Jitter(TimeSpan.FromHours(12), 0.10),
+            _ => EpisodeTtl(),
             cancellationToken);
+
+    public async Task<bool> RefreshEpisodeDetailsByIdAsync(
+        int episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        var fresh = (await apiClient.GetEpisodeInformationByIdAsync(episodeId, cancellationToken))?.ToDomain();
+        if (fresh is null)
+        {
+            logger.LogWarning("Refresh skipped for episode {EpisodeId} — TheTVDB returned no episode.", episodeId);
+            return false;
+        }
+
+        await store.UpsertEpisodeExtendedAsync(fresh, cancellationToken);
+        await cache.SetAsync(EpisodeCacheKey(episodeId, Language), fresh, EpisodeTtl(), cancellationToken);
+
+        logger.LogInformation("Refreshed episode snapshot {EpisodeId} (\"{Name}\").", episodeId, fresh.Name);
+        return true;
+    }
 
     /// <summary>
     /// Read-through the tiers in order: Redis → local DB → API. A value found in

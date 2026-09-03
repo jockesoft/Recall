@@ -177,7 +177,7 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("UpdateTvDbInfoTimer-trigger")
         .StartAt(DateTimeOffset.UtcNow.AddSeconds(10))
         .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
-        .WithDescription("Check for new TVDB info every 60 minutes, but only refresh series that are due for a refresh."));
+        .WithDescription("Check for new TVDB info every 60 minutes, but only refresh series and episodes that are due for a refresh."));
 
     q.ScheduleJob<MailTimer>(trigger => trigger
         .WithIdentity("MailTimer-trigger")

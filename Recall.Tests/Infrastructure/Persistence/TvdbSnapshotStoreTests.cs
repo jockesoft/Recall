@@ -132,4 +132,40 @@ public sealed class TvdbSnapshotStoreTests
         await using var read = new AppDbContext(_dbOptions);
         (await read.CachedEpisodesExtended.CountAsync()).Should().Be(0);
     }
+
+    [Test]
+    public async Task UpsertEpisodeExtended_OverwritesExisting()
+    {
+        await NewStore().SaveEpisodeExtendedAsync(new Episode { Id = 5001, SeriesId = 500, Name = "TBA" });
+        await NewStore().UpsertEpisodeExtendedAsync(new Episode { Id = 5001, SeriesId = 500, Name = "The Real Title" });
+
+        var loaded = await NewStore().GetEpisodeExtendedAsync(5001);
+
+        loaded!.Name.Should().Be("The Real Title");
+    }
+
+    [Test]
+    public async Task GetEpisodesNeedingRefresh_PicksStaleAndTba_ButNotFresh()
+    {
+        var now = DateTime.UtcNow;
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedEpisodesExtended.AddRange(
+                new CachedEpisodeExtendedEntity { EpisodeTvdbId = 1, Name = "Old", Payload = "{}", RetrievedUtc = now.AddDays(-40) },
+                new CachedEpisodeExtendedEntity { EpisodeTvdbId = 2, Name = "tba", Payload = "{}", RetrievedUtc = now.AddHours(-13) },
+                new CachedEpisodeExtendedEntity { EpisodeTvdbId = 3, Name = "TBA", Payload = "{}", RetrievedUtc = now.AddHours(-3) },
+                new CachedEpisodeExtendedEntity { EpisodeTvdbId = 4, Name = "Fresh", Payload = "{}", RetrievedUtc = now.AddDays(-2) });
+            await seed.SaveChangesAsync();
+        }
+
+        var due = await NewStore().GetEpisodesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddDays(-30),
+            tbaStaleBeforeUtc: now.AddHours(-12),
+            limit: 10);
+
+        // 1: older than 30d. 2: still "TBA" and older than 12h.
+        // 3: "TBA" but only 3h old. 4: fresh and titled.
+        due.Should().BeEquivalentTo(new[] { 1, 2 });
+    }
 }

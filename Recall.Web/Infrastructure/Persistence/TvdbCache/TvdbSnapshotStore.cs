@@ -70,6 +70,21 @@ public sealed class TvdbSnapshotStore(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<int>> GetEpisodesNeedingRefreshAsync(
+        DateTime staleBeforeUtc, DateTime tbaStaleBeforeUtc, int limit, CancellationToken cancellationToken = default)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        return await dbContext.CachedEpisodesExtended
+            .AsNoTracking()
+            .Where(x => x.RetrievedUtc < staleBeforeUtc
+                        || (x.Name != null && x.Name.ToUpper() == "TBA" && x.RetrievedUtc < tbaStaleBeforeUtc))
+            .OrderBy(x => x.RetrievedUtc)
+            .Take(limit)
+            .Select(x => x.EpisodeTvdbId)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task UpsertSeriesAggregateAsync(
         SeriesAggregate aggregate, string language, CancellationToken cancellationToken = default)
     {
@@ -162,6 +177,33 @@ public sealed class TvdbSnapshotStore(
         };
 
         await InsertAsync(dbContext, entity, episodeTvdbId, cancellationToken);
+    }
+
+    public async Task UpsertEpisodeExtendedAsync(Episode episode, CancellationToken cancellationToken = default)
+    {
+        if (episode.Id is not { } episodeTvdbId)
+        {
+            logger.LogWarning("Skipping episode snapshot upsert — episode has no id.");
+            return;
+        }
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var row = await dbContext.CachedEpisodesExtended
+            .FirstOrDefaultAsync(x => x.EpisodeTvdbId == episodeTvdbId, cancellationToken);
+
+        if (row is null)
+        {
+            row = new CachedEpisodeExtendedEntity { EpisodeTvdbId = episodeTvdbId };
+            dbContext.CachedEpisodesExtended.Add(row);
+        }
+
+        row.SeriesTvdbId = episode.SeriesId;
+        row.Name = episode.Name;
+        row.Payload = JsonSerializer.Serialize(episode, JsonOptions);
+        row.RetrievedUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task InsertAsync(AppDbContext dbContext, object entity, int id, CancellationToken cancellationToken)

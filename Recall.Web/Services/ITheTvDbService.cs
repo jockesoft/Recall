@@ -22,5 +22,12 @@ public interface ITheTvDbService
 
     Task<Episode?> GetEpisodeDetailsAsync(int episodeId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Bypasses the read tiers: fetches the extended episode straight from
+    /// TheTVDB and overwrites both the local snapshot and the Redis entry.
+    /// Returns <c>false</c> when the API has nothing for the id.
+    /// </summary>
+    Task<bool> RefreshEpisodeDetailsByIdAsync(int episodeId, CancellationToken cancellationToken = default);
+
     Task<Series?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default);
 }

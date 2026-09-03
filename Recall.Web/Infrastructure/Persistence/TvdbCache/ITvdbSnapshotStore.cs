@@ -28,10 +28,26 @@ public interface ITvdbSnapshotStore
         DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Cached episode snapshots that are due a refresh: either last retrieved
+    /// before <paramref name="staleBeforeUtc"/>, or still titled "TBA" and last
+    /// retrieved before <paramref name="tbaStaleBeforeUtc"/>. Oldest first,
+    /// capped at <paramref name="limit"/>. Feeds the background refresh job so
+    /// episode data can't drift from the series aggregate.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetEpisodesNeedingRefreshAsync(
+        DateTime staleBeforeUtc, DateTime tbaStaleBeforeUtc, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Inserts the aggregate snapshot for one series + language, or overwrites it
     /// (payload, denormalized columns and <c>retrieved_utc</c>) if a row exists.
     /// </summary>
     Task UpsertSeriesAggregateAsync(SeriesAggregate aggregate, string language, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Inserts the extended-episode snapshot, or overwrites it (payload,
+    /// denormalized columns and <c>retrieved_utc</c>) if a row exists.
+    /// </summary>
+    Task UpsertEpisodeExtendedAsync(Episode episode, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Composite key of a <c>cached_series_aggregate</c> row.</summary>
