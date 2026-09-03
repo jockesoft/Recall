@@ -1,0 +1,15 @@
+@model Recall.Web.Pages.Shared.FavoriteEpisodeRowModel
+
+<a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeTvdbId" class="tvdb-fav-episode">
+    <span class="tvdb-fav-episode-art @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="Still from @Model.EpisodeName" loading="lazy" />
+        }
+    </span>
+
+    <span class="tvdb-fav-episode-info">
+        <span class="tvdb-fav-episode-show">@Model.SeriesName</span>
+        <span class="tvdb-fav-episode-meta">@Model.SubLine</span>
+    </span>
+</a>

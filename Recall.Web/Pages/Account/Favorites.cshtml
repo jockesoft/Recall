@@ -1,0 +1,72 @@
+@page
+@using Recall.Web.Pages.Shared
+@model Recall.Web.Pages.Account.FavoritesModel
+@{
+    ViewData["Title"] = "Favorites";
+}
+
+<div class="tvdb-shell">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <a asp-page="/Account/Profile"
+               class="tvdb-mono text-muted d-inline-flex align-items-center gap-1 mb-3"
+               style="text-decoration:none;">
+                <span aria-hidden="true">&larr;</span> Back to profile
+            </a>
+
+            <h1 class="tvdb-display mb-4">Favorites</h1>
+
+            <section class="mb-5">
+                <h2 class="tvdb-fav-count">Titles <span>&middot; @Model.Series.Count</span></h2>
+
+                @if (Model.Series.Count == 0)
+                {
+                    <p class="tvdb-mono text-muted mb-0">You haven&rsquo;t liked any series yet.</p>
+                }
+                else
+                {
+                    <div class="tvdb-series-grid">
+                        @foreach (var series in Model.Series)
+                        {
+                            <partial name="_SeriesCard" model="@(new SeriesCardModel
+                                     {
+                                         TvdbId = series.TvdbId,
+                                         Name = series.Name,
+                                         ImageUrl = series.ImageUrl,
+                                         FirstAired = series.FirstAired,
+                                         WatchedEpisodes = series.WatchedEpisodes,
+                                         ReleasedEpisodes = series.ReleasedEpisodes
+                                     })" />
+                        }
+                    </div>
+                }
+            </section>
+
+            <section>
+                <h2 class="tvdb-fav-count">Episodes <span>&middot; @Model.Episodes.Count</span></h2>
+
+                @if (Model.Episodes.Count == 0)
+                {
+                    <p class="tvdb-mono text-muted mb-0">You haven&rsquo;t liked any episodes yet.</p>
+                }
+                else
+                {
+                    <div class="tvdb-fav-episode-list">
+                        @foreach (var episode in Model.Episodes)
+                        {
+                            <partial name="_FavoriteEpisodeRow" model="@(new FavoriteEpisodeRowModel
+                                     {
+                                         EpisodeTvdbId = episode.TvdbId,
+                                         SeriesName = episode.SeriesName,
+                                         EpisodeName = episode.EpisodeName,
+                                         SeasonNumber = episode.SeasonNumber,
+                                         EpisodeNumber = episode.EpisodeNumber,
+                                         ImageUrl = episode.ImageUrl
+                                     })" />
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    </div>
+</div>

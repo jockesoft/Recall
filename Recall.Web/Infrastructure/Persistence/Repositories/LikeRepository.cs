@@ -70,4 +70,17 @@ public sealed class LikeRepository(
 
         return true;
     }
+
+    public async Task<IReadOnlyList<UserLike>> GetLikesAsync(
+        Guid userId,
+        LikeTargetType targetType,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.UserLikes
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.TargetType == targetType)
+            .OrderByDescending(x => x.CreatedUtc)
+            .Select(x => new UserLike(x.TargetType, x.TargetTvdbId, x.SeriesTvdbId, x.CreatedUtc))
+            .ToListAsync(cancellationToken);
+    }
 }

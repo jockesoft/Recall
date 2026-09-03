@@ -10,6 +10,7 @@ using Recall.Web.Services;
 using Recall.Web.Services.Authentication;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Services.Favorites;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Extensions;
@@ -61,6 +62,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILikeRepository, LikeRepository>();
         services.AddScoped<IWatchProgressService, WatchProgressService>();
         services.AddScoped<IWatchTimeService, WatchTimeService>();
+        services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
 
         return services;

@@ -26,4 +26,26 @@ public interface ILikeRepository
         int targetTvdbId,
         int seriesTvdbId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every like the user has of the given target type, newest first. Each row
+    /// carries the target's TVDB id and (for episodes) the parent series id.
+    /// </summary>
+    Task<IReadOnlyList<UserLike>> GetLikesAsync(
+        Guid userId,
+        LikeTargetType targetType,
+        CancellationToken cancellationToken = default);
 }
+
+/// <summary>A single "heart" the user has placed, flattened for read use.</summary>
+/// <param name="TargetType">Whether <paramref name="TargetTvdbId"/> is a series or an episode.</param>
+/// <param name="TargetTvdbId">TVDB id of the liked series or episode.</param>
+/// <param name="SeriesTvdbId">
+/// Parent series id — equals <paramref name="TargetTvdbId"/> for a series like.
+/// </param>
+/// <param name="CreatedUtc">When the like was placed.</param>
+public sealed record UserLike(
+    LikeTargetType TargetType,
+    int TargetTvdbId,
+    int SeriesTvdbId,
+    DateTime CreatedUtc);

@@ -1933,6 +1933,187 @@ img.rounded.shadow-sm {
    this one is intentionally left unstyled. */
 
 /* =========================================================================
+   Favorites — the "Favorites" block on Account/Profile and the dedicated
+   Account/Favorites page (liked series as poster cards, liked episodes as
+   compact full-width rows).
+   ========================================================================= */
+
+/* Profile "Favorites" section title. */
+.tvdb-fav-title {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    font-size: 1.3rem;
+    color: var(--tvdb-text);
+    margin-bottom: 0.35rem;
+}
+
+/* Tappable subtitle row linking to the full page — "Titles" on the left, a
+   right-pointing arrow on the right that nudges on hover. */
+.tvdb-fav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.35rem 0;
+    margin-bottom: 0.9rem;
+    text-decoration: none;
+    color: var(--tvdb-text);
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-fav-header:hover,
+.tvdb-fav-header:focus-visible {
+    text-decoration: none;
+    color: var(--tvdb-text);
+}
+
+.tvdb-fav-subtitle {
+    font-family: var(--tvdb-font-ui);
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--tvdb-text);
+}
+
+.tvdb-fav-header-arrow {
+    flex: none;
+    color: var(--tvdb-text-muted);
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.tvdb-fav-header:hover .tvdb-fav-header-arrow,
+.tvdb-fav-header:focus-visible .tvdb-fav-header-arrow {
+    color: var(--tvdb-signal-ink);
+    transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-fav-header-arrow { transition: color 0.15s ease; }
+    .tvdb-fav-header:hover .tvdb-fav-header-arrow,
+    .tvdb-fav-header:focus-visible .tvdb-fav-header-arrow { transform: none; }
+}
+
+/* Standalone poster grid for the narrow profile column — a fixed 3 columns so
+   the preview tiles stay a sensible size next to the profile details. */
+.tvdb-series-grid--favorites {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(0.75rem, 2vw, 1.4rem);
+}
+
+/* "Titles · 3" / "Episodes · 5" section labels on Account/Favorites. */
+.tvdb-fav-count {
+    font-family: var(--tvdb-font-ui);
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--tvdb-text);
+    margin-bottom: 1rem;
+}
+
+.tvdb-fav-count span {
+    color: var(--tvdb-text-muted);
+    font-weight: 600;
+}
+
+/* Compact liked-episode rows: still on the left, bold show name + "S02E03 ·
+   title" aligned to its right, whole row links to Episodes/Details. */
+.tvdb-fav-episode-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.tvdb-fav-episode {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius);
+    background: var(--tvdb-paper-dim);
+    text-decoration: none;
+    color: var(--tvdb-text);
+    transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.tvdb-fav-episode:hover,
+.tvdb-fav-episode:focus-visible {
+    text-decoration: none;
+    color: var(--tvdb-text);
+    border-color: rgba(232, 163, 61, 0.55);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-fav-episode { transition: border-color 0.12s ease; }
+    .tvdb-fav-episode:hover,
+    .tvdb-fav-episode:focus-visible { transform: none; box-shadow: none; }
+}
+
+.tvdb-fav-episode-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.tvdb-fav-episode-show {
+    font-family: var(--tvdb-font-ui);
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--tvdb-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tvdb-fav-episode-meta {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.8rem;
+    color: var(--tvdb-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tvdb-fav-episode-art {
+    position: relative;
+    flex: none;
+    width: 104px;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    overflow: hidden;
+    background: linear-gradient(155deg, #0d1117, #232c3a);
+    border: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-fav-episode-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.tvdb-fav-episode-art.is-empty::after {
+    content: "No art";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    color: rgba(241, 236, 226, 0.35);
+}
+
+@media (max-width: 400px) {
+    .tvdb-fav-episode-art { width: 84px; }
+}
+
+/* =========================================================================
    NOTES — wiring this into the site
    =========================================================================
    1. In _Layout.cshtml <head>, replace any per-page font <link> tags and

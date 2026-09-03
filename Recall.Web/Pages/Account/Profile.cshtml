@@ -1,4 +1,5 @@
 @page
+@using Recall.Web.Pages.Shared
 @model Recall.Web.Pages.Account.ProfileModel
 @{
     ViewData["Title"] = "Profile";
@@ -42,6 +43,41 @@
                 <dt class="col-sm-4">Sign-in</dt>
                 <dd class="col-sm-8">Passwordless magic link &mdash; no password is stored.</dd>
             </dl>
+
+            <section class="tvdb-fav-section mb-4">
+                <h2 class="tvdb-fav-title">Favorites</h2>
+
+                <a asp-page="/Account/Favorites" class="tvdb-fav-header"
+                   aria-label="View all liked titles">
+                    <span class="tvdb-fav-subtitle">Titles</span>
+                    <svg class="tvdb-fav-header-arrow" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"
+                              stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </a>
+
+                @if (Model.FavoriteSeries.Count == 0)
+                {
+                    <p class="tvdb-mono text-muted mb-0">No favorite titles yet.</p>
+                }
+                else
+                {
+                    <div class="tvdb-series-grid--favorites">
+                        @foreach (var series in Model.FavoriteSeries)
+                        {
+                            <partial name="_SeriesCard" model="@(new SeriesCardModel
+                                     {
+                                         TvdbId = series.TvdbId,
+                                         Name = series.Name,
+                                         ImageUrl = series.ImageUrl,
+                                         FirstAired = series.FirstAired,
+                                         WatchedEpisodes = series.WatchedEpisodes,
+                                         ReleasedEpisodes = series.ReleasedEpisodes
+                                     })" />
+                        }
+                    </div>
+                }
+            </section>
 
             <div class="d-flex flex-wrap gap-2">
                 <a asp-page="/Account/EditProfile" class="btn btn-primary">Edit profile</a>
