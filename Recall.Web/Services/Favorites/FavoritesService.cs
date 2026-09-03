@@ -14,15 +14,25 @@ public sealed class FavoritesService(
     ILogger<FavoritesService> logger)
     : IFavoritesService
 {
-    // TheTVDB's /series/{id}/extended endpoint returns episode still images as
-    // site-relative paths ("/banners/..."), unlike /episodes/{id} which returns
-    // absolute URLs. Prefix the relative ones so <img src> resolves.
+    // TheTVDB hands back episode stills in a few shapes: the series aggregate
+    // uses site-relative paths ("/banners/episodes/266967/5129617.jpg" or
+    // "/banners/v4/episode/.../screencap/...jpg"), while /episodes/{id} returns
+    // an absolute URL. Leave absolute URLs alone; prefix everything else onto the
+    // artwork host (tolerating a missing leading slash).
     private const string ArtworkBaseUrl = "https://artworks.thetvdb.com";
 
-    private static string? NormalizeArtworkUrl(string? url) =>
-        string.IsNullOrWhiteSpace(url) ? null
-        : url.StartsWith('/') ? ArtworkBaseUrl + url
-        : url;
+    private static string? NormalizeArtworkUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return null;
+
+        url = url.Trim();
+
+        return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+               || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? url
+            : $"{ArtworkBaseUrl}/{url.TrimStart('/')}";
+    }
 
     public async Task<IReadOnlyList<FavoriteSeries>> GetLikedSeriesAsync(
         Guid userId,
@@ -144,12 +154,15 @@ public sealed class FavoritesService(
             var episodeNumber = summary?.EpisodeNumber;
             var imageUrl = summary?.Image;
 
-            if (summary is null)
+            if (summary is null || string.IsNullOrWhiteSpace(imageUrl))
             {
-                // The liked episode isn't in the cached aggregate (a special, a
-                // removed entry, or a stale snapshot) — fall back to a direct
-                // episode lookup. This path also uses the pooled DbContext
-                // factory, so running it in parallel is safe.
+                // Fall back to a direct episode lookup when the liked episode
+                // isn't in the cached aggregate (a special, a removed entry, or a
+                // stale snapshot) OR when the aggregate has the episode but no
+                // still — the /episodes/{id} endpoint (same source Episodes/Details
+                // uses) usually has the image the aggregate is missing. This path
+                // also uses the pooled DbContext factory, so running it in
+                // parallel is safe.
                 var episode = await theTvDbService.GetEpisodeDetailsAsync(like.TargetTvdbId, cancellationToken);
                 if (episode is null && aggregate is null)
                     return null;
@@ -157,7 +170,9 @@ public sealed class FavoritesService(
                 episodeName ??= episode?.Name;
                 seasonNumber ??= episode?.SeasonNumber;
                 episodeNumber ??= episode?.Number;
-                imageUrl ??= episode?.Image;
+
+                if (string.IsNullOrWhiteSpace(imageUrl))
+                    imageUrl = episode?.Image;
             }
 
             return new FavoriteEpisode(
