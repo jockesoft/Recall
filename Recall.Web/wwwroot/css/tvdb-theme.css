@@ -1793,6 +1793,49 @@ img.rounded.shadow-sm {
     color: var(--tvdb-text-muted);
 }
 
+/* Optional heart toggle overlaid on a poster's top-right corner. The wrapper
+   exists only to anchor it; the card link inside is unchanged. */
+.tvdb-series-card-wrap {
+    position: relative;
+    display: block;
+}
+
+.tvdb-series-card-like {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+}
+
+/* Overlay variant of .tvdb-heart: smaller, sitting on the artwork behind a dark
+   scrim so it stays legible over any poster. */
+.tvdb-series-card-like .tvdb-heart {
+    width: 32px;
+    height: 32px;
+    border-color: transparent;
+    background: rgba(13, 17, 23, 0.55);
+    color: rgba(241, 236, 226, 0.92);
+    backdrop-filter: blur(2px);
+}
+
+.tvdb-series-card-like .tvdb-heart:hover,
+.tvdb-series-card-like .tvdb-heart:focus-visible {
+    color: var(--tvdb-like);
+    border-color: transparent;
+    background: rgba(13, 17, 23, 0.72);
+}
+
+.tvdb-series-card-like .tvdb-heart--on {
+    color: var(--tvdb-like);
+    border-color: transparent;
+    background: rgba(13, 17, 23, 0.62);
+}
+
+.tvdb-series-card-like .tvdb-heart-icon {
+    width: 18px;
+    height: 18px;
+}
+
 /* =========================================================================
    Catch-up grid — a responsive grid of "next episode to watch" tiles. Each
    tile is a 16:9 episode still with the show / S·E code / episode name

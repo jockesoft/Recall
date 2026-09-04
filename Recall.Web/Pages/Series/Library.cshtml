@@ -33,7 +33,9 @@
                              ImageUrl = item.ImageUrl,
                              FirstAired = item.FirstAired,
                              WatchedEpisodes = progress.WatchedReleased,
-                             ReleasedEpisodes = progress.Released
+                             ReleasedEpisodes = progress.Released,
+                             ShowLike = true,
+                             IsLiked = Model.LikedSeriesIds.Contains(item.TvdbId)
                          })" />
             }
         </div>

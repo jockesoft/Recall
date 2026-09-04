@@ -30,4 +30,21 @@ public sealed class SeriesCardModel
 
     /// <summary>Total aired episodes — the denominator for the progress bar.</summary>
     public int ReleasedEpisodes { get; init; }
+
+    /// <summary>
+    /// When true, a heart toggle is overlaid on the top-right of the poster.
+    /// The host page must define a handler named <see cref="LikeHandler"/> (it
+    /// receives the series TVDB id as <c>id</c>) and pass the current state in
+    /// <see cref="IsLiked"/>.
+    /// </summary>
+    public bool ShowLike { get; init; }
+
+    /// <summary>Whether the current user has liked this series. Only used when <see cref="ShowLike"/> is true.</summary>
+    public bool IsLiked { get; init; }
+
+    /// <summary>Page handler the heart form posts to. Only used when <see cref="ShowLike"/> is true.</summary>
+    public string LikeHandler { get; init; } = "ToggleSeriesLike";
+
+    /// <summary>Extra hidden fields the like handler needs, rendered inside the heart form.</summary>
+    public IDictionary<string, string> LikeHiddenFields { get; init; } = new Dictionary<string, string>();
 }

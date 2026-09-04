@@ -1,3 +1,4 @@
+@using Recall.Web.Pages.Shared
 @model Recall.Web.Pages.Shared.SeriesCardModel
 @{
     var showProgress = Model.WatchedEpisodes > 0 && Model.ReleasedEpisodes > 0;
@@ -6,28 +7,44 @@
     var isComplete = showProgress && watched >= Model.ReleasedEpisodes;
 }
 
-<a asp-page="/Series/Details" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
-    <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
-        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+<div class="tvdb-series-card-wrap">
+    <a asp-page="/Series/Details" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
+        <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+            @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+            {
+                <img src="@Model.ImageUrl" alt="" loading="lazy" />
+            }
+
+            @if (showProgress)
+            {
+                <span class="tvdb-series-progress @(isComplete ? "is-complete" : "")"
+                      role="progressbar"
+                      aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
+                      aria-label="@Model.WatchedEpisodes of @Model.ReleasedEpisodes episodes watched">
+                    <span class="tvdb-series-progress-fill" style="width: @percent%"></span>
+                </span>
+            }
+        </span>
+
+        <span class="tvdb-series-title">@Model.Name</span>
+
+        @if (Model.FirstAired.HasValue)
         {
-            <img src="@Model.ImageUrl" alt="" loading="lazy" />
+            <span class="tvdb-series-year">@Model.FirstAired.Value.Year</span>
         }
+    </a>
 
-        @if (showProgress)
-        {
-            <span class="tvdb-series-progress @(isComplete ? "is-complete" : "")"
-                  role="progressbar"
-                  aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"
-                  aria-label="@Model.WatchedEpisodes of @Model.ReleasedEpisodes episodes watched">
-                <span class="tvdb-series-progress-fill" style="width: @percent%"></span>
-            </span>
-        }
-    </span>
-
-    <span class="tvdb-series-title">@Model.Name</span>
-
-    @if (Model.FirstAired.HasValue)
+    @if (Model.ShowLike)
     {
-        <span class="tvdb-series-year">@Model.FirstAired.Value.Year</span>
+        <div class="tvdb-series-card-like">
+            <partial name="_LikeToggle" model="@(new LikeToggleModel
+                     {
+                         Handler = Model.LikeHandler,
+                         RouteId = Model.TvdbId,
+                         HiddenFields = Model.LikeHiddenFields,
+                         IsLiked = Model.IsLiked,
+                         TargetNoun = "series"
+                     })" />
+        </div>
     }
-</a>
+</div>

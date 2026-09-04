@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
@@ -14,10 +15,14 @@ public sealed class LibraryModel(
     ITrackedSeriesRepository trackedSeriesRepository,
     IWatchProgressService watchProgressService,
     IEpisodeWatchRepository episodeWatchRepository,
+    ILikeRepository likeRepository,
     ILogger<LibraryModel> logger)
     : PageModel
 {
     public IReadOnlyList<TrackedSeries> Items { get; private set; } = Array.Empty<TrackedSeries>();
+
+    /// <summary>TVDB ids of the tracked series the user has also hearted.</summary>
+    public IReadOnlySet<int> LikedSeriesIds { get; private set; } = new HashSet<int>();
 
     /// <summary>
     /// Per-series watch progress over aired episodes, keyed by TVDB id. Drives
@@ -43,6 +48,10 @@ public sealed class LibraryModel(
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             Items = await trackedSeriesRepository.GetByUserAsync(userId, cancellationToken);
             ProgressByTvdbId = await BuildProgressAsync(userId, Items, cancellationToken);
+
+            var likes = await likeRepository.GetLikesAsync(userId, LikeTargetType.Series, cancellationToken);
+            LikedSeriesIds = likes.Select(l => l.TargetTvdbId).ToHashSet();
+
             return Page();
         }
         catch (Exception ex)
@@ -94,6 +103,27 @@ public sealed class LibraryModel(
             logger.LogWarning(ex, "Could not load episodes for tracked series {SeriesId} (library progress bar).", seriesTvdbId);
             return [];
         }
+    }
+
+    public async Task<IActionResult> OnPostToggleSeriesLikeAsync(int id, CancellationToken cancellationToken)
+    {
+        if (currentUserService.UserId is not { } userId)
+        {
+            this.SetErrorToast("You need to be signed in to like a series.");
+            return RedirectToPage();
+        }
+
+        try
+        {
+            await likeRepository.ToggleAsync(userId, LikeTargetType.Series, id, id, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
+            this.SetErrorToast("Could not update your like right now.");
+        }
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(Guid id, CancellationToken cancellationToken)
