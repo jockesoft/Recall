@@ -26,6 +26,22 @@ Start redis container
 docker run --name my-redis -p 6379:6379 -d redis:7
 ```
 
+Start postgres container
+```
+docker run --name local_postgres \
+  -p 5432:5432 \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=devpassword \
+  -e POSTGRES_DB=recall_db \
+  -v pgdata:/var/lib/postgresql \
+  -d postgres:18.1
+```
+
+If DB is empty in dev env. Add user:
+```
+11111111-1111-1111-1111-111111111111 - dev-user - dev@example.com
+```
+
 Launch the application in your dev environment
 ```
 dotnet watch run --project Recall.Web --launch-profile Recall.Web
