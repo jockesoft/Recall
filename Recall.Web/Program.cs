@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Timers;
 using Recall.Web.Middleware;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Services.Health;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -147,6 +149,11 @@ builder.Services.AddOmdb(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddNotifications();
 builder.Services.AddMail(builder.Configuration);
+
+// Deep health probe for uptime monitoring — GET /health returns 200 "Healthy"
+// while Postgres answers a bare SELECT 1, 503 "Unhealthy" otherwise.
+builder.Services.AddHealthChecks()
+    .AddCheck<DbHealthCheck>("database", tags: ["ready"]);
 builder.Services.AddPasswordlessAuth(builder.Configuration);
 
 // Throttle the sign-in form per client IP so it can't be scripted to spray
@@ -250,6 +257,13 @@ app.UseMiddleware<DevAuthMiddleware>();
 #endif
 
 app.UseAuthorization();
+
+// Anonymous, and the middleware sets its own no-store cache headers.
+// /health = readiness (runs the DB check); /health/live = liveness (no checks,
+// just "is the app serving requests?") so a container healthcheck won't restart
+// the process during a transient DB outage.
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 
 app.MapControllerRoute(
     name: "default",
