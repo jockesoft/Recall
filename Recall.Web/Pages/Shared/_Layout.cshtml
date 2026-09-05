@@ -101,22 +101,39 @@
 </div>
 
 <footer class="border-top footer text-muted">
-    <div class="container d-flex flex-wrap justify-content-between align-items-center py-2 gap-2">
-        <div>
-            &copy; 2026 - Recall.nu - <a asp-area="" asp-page="/Privacy">Privacy</a> - Version: @buildNumber
+    <div class="container py-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-4">
+            <div class="footer-support">
+                <div class="footer-support__title">Support &amp; contact</div>
+                <p class="footer-support__text">
+                    Questions, feedback or something not working? Message us on our Facebook
+                    page and we'll get back to you.
+                </p>
+                <a class="footer-social" href="https://www.facebook.com/profile.php?id=61594107509642"
+                   target="_blank" rel="noopener" aria-label="Recall on Facebook">
+                    <i class="fa-brands fa-facebook" aria-hidden="true"></i>
+                    <span>Recall on Facebook</span>
+                </a>
+            </div>
+
+            <div class="footer-attributions d-flex flex-wrap align-items-center gap-2">
+                <a class="thetvdbattribution" href="https://thetvdb.com/subscribe" target="_blank" rel="noopener">
+                    <img src="/images/attribution/tvdb_logo.png" height="24" alt="TheTVDB logo">
+                    <span>Metadata provided by <strong>TheTVDB</strong></span>
+                </a>
+
+                <span class="omdbattribution" title="Some series data is adapted from OMDb API and used under the CC BY-NC 4.0 licence.">
+                    <span class="omdb-lead">Data adapted from </span><a href="https://www.omdbapi.com/" target="_blank" rel="noopener"><strong>OMDb API</strong></a>
+                    <span class="omdb-sep" aria-hidden="true">&middot;</span>
+                    <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="license noopener">CC&nbsp;BY-NC&nbsp;4.0</a>
+                </span>
+            </div>
         </div>
 
-        <div class="footer-attributions d-flex flex-wrap align-items-center gap-2">
-            <a class="thetvdbattribution" href="https://thetvdb.com/subscribe" target="_blank" rel="noopener">
-                <img src="/images/attribution/tvdb_logo.png" height="24" alt="TheTVDB logo">
-                <span>Metadata provided by <strong>TheTVDB</strong></span>
-            </a>
-
-            <span class="omdbattribution" title="Some series data is adapted from OMDb API and used under the CC BY-NC 4.0 licence.">
-                <span class="omdb-lead">Data adapted from </span><a href="https://www.omdbapi.com/" target="_blank" rel="noopener"><strong>OMDb API</strong></a>
-                <span class="omdb-sep" aria-hidden="true">&middot;</span>
-                <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="license noopener">CC&nbsp;BY-NC&nbsp;4.0</a>
-            </span>
+        <div class="footer-legal">
+            &copy; 2026 Recall.nu <span aria-hidden="true">&middot;</span>
+            <a asp-area="" asp-page="/Privacy">Privacy</a> <span aria-hidden="true">&middot;</span>
+            Version @buildNumber
         </div>
     </div>
 </footer>
