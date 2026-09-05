@@ -1,10 +1,50 @@
-﻿@page
+@page
 @model PrivacyModel
 @{
     ViewData["Title"] = "Privacy Policy";
 }
 <div class="tvdb-shell">
-    <h1 class="tvdb-display mb-3">@ViewData["Title"]</h1>
+    <div class="row justify-content-center">
+        <div class="col-sm-10 col-md-8 col-lg-6">
+            <h1 class="tvdb-display mb-3">@ViewData["Title"]</h1>
 
-    <p class="tvdb-prose">Use this page to detail your site's privacy policy.</p>
+            <p class="tvdb-prose">
+                Recall.nu is a TV and movie tracker. We collect the minimum needed to run your
+                account — your email address and the shows, episodes and likes you add — and
+                don't sell or share it with third parties.
+            </p>
+
+            <h2 id="cookies" class="h4 mt-4 tvdb-display">Cookies</h2>
+            <p class="tvdb-prose">
+                The site uses only cookies that are technically necessary for it to work — for
+                example, keeping you signed in and protecting forms against abuse. No cookies are
+                used for tracking, analytics or advertising, and we don't share any information
+                with third parties for those purposes.
+            </p>
+            <p class="tvdb-prose">
+                Because every cookie we set is necessary for the site's core functions, there's
+                nothing to opt out of — no cookie preferences to manage.
+            </p>
+
+            <h2 class="h4 mt-4 tvdb-display">Sign-in</h2>
+            <p class="tvdb-prose">
+                Recall uses passwordless, email-based sign-in — there's no password to store.
+                Sign-in requests are protected against automated abuse using Cloudflare Turnstile
+                and volumetric rate limits.
+            </p>
+
+            <h2 class="h4 mt-4 tvdb-display">Logs</h2>
+            <p class="tvdb-prose">
+                The web server may temporarily log standard information such as IP address and
+                browser type for operational and security purposes. Logs aren't used to profile
+                individual visitors.
+            </p>
+
+            <h2 class="h4 mt-4 tvdb-display">Contact</h2>
+            <p class="tvdb-prose">
+                Questions about how the site handles your data? Get in touch and we'll be happy
+                to help.
+            </p>
+        </div>
+    </div>
 </div>

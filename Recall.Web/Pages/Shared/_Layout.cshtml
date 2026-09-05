@@ -119,5 +119,49 @@
 <script src="~/js/site.js" asp-append-version="true"></script>
 
 @await RenderSectionAsync("Scripts", required: false)
+
+<div id="cookieNotice" class="cookie-notice" role="region" aria-label="About cookies" hidden>
+    <p class="cookie-notice__text">
+        We only use cookies required for the site to work — for example, keeping you signed in.
+        No tracking or advertising cookies, so there's nothing to opt out of.
+        <a asp-page="/Privacy" asp-fragment="cookies">Learn more</a>.
+    </p>
+    <button type="button" id="cookieNoticeDismiss" class="btn btn-primary btn-sm cookie-notice__button">
+        Got it
+    </button>
+</div>
+<script>
+    // Inline (not in site.js) so it runs before paint: a returning visitor who
+    // already dismissed this never sees it flash on screen.
+    (function () {
+        "use strict";
+        var STORAGE_KEY = "recall.cookie-notice-dismissed";
+        var notice = document.getElementById("cookieNotice");
+        if (!notice) return;
+
+        var alreadyDismissed = false;
+        try {
+            alreadyDismissed = window.localStorage.getItem(STORAGE_KEY) === "1";
+        } catch (e) {
+            // Storage unavailable (private mode, blocked, etc.) — just show the notice.
+        }
+
+        if (!alreadyDismissed) {
+            notice.hidden = false;
+        }
+
+        var dismissButton = document.getElementById("cookieNoticeDismiss");
+        if (dismissButton) {
+            dismissButton.addEventListener("click", function () {
+                notice.hidden = true;
+                try {
+                    window.localStorage.setItem(STORAGE_KEY, "1");
+                } catch (e) {
+                    // Nothing to do — worst case the notice reappears next visit.
+                }
+            });
+        }
+    })();
+</script>
 </body>
 </html>

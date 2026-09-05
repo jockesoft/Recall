@@ -34,3 +34,37 @@ button.accept-policy {
   flex-shrink: 0;
   width: 100%;
 }
+
+.cookie-notice {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1040;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.5rem;
+  padding: 0.85rem 1.25rem;
+  background-color: var(--tvdb-ink-2, #1f2733);
+  border-top: 1px solid var(--tvdb-line, rgba(255, 255, 255, 0.08));
+  color: var(--tvdb-paper, #f1ece2);
+  box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.25);
+}
+
+.cookie-notice__text {
+  margin: 0;
+  max-width: 56rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.cookie-notice__text a {
+  color: var(--tvdb-signal, #e8a33d);
+  text-decoration: underline;
+}
+
+.cookie-notice__button {
+  flex-shrink: 0;
+}
