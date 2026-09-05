@@ -5,7 +5,15 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 
 namespace Recall.Web.Middleware;
 
+#if DEBUG
 public class DevAuthMiddleware(RequestDelegate next, ILogger<DevAuthMiddleware> logger)
+#else
+// Release builds never reference logger (the whole DEBUG block below is
+// stripped), so it's dropped here rather than left as an unread
+// primary-constructor parameter. UseMiddleware<T> resolves whichever
+// constructor exists via DI, so this is a transparent swap either way.
+public class DevAuthMiddleware(RequestDelegate next)
+#endif
 {
     private static readonly Guid FixedDevUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 

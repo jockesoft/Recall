@@ -19,6 +19,7 @@ public sealed class PasswordlessAuthServiceTests
     private Mock<IAppUserRepository> _userRepository = null!;
     private Mock<ILoginTokenRepository> _tokenRepository = null!;
     private Mock<IMailService> _mailService = null!;
+    private Mock<ILoginAbuseGuard> _abuseGuard = null!;
     private LoginTokenOptions _options = null!;
     private PasswordlessAuthService _sut = null!;
 
@@ -28,12 +29,15 @@ public sealed class PasswordlessAuthServiceTests
         _userRepository = new Mock<IAppUserRepository>();
         _tokenRepository = new Mock<ILoginTokenRepository>();
         _mailService = new Mock<IMailService>();
+        _abuseGuard = new Mock<ILoginAbuseGuard>();
+        _abuseGuard.Setup(x => x.TryAcquire(It.IsAny<string>())).Returns(true);
         _options = new LoginTokenOptions { TokenLifetimeMinutes = 15, InvalidatePreviousTokens = true };
 
         _sut = new PasswordlessAuthService(
             _userRepository.Object,
             _tokenRepository.Object,
             _mailService.Object,
+            _abuseGuard.Object,
             Options.Create(_options),
             NullLogger<PasswordlessAuthService>.Instance);
     }
@@ -257,6 +261,33 @@ public sealed class PasswordlessAuthServiceTests
         _mailService.Verify(
             x => x.QueueEmailAsync("allowed@test.local", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Test]
+    public async Task RequestLoginAsync_Should_DoNothing_WhenAbuseGuardRejects()
+    {
+        _abuseGuard.Setup(x => x.TryAcquire("throttled@test.local")).Returns(false);
+
+        await _sut.RequestLoginAsync("throttled@test.local", _ => "https://recall.test/x");
+
+        _userRepository.Verify(
+            x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _tokenRepository.Verify(x => x.AddAsync(It.IsAny<LoginToken>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mailService.Verify(
+            x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task RequestLoginAsync_Should_CheckAbuseGuard_WithNormalizedEmail()
+    {
+        _userRepository
+            .Setup(x => x.GetOrCreateByEmailAsync("mixed@test.local", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(Guid.NewGuid(), "mixed@test.local", "mixed"));
+
+        await _sut.RequestLoginAsync("  Mixed@Test.LOCAL ", _ => "https://recall.test/x");
+
+        _abuseGuard.Verify(x => x.TryAcquire("mixed@test.local"), Times.Once);
     }
 
     [Test]
