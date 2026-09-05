@@ -27,7 +27,24 @@ public sealed class LoginTokenOptions
     /// <summary>
     /// Email addresses permitted to request a sign-in link (and, on first use,
     /// have an account provisioned). Matched case-insensitively after trimming.
-    /// When empty, any address is allowed.
+    /// When empty, any address is allowed — the intended setting once
+    /// registration is open to the public; the other limits below carry the
+    /// abuse-prevention load at that point.
     /// </summary>
     public string[] AllowedEmails { get; set; } = [];
+
+    /// <summary>
+    /// Extra cap alongside <see cref="ResendCooldownSeconds"/>: how many
+    /// sign-in requests a single email address may make in a rolling 24 hours,
+    /// even across cooldown windows. Enforced in-memory (per process).
+    /// </summary>
+    public int MaxRequestsPerEmailPerDay { get; set; } = 5;
+
+    /// <summary>
+    /// Site-wide circuit breaker: the most sign-in emails queued in a rolling
+    /// hour across every requester combined. Catches distributed abuse (many
+    /// different addresses/IPs) that individually stays under the per-address
+    /// and per-IP limits. Enforced in-memory (per process).
+    /// </summary>
+    public int MaxSignInEmailsPerHourSiteWide { get; set; } = 100;
 }

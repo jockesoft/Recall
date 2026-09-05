@@ -99,14 +99,19 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Passwordless (magic-link) sign-in: the token repository plus
-    /// <see cref="IPasswordlessAuthService"/>. Cookie authentication itself is
-    /// wired up separately in <c>Program.cs</c>.
+    /// <see cref="IPasswordlessAuthService"/>, backed by the in-memory
+    /// <see cref="ILoginAbuseGuard"/> (per-address/site-wide volumetric caps) and
+    /// the Cloudflare Turnstile CAPTCHA verifier used on the login page. Cookie
+    /// authentication itself is wired up separately in <c>Program.cs</c>.
     /// </summary>
     public static IServiceCollection AddPasswordlessAuth(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<LoginTokenOptions>(configuration.GetSection(LoginTokenOptions.SectionName));
+        services.Configure<TurnstileOptions>(configuration.GetSection(TurnstileOptions.SectionName));
         services.AddScoped<ILoginTokenRepository, LoginTokenRepository>();
         services.AddScoped<IPasswordlessAuthService, PasswordlessAuthService>();
+        services.AddSingleton<ILoginAbuseGuard, LoginAbuseGuard>();
+        services.AddHttpClient<ITurnstileVerifier, TurnstileVerifier>();
 
         return services;
     }

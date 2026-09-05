@@ -1,16 +1,27 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
+using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Services.Authentication;
 
 namespace Recall.Web.Pages.Account;
 
 [AllowAnonymous]
 [EnableRateLimiting("login-email")]
-public sealed class LoginModel(IPasswordlessAuthService authService, ILogger<LoginModel> logger) : PageModel
+public sealed class LoginModel(
+    IPasswordlessAuthService authService,
+    ITurnstileVerifier turnstileVerifier,
+    IOptions<TurnstileOptions> turnstileOptions,
+    ILogger<LoginModel> logger) : PageModel
 {
+    /// <summary>Real users take more than this to type an email and submit. Bots that
+    /// clone-and-POST the form usually don't.</summary>
+    private static readonly TimeSpan MinimumHumanSubmitDelay = TimeSpan.FromSeconds(2);
+
     [BindProperty]
     [Required]
     [EmailAddress]
@@ -24,6 +35,22 @@ public sealed class LoginModel(IPasswordlessAuthService authService, ILogger<Log
     [BindProperty]
     public string? Website { get; set; }
 
+    /// <summary>
+    /// Timing trap: set to "now" when the form is rendered. A submission that
+    /// arrives faster than a human could plausibly type an email address is
+    /// treated the same as a tripped honeypot.
+    /// </summary>
+    [BindProperty]
+    public string? FormRenderedAtUtc { get; set; }
+
+    /// <summary>Token the Turnstile widget places on the form once solved.</summary>
+    [BindProperty(Name = "cf-turnstile-response")]
+    public string? TurnstileToken { get; set; }
+
+    public bool TurnstileEnabled => turnstileOptions.Value.IsConfigured;
+
+    public string? TurnstileSiteKey => turnstileOptions.Value.SiteKey;
+
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
@@ -32,20 +59,41 @@ public sealed class LoginModel(IPasswordlessAuthService authService, ILogger<Log
 
     public void OnGet()
     {
+        // Unix milliseconds rather than an ISO-8601 string: a plain integer
+        // has no characters (":", "+") that need HTML-entity round-tripping
+        // through the hidden input's rendered attribute value.
+        FormRenderedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrEmpty(Website))
+        if (!string.IsNullOrEmpty(Website) || !SubmittedLikeAHuman())
         {
-            // Honeypot tripped — look identical to a real submission, do nothing.
-            logger.LogWarning("Login honeypot tripped from {RemoteIp}.", HttpContext.Connection.RemoteIpAddress);
+            // Honeypot or timing trap tripped — look identical to a real
+            // submission so the bot doesn't learn it was caught, but send
+            // nothing.
+            logger.LogWarning(
+                "Login bot trap tripped from {RemoteIp} (honeypot: {Honeypot}).",
+                HttpContext.Connection.RemoteIpAddress, !string.IsNullOrEmpty(Website));
             LinkSent = true;
             return Page();
         }
 
         if (!ModelState.IsValid)
             return Page();
+
+        if (TurnstileEnabled)
+        {
+            var remoteIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var passedChallenge = await turnstileVerifier.VerifyAsync(TurnstileToken, remoteIp, cancellationToken);
+            if (!passedChallenge)
+            {
+                // A real person can just retry, so — unlike the honeypot/timing
+                // trap above — this fails visibly instead of pretending to succeed.
+                ModelState.AddModelError(string.Empty, "We couldn't verify that you're not a robot. Please try again.");
+                return Page();
+            }
+        }
 
         var scheme = Request.Scheme;
         var returnUrl = SafeReturnUrl();
@@ -62,6 +110,17 @@ public sealed class LoginModel(IPasswordlessAuthService authService, ILogger<Log
         // Always report the same thing whether or not the account existed.
         LinkSent = true;
         return Page();
+    }
+
+    private bool SubmittedLikeAHuman()
+    {
+        if (!long.TryParse(FormRenderedAtUtc, NumberStyles.Integer, CultureInfo.InvariantCulture, out var renderedAtMs))
+        {
+            return false; // Missing or malformed — the field a real page render always sets.
+        }
+
+        var renderedAt = DateTimeOffset.FromUnixTimeMilliseconds(renderedAtMs);
+        return DateTimeOffset.UtcNow - renderedAt >= MinimumHumanSubmitDelay;
     }
 
     private string SafeReturnUrl() =>

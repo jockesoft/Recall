@@ -21,6 +21,7 @@ public sealed class PasswordlessAuthService(
     IAppUserRepository userRepository,
     ILoginTokenRepository tokenRepository,
     IMailService mailService,
+    ILoginAbuseGuard abuseGuard,
     IOptions<LoginTokenOptions> options,
     ILogger<PasswordlessAuthService> logger) : IPasswordlessAuthService
 {
@@ -39,13 +40,26 @@ public sealed class PasswordlessAuthService(
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
 
-        // Registration allowlist: while the app is invite-only, silently drop
-        // requests for any address that isn't explicitly permitted. No account
-        // row is created and no email is sent.
+        // Registration allowlist: only enforced while non-empty. Once
+        // registration is open (the intended end state) this is a no-op and
+        // the checks below carry the abuse-prevention load instead.
         if (!IsEmailAllowed(normalizedEmail))
         {
             logger.LogWarning(
                 "Passwordless sign-in request rejected: {Email} is not on the allowlist.", normalizedEmail);
+            return;
+        }
+
+        // Per-address daily cap + site-wide hourly cap, both in-memory and
+        // both checked before touching the database — a throttled request
+        // never provisions an account or queues mail. Complements (doesn't
+        // replace) the per-IP [EnableRateLimiting] policy on the page and the
+        // resend cooldown below.
+        if (!abuseGuard.TryAcquire(normalizedEmail))
+        {
+            logger.LogWarning(
+                "Passwordless sign-in request throttled for {Email} (per-address or site-wide cap reached).",
+                normalizedEmail);
             return;
         }
 

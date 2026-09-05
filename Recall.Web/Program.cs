@@ -173,6 +173,30 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0
         });
     });
+
+    // Site-wide backstop on the same endpoint: bounds total sign-in POSTs
+    // regardless of how many distinct IPs they come from (a botnet spread
+    // across many addresses would otherwise sail past the per-IP policy).
+    // A single shared bucket, so it only ever applies to that one path.
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        HttpMethods.IsPost(httpContext.Request.Method) &&
+        httpContext.Request.Path.StartsWithSegments("/Account/Login")
+            ? RateLimitPartition.GetFixedWindowLimiter("login-post-global", _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 300,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            })
+            : RateLimitPartition.GetNoLimiter("unrestricted"));
+
+    options.OnRejected = (context, cancellationToken) =>
+    {
+        Log.Warning(
+            "Rate limit exceeded for {Path} from {RemoteIp}",
+            context.HttpContext.Request.Path,
+            context.HttpContext.Connection.RemoteIpAddress);
+        return ValueTask.CompletedTask;
+    };
 });
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();

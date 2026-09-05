@@ -21,12 +21,22 @@
             else
             {
                 <p class="tvdb-prose text-muted">
-                    Welcome to Recall.nu! Track your favorite TV shows and movies, and get notified when new episodes are available.<br /><br />
-                    Enter your email and we'll send you a link to sign in — no password needed.
+                    No account yet? No separate sign-up required — enter your email below and
+                    we'll send you a secure sign-in link. If it's your first time, an account is
+                    created for you automatically. Completely free, and all you need is a valid
+                    email address — no password to remember.
                 </p>
+
+                <ul class="list-unstyled tvdb-prose text-muted mb-4">
+                    <li class="mb-1"><i class="fa-solid fa-list-check me-2"></i>Track every show you're watching in one place</li>
+                    <li class="mb-1"><i class="fa-solid fa-bell me-2"></i>Get notified the moment a new episode airs</li>
+                    <li class="mb-1"><i class="fa-solid fa-heart me-2"></i>Like shows and build up your list of favorites</li>
+                    <li class="mb-1"><i class="fa-solid fa-shield-halved me-2"></i>No password to manage — just a secure link sent to your inbox</li>
+                </ul>
 
                 <form method="post">
                     <input type="hidden" asp-for="ReturnUrl" />
+                    <input type="hidden" asp-for="FormRenderedAtUtc" />
 
                     @* Honeypot: off-screen, not announced to AT, skipped by keyboard.
                        Real users never fill it; bots often do. *@
@@ -44,10 +54,15 @@
                         <span asp-validation-for="Email" class="text-danger"></span>
                     </div>
 
-                    <button type="submit" class="btn btn-primary">Send sign-in link</button>
+                    @if (Model.TurnstileEnabled)
+                    {
+                        <div class="cf-turnstile mb-3" data-sitekey="@Model.TurnstileSiteKey" data-theme="auto"></div>
+                    }
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-paper-plane me-1"></i> Send sign-in link
+                    </button>
                 </form>
-                <br />
-                <p class="tvdb-prose text-muted">Track your favorite shows - Stay up to date - Never miss an episode</p>
             }
         </div>
     </div>
@@ -55,4 +70,8 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    @if (Model.TurnstileEnabled)
+    {
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    }
 }
