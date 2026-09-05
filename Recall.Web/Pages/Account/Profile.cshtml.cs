@@ -26,6 +26,17 @@ public sealed class ProfileModel(
 
     public string Email => currentUser.Email ?? "—";
 
+    /// <summary>The signed-in user's role, read from the auth cookie's role claim.</summary>
+    public UserRole Role =>
+        Enum.TryParse<UserRole>(currentUser.Role, ignoreCase: true, out var role) ? role : UserRole.User;
+
+    /// <summary>Label, CSS modifier and icon for the role pill shown on the page.</summary>
+    public (string Label, string CssModifier, string Icon) RoleBadge => Role switch
+    {
+        UserRole.Admin => ("Administrator", "tvdb-role-badge--admin", "fa-user-shield"),
+        _ => ("Member", string.Empty, "fa-user")
+    };
+
     public WatchTimeSummary WatchTime { get; private set; } = WatchTimeSummary.Empty;
 
     public IReadOnlyList<FavoriteSeries> FavoriteSeries { get; private set; } = Array.Empty<FavoriteSeries>();

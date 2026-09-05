@@ -137,8 +137,8 @@ public sealed class PasswordlessAuthService(
             return LoginRedemptionResult.Invalid();
         }
 
-        logger.LogInformation("Passwordless sign-in succeeded for user {UserId}.", user.Id);
-        return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username);
+        logger.LogInformation("Passwordless sign-in succeeded for user {UserId} (role {Role}).", user.Id, user.Role);
+        return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
     }
 
     private bool IsEmailAllowed(string normalizedEmail)

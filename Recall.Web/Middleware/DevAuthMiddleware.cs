@@ -1,12 +1,10 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
-using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Entities;
 
 namespace Recall.Web.Middleware;
 
 #if DEBUG
-public class DevAuthMiddleware(RequestDelegate next, ILogger<DevAuthMiddleware> logger)
+public class DevAuthMiddleware(RequestDelegate next, IHostEnvironment environment, ILogger<DevAuthMiddleware> logger)
 #else
 // Release builds never reference logger (the whole DEBUG block below is
 // stripped), so it's dropped here rather than left as an unread
@@ -17,48 +15,46 @@ public class DevAuthMiddleware(RequestDelegate next)
 {
     private static readonly Guid FixedDevUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
-    public async Task InvokeAsync(HttpContext context, AppDbContext dbContext)
+    public async Task InvokeAsync(HttpContext context)
     {
 #if DEBUG
+        // Debug builds also run the integration-test host (ASPNETCORE_ENVIRONMENT=Test),
+        // which must behave like a clean, anonymous slate — otherwise every request made
+        // through WebApplicationFactory<Program> would silently come in pre-authenticated
+        // as admin, making it impossible to test real authentication/authorization behavior.
+        if (environment.IsEnvironment("Test"))
+        {
+            await next(context);
+            return;
+        }
+
         if (context.Request.Path.Value?.Contains('.') == true)
         {
             await next(context);
             return;
         }
 
-        if (context.User.Identity?.IsAuthenticated != true)
+        // Always run as the hard-coded dev admin outside the Test host — even if a
+        // stale real sign-in cookie (issued by an earlier manual login) is still
+        // in the browser. Without this, that cookie authenticates first in
+        // UseAuthentication() and this middleware would skip itself, leaving you
+        // as whatever role that old cookie carried.
+        var alreadyDevUser = context.User.Identity is { AuthenticationType: "DevAuth" };
+        if (!alreadyDevUser)
         {
-            // Ensure dev user exists in DB so app flows using AppUserEntity work
-            var devUser = await dbContext.Set<AppUserEntity>()
-                .FirstOrDefaultAsync(u => u.Id == FixedDevUserId);
-
-            if (devUser is null)
-            {
-                devUser = new AppUserEntity
-                {
-                    Id = FixedDevUserId,
-                    Username = "dev-user",
-                    Email = "dev@example.com",
-                    CreatedUtc = DateTime.UtcNow,
-                    UpdatedUtc = DateTime.UtcNow
-                };
-
-                dbContext.Add(devUser);
-                await dbContext.SaveChangesAsync();
-            }
-
             var claims = new List<Claim>
             {
                 // IMPORTANT: Guid as string
-                new(ClaimTypes.NameIdentifier, devUser.Id.ToString()),
-                new(ClaimTypes.Name, devUser.Username),
-                new(ClaimTypes.Email, devUser.Email),
+                new(ClaimTypes.NameIdentifier, FixedDevUserId.ToString()),
+                new(ClaimTypes.Name, "dev-user"),
+                new(ClaimTypes.Email, "dev@example.com"),
+                new(ClaimTypes.Role, UserRole.Admin.ToString())
             };
 
             var identity = new ClaimsIdentity(claims, "DevAuth");
             context.User = new ClaimsPrincipal(identity);
 
-            logger.LogInformation("Injected development user {UserId}", devUser.Id);
+            logger.LogInformation("Injected development user {UserId}", FixedDevUserId);
         }
 #endif
         await next(context);

@@ -2313,6 +2313,78 @@ img.rounded.shadow-sm {
 }
 
 /* =========================================================================
+   Stat cards — headline numbers for dashboards (e.g. the admin panel).
+   ========================================================================= */
+
+.tvdb-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.85rem;
+}
+
+.tvdb-stat {
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius);
+    padding: 1rem 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.tvdb-stat__label {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.tvdb-stat__value {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1.02;
+    font-size: clamp(1.9rem, 6vw, 2.6rem);
+    color: var(--tvdb-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.tvdb-stat__hint {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    color: var(--tvdb-text-muted);
+}
+
+/* Role pill — shown on the profile page. Neutral by default, amber for admin. */
+.tvdb-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.28rem 0.7rem;
+    border-radius: 999px;
+    font-family: var(--tvdb-font-ui);
+    font-size: 0.82rem;
+    font-weight: 600;
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    color: var(--tvdb-text);
+}
+
+.tvdb-role-badge i {
+    font-size: 0.85em;
+}
+
+.tvdb-role-badge--admin {
+    background: rgba(232, 163, 61, 0.16);
+    border-color: rgba(232, 163, 61, 0.5);
+    color: var(--tvdb-signal-ink);
+}
+
+/* =========================================================================
    NOTES — wiring this into the site
    =========================================================================
    1. In _Layout.cshtml <head>, replace any per-page font <link> tags and

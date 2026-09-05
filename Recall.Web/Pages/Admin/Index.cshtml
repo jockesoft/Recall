@@ -1,0 +1,31 @@
+@page
+@model Recall.Web.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "Admin";
+}
+
+<div class="tvdb-shell">
+    <div class="row justify-content-center">
+        <div class="col-sm-11 col-md-9 col-lg-7">
+            <div class="tvdb-eyebrow mb-1"><i class="fa-solid fa-gauge-high me-1"></i> Admin</div>
+            <h1 class="tvdb-display mb-2">Dashboard</h1>
+            <p class="tvdb-prose text-muted mb-4">
+                An overview of Recall.nu. Roles are managed directly in the database — every new
+                account starts as <span class="tvdb-mono">User</span>.
+            </p>
+
+            <div class="tvdb-stat-grid">
+                <div class="tvdb-stat">
+                    <span class="tvdb-stat__label"><i class="fa-solid fa-users"></i> Registered users</span>
+                    <span class="tvdb-stat__value">@Model.RegisteredUserCount.ToString("N0")</span>
+                    <span class="tvdb-stat__hint">accounts that have signed in at least once</span>
+                </div>
+                <div class="tvdb-stat">
+                    <span class="tvdb-stat__label"><i class="fa-solid fa-user-shield"></i> Admins</span>
+                    <span class="tvdb-stat__value">@Model.AdminCount.ToString("N0")</span>
+                    <span class="tvdb-stat__hint">users with dashboard access</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

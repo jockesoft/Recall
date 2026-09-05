@@ -1,3 +1,5 @@
+using Recall.Web.Infrastructure.Persistence.Entities;
+
 namespace Recall.Web.Services.Authentication;
 
 public enum LoginRedemptionStatus
@@ -17,13 +19,14 @@ public sealed record LoginRedemptionResult(
     LoginRedemptionStatus Status,
     Guid UserId,
     string Email,
-    string DisplayName)
+    string DisplayName,
+    UserRole Role)
 {
     public bool Succeeded => Status == LoginRedemptionStatus.Success;
 
     public static LoginRedemptionResult Invalid() =>
-        new(LoginRedemptionStatus.InvalidOrExpired, Guid.Empty, string.Empty, string.Empty);
+        new(LoginRedemptionStatus.InvalidOrExpired, Guid.Empty, string.Empty, string.Empty, UserRole.User);
 
-    public static LoginRedemptionResult ForUser(Guid userId, string email, string displayName) =>
-        new(LoginRedemptionStatus.Success, userId, email, displayName);
+    public static LoginRedemptionResult ForUser(Guid userId, string email, string displayName, UserRole role) =>
+        new(LoginRedemptionStatus.Success, userId, email, displayName, role);
 }

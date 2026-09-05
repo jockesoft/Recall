@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Recall.Web.Infrastructure.Authentication;
 
 namespace Recall.Web.Services;
 
@@ -19,6 +20,14 @@ public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
     public string? DisplayName =>
         FindFirstValue("name") ??
         httpContextAccessor.HttpContext?.User.Identity?.Name;
+
+    public string? Role =>
+        FindFirstValue(ClaimTypes.Role);
+
+    public bool IsInRole(string role) =>
+        httpContextAccessor.HttpContext?.User.IsInRole(role) ?? false;
+
+    public bool IsAdmin => IsInRole(Roles.Admin);
 
     private string? FindFirstValue(string claimType) =>
         httpContextAccessor.HttpContext?.User.FindFirstValue(claimType);

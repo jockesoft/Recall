@@ -45,11 +45,12 @@ public sealed class PasswordlessAuthServiceTests
     private static string Sha256Base64(string value) =>
         Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
-    private static AppUserEntity User(Guid id, string email, string username) => new()
+    private static AppUserEntity User(Guid id, string email, string username, UserRole role = UserRole.User) => new()
     {
         Id = id,
         Email = email,
-        Username = username
+        Username = username,
+        Role = role
     };
 
     // ---- RequestLoginAsync -------------------------------------------------
@@ -361,7 +362,36 @@ public sealed class PasswordlessAuthServiceTests
         result.UserId.Should().Be(user.Id);
         result.Email.Should().Be("user@test.local");
         result.DisplayName.Should().Be("user");
+        result.Role.Should().Be(UserRole.User);
         _tokenRepository.Verify(x => x.MarkConsumedAsync(token.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task RedeemAsync_Should_CarryThrough_AdminRole()
+    {
+        const string raw = "raw-token-value";
+        var expectedHash = Sha256Base64(raw);
+
+        var user = User(Guid.NewGuid(), "boss@test.local", "boss", UserRole.Admin);
+        var token = new LoginToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = expectedHash,
+            ExpiresUtc = DateTime.UtcNow.AddMinutes(5)
+        };
+
+        _tokenRepository
+            .Setup(x => x.GetActiveByHashAsync(expectedHash, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(token);
+        _userRepository
+            .Setup(x => x.GetByIdAsync(user.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(user);
+
+        var result = await _sut.RedeemAsync(raw);
+
+        result.Succeeded.Should().BeTrue();
+        result.Role.Should().Be(UserRole.Admin);
     }
 
     [Test]

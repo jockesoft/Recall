@@ -32,7 +32,8 @@ public sealed class VerifyModel(IPasswordlessAuthService authService) : PageMode
         {
             new(ClaimTypes.NameIdentifier, result.UserId.ToString()),
             new(ClaimTypes.Name, result.DisplayName),
-            new(ClaimTypes.Email, result.Email)
+            new(ClaimTypes.Email, result.Email),
+            new(ClaimTypes.Role, result.Role.ToString())
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

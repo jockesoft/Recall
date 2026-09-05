@@ -23,6 +23,13 @@ public sealed class AppUserEntityConfiguration : IEntityTypeConfiguration<AppUse
             .HasMaxLength(320)
             .IsRequired();
 
+        builder.Property(x => x.Role)
+            .HasColumnName("role")
+            .HasMaxLength(20)
+            .HasConversion<string>()
+            .HasDefaultValue(UserRole.User)
+            .IsRequired();
+
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")

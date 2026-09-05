@@ -65,6 +65,15 @@
                                 </li>
                                 <li><a class="dropdown-item" asp-page="/Account/Profile">Profile</a></li>
                                 <li><a class="dropdown-item" asp-page="/Account/Notifications">Notifications</a></li>
+                                @if (CurrentUser.IsAdmin)
+                                {
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item" asp-page="/Admin/Index">
+                                            <i class="fa-solid fa-gauge-high fa-fw me-2"></i>Admin panel
+                                        </a>
+                                    </li>
+                                }
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <form method="post" asp-page="/Account/Logout">
