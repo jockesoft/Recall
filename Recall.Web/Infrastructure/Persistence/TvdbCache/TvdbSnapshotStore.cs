@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -71,14 +72,23 @@ public sealed class TvdbSnapshotStore(
     }
 
     public async Task<IReadOnlyList<int>> GetEpisodesNeedingRefreshAsync(
-        DateTime staleBeforeUtc, DateTime tbaStaleBeforeUtc, int limit, CancellationToken cancellationToken = default)
+        DateTime staleBeforeUtc,
+        DateTime tbaStaleBeforeUtc,
+        DateTime imageChaseBeforeUtc,
+        DateOnly today,
+        int maxImageChaseAttempts,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         return await dbContext.CachedEpisodesExtended
             .AsNoTracking()
             .Where(x => x.RetrievedUtc < staleBeforeUtc
-                        || (x.Name != null && x.Name.ToUpper() == "TBA" && x.RetrievedUtc < tbaStaleBeforeUtc))
+                        || (x.Name != null && x.Name.ToUpper() == "TBA" && x.RetrievedUtc < tbaStaleBeforeUtc)
+                        || (!x.HasImage && x.Aired != null && x.Aired <= today
+                            && x.RefreshAttempts < maxImageChaseAttempts
+                            && x.RetrievedUtc < imageChaseBeforeUtc))
             .OrderBy(x => x.RetrievedUtc)
             .Take(limit)
             .Select(x => x.EpisodeTvdbId)
@@ -172,6 +182,8 @@ public sealed class TvdbSnapshotStore(
             EpisodeTvdbId = episodeTvdbId,
             SeriesTvdbId = episode.SeriesId,
             Name = episode.Name,
+            Aired = ParseAired(episode.Aired),
+            HasImage = !string.IsNullOrEmpty(episode.Image),
             Payload = JsonSerializer.Serialize(episode, JsonOptions),
             RetrievedUtc = DateTime.UtcNow
         };
@@ -198,12 +210,60 @@ public sealed class TvdbSnapshotStore(
             dbContext.CachedEpisodesExtended.Add(row);
         }
 
+        var hasImage = !string.IsNullOrEmpty(episode.Image);
+
         row.SeriesTvdbId = episode.SeriesId;
         row.Name = episode.Name;
+        row.Aired = ParseAired(episode.Aired);
+        row.HasImage = hasImage;
+        row.RefreshAttempts = hasImage ? 0 : row.RefreshAttempts + 1;
         row.Payload = JsonSerializer.Serialize(episode, JsonOptions);
         row.RetrievedUtc = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Episode>> BackfillEpisodeImagesFromAggregateAsync(
+        SeriesAggregate aggregate, CancellationToken cancellationToken = default)
+    {
+        var imagesByEpisodeId = aggregate.Episodes
+            .Where(e => !string.IsNullOrEmpty(e.Image))
+            .ToDictionary(e => e.Id, e => e.Image!);
+
+        if (imagesByEpisodeId.Count == 0)
+            return [];
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var episodeIds = imagesByEpisodeId.Keys.ToList();
+
+        var candidates = await dbContext.CachedEpisodesExtended
+            .Where(x => !x.HasImage && episodeIds.Contains(x.EpisodeTvdbId))
+            .ToListAsync(cancellationToken);
+
+        if (candidates.Count == 0)
+            return [];
+
+        var patched = new List<Episode>(candidates.Count);
+
+        foreach (var row in candidates)
+        {
+            var episode = Deserialize<Episode>(row.Payload, row.EpisodeTvdbId);
+            if (episode is null)
+                continue;
+
+            var updated = episode with { Image = imagesByEpisodeId[row.EpisodeTvdbId] };
+
+            row.Payload = JsonSerializer.Serialize(updated, JsonOptions);
+            row.HasImage = true;
+            row.RefreshAttempts = 0;
+
+            patched.Add(updated);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return patched;
     }
 
     private async Task InsertAsync(AppDbContext dbContext, object entity, int id, CancellationToken cancellationToken)
@@ -238,4 +298,9 @@ public sealed class TvdbSnapshotStore(
             return null;
         }
     }
+
+    private static DateOnly? ParseAired(string? aired) =>
+        DateOnly.TryParse(aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : null;
 }

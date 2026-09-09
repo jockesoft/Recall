@@ -23,6 +23,14 @@ public sealed class DetailsModel(
     : PageModel
 {
     public Episode? Episode { get; set; }
+
+    /// <summary>
+    /// The still to render: the episode's own image, or — when TheTVDB hasn't
+    /// backfilled that yet — the per-episode image from the series aggregate,
+    /// which is sometimes populated first. Same fallback Index/Favorites use.
+    /// </summary>
+    public string? DisplayImage { get; private set; }
+
     public bool IsWatchedByCurrentUser { get; private set; }
 
     /// <summary>Whether the current user has hearted this episode.</summary>
@@ -257,6 +265,8 @@ public sealed class DetailsModel(
 
             if (Episode is not null)
             {
+                DisplayImage = Episode.Image;
+
                 if (DateOnly.TryParse(Episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired))
                     AiredDate = aired;
 
@@ -264,7 +274,12 @@ public sealed class DetailsModel(
                 {
                     var aggregate = await LoadSeriesHeaderAsync(Episode.SeriesId.Value, cancellationToken);
                     if (aggregate is not null && Episode.Id is { } currentId)
+                    {
                         SetEpisodeNav(aggregate, currentId);
+
+                        if (string.IsNullOrWhiteSpace(DisplayImage))
+                            DisplayImage = aggregate.Episodes.FirstOrDefault(e => e.Id == currentId)?.Image;
+                    }
                 }
             }
 

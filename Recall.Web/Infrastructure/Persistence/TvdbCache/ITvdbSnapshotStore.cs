@@ -28,14 +28,24 @@ public interface ITvdbSnapshotStore
         DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cached episode snapshots that are due a refresh: either last retrieved
-    /// before <paramref name="staleBeforeUtc"/>, or still titled "TBA" and last
-    /// retrieved before <paramref name="tbaStaleBeforeUtc"/>. Oldest first,
-    /// capped at <paramref name="limit"/>. Feeds the background refresh job so
-    /// episode data can't drift from the series aggregate.
+    /// Cached episode snapshots that are due a refresh: last retrieved before
+    /// <paramref name="staleBeforeUtc"/>; still titled "TBA" and last retrieved
+    /// before <paramref name="tbaStaleBeforeUtc"/>; or missing its still image
+    /// despite having already aired (denormalized air date on or before
+    /// <paramref name="today"/>), last retrieved before
+    /// <paramref name="imageChaseBeforeUtc"/> and with fewer than
+    /// <paramref name="maxImageChaseAttempts"/> consecutive imageless refreshes.
+    /// Oldest first, capped at <paramref name="limit"/>. Feeds the background
+    /// refresh job so episode data can't drift from the series aggregate.
     /// </summary>
     Task<IReadOnlyList<int>> GetEpisodesNeedingRefreshAsync(
-        DateTime staleBeforeUtc, DateTime tbaStaleBeforeUtc, int limit, CancellationToken cancellationToken = default);
+        DateTime staleBeforeUtc,
+        DateTime tbaStaleBeforeUtc,
+        DateTime imageChaseBeforeUtc,
+        DateOnly today,
+        int maxImageChaseAttempts,
+        int limit,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Inserts the aggregate snapshot for one series + language, or overwrites it
@@ -48,6 +58,17 @@ public interface ITvdbSnapshotStore
     /// denormalized columns and <c>retrieved_utc</c>) if a row exists.
     /// </summary>
     Task UpsertEpisodeExtendedAsync(Episode episode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// For each episode in <paramref name="aggregate"/> that has an image, patches
+    /// any matching <c>cached_episode_extended</c> row currently missing one —
+    /// purely local reconciliation using data already fetched for the aggregate
+    /// refresh, no extra TheTVDB call. Leaves <c>retrieved_utc</c> untouched.
+    /// Returns the patched episodes (post-patch) so callers can refresh other
+    /// caches, e.g. Redis, for them.
+    /// </summary>
+    Task<IReadOnlyList<Episode>> BackfillEpisodeImagesFromAggregateAsync(
+        SeriesAggregate aggregate, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Composite key of a <c>cached_series_aggregate</c> row.</summary>

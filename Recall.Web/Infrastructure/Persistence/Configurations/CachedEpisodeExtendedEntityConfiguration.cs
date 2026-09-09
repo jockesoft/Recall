@@ -22,6 +22,20 @@ public sealed class CachedEpisodeExtendedEntityConfiguration : IEntityTypeConfig
             .HasColumnName("name")
             .HasMaxLength(500);
 
+        builder.Property(x => x.Aired)
+            .HasColumnName("aired")
+            .HasColumnType("date");
+
+        builder.Property(x => x.HasImage)
+            .HasColumnName("has_image")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(x => x.RefreshAttempts)
+            .HasColumnName("refresh_attempts")
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property(x => x.Payload)
             .HasColumnName("payload")
             .HasColumnType("jsonb")

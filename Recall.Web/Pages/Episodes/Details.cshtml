@@ -61,10 +61,10 @@
     {
         <div class="row g-4">
             <div class="col-md-5">
-                <div class="tvdb-media is-wide @(string.IsNullOrWhiteSpace(ep.Image) ? "is-empty" : "")">
-                    @if (!string.IsNullOrWhiteSpace(ep.Image))
+                <div class="tvdb-media is-wide @(string.IsNullOrWhiteSpace(Model.DisplayImage) ? "is-empty" : "")">
+                    @if (!string.IsNullOrWhiteSpace(Model.DisplayImage))
                     {
-                        <img src="@ep.Image" alt="Still from @ep.Name" loading="lazy" />
+                        <img src="@Model.DisplayImage" alt="Still from @ep.Name" loading="lazy" />
                     }
                     <div class="tvdb-slate">
                         <span class="tvdb-dot" aria-hidden="true"></span>

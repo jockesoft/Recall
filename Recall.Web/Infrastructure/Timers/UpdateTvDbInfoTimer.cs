@@ -16,11 +16,14 @@ namespace Recall.Web.Infrastructure.Timers;
 /// <see cref="MaxSeriesPerRun"/> <c>cached_series_aggregate</c> rows that carry
 /// TheTVDB's <c>keep_updated</c> flag and are older than <see cref="MinRefreshAge"/>,
 /// then up to <see cref="MaxEpisodesPerRun"/> <c>cached_episode_extended</c> rows
-/// that are either older than <see cref="EpisodeMaxAge"/> or still titled "TBA"
-/// and older than <see cref="TbaEpisodeMaxAge"/>. Refreshing episodes here keeps
-/// per-episode data (title, air date, still) from drifting out of sync with the
-/// series aggregate. The age checks mean the job can be scheduled far more often
-/// than the refresh cadence without hammering the upstream API.
+/// that are either older than <see cref="EpisodeMaxAge"/>, still titled "TBA" and
+/// older than <see cref="TbaEpisodeMaxAge"/>, or missing their still image despite
+/// having already aired (re-checked every <see cref="MinRefreshAge"/>, up to
+/// <see cref="MaxImageChaseAttempts"/> times, so an episode that will never get
+/// art doesn't get polled forever). Refreshing episodes here keeps per-episode
+/// data (title, air date, still) from drifting out of sync with the series
+/// aggregate. The age checks mean the job can be scheduled far more often than
+/// the refresh cadence without hammering the upstream API.
 /// </summary>
 [DisallowConcurrentExecution]
 public class UpdateTvDbInfoTimer(
@@ -39,6 +42,18 @@ public class UpdateTvDbInfoTimer(
     /// date usually land within a day or two of the placeholder.
     /// </summary>
     private static readonly TimeSpan TbaEpisodeMaxAge = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// Minimum time between re-checks of an aired episode that's still missing
+    /// its still image — reuses <see cref="MinRefreshAge"/>'s cadence.
+    /// </summary>
+    private static readonly TimeSpan ImageChaseInterval = MinRefreshAge;
+
+    /// <summary>
+    /// Give up chasing an aired episode's missing still after this many
+    /// consecutive imageless refreshes — some episodes simply never get art.
+    /// </summary>
+    private const int MaxImageChaseAttempts = 5;
 
     /// <summary>Upper bound on series refreshed per run — deliberately low to start.</summary>
     private const int MaxSeriesPerRun = 10;
@@ -98,9 +113,12 @@ public class UpdateTvDbInfoTimer(
         var now = DateTime.UtcNow;
         var staleBeforeUtc = now - EpisodeMaxAge;
         var tbaStaleBeforeUtc = now - TbaEpisodeMaxAge;
+        var imageChaseBeforeUtc = now - ImageChaseInterval;
+        var today = DateOnly.FromDateTime(now);
 
         var candidates = await snapshotStore.GetEpisodesNeedingRefreshAsync(
-            staleBeforeUtc, tbaStaleBeforeUtc, MaxEpisodesPerRun, cancellationToken);
+            staleBeforeUtc, tbaStaleBeforeUtc, imageChaseBeforeUtc, today, MaxImageChaseAttempts,
+            MaxEpisodesPerRun, cancellationToken);
 
         if (candidates.Count == 0)
         {
@@ -109,8 +127,8 @@ public class UpdateTvDbInfoTimer(
         }
 
         logger.LogInformation(
-            "UpdateTvDbInfoTimer: refreshing {Count} cached episode(s) — stale before {StaleBefore:u} / TBA before {TbaBefore:u} (cap {Cap}).",
-            candidates.Count, staleBeforeUtc, tbaStaleBeforeUtc, MaxEpisodesPerRun);
+            "UpdateTvDbInfoTimer: refreshing {Count} cached episode(s) — stale before {StaleBefore:u} / TBA before {TbaBefore:u} / image chase before {ImageChaseBefore:u} (cap {Cap}).",
+            candidates.Count, staleBeforeUtc, tbaStaleBeforeUtc, imageChaseBeforeUtc, MaxEpisodesPerRun);
 
         var refreshed = 0;
 

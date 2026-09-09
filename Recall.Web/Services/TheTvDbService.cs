@@ -79,7 +79,33 @@ public sealed class TheTvDbService(
         await cache.SetAsync(AggregateCacheKey(seriesId, Language), fresh, AggregateTtl(fresh), cancellationToken);
 
         logger.LogInformation("Refreshed series aggregate {SeriesId} ({EpisodeCount} episodes).", seriesId, fresh.Episodes.Count);
+
+        await BackfillEpisodeImagesAsync(fresh, cancellationToken);
+
         return true;
+    }
+
+    /// <summary>
+    /// The aggregate sometimes has a per-episode still before the dedicated
+    /// episode endpoint does. Since we already paid for this fetch, patch any
+    /// matching <c>cached_episode_extended</c> row that's still missing an
+    /// image — no extra TheTVDB call — and refresh its Redis entry so a live
+    /// read doesn't serve the stale null-image copy for the rest of its TTL.
+    /// </summary>
+    private async Task BackfillEpisodeImagesAsync(SeriesAggregate aggregate, CancellationToken cancellationToken)
+    {
+        var patched = await store.BackfillEpisodeImagesFromAggregateAsync(aggregate, cancellationToken);
+        if (patched.Count == 0)
+            return;
+
+        foreach (var episode in patched)
+        {
+            await cache.SetAsync(EpisodeCacheKey(episode.Id!.Value, Language), episode, EpisodeTtl(), cancellationToken);
+        }
+
+        logger.LogInformation(
+            "Backfilled {Count} episode image(s) for series {SeriesId} from its aggregate refresh.",
+            patched.Count, aggregate.TvdbId);
     }
 
     public Task<Series?> GetSeriesByIdExtendedAsync(

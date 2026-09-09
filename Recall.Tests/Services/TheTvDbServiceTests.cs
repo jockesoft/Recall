@@ -168,4 +168,31 @@ public class TheTvDbServiceTests
         result.Name.Should().Be("Extended Show");
         _store.Verify(s => s.SaveSeriesExtendedAsync(It.Is<Series>(x => x.Id == 5), It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Test]
+    public async Task RefreshSeriesAggregateByIdAsync_BackfillsMatchingEpisodeImages()
+    {
+        var fresh = new SeriesAggregate
+        {
+            TvdbId = 20,
+            Name = "Backfill Show",
+            Episodes = [new EpisodeSummary { Id = 2001, Name = "Ep", Image = "https://example.com/still.jpg" }]
+        };
+        _apiClient
+            .Setup(a => a.GetSeriesAggregateByIdAsync(20, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fresh);
+
+        var patchedEpisode = new Episode { Id = 2001, Name = "Ep", Image = "https://example.com/still.jpg" };
+        _store
+            .Setup(s => s.BackfillEpisodeImagesFromAggregateAsync(fresh, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([patchedEpisode]);
+
+        var result = await _sut.RefreshSeriesAggregateByIdAsync(20);
+
+        result.Should().BeTrue();
+        _store.Verify(s => s.BackfillEpisodeImagesFromAggregateAsync(fresh, It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(
+            c => c.SetAsync("episode:extended:v2:2001:eng", patchedEpisode, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
 }
