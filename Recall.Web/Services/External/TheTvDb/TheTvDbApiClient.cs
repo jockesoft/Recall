@@ -92,10 +92,10 @@ public sealed class TheTvDbApiClient(
             fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
         }
 
-        var aggregate = seriesDto.ToAggregate(translationDto, fallbackEpisodes);
-        var englishEpisodes = await EnrichEpisodesWithEnglishAsync(aggregate.Episodes, cancellationToken);
-
-        return aggregate with { Episodes = englishEpisodes };
+        // Episode names/overviews come back in the series' original language here —
+        // TheTvDbService enriches them with English translations afterward, reusing
+        // whatever it already has cached per-episode instead of always re-fetching.
+        return seriesDto.ToAggregate(translationDto, fallbackEpisodes);
     }
 
     /// <summary>
@@ -245,46 +245,6 @@ public sealed class TheTvDbApiClient(
         var translatedOverview = string.IsNullOrWhiteSpace(translation?.Overview) ? episode.Overview : translation.Overview;
 
         return episode with { Name = translatedName, Overview = translatedOverview };
-    }
-
-    /// <summary>
-    /// Fetches the English translation for every episode in parallel (bounded by the shared
-    /// request throttle), instead of one HTTP round trip at a time. For a 100+ episode series
-    /// this is the difference between minutes and seconds.
-    /// </summary>
-    private async Task<IReadOnlyList<EpisodeSummary>> EnrichEpisodesWithEnglishAsync(
-        IReadOnlyList<EpisodeSummary> episodes,
-        CancellationToken cancellationToken)
-    {
-        var tasks = episodes.Select(ep => EnrichSingleEpisodeAsync(ep, cancellationToken));
-        return await Task.WhenAll(tasks);
-    }
-
-    private async Task<EpisodeSummary> EnrichSingleEpisodeAsync(EpisodeSummary ep, CancellationToken cancellationToken)
-    {
-        EpisodeTranslationDataDto? tr = null;
-        try
-        {
-            tr = await GetEpisodeTranslationByLanguageAsync(ep.Id, "eng", cancellationToken);
-        }
-        catch (TheTvDbApiException ex)
-        {
-            logger.LogDebug(ex, "Could not load English translation for episode {EpisodeId}", ep.Id);
-        }
-
-        return new EpisodeSummary
-        {
-            Id = ep.Id,
-            SeasonNumber = ep.SeasonNumber,
-            EpisodeNumber = ep.EpisodeNumber,
-            Name = !string.IsNullOrWhiteSpace(tr?.Name) ? tr.Name! : ep.Name,
-            Overview = !string.IsNullOrWhiteSpace(tr?.Overview) ? tr.Overview : ep.Overview,
-            Image = ep.Image,
-            Aired = ep.Aired,
-            RuntimeMinutes = ep.RuntimeMinutes,
-            IsMovie = ep.IsMovie,
-            FinaleType = ep.FinaleType
-        };
     }
 
     /// <summary>

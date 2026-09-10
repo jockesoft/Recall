@@ -161,6 +161,30 @@ public sealed class TvdbSnapshotStore(
         return Deserialize<Episode>(row?.Payload, episodeTvdbId);
     }
 
+    public async Task<IReadOnlyDictionary<int, Episode>> GetEpisodesExtendedAsync(
+        IReadOnlyCollection<int> episodeTvdbIds, CancellationToken cancellationToken = default)
+    {
+        if (episodeTvdbIds.Count == 0)
+            return new Dictionary<int, Episode>();
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var rows = await dbContext.CachedEpisodesExtended
+            .AsNoTracking()
+            .Where(x => episodeTvdbIds.Contains(x.EpisodeTvdbId))
+            .Select(x => new { x.EpisodeTvdbId, x.Payload })
+            .ToListAsync(cancellationToken);
+
+        var result = new Dictionary<int, Episode>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (Deserialize<Episode>(row.Payload, row.EpisodeTvdbId) is { } episode)
+                result[row.EpisodeTvdbId] = episode;
+        }
+
+        return result;
+    }
+
     public async Task SaveEpisodeExtendedAsync(Episode episode, CancellationToken cancellationToken = default)
     {
         if (episode.Id is not { } episodeTvdbId)
