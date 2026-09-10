@@ -1,6 +1,7 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Favorites.Models;
 using Recall.Web.Services.WatchTracking;
 
@@ -14,26 +15,6 @@ public sealed class FavoritesService(
     ILogger<FavoritesService> logger)
     : IFavoritesService
 {
-    // TheTVDB hands back episode stills in a few shapes: the series aggregate
-    // uses site-relative paths ("/banners/episodes/266967/5129617.jpg" or
-    // "/banners/v4/episode/.../screencap/...jpg"), while /episodes/{id} returns
-    // an absolute URL. Leave absolute URLs alone; prefix everything else onto the
-    // artwork host (tolerating a missing leading slash).
-    private const string ArtworkBaseUrl = "https://artworks.thetvdb.com";
-
-    private static string? NormalizeArtworkUrl(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url))
-            return null;
-
-        url = url.Trim();
-
-        return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-               || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            ? url
-            : $"{ArtworkBaseUrl}/{url.TrimStart('/')}";
-    }
-
     public async Task<IReadOnlyList<FavoriteSeries>> GetLikedSeriesAsync(
         Guid userId,
         int? limit,
@@ -178,7 +159,7 @@ public sealed class FavoritesService(
             return new FavoriteEpisode(
                 like.TargetTvdbId,
                 string.IsNullOrWhiteSpace(seriesName) ? "Unknown series" : seriesName,
-                NormalizeArtworkUrl(imageUrl),
+                ArtworkUrl.Normalize(imageUrl),
                 seasonNumber,
                 episodeNumber,
                 episodeName);

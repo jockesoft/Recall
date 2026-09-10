@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages;
@@ -110,7 +111,7 @@ public sealed class IndexModel(
                     SeasonNumber = ep.SeasonNumber,
                     EpisodeNumber = ep.EpisodeNumber,
                     Name = ep.Name,
-                    ImageUrl = aggregate.ImageUrl,
+                    ImageUrl = ArtworkUrl.Normalize(aggregate.ImageUrl),
                     AiredDate = ep.Aired!.Value,
                     FinaleType = ep.FinaleType,
                     SeriesCaughtUp = seriesCaughtUp
@@ -122,8 +123,8 @@ public sealed class IndexModel(
                 // Prefer any still already on the aggregate; fall back to the
                 // series cover for now — EnrichCatchUpImagesAsync then swaps in
                 // the real per-episode screencap from the episode endpoint.
-                var summaryImage = aggregate.Episodes
-                    .FirstOrDefault(e => e.Id == next.Id)?.Image;
+                var summaryImage = ArtworkUrl.Normalize(
+                    aggregate.Episodes.FirstOrDefault(e => e.Id == next.Id)?.Image);
 
                 catchUp.Add(new CatchUpItem
                 {
@@ -133,7 +134,7 @@ public sealed class IndexModel(
                     SeasonNumber = next.SeasonNumber,
                     EpisodeNumber = next.EpisodeNumber,
                     Name = next.Name,
-                    ImageUrl = string.IsNullOrWhiteSpace(summaryImage) ? aggregate.ImageUrl : summaryImage
+                    ImageUrl = summaryImage ?? ArtworkUrl.Normalize(aggregate.ImageUrl)
                 });
             }
         }
@@ -177,9 +178,9 @@ public sealed class IndexModel(
 
         return items
             .Zip(episodes, (item, episode) =>
-                string.IsNullOrWhiteSpace(episode?.Image)
-                    ? item
-                    : item with { ImageUrl = episode.Image })
+                ArtworkUrl.Normalize(episode?.Image) is { } image
+                    ? item with { ImageUrl = image }
+                    : item)
             .ToList();
     }
 

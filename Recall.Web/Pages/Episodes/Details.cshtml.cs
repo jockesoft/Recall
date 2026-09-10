@@ -265,7 +265,7 @@ public sealed class DetailsModel(
 
             if (Episode is not null)
             {
-                DisplayImage = Episode.Image;
+                DisplayImage = ArtworkUrl.Normalize(Episode.Image);
 
                 if (DateOnly.TryParse(Episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired))
                     AiredDate = aired;
@@ -277,8 +277,8 @@ public sealed class DetailsModel(
                     {
                         SetEpisodeNav(aggregate, currentId);
 
-                        if (string.IsNullOrWhiteSpace(DisplayImage))
-                            DisplayImage = aggregate.Episodes.FirstOrDefault(e => e.Id == currentId)?.Image;
+                        DisplayImage ??= ArtworkUrl.Normalize(
+                            aggregate.Episodes.FirstOrDefault(e => e.Id == currentId)?.Image);
                     }
                 }
             }
