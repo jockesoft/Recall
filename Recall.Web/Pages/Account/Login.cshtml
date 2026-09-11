@@ -1,7 +1,11 @@
 @page
 @model LoginModel
 @{
-    ViewData["Title"] = "Sign in";
+    ViewData["Title"] = "Sign In - Free TV Show & Episode Tracker";
+    ViewData["Description"] = "Sign in to Recall.nu, a free TV show tracker. Track every series "
+        + "you watch, get notified the moment a new episode airs, and build your list of "
+        + "favorites — no password needed.";
+    ViewData["Robots"] = "index, follow";
 }
 
 <div class="tvdb-shell">
@@ -74,4 +78,23 @@
     {
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     }
+}
+
+@section Head {
+    <script type="application/ld+json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "WebApplication",
+        ["name"] = "Recall.nu",
+        ["url"] = "https://recall.nu/",
+        ["description"] = ViewData["Description"],
+        ["applicationCategory"] = "LifestyleApplication",
+        ["operatingSystem"] = "Any",
+        ["offers"] = new Dictionary<string, object?>
+        {
+            ["@type"] = "Offer",
+            ["price"] = "0",
+            ["priceCurrency"] = "USD"
+        }
+    }))</script>
 }
