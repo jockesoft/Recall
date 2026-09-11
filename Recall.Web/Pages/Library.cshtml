@@ -4,6 +4,11 @@
 @model Recall.Web.Pages.LibraryModel
 @{
     ViewData["Title"] = "My Library";
+
+    var allItems = Model.Watching.Concat(Model.UpToDate).Concat(Model.Watched);
+    var hasSeries = allItems.Any(i => i.Type == SearchResultType.Series);
+    var hasMovies = allItems.Any(i => i.Type == SearchResultType.Movie);
+    var showFilters = hasSeries && hasMovies;
 }
 
 @functions {
@@ -28,8 +33,23 @@
 <div class="tvdb-shell">
     <h1 class="tvdb-display mb-3">My Library</h1>
 
-    <div class="mb-3">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
         <a asp-page="/Search" class="btn btn-primary">Find series or movies</a>
+
+        @if (showFilters)
+        {
+            <div class="tvdb-filter-bar" role="group" aria-label="Filter by type">
+                <button type="button" class="btn btn-dark btn-sm rounded-pill px-3 tvdb-filter-btn is-active" data-filter="all">
+                    All
+                </button>
+                <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3 tvdb-filter-btn tvdb-filter-btn--series" data-filter="series">
+                    <i class="fa-solid fa-tv" aria-hidden="true"></i> Series
+                </button>
+                <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3 tvdb-filter-btn tvdb-filter-btn--movie" data-filter="movie">
+                    <i class="fa-solid fa-film" aria-hidden="true"></i> Movies
+                </button>
+            </div>
+        }
     </div>
 
     @if (Model.IsEmpty)
@@ -42,35 +62,90 @@
     {
         @if (Model.Watching.Count > 0)
         {
-            <h4 class="mb-3 tvdb-eyebrow">Watching &middot; @Model.Watching.Count</h4>
-            <div class="tvdb-series-grid mb-4">
-                @foreach (var item in Model.Watching)
-                {
-                    <partial name="_SeriesCard" model="@ToCardModel(item)" />
-                }
+            <div class="tvdb-library-section" data-library-section>
+                <h4 class="mb-3 tvdb-eyebrow">Watching &middot; @Model.Watching.Count</h4>
+                <div class="tvdb-series-grid mb-4">
+                    @foreach (var item in Model.Watching)
+                    {
+                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
+                    }
+                </div>
             </div>
         }
 
         @if (Model.UpToDate.Count > 0)
         {
-            <h4 class="mb-3 tvdb-eyebrow">Up to Date &middot; @Model.UpToDate.Count</h4>
-            <div class="tvdb-series-grid mb-4">
-                @foreach (var item in Model.UpToDate)
-                {
-                    <partial name="_SeriesCard" model="@ToCardModel(item)" />
-                }
+            <div class="tvdb-library-section" data-library-section>
+                <h4 class="mb-3 tvdb-eyebrow">Up to Date &middot; @Model.UpToDate.Count</h4>
+                <div class="tvdb-series-grid mb-4">
+                    @foreach (var item in Model.UpToDate)
+                    {
+                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
+                    }
+                </div>
             </div>
         }
 
         @if (Model.Watched.Count > 0)
         {
-            <h4 class="mb-3 tvdb-eyebrow">Watched &middot; @Model.Watched.Count</h4>
-            <div class="tvdb-series-grid mb-4">
-                @foreach (var item in Model.Watched)
-                {
-                    <partial name="_SeriesCard" model="@ToCardModel(item)" />
-                }
+            <div class="tvdb-library-section" data-library-section>
+                <h4 class="mb-3 tvdb-eyebrow">Watched &middot; @Model.Watched.Count</h4>
+                <div class="tvdb-series-grid mb-4">
+                    @foreach (var item in Model.Watched)
+                    {
+                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
+                    }
+                </div>
             </div>
         }
+
+        <div id="tvdb-library-empty-filter" class="alert alert-info" role="alert" hidden>
+            Nothing matches this filter.
+        </div>
     }
 </div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var buttons = document.querySelectorAll('.tvdb-filter-btn');
+            if (buttons.length === 0) return;
+
+            var sections = document.querySelectorAll('[data-library-section]');
+            var emptyNotice = document.getElementById('tvdb-library-empty-filter');
+
+            function applyFilter(type) {
+                var anyVisible = false;
+
+                sections.forEach(function (section) {
+                    var cards = section.querySelectorAll('[data-content-type]');
+                    var sectionHasMatch = false;
+
+                    cards.forEach(function (card) {
+                        var matches = type === 'all' || card.dataset.contentType === type;
+                        card.hidden = !matches;
+                        if (matches) sectionHasMatch = true;
+                    });
+
+                    section.hidden = !sectionHasMatch;
+                    if (sectionHasMatch) anyVisible = true;
+                });
+
+                if (emptyNotice) emptyNotice.hidden = anyVisible;
+            }
+
+            buttons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    buttons.forEach(function (b) {
+                        b.classList.remove('is-active', 'btn-dark');
+                        b.classList.add('btn-outline-dark');
+                    });
+                    button.classList.add('is-active', 'btn-dark');
+                    button.classList.remove('btn-outline-dark');
+
+                    applyFilter(button.dataset.filter);
+                });
+            });
+        })();
+    </script>
+}

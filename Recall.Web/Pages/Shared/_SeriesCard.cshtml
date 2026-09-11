@@ -7,7 +7,7 @@
     var isComplete = showProgress && watched >= Model.ReleasedEpisodes;
 }
 
-<div class="tvdb-series-card-wrap">
+<div class="tvdb-series-card-wrap" data-content-type="@Model.BadgeVariant">
     <a asp-page="@Model.DetailsPage" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
         <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
             @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))

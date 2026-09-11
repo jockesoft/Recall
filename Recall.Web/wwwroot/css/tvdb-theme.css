@@ -1148,6 +1148,23 @@ button.tvdb-badge {
 /* season chips use .btn-sm.rounded-pill on top of dark/outline-dark above —
    no extra rule needed, they inherit the reskin. */
 
+/* Library page's series/movie filter — same pill chip as season chips, plus a
+   tinted icon (amber/teal, matching the content-type badges) so the filter
+   reads at a glance in either state. */
+.tvdb-filter-bar {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.tvdb-filter-btn--series i {
+    color: var(--tvdb-signal);
+}
+
+.tvdb-filter-btn--movie i {
+    color: var(--tvdb-info);
+}
+
 /* Green tally check on a season chip whose every episode is watched. Sits to
    the left of the season name; stays legible on both the dark (active) and
    outline (inactive) chip. */
