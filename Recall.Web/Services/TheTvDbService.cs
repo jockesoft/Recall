@@ -19,18 +19,13 @@ public sealed class TheTvDbService(
 {
     private const string Language = "eng";
 
-    public async Task<IReadOnlyList<TvSeriesSummary>> SearchSeriesAsync(string query, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SearchResultItem>> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
-        var items = await apiClient.SearchSeriesAsync(query, cancellationToken);
+        var items = await apiClient.SearchAsync(query, cancellationToken);
 
         return items
-            .Where(x => x.Type is null || x.Type.Equals("series", StringComparison.OrdinalIgnoreCase))
-            .Select(x => new TvSeriesSummary(
-                x.TvdbId,
-                x.Name ?? string.Empty,
-                x.Overview,
-                x.ImageUrl,
-                x.Year))
+            .Select(x => x.ToDomain())
+            .OfType<SearchResultItem>()
             .ToArray();
     }
 

@@ -1576,6 +1576,11 @@ img.rounded.shadow-sm {
     text-align: center;
 }
 
+.tvdb-search-result--disabled {
+    position: relative;
+    opacity: 0.6;
+}
+
 .tvdb-slate--inline {
     display: inline-flex;
     align-items: center;

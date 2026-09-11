@@ -1,8 +1,9 @@
 namespace Recall.Web.Domain.TheTvDb;
 
-public sealed record TvSeriesSummary(
+public sealed record SearchResultItem(
     int TvdbId,
     string Name,
     string? Overview,
     string? ImageUrl,
-    string? Year);
+    string? Year,
+    SearchResultType Type);

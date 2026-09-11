@@ -30,10 +30,10 @@ public class TheTvDbServiceTests
     }
 
     [Test]
-    public async Task SearchSeriesAsync_Should_MapDtos_ToSummaries()
+    public async Task SearchAsync_Should_MapDtos_ToSearchResultItems()
     {
         _apiClient
-            .Setup(x => x.SearchSeriesAsync("dark", It.IsAny<CancellationToken>()))
+            .Setup(x => x.SearchAsync("dark", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResultDto>
             {
                 new()
@@ -46,31 +46,35 @@ public class TheTvDbServiceTests
                 }
             });
 
-        var result = await _sut.SearchSeriesAsync("dark");
+        var result = await _sut.SearchAsync("dark");
 
         result.Should().HaveCount(1);
         result[0].TvdbId.Should().Be(1);
         result[0].Name.Should().Be("Dark");
         result[0].Year.Should().Be("2017");
         result[0].Overview.Should().Be("A family saga with a supernatural twist.");
+        result[0].Type.Should().Be(SearchResultType.Series);
     }
 
     [Test]
-    public async Task SearchSeriesAsync_Should_FilterOut_NonSeriesTypes()
+    public async Task SearchAsync_Should_IncludeSeriesAndMovies_AndFilterOutOtherTypes()
     {
         _apiClient
-            .Setup(x => x.SearchSeriesAsync("batman", It.IsAny<CancellationToken>()))
+            .Setup(x => x.SearchAsync("batman", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResultDto>
             {
                 new() { TvdbId = 10, Name = "Batman Begins", Type = "movie" },
                 new() { TvdbId = 11, Name = "The Batman", Type = "series" },
-                new() { TvdbId = 12, Name = "Unknown Type Item", Type = null }
+                new() { TvdbId = 12, Name = "Batman", Type = "person" },
+                new() { TvdbId = 13, Name = "Unknown Type Item", Type = null }
             });
 
-        var result = await _sut.SearchSeriesAsync("batman");
+        var result = await _sut.SearchAsync("batman");
 
         result.Should().HaveCount(2);
-        result.Select(x => x.TvdbId).Should().BeEquivalentTo([11, 12]);
+        result.Select(x => x.TvdbId).Should().BeEquivalentTo([10, 11]);
+        result.Single(x => x.TvdbId == 10).Type.Should().Be(SearchResultType.Movie);
+        result.Single(x => x.TvdbId == 11).Type.Should().Be(SearchResultType.Series);
     }
 
     [Test]

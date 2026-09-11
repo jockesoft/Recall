@@ -1,0 +1,95 @@
+@page
+@using Recall.Web.Domain.TheTvDb
+@model Recall.Web.Pages.SearchModel
+@{
+    ViewData["Title"] = "Search";
+}
+
+<div class="tvdb-shell">
+    <h1 class="tvdb-display mb-3">Search</h1>
+
+    <form method="get" class="row g-2 mb-4">
+        <div class="col-md-8">
+            <label asp-for="Query" class="form-label"></label>
+            <input asp-for="Query" class="form-control" placeholder="e.g. Dark, Oppenheimer..." />
+            <span asp-validation-for="Query" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">Search</button>
+        </div>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            @Model.ErrorMessage
+        </div>
+    }
+
+    @if (Model.HasSearched && Model.Results.Count == 0 && string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-info" role="alert">
+            No series or movies found for <strong>@Model.Query</strong>.
+        </div>
+    }
+
+    @if (Model.Results.Count > 0)
+    {
+        <p class="tvdb-mono text-muted">Found @Model.Results.Count result(s).</p>
+
+        <div class="list-group">
+            @foreach (var item in Model.Results)
+            {
+                var isSeries = item.Type == SearchResultType.Series;
+                var typeBadgeClass = isSeries ? "text-bg-primary" : "text-bg-secondary";
+
+                <div class="list-group-item @(isSeries ? "" : "tvdb-search-result--disabled")">
+                    @if (isSeries)
+                    {
+                        <a asp-page="/Series/Details" asp-route-id="@item.TvdbId" class="stretched-link"></a>
+                    }
+
+                    <div class="d-flex gap-3 align-items-start">
+                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "is-empty" : "")">
+                            @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                            {
+                                <img src="@item.ImageUrl" alt="" class="tvdb-thumb" loading="lazy"/>
+                            }
+                            else
+                            {
+                                <span>No art</span>
+                            }
+                        </div>
+
+                        <div class="flex-grow-1">
+                            <div class="d-flex w-100 justify-content-between align-items-start gap-2">
+                                <h5 class="mb-1">
+                                    @item.Name
+                                    <span class="badge @typeBadgeClass tvdb-mono">@item.Type</span>
+                                </h5>
+                                @if (!string.IsNullOrWhiteSpace(item.Year))
+                                {
+                                    <small class="tvdb-mono text-nowrap">@item.Year</small>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(item.Overview))
+                            {
+                                <p class="mb-1 tvdb-prose text-muted">@item.Overview</p>
+                            }
+
+                            @if (!isSeries)
+                            {
+                                <p class="mb-0 tvdb-mono text-muted small">Movie tracking is coming soon.</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

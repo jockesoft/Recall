@@ -157,7 +157,7 @@ public class TheTvDbApiClientTests
     }
 
     [Test]
-    public async Task SearchSeriesAsync_Should_Login_Then_ReturnResults()
+    public async Task SearchAsync_Should_Login_Then_ReturnResults()
     {
         // Arrange
         var handlerMock = CreateHandlerMock(new Queue<HttpResponseMessage>([
@@ -180,7 +180,7 @@ public class TheTvDbApiClientTests
         var sut = CreateSut(handlerMock.Object);
 
         // Act
-        var result = await sut.SearchSeriesAsync("dark");
+        var result = await sut.SearchAsync("dark");
 
         // Assert
         result.Should().NotBeNull();
@@ -190,7 +190,7 @@ public class TheTvDbApiClientTests
     }
 
     [Test]
-    public void SearchSeriesAsync_Should_ThrowTheTvDbApiException_WhenLoginFails()
+    public void SearchAsync_Should_ThrowTheTvDbApiException_WhenLoginFails()
     {
         // Arrange
         var handlerMock = CreateHandlerMock(new Queue<HttpResponseMessage>(new[]
@@ -206,7 +206,7 @@ public class TheTvDbApiClientTests
         var sut = CreateSut(handlerMock.Object);
 
         // Act
-        Func<Task> act = async () => await sut.SearchSeriesAsync("dark");
+        Func<Task> act = async () => await sut.SearchAsync("dark");
 
         // Assert
         act.Should().ThrowAsync<TheTvDbApiException>()
@@ -214,7 +214,7 @@ public class TheTvDbApiClientTests
     }
 
     [Test]
-    public void SearchSeriesAsync_Should_ThrowTheTvDbApiException_WhenSearchFails()
+    public void SearchAsync_Should_ThrowTheTvDbApiException_WhenSearchFails()
     {
         // Arrange
         var handlerMock = CreateHandlerMock(new Queue<HttpResponseMessage>(new[]
@@ -236,7 +236,7 @@ public class TheTvDbApiClientTests
         var sut = CreateSut(handlerMock.Object);
 
         // Act
-        Func<Task> act = async () => await sut.SearchSeriesAsync("dark");
+        Func<Task> act = async () => await sut.SearchAsync("dark");
 
         // Assert
         act.Should().ThrowAsync<TheTvDbApiException>()
@@ -244,14 +244,14 @@ public class TheTvDbApiClientTests
     }
 
     [Test]
-    public async Task SearchSeriesAsync_Should_ReturnEmpty_WhenQueryIsWhitespace_AndNotCallHttp()
+    public async Task SearchAsync_Should_ReturnEmpty_WhenQueryIsWhitespace_AndNotCallHttp()
     {
         // Arrange
         var handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
         var sut = CreateSut(handlerMock.Object);
 
         // Act
-        var result = await sut.SearchSeriesAsync("   ");
+        var result = await sut.SearchAsync("   ");
 
         // Assert
         result.Should().NotBeNull();

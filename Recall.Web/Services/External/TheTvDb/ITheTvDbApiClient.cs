@@ -10,7 +10,12 @@ namespace Recall.Web.Services.External.TheTvDb;
 /// </summary>
 public interface ITheTvDbApiClient
 {
-    Task<IReadOnlyList<SearchResultDto>> SearchSeriesAsync(string query, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Unscoped TheTVDB search — returns every entity type TheTVDB matches
+    /// (series, movies, people, companies, ...). Filtering to the content
+    /// types Recall cares about happens in <see cref="Mappings.SearchResultMappings"/>.
+    /// </summary>
+    Task<IReadOnlyList<SearchResultDto>> SearchAsync(string query, CancellationToken cancellationToken = default);
 
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
         int seriesId,

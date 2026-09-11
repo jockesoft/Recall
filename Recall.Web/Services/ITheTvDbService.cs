@@ -8,7 +8,11 @@ namespace Recall.Web.Services;
 /// </summary>
 public interface ITheTvDbService
 {
-    Task<IReadOnlyList<TvSeriesSummary>> SearchSeriesAsync(string query, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Combined series + movie search. Other TheTVDB entity types
+    /// (people, companies, ...) are filtered out.
+    /// </summary>
+    Task<IReadOnlyList<SearchResultItem>> SearchAsync(string query, CancellationToken cancellationToken = default);
     Task<TvSeriesDetails?> GetSeriesByIdAsync(int seriesId, CancellationToken cancellationToken = default);
 
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);

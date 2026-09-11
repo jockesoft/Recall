@@ -23,13 +23,13 @@ public sealed class TheTvDbApiClient(
 {
     private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
-    public async Task<IReadOnlyList<SearchResultDto>> SearchSeriesAsync(string query, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SearchResultDto>> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
             return [];
 
         var envelope = await SendAsync<TheTvDbEnvelopeDto<List<SearchResultDto>>>(
-            () => new HttpRequestMessage(HttpMethod.Get, $"search?query={Uri.EscapeDataString(query)}&type=series"),
+            () => new HttpRequestMessage(HttpMethod.Get, $"search?query={Uri.EscapeDataString(query)}"),
             cancellationToken);
 
         return envelope.Data ?? [];

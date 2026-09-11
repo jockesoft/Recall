@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
-using Microsoft.AspNetCore.Authorization;
-namespace Recall.Web.Pages.Series;
+
+namespace Recall.Web.Pages;
 
 [Authorize]
 public sealed class SearchModel(
@@ -14,11 +15,11 @@ public sealed class SearchModel(
     : PageModel
 {
     [BindProperty(SupportsGet = true)]
-    [Display(Name = "Series title")]
+    [Display(Name = "Title")]
     [StringLength(100, MinimumLength = 2, ErrorMessage = "Search text must be between 2 and 100 characters.")]
     public string? Query { get; set; }
 
-    public IReadOnlyList<TvSeriesSummary> Results { get; private set; } = [];
+    public IReadOnlyList<SearchResultItem> Results { get; private set; } = [];
 
     public string? ErrorMessage { get; private set; }
 
@@ -34,7 +35,7 @@ public sealed class SearchModel(
 
         try
         {
-            Results = await theTvDbService.SearchSeriesAsync(Query!, cancellationToken);
+            Results = await theTvDbService.SearchAsync(Query!, cancellationToken);
         }
         catch (TheTvDbApiException ex)
         {
