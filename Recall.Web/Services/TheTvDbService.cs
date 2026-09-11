@@ -1,6 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Caching;
-using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Mappings;
 using Recall.Web.Services.External.TheTvDb;
@@ -124,15 +123,11 @@ public sealed class TheTvDbService(
         if (cachedById.TryGetValue(episode.Id, out var cached))
             return WithTranslation(episode, cached.Name, cached.Overview);
 
-        EpisodeTranslationDataDto? translation = null;
-        try
-        {
-            translation = await apiClient.GetEpisodeTranslationByLanguageAsync(episode.Id, Language, cancellationToken);
-        }
-        catch (TheTvDbApiException ex)
-        {
-            logger.LogDebug(ex, "Could not load English translation for episode {EpisodeId}.", episode.Id);
-        }
+        var translation = await apiClient.GetEpisodeTranslationByLanguageAsync(episode.Id, Language, cancellationToken)
+            .AsOptionalAsync(
+                logger, LogLevel.Debug,
+                "Could not load English translation for episode {EpisodeId}.",
+                episode.Id);
 
         return WithTranslation(episode, translation?.Name, translation?.Overview);
     }

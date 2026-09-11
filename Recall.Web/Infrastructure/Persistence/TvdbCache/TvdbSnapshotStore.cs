@@ -12,9 +12,9 @@ public sealed class TvdbSnapshotStore(
     ILogger<TvdbSnapshotStore> logger)
     : ITvdbSnapshotStore
 {
-    // Same options Redis/DistributedCacheJson uses — SeriesAggregate already
+    // Same instance Redis/DistributedCacheJson uses — SeriesAggregate already
     // round-trips through this, so the JSON shapes stay in lockstep.
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
     // Each operation takes its own context. Callers fan this store out in
     // parallel within a single request, so a shared (scoped) context would

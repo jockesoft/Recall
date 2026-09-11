@@ -10,7 +10,7 @@ public sealed class EpisodeOmdbSnapshotStore(
     ILogger<EpisodeOmdbSnapshotStore> logger)
     : IEpisodeOmdbSnapshotStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
     public async Task<OmdbSeries?> GetAsync(int episodeTvdbId, CancellationToken cancellationToken = default)
     {

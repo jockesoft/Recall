@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Infrastructure;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Search;
@@ -20,7 +21,7 @@ public sealed class TheTvDbApiClient(
     ILogger<TheTvDbApiClient> logger)
     : ITheTvDbApiClient
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
     public async Task<IReadOnlyList<SearchResultDto>> SearchSeriesAsync(string query, CancellationToken cancellationToken = default)
     {
@@ -65,21 +66,13 @@ public sealed class TheTvDbApiClient(
         CancellationToken cancellationToken)
     {
         var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
-        var translationDtoTask = GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
 
         // Translation is best-effort — its failure shouldn't cost us the series data.
-        SeriesTranslationDataDto? translationDto = null;
-        try
-        {
-            translationDto = await translationDtoTask;
-        }
-        catch (TheTvDbApiException ex)
-        {
-            logger.LogInformation(
-                ex,
+        var translationDto = await GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken)
+            .AsOptionalAsync(
+                logger, LogLevel.Information,
                 "Translation fetch failed for series {SeriesId}, language {Language}. Falling back to untranslated data.",
                 seriesId, language);
-        }
 
         var seriesDto = await seriesDtoTask; // let a genuine series-fetch failure propagate
 
@@ -128,9 +121,7 @@ public sealed class TheTvDbApiClient(
             .Where(e => e.Id.HasValue)
             .GroupBy(e => e.Id!.Value)
             .Select(g => g.First())
-            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
-            .ThenBy(e => e.Number ?? int.MaxValue)
-            .ThenBy(e => e.Id ?? int.MaxValue)
+            .OrderBySeasonAndEpisode(e => e.SeasonNumber, e => e.Number, e => e.Id!.Value)
             .ToArray();
     }
 
@@ -238,17 +229,12 @@ public sealed class TheTvDbApiClient(
         var episodeTask = SendAsync<TheTvDbEnvelopeDto<EpisodeExtendedDto>>(
             () => new HttpRequestMessage(HttpMethod.Get, $"episodes/{episodeId}/extended"),
             cancellationToken);
-        var translationTask = GetEpisodeTranslationByLanguageAsync(episodeId, language, cancellationToken);
 
-        EpisodeTranslationDataDto? translation = null;
-        try
-        {
-            translation = await translationTask;
-        }
-        catch (TheTvDbApiException ex)
-        {
-            logger.LogDebug(ex, "Could not load translation for episode {EpisodeId}, language {Language}.", episodeId, language);
-        }
+        var translation = await GetEpisodeTranslationByLanguageAsync(episodeId, language, cancellationToken)
+            .AsOptionalAsync(
+                logger, LogLevel.Debug,
+                "Could not load translation for episode {EpisodeId}, language {Language}.",
+                episodeId, language);
 
         var episode = (await episodeTask).Data; // let a genuine episode-fetch failure propagate
         if (episode is null)

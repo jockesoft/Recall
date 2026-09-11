@@ -26,9 +26,7 @@ public sealed class NotificationService(
 
         var fresh = digest.Episodes
             .Where(e => !alreadyNotified.Contains(e.EpisodeTvdbId))
-            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
-            .ThenBy(e => e.EpisodeNumber ?? int.MaxValue)
-            .ThenBy(e => e.EpisodeTvdbId)
+            .OrderBySeasonAndEpisode(e => e.SeasonNumber, e => e.EpisodeNumber, e => e.EpisodeTvdbId)
             .ToList();
 
         if (fresh.Count == 0)

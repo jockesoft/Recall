@@ -10,7 +10,7 @@ public sealed class OmdbSnapshotStore(
     ILogger<OmdbSnapshotStore> logger)
     : IOmdbSnapshotStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
     public async Task<OmdbSeries?> GetAsync(int tvdbId, CancellationToken cancellationToken = default)
     {

@@ -5,7 +5,7 @@ namespace Recall.Web.Infrastructure.Caching;
 
 public sealed class DistributedCacheJson(IDistributedCache cache) : IDistributedCacheJson
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
     public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default)
     {

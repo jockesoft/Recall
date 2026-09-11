@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Recall.Web.Infrastructure;
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Auth;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
@@ -21,7 +22,7 @@ namespace Recall.Web.Services.External.TheTvDb;
 /// </summary>
 public sealed class TheTvDbClientState(IOptions<TheTvDbOptions> options, ILogger<TheTvDbClientState> logger)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
     // How many concurrent HTTP calls we're willing to make against TVDB at once.
     // Keep this modest — we parallelize episode/season fetches, and TVDB will

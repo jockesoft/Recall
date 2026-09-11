@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Omdb;
+using Recall.Web.Infrastructure;
 using Recall.Web.Infrastructure.External.Omdb;
 
 namespace Recall.Web.Services.External.Omdb;
@@ -12,7 +13,7 @@ public sealed class OmdbApiClient(
     ILogger<OmdbApiClient> logger)
     : IOmdbApiClient
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
     private readonly OmdbOptions _options = options.Value;
 
     public Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, CancellationToken cancellationToken = default) =>

@@ -10,9 +10,7 @@ public static class WatchProgressCalculator
     /// <summary>Season/episode order, with a stable id tie-break.</summary>
     public static IReadOnlyList<WatchableEpisode> Order(IEnumerable<WatchableEpisode> episodes) =>
         episodes
-            .OrderBy(e => e.SeasonNumber ?? int.MaxValue)
-            .ThenBy(e => e.EpisodeNumber ?? int.MaxValue)
-            .ThenBy(e => e.Id)
+            .OrderBySeasonAndEpisode(e => e.SeasonNumber, e => e.EpisodeNumber, e => e.Id)
             .ToList();
 
     public static SeriesWatchProgress Build(
@@ -31,7 +29,6 @@ public static class WatchProgressCalculator
             OrderedEpisodes = ordered,
             WatchedEpisodeIds = watchedEpisodeIds,
             NextUnwatchedEpisode = released.FirstOrDefault(e => !watchedEpisodeIds.Contains(e.Id)),
-            UnwatchedReleasedCount = released.Count - watchedReleased,
             ReleasedCount = released.Count,
             WatchedReleasedCount = watchedReleased,
         };
