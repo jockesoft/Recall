@@ -23,6 +23,7 @@ public sealed class DetailsModel(
     IEpisodeWatchRepository episodeWatchRepository,
     IWatchProgressService watchProgressService,
     ILikeRepository likeRepository,
+    IRatingRepository ratingRepository,
     IOmdbSnapshotStore omdbSnapshotStore,
     ILogger<DetailsModel> logger)
     : PageModel
@@ -40,6 +41,9 @@ public sealed class DetailsModel(
 
     /// <summary>Whether the current user has hearted this series.</summary>
     public bool IsLikedByCurrentUser { get; private set; }
+
+    /// <summary>The current user's 1-10 rating of this series, or null when unrated.</summary>
+    public int? CurrentUserRating { get; private set; }
 
     public IReadOnlySet<int> WatchedEpisodeIds { get; private set; } = new HashSet<int>();
 
@@ -103,6 +107,58 @@ public sealed class DetailsModel(
         {
             logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your like right now.");
+        }
+
+        return RedirectToPage(new { id, season = Season });
+    }
+
+    public async Task<IActionResult> OnPostRateSeriesAsync(
+        [FromRoute] int id,
+        [FromForm] int value,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to rate a series.");
+            return RedirectToPage(new { id, season = Season });
+        }
+
+        if (value is < 1 or > 10)
+            return RedirectToPage(new { id, season = Season });
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            await ratingRepository.RateAsync(userId, RatingTargetType.Series, id, id, value, cancellationToken);
+            this.SetSuccessToast("Rating saved.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed rating series {SeriesId}.", id);
+            this.SetErrorToast("Could not save your rating right now.");
+        }
+
+        return RedirectToPage(new { id, season = Season });
+    }
+
+    public async Task<IActionResult> OnPostClearSeriesRatingAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to rate a series.");
+            return RedirectToPage(new { id, season = Season });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Series, id, cancellationToken);
+            this.SetInfoToast("Rating removed.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed clearing rating for series {SeriesId}.", id);
+            this.SetErrorToast("Could not update your rating right now.");
         }
 
         return RedirectToPage(new { id, season = Season });
@@ -271,6 +327,7 @@ public sealed class DetailsModel(
 
             IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
             IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Series, id, cancellationToken);
+            CurrentUserRating = await ratingRepository.GetRatingAsync(userId, RatingTargetType.Series, id, cancellationToken);
             WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, [id], cancellationToken);
             WatchedDatesByEpisodeId = await episodeWatchRepository.GetWatchedUtcByEpisodeAsync(userId, id, cancellationToken);
 

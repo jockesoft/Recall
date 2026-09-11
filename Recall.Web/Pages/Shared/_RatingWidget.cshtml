@@ -1,0 +1,33 @@
+@model Recall.Web.Pages.Shared.RatingWidgetModel
+
+<div class="tvdb-rating-picker" role="group" aria-label="Rate this @Model.TargetNoun from 1 to 10">
+    <span class="tvdb-rating-picker-label">Your rating</span>
+
+    <form method="post" asp-page-handler="@Model.RateHandler" asp-route-id="@Model.RouteId" class="d-inline-flex gap-1">
+        @foreach (var field in Model.HiddenFields)
+        {
+            <input type="hidden" name="@field.Key" value="@field.Value" />
+        }
+        @for (var i = 1; i <= 10; i++)
+        {
+            var isCurrent = Model.CurrentValue == i;
+            var isFilled = Model.CurrentValue is { } current && i <= current;
+            <button type="submit" name="value" value="@i"
+                    class="tvdb-rating-pill @(isFilled ? "is-filled" : "") @(isCurrent ? "is-current" : "")"
+                    title="Rate @i / 10"
+                    aria-pressed="@(isCurrent ? "true" : "false")"
+                    aria-label="Rate this @Model.TargetNoun @i out of 10">@i</button>
+        }
+    </form>
+
+    @if (Model.CurrentValue is not null)
+    {
+        <form method="post" asp-page-handler="@Model.ClearHandler" asp-route-id="@Model.RouteId" class="d-inline">
+            @foreach (var field in Model.HiddenFields)
+            {
+                <input type="hidden" name="@field.Key" value="@field.Value" />
+            }
+            <button type="submit" class="tvdb-rating-clear" title="Remove your rating">Clear</button>
+        </form>
+    }
+</div>

@@ -17,5 +17,6 @@ public sealed class AppUserEntity
     public ICollection<EpisodeWatchEntity> EpisodeWatches { get; set; } = new List<EpisodeWatchEntity>();
     public ICollection<LoginTokenEntity> LoginTokens { get; set; } = new List<LoginTokenEntity>();
     public ICollection<UserLikeEntity> Likes { get; set; } = new List<UserLikeEntity>();
+    public ICollection<UserRatingEntity> Ratings { get; set; } = new List<UserRatingEntity>();
     public ICollection<NotificationEntity> Notifications { get; set; } = new List<NotificationEntity>();
 }

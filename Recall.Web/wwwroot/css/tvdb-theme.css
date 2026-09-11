@@ -830,6 +830,86 @@ button.tvdb-badge {
     color: var(--tvdb-text-muted);
 }
 
+/* "Your rating" 1-10 picker — a row of pill buttons that each POST their own
+   value. Used on Series/Details and Episodes/Details next to the like toggle. */
+.tvdb-rating-picker {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.tvdb-rating-picker-label {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-rating-pill {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    flex: none;
+    border-radius: 50%;
+    border: 1px solid var(--tvdb-ink-line);
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-text-muted);
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.tvdb-rating-pill:hover,
+.tvdb-rating-pill:focus-visible {
+    border-color: var(--tvdb-signal);
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-rating-pill:active {
+    transform: scale(0.92);
+}
+
+/* Every pill at or below the current rating gets a light amber tint. */
+.tvdb-rating-pill.is-filled {
+    background: rgba(232, 163, 61, 0.28);
+    border-color: rgba(232, 163, 61, 0.55);
+    color: var(--tvdb-signal-ink);
+}
+
+/* The exact selected value gets a solid fill on top of that tint. */
+.tvdb-rating-pill.is-current {
+    background: var(--tvdb-signal);
+    border-color: var(--tvdb-signal);
+    color: #3d2408;
+    font-weight: 600;
+}
+
+.tvdb-rating-clear {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: none;
+    padding: 0;
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.72rem;
+    color: var(--tvdb-text-muted);
+    cursor: pointer;
+}
+
+.tvdb-rating-clear:hover,
+.tvdb-rating-clear:focus-visible {
+    color: var(--tvdb-danger);
+    text-decoration: underline;
+}
+
 /* "Heart" like toggle — outline heart that fills when liked. Used on the
    Series/Details and Episodes/Details action rows. */
 .tvdb-heart {

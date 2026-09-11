@@ -188,6 +188,17 @@
                              })" />
                 </div>
 
+                <div class="mb-3">
+                    <partial name="_RatingWidget" model="@(new RatingWidgetModel
+                             {
+                                 RateHandler = "RateEpisode",
+                                 ClearHandler = "ClearEpisodeRating",
+                                 RouteId = ep.Id!.Value,
+                                 CurrentValue = Model.CurrentUserRating,
+                                 TargetNoun = "episode"
+                             })" />
+                </div>
+
                 @if (!string.IsNullOrWhiteSpace(ep.Overview))
                 {
                     <p class="tvdb-prose">@ep.Overview</p>

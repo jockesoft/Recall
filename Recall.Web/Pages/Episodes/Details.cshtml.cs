@@ -19,7 +19,8 @@ public sealed class DetailsModel(
     ICurrentUserService currentUserService,
     IEpisodeWatchRepository episodeWatchRepository,
     IWatchProgressService watchProgressService,
-    ILikeRepository likeRepository)
+    ILikeRepository likeRepository,
+    IRatingRepository ratingRepository)
     : PageModel
 {
     public Episode? Episode { get; set; }
@@ -35,6 +36,9 @@ public sealed class DetailsModel(
 
     /// <summary>Whether the current user has hearted this episode.</summary>
     public bool IsLikedByCurrentUser { get; private set; }
+
+    /// <summary>The current user's 1-10 rating of this episode, or null when unrated.</summary>
+    public int? CurrentUserRating { get; private set; }
 
     /// <summary>When the current user marked this episode watched, if they have.</summary>
     public DateTime? WatchedOnUtc { get; private set; }
@@ -101,6 +105,68 @@ public sealed class DetailsModel(
         {
             logger.LogError(ex, "Failed toggling like for episode {EpisodeId}.", id);
             this.SetErrorToast("Could not update your like right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostRateEpisodeAsync(
+        [FromRoute] int id,
+        [FromForm] int value,
+        CancellationToken cancellationToken)
+    {
+        if (id <= 0)
+            return NotFound();
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to rate an episode.");
+            return RedirectToPage(new { id });
+        }
+
+        if (value is < 1 or > 10)
+            return RedirectToPage(new { id });
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+            var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
+            var seriesId = episode?.SeriesId is > 0 ? episode.SeriesId.Value : id;
+
+            await ratingRepository.RateAsync(userId, RatingTargetType.Episode, id, seriesId, value, cancellationToken);
+            this.SetSuccessToast("Rating saved.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed rating episode {EpisodeId}.", id);
+            this.SetErrorToast("Could not save your rating right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostClearEpisodeRatingAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (id <= 0)
+            return NotFound();
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to rate an episode.");
+            return RedirectToPage(new { id });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Episode, id, cancellationToken);
+            this.SetInfoToast("Rating removed.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed clearing rating for episode {EpisodeId}.", id);
+            this.SetErrorToast("Could not update your rating right now.");
         }
 
         return RedirectToPage(new { id });
@@ -293,6 +359,7 @@ public sealed class DetailsModel(
                 IsWatchedByCurrentUser = WatchedOnUtc is not null;
 
                 IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Episode, id, cancellationToken);
+                CurrentUserRating = await ratingRepository.GetRatingAsync(userId, RatingTargetType.Episode, id, cancellationToken);
 
                 if (!IsWatchedByCurrentUser && Episode.SeriesId is > 0)
                 {
