@@ -1,5 +1,6 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Movies;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Search;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 
@@ -35,5 +36,17 @@ public interface ITheTvDbApiClient
 
     Task<EpisodeExtendedDto?> GetEpisodeInformationByIdAsync(
         int episodeId,
+        CancellationToken cancellationToken = default);
+
+    Task<MovieAggregate?> GetMovieAggregateByIdAsync(
+        int movieId,
+        string language = "eng",
+        CancellationToken cancellationToken = default);
+
+    Task<MovieDataDto?> GetMovieByIdExtendedAsync(int movieId, CancellationToken cancellationToken = default);
+
+    Task<SeriesTranslationDataDto?> GetMovieTranslationByLanguageAsync(
+        int movieId,
+        string language,
         CancellationToken cancellationToken = default);
 }

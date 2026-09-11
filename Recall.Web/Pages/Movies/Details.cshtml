@@ -1,0 +1,266 @@
+@page "{id:int}"
+@model Recall.Web.Pages.Movies.DetailsModel
+@functions {
+    static string FormatRuntime(int minutes)
+    {
+        var hours = minutes / 60;
+        var mins = minutes % 60;
+        return hours > 0 ? $"{hours}h {mins}m" : $"{mins}m";
+    }
+
+    static string FormatUsd(decimal value) => "$" + value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
+    static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength].TrimEnd() + "…";
+}
+@{
+    var movie = Model.Movie;
+    ViewData["Title"] = movie?.Name ?? "Movie Details";
+    ViewData["Description"] = !string.IsNullOrWhiteSpace(movie?.Overview)
+        ? Truncate(movie.Overview, 300)
+        : $"Details and cast for {(movie?.Name ?? "this movie")} on Recall.nu.";
+    ViewData["Robots"] = movie is not null ? "index, follow" : "noindex, nofollow";
+
+    var status = movie?.Status;
+    var isReleased = status is { Name: not null } && status.Name.Equals("Released", StringComparison.OrdinalIgnoreCase);
+    var imdbId = movie?.RemoteIds
+        .FirstOrDefault(r => string.Equals(r.SourceName, "imdb", StringComparison.OrdinalIgnoreCase))?.Id;
+}
+
+<a asp-page="/Search" class="tvdb-back-link"
+   onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">&larr; Back</a>
+
+<div class="tvdb-shell">
+    @if (movie is null)
+    {
+        <div class="alert alert-warning">Movie not found.</div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="tvdb-media @(string.IsNullOrWhiteSpace(movie.ImageUrl) ? "is-empty" : "")">
+                    @if (!string.IsNullOrWhiteSpace(movie.ImageUrl))
+                    {
+                        <img src="@movie.ImageUrl" alt="@movie.Name" />
+                    }
+                    @if (status?.Name is not null)
+                    {
+                        <div class="tvdb-slate">
+                            <span class="tvdb-dot @(isReleased ? "is-ok" : "")" aria-hidden="true"></span>
+                            <span>@status.Name.ToUpperInvariant()</span>
+                        </div>
+                    }
+                </div>
+
+                @if (imdbId is not null)
+                {
+                    <div class="mt-2">
+                        <a class="tvdb-extlink" href="https://www.imdb.com/title/@imdbId" target="_blank" rel="noopener">
+                            <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
+                            <span>View on IMDb</span>
+                            <span class="tvdb-extlink-arrow" aria-hidden="true">&#8599;</span>
+                        </a>
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-8">
+                <h1 class="tvdb-display mb-2">@movie.Name</h1>
+
+                @if (movie.Genres.Count > 0)
+                {
+                    <div class="tvdb-genre-list mb-3">
+                        @foreach (var genre in movie.Genres)
+                        {
+                            <span class="tvdb-badge tvdb-badge--neutral">@genre</span>
+                        }
+                    </div>
+                }
+
+                <dl class="row">
+                    <dt class="col-sm-3">TVDB Id</dt>
+                    <dd class="col-sm-9">
+                        <a href="https://www.thetvdb.com/movies/@movie.Slug" target="_blank" rel="noopener">@movie.TvdbId</a>
+                    </dd>
+
+                    @if (movie.ReleaseDate.HasValue)
+                    {
+                        <dt class="col-sm-3">Release date</dt>
+                        <dd class="col-sm-9">@movie.ReleaseDate.Value.ToString("yyyy-MM-dd")</dd>
+                    }
+
+                    @if (movie.RuntimeMinutes is > 0)
+                    {
+                        <dt class="col-sm-3">Runtime</dt>
+                        <dd class="col-sm-9">@FormatRuntime(movie.RuntimeMinutes.Value)</dd>
+                    }
+
+                    @if (movie.Studios.Count > 0)
+                    {
+                        <dt class="col-sm-3">Studio</dt>
+                        <dd class="col-sm-9">@string.Join(", ", movie.Studios)</dd>
+                    }
+
+                    @if (movie.Budget.HasValue)
+                    {
+                        <dt class="col-sm-3">Budget</dt>
+                        <dd class="col-sm-9">@FormatUsd(movie.Budget.Value)</dd>
+                    }
+
+                    @if (movie.BoxOffice.HasValue)
+                    {
+                        <dt class="col-sm-3">Box office</dt>
+                        <dd class="col-sm-9">@FormatUsd(movie.BoxOffice.Value)</dd>
+                    }
+                </dl>
+
+                @if (!string.IsNullOrWhiteSpace(movie.Overview))
+                {
+                    <h5>Overview</h5>
+                    <p class="tvdb-prose">@movie.Overview</p>
+                }
+            </div>
+        </div>
+
+        var cast = movie.Characters
+            .Where(c => !string.IsNullOrWhiteSpace(c.PersonName) || !string.IsNullOrWhiteSpace(c.Name))
+            .ToList();
+
+        if (cast.Count > 0)
+        {
+            <hr class="my-4" />
+            <h4 class="mb-3">Cast &amp; Characters</h4>
+
+            <div class="cast-container" id="castContainer">
+                <div class="row g-3" id="castGrid">
+                    @foreach (var ch in cast)
+                    {
+                        var personDisplay = string.IsNullOrWhiteSpace(ch.PersonName) ? "Unknown person" : ch.PersonName;
+                        var characterDisplay = string.IsNullOrWhiteSpace(ch.Name) ? null : ch.Name;
+                        var imageUrl = !string.IsNullOrWhiteSpace(ch.PersonImageUrl) ? ch.PersonImageUrl : ch.Image;
+                        var hasLink = !string.IsNullOrWhiteSpace(ch.Url);
+
+                        <div class="col-12 col-sm-6 col-lg-4 cast-item">
+                            <div class="h-100 d-flex p-3 gap-3 align-items-start form-control">
+                                <div class="flex-shrink-0">
+                                    @if (!string.IsNullOrWhiteSpace(imageUrl))
+                                    {
+                                        <img src="@imageUrl"
+                                             alt="@personDisplay"
+                                             class="rounded"
+                                             style="width:72px;height:72px;object-fit:cover;" />
+                                    }
+                                    else
+                                    {
+                                        <div class="rounded d-flex align-items-center justify-content-center tvdb-slate--inline"
+                                             style="width:72px;height:72px;">
+                                            No image
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="min-w-0">
+                                    <div class="fw-semibold text-truncate" style="color:var(--tvdb-text);">@personDisplay</div>
+
+                                    @if (!string.IsNullOrWhiteSpace(characterDisplay))
+                                    {
+                                        <div class="small text-break tvdb-mono" style="color:var(--tvdb-text-muted);">
+                                            as @characterDisplay
+                                        </div>
+                                    }
+
+                                    <div class="mt-2 d-flex flex-wrap gap-2">
+                                        @if (ch.IsFeatured)
+                                        {
+                                            <span class="tvdb-badge tvdb-badge--ok">Featured</span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(ch.PeopleType))
+                                        {
+                                            <span class="tvdb-badge tvdb-badge--amber">@ch.PeopleType</span>
+                                        }
+                                    </div>
+
+                                    @if (hasLink)
+                                    {
+                                        <div class="mt-2">
+                                            <a href="@ch.Url"
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               class="tvdb-mono small"
+                                               style="color:var(--tvdb-signal);text-decoration:none;">
+                                                View on TheTVDB ↗
+                                            </a>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (cast.Count > 6)
+                {
+                    <div class="cast-expand-container mt-3">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn" onclick="toggleCast()">
+                            <span class="tvdb-mono">Show @(cast.Count - 6) more</span>
+                            <span class="ms-2" id="castToggleIcon">▼</span>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <style>
+                #castGrid .cast-item:nth-child(n+7) {
+                    display: none;
+                }
+
+                #castContainer.is-expanded #castGrid .cast-item:nth-child(n+7) {
+                    display: block;
+                }
+
+                #castToggleIcon {
+                    display: inline-block;
+                    transition: transform 0.3s ease;
+                }
+
+                #castContainer.is-expanded #castToggleIcon {
+                    transform: rotate(180deg);
+                }
+            </style>
+
+            <script>
+                function toggleCast() {
+                    const container = document.getElementById('castContainer');
+                    const btn = document.getElementById('castToggleBtn');
+                    const isExpanded = container.classList.contains('is-expanded');
+
+                    if (isExpanded) {
+                        container.classList.remove('is-expanded');
+                        btn.innerHTML = '<span class="tvdb-mono">Show @(cast.Count - 6) more</span><span class="ms-2" id="castToggleIcon">▼</span>';
+                    } else {
+                        container.classList.add('is-expanded');
+                        btn.innerHTML = '<span class="tvdb-mono">Show less</span><span class="ms-2" id="castToggleIcon">▼</span>';
+                    }
+                }
+            </script>
+        }
+    }
+</div>
+
+@section Head {
+    @if (movie is not null)
+    {
+        <script type="application/ld+json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "Movie",
+            ["name"] = movie.Name,
+            ["description"] = ViewData["Description"],
+            ["image"] = movie.ImageUrl,
+            ["dateCreated"] = movie.ReleaseDate?.ToString("yyyy-MM-dd"),
+            ["genre"] = movie.Genres
+        }))</script>
+    }
+}

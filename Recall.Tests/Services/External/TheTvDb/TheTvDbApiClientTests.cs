@@ -348,6 +348,107 @@ public class TheTvDbApiClientTests
         result!.Episodes.Should().HaveCount(50, "the pagination loop must stop at its safety cap instead of running forever");
     }
 
+    [Test]
+    public async Task GetMovieAggregateByIdAsync_Should_ReturnAggregate_WhenTranslationFetchFails()
+    {
+        // Arrange: the movie call succeeds but the (best-effort) translation call
+        // fails — the aggregate must still come back rather than being discarded.
+        var handlerMock = CreateRoutedHandlerMock(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+
+            if (path.EndsWith("/login", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data":{"token":"test-token"}}""");
+
+            if (path.Contains("/translations/", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.InternalServerError, """{"status":"failure","message":"Server error"}""");
+
+            if (path.Contains("/extended", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """
+                    {
+                      "status":"success",
+                      "data": { "id": 287533, "name": "Oppenheimer" }
+                    }
+                    """);
+
+            throw new InvalidOperationException($"Unexpected request path: {path}");
+        });
+
+        var sut = CreateSut(handlerMock.Object);
+
+        // Act
+        var result = await sut.GetMovieAggregateByIdAsync(287533);
+
+        // Assert
+        result.Should().NotBeNull("a failed translation fetch must not discard an already-successful movie fetch");
+        result!.TvdbId.Should().Be(287533);
+        result.Name.Should().Be("Oppenheimer");
+    }
+
+    [Test]
+    public async Task GetMovieAggregateByIdAsync_Should_UseTranslatedNameAndOverview_WhenTranslationSucceeds()
+    {
+        var handlerMock = CreateRoutedHandlerMock(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+
+            if (path.EndsWith("/login", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data":{"token":"test-token"}}""");
+
+            if (path.Contains("/translations/", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """
+                    {
+                      "status":"success",
+                      "data": { "name": "Oppenheimer", "overview": "The story of J. Robert Oppenheimer.", "language": "eng" }
+                    }
+                    """);
+
+            if (path.Contains("/extended", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """
+                    {
+                      "status":"success",
+                      "data": { "id": 287533, "name": "Oppenheimer (raw)" }
+                    }
+                    """);
+
+            throw new InvalidOperationException($"Unexpected request path: {path}");
+        });
+
+        var sut = CreateSut(handlerMock.Object);
+
+        var result = await sut.GetMovieAggregateByIdAsync(287533);
+
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Oppenheimer");
+        result.Overview.Should().Be("The story of J. Robert Oppenheimer.");
+    }
+
+    [Test]
+    public async Task GetMovieAggregateByIdAsync_Should_ReturnNull_WhenMovieNotFound()
+    {
+        var handlerMock = CreateRoutedHandlerMock(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+
+            if (path.EndsWith("/login", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data":{"token":"test-token"}}""");
+
+            if (path.Contains("/translations/", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.NotFound, """{"status":"failure","message":"not found"}""");
+
+            if (path.Contains("/extended", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data": null}""");
+
+            throw new InvalidOperationException($"Unexpected request path: {path}");
+        });
+
+        var sut = CreateSut(handlerMock.Object);
+
+        var result = await sut.GetMovieAggregateByIdAsync(999999999);
+
+        result.Should().BeNull();
+    }
+
     private static TheTvDbApiClient CreateSut(HttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler)

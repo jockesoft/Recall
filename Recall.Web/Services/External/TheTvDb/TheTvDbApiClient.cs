@@ -5,6 +5,7 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Movies;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Search;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 using Recall.Web.Mappings;
@@ -193,6 +194,60 @@ public sealed class TheTvDbApiClient(
 
         var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
             () => new HttpRequestMessage(HttpMethod.Get, $"series/{seriesId}/extended?meta=episodes&short=false"),
+            cancellationToken);
+
+        return envelope.Data;
+    }
+
+    public Task<MovieAggregate?> GetMovieAggregateByIdAsync(
+        int movieId,
+        string language = "eng",
+        CancellationToken cancellationToken = default)
+    {
+        language = language.Trim().ToLowerInvariant();
+        return FetchMovieAggregateAsync(movieId, language, cancellationToken);
+    }
+
+    private async Task<MovieAggregate?> FetchMovieAggregateAsync(
+        int movieId,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        var movieDtoTask = GetMovieByIdExtendedAsync(movieId, cancellationToken);
+
+        // Translation is best-effort — its failure shouldn't cost us the movie data.
+        var translationDto = await GetMovieTranslationByLanguageAsync(movieId, language, cancellationToken)
+            .AsOptionalAsync(
+                logger, LogLevel.Information,
+                "Translation fetch failed for movie {MovieId}, language {Language}. Falling back to untranslated data.",
+                movieId, language);
+
+        var movieDto = await movieDtoTask; // let a genuine movie-fetch failure propagate
+
+        return movieDto?.ToAggregate(translationDto);
+    }
+
+    public async Task<MovieDataDto?> GetMovieByIdExtendedAsync(int movieId, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(movieId);
+
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<MovieDataDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"movies/{movieId}/extended"),
+            cancellationToken);
+
+        return envelope.Data;
+    }
+
+    public async Task<SeriesTranslationDataDto?> GetMovieTranslationByLanguageAsync(
+        int movieId,
+        string language,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(movieId);
+        if (string.IsNullOrWhiteSpace(language)) throw new ArgumentException("Language is required.", nameof(language));
+
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesTranslationDataDto>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"movies/{movieId}/translations/{Uri.EscapeDataString(language)}"),
             cancellationToken);
 
         return envelope.Data;

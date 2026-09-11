@@ -78,6 +78,20 @@ public class TheTvDbServiceTests
     }
 
     [Test]
+    public async Task GetMovieAggregateByIdAsync_Should_PassThrough_ToApiClient()
+    {
+        var expected = new MovieAggregate { TvdbId = 287533, Name = "Oppenheimer" };
+
+        _apiClient
+            .Setup(x => x.GetMovieAggregateByIdAsync(287533, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        var result = await _sut.GetMovieAggregateByIdAsync(287533);
+
+        result.Should().BeSameAs(expected);
+    }
+
+    [Test]
     public async Task GetSeriesByIdAsync_Should_MapAggregate_ToDetails()
     {
         _apiClient

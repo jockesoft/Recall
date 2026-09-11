@@ -34,4 +34,10 @@ public interface ITheTvDbService
     Task<bool> RefreshEpisodeDetailsByIdAsync(int episodeId, CancellationToken cancellationToken = default);
 
     Task<Series?> GetSeriesByIdExtendedAsync(int seriesId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches a movie's details straight from TheTVDB — unlike the series/episode
+    /// reads, this does not yet go through the Redis/Postgres cache tiers.
+    /// </summary>
+    Task<MovieAggregate?> GetMovieAggregateByIdAsync(int movieId, CancellationToken cancellationToken = default);
 }

@@ -43,11 +43,8 @@
                 var isSeries = item.Type == SearchResultType.Series;
                 var typeBadgeClass = isSeries ? "text-bg-primary" : "text-bg-secondary";
 
-                <div class="list-group-item @(isSeries ? "" : "tvdb-search-result--disabled")">
-                    @if (isSeries)
-                    {
-                        <a asp-page="/Series/Details" asp-route-id="@item.TvdbId" class="stretched-link"></a>
-                    }
+                <div class="list-group-item">
+                    <a asp-page="@(isSeries ? "/Series/Details" : "/Movies/Details")" asp-route-id="@item.TvdbId" class="stretched-link"></a>
 
                     <div class="d-flex gap-3 align-items-start">
                         <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "is-empty" : "")">
@@ -76,11 +73,6 @@
                             @if (!string.IsNullOrWhiteSpace(item.Overview))
                             {
                                 <p class="mb-1 tvdb-prose text-muted">@item.Overview</p>
-                            }
-
-                            @if (!isSeries)
-                            {
-                                <p class="mb-0 tvdb-mono text-muted small">Movie tracking is coming soon.</p>
                             }
                         </div>
                     </div>

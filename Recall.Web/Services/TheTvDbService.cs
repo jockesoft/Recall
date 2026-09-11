@@ -172,6 +172,11 @@ public sealed class TheTvDbService(
             patched.Count, aggregate.TvdbId);
     }
 
+    public Task<MovieAggregate?> GetMovieAggregateByIdAsync(
+        int movieId,
+        CancellationToken cancellationToken = default)
+        => apiClient.GetMovieAggregateByIdAsync(movieId, Language, cancellationToken);
+
     public Task<Series?> GetSeriesByIdExtendedAsync(
         int seriesId,
         CancellationToken cancellationToken = default)
