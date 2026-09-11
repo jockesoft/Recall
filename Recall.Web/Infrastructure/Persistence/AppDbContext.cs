@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     // OMDb enrichment snapshot per series, refreshed at most monthly by UpdateOmdbInfoTimer.
     public DbSet<CachedSeriesOmdbEntity> CachedSeriesOmdb => Set<CachedSeriesOmdbEntity>();
+    public DbSet<CachedEpisodeOmdbEntity> CachedEpisodesOmdb => Set<CachedEpisodeOmdbEntity>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

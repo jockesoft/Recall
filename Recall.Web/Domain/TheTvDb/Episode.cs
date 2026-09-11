@@ -31,6 +31,14 @@ public sealed record Episode
 
     public IReadOnlyList<EpisodeAward> Awards { get; init; } = [];
     public IReadOnlyList<EpisodeContentRating> ContentRatings { get; init; } = [];
+    public IReadOnlyList<EpisodeRemoteId> RemoteIds { get; init; } = [];
+}
+
+public sealed class EpisodeRemoteId
+{
+    public string? Id { get; init; }
+    public int? Type { get; init; }
+    public string? SourceName { get; init; }
 }
 
 public sealed record EpisodeAward

@@ -70,6 +70,14 @@ public static class EpisodeMappings
                     Category = a.Category,
                     IsWinner = a.IsWinner ?? false
                 })
+                .ToArray() ?? [],
+            RemoteIds = dto.RemoteIds?
+                .Select(r => new EpisodeRemoteId
+                {
+                    Id = r.Id,
+                    Type = r.Type,
+                    SourceName = r.SourceName
+                })
                 .ToArray() ?? []
         };
     }

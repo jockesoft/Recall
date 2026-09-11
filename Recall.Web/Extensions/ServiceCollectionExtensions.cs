@@ -52,6 +52,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<IOmdbSnapshotStore, OmdbSnapshotStore>();
+        services.AddScoped<IEpisodeOmdbSnapshotStore, EpisodeOmdbSnapshotStore>();
         return services;
     }
 

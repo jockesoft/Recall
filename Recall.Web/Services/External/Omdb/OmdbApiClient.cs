@@ -15,7 +15,13 @@ public sealed class OmdbApiClient(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly OmdbOptions _options = options.Value;
 
-    public async Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, CancellationToken cancellationToken = default)
+    public Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, CancellationToken cancellationToken = default) =>
+        FetchAsync(imdbId, type: null, cancellationToken);
+
+    public Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, string type, CancellationToken cancellationToken = default) =>
+        FetchAsync(imdbId, type, cancellationToken);
+
+    private async Task<OmdbSeries?> FetchAsync(string imdbId, string? type, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(imdbId))
             throw new ArgumentException("IMDb id is required.", nameof(imdbId));
@@ -24,6 +30,8 @@ public sealed class OmdbApiClient(
             throw new InvalidOperationException("OMDb ApiKey is not configured (Omdb:ApiKey / Omdb__ApiKey).");
 
         var url = $"?apikey={Uri.EscapeDataString(_options.ApiKey)}&i={Uri.EscapeDataString(imdbId)}&r=json";
+        if (!string.IsNullOrWhiteSpace(type))
+            url += $"&type={Uri.EscapeDataString(type)}";
 
         using var response = await httpClient.GetAsync(url, cancellationToken);
 

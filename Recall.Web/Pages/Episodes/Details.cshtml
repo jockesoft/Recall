@@ -43,8 +43,16 @@
         _ => null
     };
 
+    // OMDb uses the literal string "N/A" for missing values.
+    string? OmdbValue(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : raw.Trim();
+
     var runtimeText = ep is null ? null : FormatRuntime(ep.Runtime);
     var finaleText = ep is null ? null : FinaleLabel(ep.FinaleType);
+    var omdbRating = OmdbValue(Model.Omdb?.ImdbRating);
+    var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
 @if (ep?.SeriesId is not null)
@@ -71,6 +79,17 @@
                         <span>@SlateCode(ep)</span>
                     </div>
                 </div>
+
+                @if (!string.IsNullOrWhiteSpace(Model.ImdbId))
+                {
+                    <div class="mt-2">
+                        <a class="tvdb-extlink" href="https://www.imdb.com/title/@Model.ImdbId" target="_blank" rel="noopener">
+                            <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
+                            <span>View on IMDb</span>
+                            <span class="tvdb-extlink-arrow" aria-hidden="true">&#8599;</span>
+                        </a>
+                    </div>
+                }
             </div>
 
             <div class="col-md-7">
@@ -93,6 +112,16 @@
                 </div>
 
                 <div class="tvdb-rating-panel mb-3">
+                    @if (omdbRating is not null)
+                    {
+                        <span class="tvdb-rating">
+                            <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                            <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
+                            <span class="tvdb-rating-votes">
+                                IMDb@(omdbVotes is not null ? $" · {omdbVotes} votes" : "")
+                            </span>
+                        </span>
+                    }
                     @if (ep.Score is > 0)
                     {
                         <span class="tvdb-rating">

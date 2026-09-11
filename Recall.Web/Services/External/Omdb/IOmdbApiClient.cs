@@ -14,4 +14,10 @@ public interface IOmdbApiClient
     /// (its "Response":"False") — network/HTTP failures throw.
     /// </summary>
     Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// As above, but adds OMDb's optional <c>&amp;type=</c> filter (e.g. <c>"episode"</c>)
+    /// to the lookup.
+    /// </summary>
+    Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, string type, CancellationToken cancellationToken = default);
 }

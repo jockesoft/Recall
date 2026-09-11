@@ -74,5 +74,8 @@ public sealed record EpisodeExtendedDto : EpisodeDto
 
     [JsonPropertyName("awards")]
     public List<AwardDto>? Awards { get; init; }
+
+    [JsonPropertyName("remoteIds")]
+    public List<RemoteIdDto>? RemoteIds { get; init; }
 }
 

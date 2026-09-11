@@ -2,11 +2,16 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
+using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Infrastructure.Persistence.Entities;
+using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
 
@@ -20,9 +25,15 @@ public sealed class DetailsModel(
     IEpisodeWatchRepository episodeWatchRepository,
     IWatchProgressService watchProgressService,
     ILikeRepository likeRepository,
-    IRatingRepository ratingRepository)
+    IRatingRepository ratingRepository,
+    IOmdbApiClient omdbApiClient,
+    IEpisodeOmdbSnapshotStore episodeOmdbSnapshotStore,
+    IOptions<OmdbOptions> omdbOptions)
     : PageModel
 {
+    /// <summary>Only refresh an episode's OMDb data this rarely — matches UpdateOmdbInfoTimer's series cadence.</summary>
+    private static readonly TimeSpan OmdbRefreshAge = TimeSpan.FromDays(30);
+
     public Episode? Episode { get; set; }
 
     /// <summary>
@@ -45,6 +56,12 @@ public sealed class DetailsModel(
 
     /// <summary>How many Recall users have rated this episode.</summary>
     public int RecallRatingCount { get; private set; }
+
+    /// <summary>IMDb id for this specific episode, from TheTVDB's remote ids, when known.</summary>
+    public string? ImdbId { get; private set; }
+
+    /// <summary>OMDb enrichment for this episode, when available (fetched lazily and cached).</summary>
+    public OmdbSeries? Omdb { get; private set; }
 
     /// <summary>When the current user marked this episode watched, if they have.</summary>
     public DateTime? WatchedOnUtc { get; private set; }
@@ -272,6 +289,35 @@ public sealed class DetailsModel(
     }
 
     /// <summary>
+    /// Cache-through OMDb lookup for one episode: serves the cached snapshot when
+    /// it's still fresh, otherwise calls OMDb live and stores the result. Unlike
+    /// series (enriched proactively by <c>UpdateOmdbInfoTimer</c>), episodes are
+    /// only enriched on demand — there are far more of them, so eagerly fetching
+    /// every one isn't worth the OMDb quota.
+    /// </summary>
+    private async Task<OmdbSeries?> LoadOmdbAsync(int episodeTvdbId, string imdbId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(omdbOptions.Value.ApiKey))
+            return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
+
+        var retrievedUtc = await episodeOmdbSnapshotStore.GetRetrievedUtcAsync(episodeTvdbId, cancellationToken);
+        if (retrievedUtc is { } retrieved && DateTime.UtcNow - retrieved < OmdbRefreshAge)
+            return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
+
+        try
+        {
+            var data = await omdbApiClient.GetByImdbIdAsync(imdbId, "episode", cancellationToken);
+            await episodeOmdbSnapshotStore.UpsertAsync(episodeTvdbId, imdbId, data, cancellationToken);
+            return data;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to fetch OMDb rating for episode {EpisodeId}; using cached snapshot if any.", episodeTvdbId);
+            return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Pulls the series name (for the header link) and its broadcast time from
     /// the layered-cached series aggregate — the same snapshot the background
     /// refresh timer keeps current, so no extra TheTVDB call is made here.
@@ -357,6 +403,16 @@ public sealed class DetailsModel(
                 var ratingSummary = await ratingRepository.GetSummaryAsync(RatingTargetType.Episode, id, cancellationToken);
                 RecallRatingAverage = ratingSummary.Average;
                 RecallRatingCount = ratingSummary.Count;
+
+                ImdbId = Episode.RemoteIds
+                    .FirstOrDefault(r => string.Equals(r.SourceName, "imdb", StringComparison.OrdinalIgnoreCase)
+                                         && !string.IsNullOrWhiteSpace(r.Id))
+                    ?.Id;
+
+                if (!string.IsNullOrWhiteSpace(ImdbId) && Episode.Id is > 0)
+                {
+                    Omdb = await LoadOmdbAsync(Episode.Id.Value, ImdbId, cancellationToken);
+                }
             }
 
             if (Episode is not null &&
