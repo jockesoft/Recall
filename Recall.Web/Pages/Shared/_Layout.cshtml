@@ -71,7 +71,7 @@
 <header>
     <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
         <div class="container">
-            <a class="navbar-brand" asp-area="" asp-page="/Index">
+            <a class="navbar-brand" asp-area="" asp-page="@(CurrentUser.IsAuthenticated ? "/Dashboard" : "/Index")">
                 <img src="~/images/banner.png" asp-append-version="true" alt="Recall" class="navbar-logo" />
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
@@ -81,14 +81,17 @@
             <div class="navbar-collapse collapse">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
+                        <a class="nav-link text-dark" asp-area="" asp-page="@(CurrentUser.IsAuthenticated ? "/Dashboard" : "/Index")">Home</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-dark" asp-area="" asp-page="/Series/Search">Search</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-dark" asp-page="/Series/Library">My Library</a>
-                    </li>
+                    @if (CurrentUser.IsAuthenticated)
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Series/Search">Search</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-page="/Series/Library">My Library</a>
+                        </li>
+                    }
                 </ul>
                 <ul class="navbar-nav align-items-sm-center">
                     @if (CurrentUser.IsAuthenticated)

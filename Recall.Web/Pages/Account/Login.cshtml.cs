@@ -124,5 +124,5 @@ public sealed class LoginModel(
     }
 
     private string SafeReturnUrl() =>
-        !string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/";
+        !string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/Dashboard";
 }

@@ -43,7 +43,7 @@ public sealed class VerifyModel(IPasswordlessAuthService authService) : PageMode
             new ClaimsPrincipal(identity),
             new AuthenticationProperties { IsPersistent = true });
 
-        var target = !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl! : "/";
+        var target = !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl! : "/Dashboard";
         return LocalRedirect(target);
     }
 }

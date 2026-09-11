@@ -1,0 +1,153 @@
+@page
+@using Recall.Web.Pages.Shared
+@model DashboardModel
+@{
+    ViewData["Title"] = "Dashboard";
+
+    bool IsFinaleType(string? type) =>
+        string.Equals(type, "season", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(type, "series", StringComparison.OrdinalIgnoreCase);
+
+    string DayGroup(DateOnly aired)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var days = aired.DayNumber - today.DayNumber;
+        return days switch
+        {
+            0 => "Today",
+            1 => "Tomorrow",
+            <= 7 => "This week",
+            _ => "Later"
+        };
+    }
+
+    var hasLibrary = Model.TrackedSeriesCount > 0;
+
+    // Collapse multiple episodes of the same series airing on the same date
+    // (same season) into a single row — e.g. 8 rows of "The Gentlemen S02" on
+    // one day become one row reading "S02 · E01-E08".
+    var upcomingRows = Model.UpcomingEpisodes
+        .GroupBy(e => new { e.SeriesId, e.AiredDate, e.SeasonNumber })
+        .Select(g =>
+        {
+            var ordered = g
+                .OrderBy(e => e.EpisodeNumber ?? int.MaxValue)
+                .ThenBy(e => e.EpisodeId)
+                .ToList();
+            var head = ordered[0];
+            var numbers = ordered
+                .Where(e => e.EpisodeNumber.HasValue)
+                .Select(e => e.EpisodeNumber!.Value)
+                .ToList();
+            return new
+            {
+                head.SeriesId,
+                head.SeriesName,
+                head.ImageUrl,
+                head.SeasonNumber,
+                head.AiredDate,
+                head.SeriesCaughtUp,
+                LinkEpisodeId = head.EpisodeId,
+                Count = ordered.Count,
+                EpisodeFrom = numbers.Count > 0 ? numbers.Min() : (int?)null,
+                EpisodeTo = numbers.Count > 0 ? numbers.Max() : (int?)null,
+                SingleName = ordered.Count == 1 ? head.Name : null,
+                IsPremiere = numbers.Contains(1),
+                IsFinale = ordered.Any(e => IsFinaleType(e.FinaleType))
+            };
+        })
+        .ToList();
+
+    var groupedUpcoming = upcomingRows
+        .GroupBy(r => DayGroup(r.AiredDate))
+        .OrderBy(g => g.Key switch { "Today" => 0, "Tomorrow" => 1, "This week" => 2, _ => 3 });
+}
+
+<div class="tvdb-shell">
+    <div class="tvdb-eyebrow mb-1">Your channel &middot; @DateTime.Today.ToString("dddd, MMMM d")</div>
+
+    @if (!hasLibrary)
+    {
+        <div class="tvdb-empty-state">
+            <div class="tvdb-slate--inline mb-3"><span class="tvdb-dot" aria-hidden="true"></span> NO SIGNAL</div>
+            <h2 class="tvdb-display">Nothing on your schedule yet</h2>
+            <p class="tvdb-prose text-muted">Add a few shows to your library and this page turns into your personal air-date guide.</p>
+            <a asp-page="/Series/Search" class="btn btn-primary mt-2">Find series to track</a>
+        </div>
+    }
+    else
+    {
+        <div class="tvdb-stat-row">
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.TrackedSeriesCount</div>
+                <div class="tvdb-stat-label">Tracked series</div>
+            </div>
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.UpcomingThisWeekCount</div>
+                <div class="tvdb-stat-label">Airing this week</div>
+            </div>
+            <div class="tvdb-stat">
+                <div class="tvdb-stat-value">@Model.UnwatchedCount</div>
+                <div class="tvdb-stat-label">Unwatched episodes</div>
+            </div>
+        </div>
+
+        @if (Model.CatchUpEpisodes.Count > 0)
+        {
+            <h4 class="mb-3">Catch up</h4>
+            <div class="tvdb-catchup-grid mb-4">
+                @foreach (var ep in Model.CatchUpEpisodes)
+                {
+                    <partial name="_CatchUpCard" model="@(new CatchUpCardModel
+                             {
+                                 SeriesId = ep.SeriesId,
+                                 SeriesName = ep.SeriesName,
+                                 EpisodeId = ep.EpisodeId,
+                                 SeasonNumber = ep.SeasonNumber,
+                                 EpisodeNumber = ep.EpisodeNumber,
+                                 EpisodeName = ep.Name,
+                                 ImageUrl = ep.ImageUrl
+                             })" />
+                }
+            </div>
+        }
+
+        <h4 class="mb-0">Upcoming</h4>
+
+        @if (Model.UpcomingEpisodes.Count == 0)
+        {
+            <div class="alert alert-info mt-3">Nothing airing soon for the series you track.</div>
+        }
+        else
+        {
+            @foreach (var group in groupedUpcoming)
+            {
+                <div class="tvdb-schedule-day">@group.Key</div>
+                <div class="tvdb-upcoming-list">
+                    @foreach (var row in group
+                        .OrderBy(r => r.AiredDate)
+                        .ThenBy(r => r.SeriesName)
+                        .ThenBy(r => r.SeasonNumber ?? int.MaxValue))
+                    {
+                        <partial name="_UpcomingEpisodeCard" model="@(new UpcomingEpisodeCardModel
+                                 {
+                                     SeriesId = row.SeriesId,
+                                     SeriesName = row.SeriesName,
+                                     LinkEpisodeId = row.LinkEpisodeId,
+                                     SeasonNumber = row.SeasonNumber,
+                                     EpisodeFrom = row.EpisodeFrom,
+                                     EpisodeTo = row.EpisodeTo,
+                                     EpisodeName = row.SingleName,
+                                     ImageUrl = row.ImageUrl,
+                                     AiredDate = row.AiredDate,
+                                     IsPremiere = row.IsPremiere,
+                                     IsFinale = row.IsFinale,
+                                     EpisodeCount = row.Count,
+                                     SeriesCaughtUp = row.SeriesCaughtUp
+                                 })" />
+                    }
+                </div>
+            }
+        }
+    }
+</div>

@@ -1,192 +1,61 @@
-@* -----------------------------------------------------------------------
-   Assumed IndexModel shape — adjust to match your actual PageModel:
-
-   public sealed class IndexModel : PageModel
-   {
-       public int TrackedSeriesCount { get; set; }
-       public int UpcomingThisWeekCount { get; set; }
-       public int UnwatchedCount { get; set; }
-       public List<UpcomingEpisodeItem> UpcomingEpisodes { get; set; } = [];
-       public List<CatchUpItem> CatchUpEpisodes { get; set; } = [];
-
-       public async Task OnGetAsync() { ... }
-
-       public async Task<IActionResult> OnPostMarkWatchedAsync(int episodeId) { ... }
-   }
-
-   public sealed class UpcomingEpisodeItem
-   {
-       public int SeriesId { get; init; }
-       public string SeriesName { get; init; } = "";
-       public int EpisodeId { get; init; }
-       public int? SeasonNumber { get; init; }
-       public int? EpisodeNumber { get; init; }
-       public string Name { get; init; } = "";
-       public string? ImageUrl { get; init; }
-       public DateOnly AiredDate { get; init; }
-   }
-
-   public sealed class CatchUpItem
-   {
-       public int SeriesId { get; init; }
-       public string SeriesName { get; init; } = "";
-       public int EpisodeId { get; init; }
-       public int? SeasonNumber { get; init; }
-       public int? EpisodeNumber { get; init; }
-       public string Name { get; init; } = "";
-       public string? ImageUrl { get; init; }
-   }
-   ----------------------------------------------------------------------- *@
 @page
-@using Recall.Web.Pages.Shared
 @model IndexModel
 @{
-    ViewData["Title"] = "Home";
-
-    bool IsFinaleType(string? type) =>
-        string.Equals(type, "season", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(type, "series", StringComparison.OrdinalIgnoreCase);
-
-    string DayGroup(DateOnly aired)
-    {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var days = aired.DayNumber - today.DayNumber;
-        return days switch
-        {
-            0 => "Today",
-            1 => "Tomorrow",
-            <= 7 => "This week",
-            _ => "Later"
-        };
-    }
-
-    var hasLibrary = Model.TrackedSeriesCount > 0;
-
-    // Collapse multiple episodes of the same series airing on the same date
-    // (same season) into a single row — e.g. 8 rows of "The Gentlemen S02" on
-    // one day become one row reading "S02 · E01-E08".
-    var upcomingRows = Model.UpcomingEpisodes
-        .GroupBy(e => new { e.SeriesId, e.AiredDate, e.SeasonNumber })
-        .Select(g =>
-        {
-            var ordered = g
-                .OrderBy(e => e.EpisodeNumber ?? int.MaxValue)
-                .ThenBy(e => e.EpisodeId)
-                .ToList();
-            var head = ordered[0];
-            var numbers = ordered
-                .Where(e => e.EpisodeNumber.HasValue)
-                .Select(e => e.EpisodeNumber!.Value)
-                .ToList();
-            return new
-            {
-                head.SeriesId,
-                head.SeriesName,
-                head.ImageUrl,
-                head.SeasonNumber,
-                head.AiredDate,
-                head.SeriesCaughtUp,
-                LinkEpisodeId = head.EpisodeId,
-                Count = ordered.Count,
-                EpisodeFrom = numbers.Count > 0 ? numbers.Min() : (int?)null,
-                EpisodeTo = numbers.Count > 0 ? numbers.Max() : (int?)null,
-                SingleName = ordered.Count == 1 ? head.Name : null,
-                IsPremiere = numbers.Contains(1),
-                IsFinale = ordered.Any(e => IsFinaleType(e.FinaleType))
-            };
-        })
-        .ToList();
-
-    var groupedUpcoming = upcomingRows
-        .GroupBy(r => DayGroup(r.AiredDate))
-        .OrderBy(g => g.Key switch { "Today" => 0, "Tomorrow" => 1, "This week" => 2, _ => 3 });
+    ViewData["Title"] = "Track TV Shows & Get Episode Alerts";
+    ViewData["Description"] = "Recall.nu is a free TV show tracker. Track every series you " +
+        "watch, get notified the moment a new episode airs, and build your list of favorites " +
+        "— no password needed.";
+    ViewData["Robots"] = "index, follow";
 }
 
 <div class="tvdb-shell">
-    <div class="tvdb-eyebrow mb-1">Your channel &middot; @DateTime.Today.ToString("dddd, MMMM d")</div>
-
-    @if (!hasLibrary)
-    {
-        <div class="tvdb-empty-state">
-            <div class="tvdb-slate--inline mb-3"><span class="tvdb-dot" aria-hidden="true"></span> NO SIGNAL</div>
-            <h2 class="tvdb-display">Nothing on your schedule yet</h2>
-            <p class="tvdb-prose text-muted">Add a few shows to your library and this page turns into your personal air-date guide.</p>
-            <a asp-page="/Series/Search" class="btn btn-primary mt-2">Find series to track</a>
+    <div class="tvdb-empty-state">
+        <div class="tvdb-slate--inline mb-3">
+            <span class="tvdb-dot is-ok" aria-hidden="true"></span> FREE &middot; NO PASSWORD NEEDED
         </div>
-    }
-    else
-    {
-        <div class="tvdb-stat-row">
-            <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.TrackedSeriesCount</div>
-                <div class="tvdb-stat-label">Tracked series</div>
-            </div>
-            <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.UpcomingThisWeekCount</div>
-                <div class="tvdb-stat-label">Airing this week</div>
-            </div>
-            <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.UnwatchedCount</div>
-                <div class="tvdb-stat-label">Unwatched episodes</div>
-            </div>
+        <h1 class="tvdb-display mb-3">Never miss the next episode.</h1>
+        <p class="tvdb-prose text-muted mb-4 mx-auto" style="max-width: 34rem;">
+            Track every show you watch, know the moment a new episode airs, and pick up right
+            where you left off. Sign in with just your email — no password, no setup.
+        </p>
+        <a asp-page="/Account/Login" class="btn btn-primary btn-lg px-4">
+            <i class="fa-solid fa-paper-plane me-1"></i> Get started — it's free
+        </a>
+    </div>
+
+    <div class="row mt-4 g-4">
+        <div class="col-md-4 text-center">
+            <i class="fa-solid fa-list-check fa-2x mb-3" aria-hidden="true"></i>
+            <h2 class="h5">Track everything you watch</h2>
+            <p class="tvdb-prose text-muted">
+                Build a library of every series you follow, and see at a glance what's new.
+            </p>
         </div>
+        <div class="col-md-4 text-center">
+            <i class="fa-solid fa-bell fa-2x mb-3" aria-hidden="true"></i>
+            <h2 class="h5">Get notified on air day</h2>
+            <p class="tvdb-prose text-muted">
+                We check for new episodes automatically and let you know the moment one airs.
+            </p>
+        </div>
+        <div class="col-md-4 text-center">
+            <i class="fa-solid fa-heart fa-2x mb-3" aria-hidden="true"></i>
+            <h2 class="h5">Save your favorites</h2>
+            <p class="tvdb-prose text-muted">
+                Like shows and episodes to build up a running list of favorites over time.
+            </p>
+        </div>
+    </div>
 
-        @if (Model.CatchUpEpisodes.Count > 0)
-        {
-            <h4 class="mb-3">Catch up</h4>
-            <div class="tvdb-catchup-grid mb-4">
-                @foreach (var ep in Model.CatchUpEpisodes)
-                {
-                    <partial name="_CatchUpCard" model="@(new CatchUpCardModel
-                             {
-                                 SeriesId = ep.SeriesId,
-                                 SeriesName = ep.SeriesName,
-                                 EpisodeId = ep.EpisodeId,
-                                 SeasonNumber = ep.SeasonNumber,
-                                 EpisodeNumber = ep.EpisodeNumber,
-                                 EpisodeName = ep.Name,
-                                 ImageUrl = ep.ImageUrl
-                             })" />
-                }
-            </div>
-        }
-
-        <h4 class="mb-0">Upcoming</h4>
-
-        @if (Model.UpcomingEpisodes.Count == 0)
-        {
-            <div class="alert alert-info mt-3">Nothing airing soon for the series you track.</div>
-        }
-        else
-        {
-            @foreach (var group in groupedUpcoming)
-            {
-                <div class="tvdb-schedule-day">@group.Key</div>
-                <div class="tvdb-upcoming-list">
-                    @foreach (var row in group
-                        .OrderBy(r => r.AiredDate)
-                        .ThenBy(r => r.SeriesName)
-                        .ThenBy(r => r.SeasonNumber ?? int.MaxValue))
-                    {
-                        <partial name="_UpcomingEpisodeCard" model="@(new UpcomingEpisodeCardModel
-                                 {
-                                     SeriesId = row.SeriesId,
-                                     SeriesName = row.SeriesName,
-                                     LinkEpisodeId = row.LinkEpisodeId,
-                                     SeasonNumber = row.SeasonNumber,
-                                     EpisodeFrom = row.EpisodeFrom,
-                                     EpisodeTo = row.EpisodeTo,
-                                     EpisodeName = row.SingleName,
-                                     ImageUrl = row.ImageUrl,
-                                     AiredDate = row.AiredDate,
-                                     IsPremiere = row.IsPremiere,
-                                     IsFinale = row.IsFinale,
-                                     EpisodeCount = row.Count,
-                                     SeriesCaughtUp = row.SeriesCaughtUp
-                                 })" />
-                    }
-                </div>
-            }
-        }
-    }
+    <div class="row mt-5 justify-content-center text-center">
+        <div class="col-lg-7">
+            <h2 class="h4 mb-3">How it works</h2>
+            <ol class="tvdb-prose text-muted text-start mx-auto mb-4" style="max-width: 30rem;">
+                <li class="mb-2">Enter your email — no account or password to set up.</li>
+                <li class="mb-2">Add the shows you're currently watching.</li>
+                <li>Recall keeps track of what's aired and tells you when there's something new.</li>
+            </ol>
+            <a asp-page="/Account/Login" class="btn btn-outline-primary">Sign in</a>
+        </div>
+    </div>
 </div>
