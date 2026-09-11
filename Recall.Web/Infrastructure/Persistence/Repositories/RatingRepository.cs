@@ -103,13 +103,15 @@ public sealed class RatingRepository(
         int targetTvdbId,
         CancellationToken cancellationToken = default)
     {
-        var summary = await dbContext.UserRatings
+        var query = dbContext.UserRatings
             .AsNoTracking()
-            .Where(x => x.TargetType == targetType && x.TargetTvdbId == targetTvdbId)
-            .GroupBy(x => 1)
-            .Select(g => new { Average = g.Average(x => x.Value), Count = g.Count() })
-            .FirstOrDefaultAsync(cancellationToken);
+            .Where(x => x.TargetType == targetType && x.TargetTvdbId == targetTvdbId);
 
-        return summary is null ? RatingSummary.Empty : new RatingSummary(summary.Average, summary.Count);
+        var count = await query.CountAsync(cancellationToken);
+        if (count == 0)
+            return RatingSummary.Empty;
+
+        var average = await query.AverageAsync(x => x.Value, cancellationToken);
+        return new RatingSummary(average, count);
     }
 }
