@@ -1,0 +1,18 @@
+@model bool
+@* Shared "All / Series / Movies" filter used on Library, Profile and Favorites.
+   Pair it with wwwroot/js/tvdb-type-filter.js and mark each filterable section
+   with `data-library-section`, each card with `data-content-type="series|movie"`. *@
+@if (Model)
+{
+    <div class="tvdb-filter-bar" role="group" aria-label="Filter by type">
+        <button type="button" class="btn btn-dark btn-sm rounded-pill px-3 tvdb-filter-btn is-active" data-filter="all">
+            All
+        </button>
+        <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3 tvdb-filter-btn tvdb-filter-btn--series" data-filter="series">
+            <i class="fa-solid fa-tv" aria-hidden="true"></i> Series
+        </button>
+        <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3 tvdb-filter-btn tvdb-filter-btn--movie" data-filter="movie">
+            <i class="fa-solid fa-film" aria-hidden="true"></i> Movies
+        </button>
+    </div>
+}

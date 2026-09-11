@@ -1,8 +1,33 @@
 @page
+@using Recall.Web.Domain.TheTvDb
 @using Recall.Web.Pages.Shared
 @model Recall.Web.Pages.Account.ProfileModel
 @{
     ViewData["Title"] = "Profile";
+
+    var hasSeries = Model.FavoriteTitles.Any(t => t.Type == SearchResultType.Series);
+    var hasMovies = Model.FavoriteTitles.Any(t => t.Type == SearchResultType.Movie);
+    var showFilters = hasSeries && hasMovies;
+}
+
+@functions {
+    static SeriesCardModel ToCardModel(Recall.Web.Services.Favorites.Models.FavoriteTitle title) => new()
+    {
+        TvdbId = title.TvdbId,
+        Name = title.Name,
+        ImageUrl = title.ImageUrl,
+        FirstAired = title.FirstAired,
+        WatchedEpisodes = title.WatchedEpisodes,
+        ReleasedEpisodes = title.ReleasedEpisodes,
+        DetailsPage = title.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
+        BadgeIcon = title.Type == SearchResultType.Movie ? "fa-film" : "fa-tv",
+        BadgeLabel = title.Type == SearchResultType.Movie ? "Movie" : "Series",
+        BadgeVariant = title.Type == SearchResultType.Movie ? "movie" : "series",
+        LikeHandler = title.Type == SearchResultType.Movie ? "ToggleMovieLike" : "ToggleSeriesLike",
+        LikeTargetNoun = title.Type == SearchResultType.Movie ? "movie" : "series",
+        ShowLike = true,
+        IsLiked = true
+    };
 }
 
 <div class="tvdb-shell">
@@ -63,27 +88,27 @@
                     </svg>
                 </a>
 
-                @if (Model.FavoriteSeries.Count == 0)
+                <div class="mb-3">
+                    <partial name="_TypeFilterBar" model="showFilters" />
+                </div>
+
+                @if (Model.FavoriteTitles.Count == 0)
                 {
                     <p class="tvdb-mono text-muted mb-0">No favorite titles yet.</p>
                 }
                 else
                 {
-                    <div class="tvdb-series-grid--favorites">
-                        @foreach (var series in Model.FavoriteSeries)
-                        {
-                            <partial name="_SeriesCard" model="@(new SeriesCardModel
-                                     {
-                                         TvdbId = series.TvdbId,
-                                         Name = series.Name,
-                                         ImageUrl = series.ImageUrl,
-                                         FirstAired = series.FirstAired,
-                                         WatchedEpisodes = series.WatchedEpisodes,
-                                         ReleasedEpisodes = series.ReleasedEpisodes,
-                                         ShowLike = true,
-                                         IsLiked = true
-                                     })" />
-                        }
+                    <div data-library-section>
+                        <div class="tvdb-series-grid--favorites">
+                            @foreach (var title in Model.FavoriteTitles)
+                            {
+                                <partial name="_SeriesCard" model="@ToCardModel(title)" />
+                            }
+                        </div>
+                    </div>
+
+                    <div id="tvdb-library-empty-filter" class="tvdb-mono text-muted mb-0" role="alert" hidden>
+                        Nothing matches this filter.
                     </div>
                 }
             </section>
@@ -97,3 +122,7 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/tvdb-type-filter.js" asp-append-version="true"></script>
+}

@@ -1,21 +1,25 @@
+using Recall.Web.Domain.TheTvDb;
+
 namespace Recall.Web.Services.Favorites.Models;
 
 /// <summary>Full favorites payload for the Account/Favorites page.</summary>
-/// <param name="Series">Liked series, newest-liked first.</param>
-/// <param name="SeriesCount">How many series the user has liked.</param>
+/// <param name="Titles">Liked series and movies, newest-liked first across both.</param>
+/// <param name="TitleCount">How many titles (series + movies) the user has liked.</param>
 /// <param name="Episodes">Liked episodes, newest-liked first.</param>
 /// <param name="EpisodeCount">How many episodes the user has liked.</param>
 public sealed record FavoritesView(
-    IReadOnlyList<FavoriteSeries> Series,
-    int SeriesCount,
+    IReadOnlyList<FavoriteTitle> Titles,
+    int TitleCount,
     IReadOnlyList<FavoriteEpisode> Episodes,
     int EpisodeCount);
 
 /// <summary>
-/// A liked series, shaped to feed the shared <c>_SeriesCard</c> partial
-/// (via <c>SeriesCardModel</c>).
+/// A liked series or movie, shaped to feed the shared <c>_SeriesCard</c> partial
+/// (via <c>SeriesCardModel</c>). Movies carry no episode progress, so
+/// <see cref="WatchedEpisodes"/>/<see cref="ReleasedEpisodes"/> are both 0.
 /// </summary>
-public sealed record FavoriteSeries(
+public sealed record FavoriteTitle(
+    SearchResultType Type,
     int TvdbId,
     string Name,
     string? ImageUrl,

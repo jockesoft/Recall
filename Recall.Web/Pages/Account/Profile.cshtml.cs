@@ -19,7 +19,7 @@ public sealed class ProfileModel(
     ILikeRepository likeRepository,
     ILogger<ProfileModel> logger) : PageModel
 {
-    /// <summary>How many liked series the profile page previews before the "see all" arrow.</summary>
+    /// <summary>How many liked titles the profile page previews before the "see all" arrow.</summary>
     public const int FavoritesPreviewCount = 6;
 
     public string DisplayName => currentUser.DisplayName ?? "—";
@@ -39,7 +39,7 @@ public sealed class ProfileModel(
 
     public WatchTimeSummary WatchTime { get; private set; } = WatchTimeSummary.Empty;
 
-    public IReadOnlyList<FavoriteSeries> FavoriteSeries { get; private set; } = Array.Empty<FavoriteSeries>();
+    public IReadOnlyList<FavoriteTitle> FavoriteTitles { get; private set; } = Array.Empty<FavoriteTitle>();
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -57,11 +57,11 @@ public sealed class ProfileModel(
 
         try
         {
-            FavoriteSeries = await favoritesService.GetLikedSeriesAsync(userId, FavoritesPreviewCount, cancellationToken);
+            FavoriteTitles = await favoritesService.GetLikedTitlesAsync(userId, FavoritesPreviewCount, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Could not load favorite series for the profile page.");
+            logger.LogWarning(ex, "Could not load favorite titles for the profile page.");
         }
     }
 
@@ -80,6 +80,27 @@ public sealed class ProfileModel(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
+            this.SetErrorToast("Could not update your like right now.");
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostToggleMovieLikeAsync(int id, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId)
+        {
+            this.SetErrorToast("You need to be signed in to like a movie.");
+            return RedirectToPage();
+        }
+
+        try
+        {
+            await likeRepository.ToggleAsync(userId, LikeTargetType.Movie, id, id, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed toggling like for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your like right now.");
         }
 

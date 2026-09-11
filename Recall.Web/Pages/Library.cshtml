@@ -36,20 +36,7 @@
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
         <a asp-page="/Search" class="btn btn-primary">Find series or movies</a>
 
-        @if (showFilters)
-        {
-            <div class="tvdb-filter-bar" role="group" aria-label="Filter by type">
-                <button type="button" class="btn btn-dark btn-sm rounded-pill px-3 tvdb-filter-btn is-active" data-filter="all">
-                    All
-                </button>
-                <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3 tvdb-filter-btn tvdb-filter-btn--series" data-filter="series">
-                    <i class="fa-solid fa-tv" aria-hidden="true"></i> Series
-                </button>
-                <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3 tvdb-filter-btn tvdb-filter-btn--movie" data-filter="movie">
-                    <i class="fa-solid fa-film" aria-hidden="true"></i> Movies
-                </button>
-            </div>
-        }
+        <partial name="_TypeFilterBar" model="showFilters" />
     </div>
 
     @if (Model.IsEmpty)
@@ -106,46 +93,5 @@
 </div>
 
 @section Scripts {
-    <script>
-        (function () {
-            var buttons = document.querySelectorAll('.tvdb-filter-btn');
-            if (buttons.length === 0) return;
-
-            var sections = document.querySelectorAll('[data-library-section]');
-            var emptyNotice = document.getElementById('tvdb-library-empty-filter');
-
-            function applyFilter(type) {
-                var anyVisible = false;
-
-                sections.forEach(function (section) {
-                    var cards = section.querySelectorAll('[data-content-type]');
-                    var sectionHasMatch = false;
-
-                    cards.forEach(function (card) {
-                        var matches = type === 'all' || card.dataset.contentType === type;
-                        card.hidden = !matches;
-                        if (matches) sectionHasMatch = true;
-                    });
-
-                    section.hidden = !sectionHasMatch;
-                    if (sectionHasMatch) anyVisible = true;
-                });
-
-                if (emptyNotice) emptyNotice.hidden = anyVisible;
-            }
-
-            buttons.forEach(function (button) {
-                button.addEventListener('click', function () {
-                    buttons.forEach(function (b) {
-                        b.classList.remove('is-active', 'btn-dark');
-                        b.classList.add('btn-outline-dark');
-                    });
-                    button.classList.add('is-active', 'btn-dark');
-                    button.classList.remove('btn-outline-dark');
-
-                    applyFilter(button.dataset.filter);
-                });
-            });
-        })();
-    </script>
+    <script src="~/js/tvdb-type-filter.js" asp-append-version="true"></script>
 }

@@ -14,51 +14,90 @@ public sealed class FavoritesService(
     ILogger<FavoritesService> logger)
     : IFavoritesService
 {
-    public async Task<IReadOnlyList<FavoriteSeries>> GetLikedSeriesAsync(
+    public async Task<IReadOnlyList<FavoriteTitle>> GetLikedTitlesAsync(
         Guid userId,
         int? limit,
         CancellationToken cancellationToken = default)
     {
-        var likes = await likeRepository.GetLikesAsync(userId, LikeTargetType.Series, cancellationToken);
+        // Sequential: both share the request's scoped DbContext (like the series
+        // aggregate calls below, that one uses a pooled DbContext factory instead,
+        // so it's safe to run those in parallel).
+        var seriesLikes = await likeRepository.GetLikesAsync(userId, LikeTargetType.Series, cancellationToken);
+        var movieLikes = await likeRepository.GetLikesAsync(userId, LikeTargetType.Movie, cancellationToken);
 
-        var ids = likes
-            .Select(l => l.TargetTvdbId)
-            .Distinct()
+        var ordered = seriesLikes
+            .Select(l => (l.TargetTvdbId, l.CreatedUtc, Type: SearchResultType.Series))
+            .Concat(movieLikes.Select(l => (l.TargetTvdbId, l.CreatedUtc, Type: SearchResultType.Movie)))
+            .OrderByDescending(x => x.CreatedUtc)
             .ToList();
 
         if (limit is { } max)
-            ids = ids.Take(Math.Max(0, max)).ToList();
+            ordered = ordered.Take(Math.Max(0, max)).ToList();
 
-        if (ids.Count == 0)
+        if (ordered.Count == 0)
             return [];
 
+        var seriesIds = ordered.Where(x => x.Type == SearchResultType.Series).Select(x => x.TargetTvdbId).Distinct().ToList();
+        var movieIds = ordered.Where(x => x.Type == SearchResultType.Movie).Select(x => x.TargetTvdbId).Distinct().ToList();
+
         // One batched query on the scoped DbContext for every watched episode
-        // across these series — then the TheTVDB aggregates fan out in parallel
-        // (that path uses a pooled DbContext factory, so it's concurrency-safe).
-        var watchedIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, ids, cancellationToken);
+        // across these series — must finish before the aggregate fan-out below,
+        // which uses a pooled DbContext factory and is safe to run concurrently
+        // with itself (but not with another call on the shared context).
+        var watchedIds = seriesIds.Count > 0
+            ? await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesIds, cancellationToken)
+            : new HashSet<int>();
 
-        var aggregates = await Task.WhenAll(
-            ids.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)));
+        var seriesAggregatesTask = seriesIds.Count > 0
+            ? Task.WhenAll(seriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)))
+            : Task.FromResult(Array.Empty<SeriesAggregate?>());
 
-        var result = new List<FavoriteSeries>(ids.Count);
-        foreach (var aggregate in aggregates)
+        var movieAggregatesTask = movieIds.Count > 0
+            ? Task.WhenAll(movieIds.Select(id => theTvDbService.TryGetMovieAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)))
+            : Task.FromResult(Array.Empty<MovieAggregate?>());
+
+        await Task.WhenAll(seriesAggregatesTask, movieAggregatesTask);
+
+        var seriesById = seriesAggregatesTask.Result.Where(a => a is not null).Select(a => a!).ToDictionary(a => a.TvdbId);
+        var moviesById = movieAggregatesTask.Result.Where(a => a is not null).Select(a => a!).ToDictionary(a => a.TvdbId);
+
+        var result = new List<FavoriteTitle>(ordered.Count);
+        foreach (var entry in ordered)
         {
-            if (aggregate is null)
-                continue;
+            if (entry.Type == SearchResultType.Series)
+            {
+                if (!seriesById.TryGetValue(entry.TargetTvdbId, out var aggregate))
+                    continue;
 
-            var progress = watchProgressService.BuildProgress(
-                aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedIds);
+                var progress = watchProgressService.BuildProgress(
+                    aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedIds);
 
-            result.Add(new FavoriteSeries(
-                aggregate.TvdbId,
-                aggregate.Name,
-                aggregate.ImageUrl,
-                aggregate.FirstAired,
-                progress.WatchedReleasedCount,
-                progress.ReleasedCount));
+                result.Add(new FavoriteTitle(
+                    SearchResultType.Series,
+                    aggregate.TvdbId,
+                    aggregate.Name,
+                    aggregate.ImageUrl,
+                    aggregate.FirstAired,
+                    progress.WatchedReleasedCount,
+                    progress.ReleasedCount));
+            }
+            else
+            {
+                if (!moviesById.TryGetValue(entry.TargetTvdbId, out var movie))
+                    continue;
+
+                result.Add(new FavoriteTitle(
+                    SearchResultType.Movie,
+                    movie.TvdbId,
+                    movie.Name,
+                    movie.ImageUrl,
+                    movie.ReleaseDate,
+                    WatchedEpisodes: 0,
+                    ReleasedEpisodes: 0));
+            }
         }
 
-        // Aggregates keep the newest-liked-first order of `ids`.
+        // `ordered` keeps the newest-liked-first order across both types.
         return result;
     }
 
@@ -68,10 +107,10 @@ public sealed class FavoritesService(
     {
         // Sequential: both halves read from the scoped DbContext (likes +
         // watched episodes), so they must not overlap.
-        var series = await GetLikedSeriesAsync(userId, limit: null, cancellationToken);
+        var titles = await GetLikedTitlesAsync(userId, limit: null, cancellationToken);
         var episodes = await GetLikedEpisodesAsync(userId, cancellationToken);
 
-        return new FavoritesView(series, series.Count, episodes, episodes.Count);
+        return new FavoritesView(titles, titles.Count, episodes, episodes.Count);
     }
 
     private async Task<IReadOnlyList<FavoriteEpisode>> GetLikedEpisodesAsync(

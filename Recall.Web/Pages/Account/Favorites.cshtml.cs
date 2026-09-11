@@ -17,7 +17,7 @@ public sealed class FavoritesModel(
     ILikeRepository likeRepository,
     ILogger<FavoritesModel> logger) : PageModel
 {
-    public IReadOnlyList<FavoriteSeries> Series { get; private set; } = Array.Empty<FavoriteSeries>();
+    public IReadOnlyList<FavoriteTitle> Titles { get; private set; } = Array.Empty<FavoriteTitle>();
 
     public IReadOnlyList<FavoriteEpisode> Episodes { get; private set; } = Array.Empty<FavoriteEpisode>();
 
@@ -29,7 +29,7 @@ public sealed class FavoritesModel(
         try
         {
             var view = await favoritesService.GetAllFavoritesAsync(userId, cancellationToken);
-            Series = view.Series;
+            Titles = view.Titles;
             Episodes = view.Episodes;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -53,6 +53,27 @@ public sealed class FavoritesModel(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
+            this.SetErrorToast("Could not update your like right now.");
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostToggleMovieLikeAsync(int id, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId)
+        {
+            this.SetErrorToast("You need to be signed in to like a movie.");
+            return RedirectToPage();
+        }
+
+        try
+        {
+            await likeRepository.ToggleAsync(userId, LikeTargetType.Movie, id, id, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed toggling like for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your like right now.");
         }
 
