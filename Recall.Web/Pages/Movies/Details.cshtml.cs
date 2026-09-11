@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Entities;
+using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
@@ -19,10 +21,14 @@ public sealed class DetailsModel(
     ICurrentUserService currentUserService,
     ILikeRepository likeRepository,
     IMovieWatchRepository movieWatchRepository,
+    IMovieOmdbSnapshotStore omdbSnapshotStore,
     ILogger<DetailsModel> logger)
     : PageModel
 {
     public MovieAggregate? Movie { get; private set; }
+
+    /// <summary>OMDb enrichment for this movie, when the background job has stored it.</summary>
+    public OmdbSeries? Omdb { get; private set; }
 
     public bool IsAuthenticated => currentUserService.IsAuthenticated;
 
@@ -42,6 +48,10 @@ public sealed class DetailsModel(
         {
             Movie = await theTvDbService.GetMovieAggregateByIdAsync(id, cancellationToken);
             if (Movie is null) return NotFound();
+
+            // OMDb enrichment (rating, awards, …) — local snapshot only, populated
+            // by UpdateMovieOmdbInfoTimer. Absent until the job has run for this movie.
+            Omdb = await omdbSnapshotStore.GetAsync(id, cancellationToken);
 
             if (currentUserService.IsAuthenticated && currentUserService.UserId is { } userId)
             {

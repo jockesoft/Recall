@@ -2,6 +2,12 @@
 @model Recall.Web.Pages.Movies.DetailsModel
 @using Recall.Web.Pages.Shared
 @functions {
+    // OMDb uses the literal string "N/A" for missing values.
+    static string? OmdbValue(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : raw.Trim();
+
     static string FormatRuntime(int minutes)
     {
         var hours = minutes / 60;
@@ -26,6 +32,10 @@
     var isReleased = status is { Name: not null } && status.Name.Equals("Released", StringComparison.OrdinalIgnoreCase);
     var imdbId = movie?.RemoteIds
         .FirstOrDefault(r => string.Equals(r.SourceName, "imdb", StringComparison.OrdinalIgnoreCase))?.Id;
+
+    var omdbAwards = OmdbValue(Model.Omdb?.Awards);
+    var omdbRating = OmdbValue(Model.Omdb?.ImdbRating);
+    var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
 <a asp-page="/Search" class="tvdb-back-link"
@@ -139,12 +149,38 @@
                         <dt class="col-sm-3">Box office</dt>
                         <dd class="col-sm-9">@FormatUsd(movie.BoxOffice.Value)</dd>
                     }
+
+                    @if (omdbRating is not null)
+                    {
+                        <dt class="col-sm-3">IMDb rating</dt>
+                        <dd class="col-sm-9">
+                            <span class="tvdb-rating">
+                                <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                                <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
+                                @if (omdbVotes is not null)
+                                {
+                                    <span class="tvdb-rating-votes">@omdbVotes votes</span>
+                                }
+                            </span>
+                        </dd>
+                    }
                 </dl>
 
                 @if (!string.IsNullOrWhiteSpace(movie.Overview))
                 {
                     <h5>Overview</h5>
                     <p class="tvdb-prose">@movie.Overview</p>
+                }
+
+                @if (omdbAwards is not null)
+                {
+                    <div class="tvdb-awards">
+                        <i class="fa-solid fa-award" aria-hidden="true"></i>
+                        <div>
+                            <p class="mb-0">@omdbAwards</p>
+                            <span class="tvdb-awards-src">via OMDb</span>
+                        </div>
+                    </div>
                 }
             </div>
         </div>
