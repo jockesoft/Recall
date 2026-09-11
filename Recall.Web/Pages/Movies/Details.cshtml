@@ -1,5 +1,6 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Movies.DetailsModel
+@using Recall.Web.Pages.Shared
 @functions {
     static string FormatRuntime(int minutes)
     {
@@ -29,6 +30,8 @@
 
 <a asp-page="/Search" class="tvdb-back-link"
    onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">&larr; Back</a>
+
+@Html.AntiForgeryToken()
 
 <div class="tvdb-shell">
     @if (movie is null)
@@ -75,6 +78,29 @@
                         {
                             <span class="tvdb-badge tvdb-badge--neutral">@genre</span>
                         }
+                    </div>
+                }
+
+                @if (Model.IsAuthenticated)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
+                                 {
+                                     Handler = "ToggleMovieWatched",
+                                     RouteId = movie.TvdbId,
+                                     IsWatched = Model.IsWatchedByCurrentUser,
+                                     WatchedLabel = Model.WatchedOnUtc is { } w
+                                         ? $"Watched on {w.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)}"
+                                         : "Watched"
+                                 })" />
+
+                        <partial name="_LikeToggle" model="@(new LikeToggleModel
+                                 {
+                                     Handler = "ToggleMovieLike",
+                                     RouteId = movie.TvdbId,
+                                     IsLiked = Model.IsLikedByCurrentUser,
+                                     TargetNoun = "movie"
+                                 })" />
                     </div>
                 }
 
