@@ -99,6 +99,38 @@ public sealed class MovieWatchRepositoryTests
         (await sut.GetWatchedUtcAsync(userId, 2)).Should().NotBeNull();
     }
 
+    [Test]
+    public async Task GetWatchedMoviesAsync_Should_ReturnOnlyThisUsersWatches_NewestFirst()
+    {
+        var userId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+        await SeedUserAsync(otherUserId);
+
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var sut = new MovieWatchRepository(dbContext, NullLogger<MovieWatchRepository>.Instance);
+
+        await sut.ToggleAsync(userId, movieTvdbId: 1);
+        await sut.ToggleAsync(userId, movieTvdbId: 2);
+        await sut.ToggleAsync(otherUserId, movieTvdbId: 3);
+
+        var watched = await sut.GetWatchedMoviesAsync(userId);
+
+        watched.Select(w => w.MovieTvdbId).Should().BeEquivalentTo([1, 2]);
+    }
+
+    [Test]
+    public async Task GetWatchedMoviesAsync_Should_ReturnEmpty_WhenNothingWatched()
+    {
+        var userId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var sut = new MovieWatchRepository(dbContext, NullLogger<MovieWatchRepository>.Instance);
+
+        (await sut.GetWatchedMoviesAsync(userId)).Should().BeEmpty();
+    }
+
     private async Task SeedUserAsync(Guid userId)
     {
         await using var dbContext = new AppDbContext(_dbOptions);

@@ -54,4 +54,14 @@ public sealed class MovieWatchRepository(
 
         return true;
     }
+
+    public async Task<IReadOnlyList<MovieWatch>> GetWatchedMoviesAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await dbContext.UserMovieWatches
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.WatchedUtc)
+            .Select(x => new MovieWatch(x.MovieTvdbId, x.WatchedUtc))
+            .ToListAsync(cancellationToken);
+    }
 }

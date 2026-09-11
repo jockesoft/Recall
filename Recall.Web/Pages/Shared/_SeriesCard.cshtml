@@ -8,11 +8,18 @@
 }
 
 <div class="tvdb-series-card-wrap">
-    <a asp-page="/Series/Details" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
+    <a asp-page="@Model.DetailsPage" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
         <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
             @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
             {
                 <img src="@Model.ImageUrl" alt="" loading="lazy" />
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Model.BadgeIcon))
+            {
+                <span class="tvdb-series-badge tvdb-series-badge--@Model.BadgeVariant" title="@Model.BadgeLabel" aria-label="@Model.BadgeLabel">
+                    <i class="fa-solid @Model.BadgeIcon" aria-hidden="true"></i>
+                </span>
             }
 
             @if (showProgress)
@@ -28,7 +35,11 @@
 
         <span class="tvdb-series-title">@Model.Name</span>
 
-        @if (Model.FirstAired.HasValue)
+        @if (!string.IsNullOrWhiteSpace(Model.Caption))
+        {
+            <span class="tvdb-series-year">@Model.Caption</span>
+        }
+        else if (Model.FirstAired.HasValue)
         {
             <span class="tvdb-series-year">@Model.FirstAired.Value.Year</span>
         }
@@ -43,7 +54,7 @@
                          RouteId = Model.TvdbId,
                          HiddenFields = Model.LikeHiddenFields,
                          IsLiked = Model.IsLiked,
-                         TargetNoun = "series"
+                         TargetNoun = Model.LikeTargetNoun
                      })" />
         </div>
     }

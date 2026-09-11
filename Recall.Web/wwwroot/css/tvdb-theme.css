@@ -758,6 +758,12 @@ hr {
     border: 1px solid var(--tvdb-ink-line);
 }
 
+.tvdb-badge--info {
+    color: var(--tvdb-info-ink);
+    background: rgba(79, 138, 147, 0.22);
+    border: 1px solid rgba(79, 138, 147, 0.5);
+}
+
 /* Badge-as-button (e.g. an inline status chip rendered as a <button>) */
 button.tvdb-badge {
     appearance: none;
@@ -1831,6 +1837,37 @@ img.rounded.shadow-sm {
     color: rgba(241, 236, 226, 0.35);
     text-align: center;
     padding: 0.75rem;
+}
+
+/* Small corner label (e.g. "Movie") for a card whose content type isn't
+   obvious from context — sits top-left, opposite the like heart. */
+.tvdb-series-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    color: var(--tvdb-paper);
+    background: rgba(10, 13, 18, 0.65);
+    border: 1px solid rgba(241, 236, 226, 0.25);
+}
+
+/* Content-type tint: amber for series, teal for movies — same accent colors
+   used everywhere else in the theme (tvdb-signal / tvdb-info). */
+.tvdb-series-badge--series {
+    color: var(--tvdb-signal);
+    border-color: rgba(232, 163, 61, 0.55);
+}
+
+.tvdb-series-badge--movie {
+    color: var(--tvdb-info);
+    border-color: rgba(79, 138, 147, 0.55);
 }
 
 /* Thin watch-progress bar along the bottom edge of the poster. Only rendered

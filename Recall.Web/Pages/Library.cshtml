@@ -1,0 +1,76 @@
+@page
+@using Recall.Web.Domain.TheTvDb
+@using Recall.Web.Pages.Shared
+@model Recall.Web.Pages.LibraryModel
+@{
+    ViewData["Title"] = "My Library";
+}
+
+@functions {
+    static SeriesCardModel ToCardModel(LibraryCardItem item) => new()
+    {
+        TvdbId = item.TvdbId,
+        Name = item.Name,
+        ImageUrl = item.ImageUrl,
+        FirstAired = item.FirstAired,
+        WatchedEpisodes = item.WatchedEpisodes,
+        ReleasedEpisodes = item.ReleasedEpisodes,
+        Caption = item.Caption,
+        DetailsPage = item.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
+        BadgeIcon = item.Type == SearchResultType.Movie ? "fa-film" : "fa-tv",
+        BadgeLabel = item.Type == SearchResultType.Movie ? "Movie" : "Series",
+        BadgeVariant = item.Type == SearchResultType.Movie ? "movie" : "series",
+        ShowLike = item.Type == SearchResultType.Series,
+        IsLiked = item.IsLiked
+    };
+}
+
+<div class="tvdb-shell">
+    <h1 class="tvdb-display mb-3">My Library</h1>
+
+    <div class="mb-3">
+        <a asp-page="/Search" class="btn btn-primary">Find series or movies</a>
+    </div>
+
+    @if (Model.IsEmpty)
+    {
+        <div class="alert alert-info" role="alert">
+            Your library is empty. Search and save series, or mark a movie as watched, to get started.
+        </div>
+    }
+    else
+    {
+        @if (Model.Watching.Count > 0)
+        {
+            <h4 class="mb-3 tvdb-eyebrow">Watching &middot; @Model.Watching.Count</h4>
+            <div class="tvdb-series-grid mb-4">
+                @foreach (var item in Model.Watching)
+                {
+                    <partial name="_SeriesCard" model="@ToCardModel(item)" />
+                }
+            </div>
+        }
+
+        @if (Model.UpToDate.Count > 0)
+        {
+            <h4 class="mb-3 tvdb-eyebrow">Up to Date &middot; @Model.UpToDate.Count</h4>
+            <div class="tvdb-series-grid mb-4">
+                @foreach (var item in Model.UpToDate)
+                {
+                    <partial name="_SeriesCard" model="@ToCardModel(item)" />
+                }
+            </div>
+        }
+
+        @if (Model.Watched.Count > 0)
+        {
+            <h4 class="mb-3 tvdb-eyebrow">Watched &middot; @Model.Watched.Count</h4>
+            <div class="tvdb-series-grid mb-4">
+                @foreach (var item in Model.Watched)
+                {
+                    <partial name="_SeriesCard" model="@ToCardModel(item)" />
+                }
+            </div>
+        }
+    }
+</div>

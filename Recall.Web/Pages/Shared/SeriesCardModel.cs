@@ -47,4 +47,29 @@ public sealed class SeriesCardModel
 
     /// <summary>Extra hidden fields the like handler needs, rendered inside the heart form.</summary>
     public IDictionary<string, string> LikeHiddenFields { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Noun used in the like button's tooltip/aria-label, e.g. "series" or "movie".</summary>
+    public string LikeTargetNoun { get; init; } = "series";
+
+    /// <summary>Page the poster links to. Defaults to Series/Details; pass "/Movies/Details" for a movie.</summary>
+    public string DetailsPage { get; init; } = "/Series/Details";
+
+    /// <summary>
+    /// Optional small corner icon indicating content type, e.g. "fa-film" for a
+    /// movie or "fa-tv" for a series (any Font Awesome solid icon name, without
+    /// the "fa-solid" prefix). Null omits the badge entirely.
+    /// </summary>
+    public string? BadgeIcon { get; init; }
+
+    /// <summary>Accessible label for <see cref="BadgeIcon"/>, e.g. "Movie" or "Series".</summary>
+    public string? BadgeLabel { get; init; }
+
+    /// <summary>
+    /// Color modifier for the badge — "series" tints it amber, "movie" tints it
+    /// teal (the theme's accent colors). Ignored when <see cref="BadgeIcon"/> is null.
+    /// </summary>
+    public string BadgeVariant { get; init; } = "series";
+
+    /// <summary>Optional line of text under the title, e.g. "Watched on Sep 11, 2026".</summary>
+    public string? Caption { get; init; }
 }

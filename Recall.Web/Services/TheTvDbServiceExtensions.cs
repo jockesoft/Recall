@@ -27,4 +27,28 @@ public static class TheTvDbServiceExtensions
             return null;
         }
     }
+
+    /// <summary>
+    /// Best-effort movie aggregate fetch: swallows any exception except
+    /// cancellation, logs a warning tagged with <paramref name="context"/>, and
+    /// returns <c>null</c> instead of letting one bad movie take down a page or
+    /// job that's loading many of them in parallel.
+    /// </summary>
+    public static async Task<MovieAggregate?> TryGetMovieAggregateAsync(
+        this ITheTvDbService theTvDbService,
+        int movieTvdbId,
+        ILogger logger,
+        string context,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await theTvDbService.GetMovieAggregateByIdAsync(movieTvdbId, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "{Context}: could not load movie aggregate {MovieId}.", context, movieTvdbId);
+            return null;
+        }
+    }
 }

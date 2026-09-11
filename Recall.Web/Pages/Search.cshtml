@@ -41,7 +41,8 @@
             @foreach (var item in Model.Results)
             {
                 var isSeries = item.Type == SearchResultType.Series;
-                var typeBadgeClass = isSeries ? "text-bg-primary" : "text-bg-secondary";
+                var typeBadgeClass = isSeries ? "tvdb-badge--amber" : "tvdb-badge--info";
+                var typeIcon = isSeries ? "fa-tv" : "fa-film";
 
                 <div class="list-group-item">
                     <a asp-page="@(isSeries ? "/Series/Details" : "/Movies/Details")" asp-route-id="@item.TvdbId" class="stretched-link"></a>
@@ -62,7 +63,9 @@
                             <div class="d-flex w-100 justify-content-between align-items-start gap-2">
                                 <h5 class="mb-1">
                                     @item.Name
-                                    <span class="badge @typeBadgeClass tvdb-mono">@item.Type</span>
+                                    <span class="tvdb-badge @typeBadgeClass" title="@item.Type" aria-label="@item.Type">
+                                        <i class="fa-solid @typeIcon" aria-hidden="true"></i>
+                                    </span>
                                 </h5>
                                 @if (!string.IsNullOrWhiteSpace(item.Year))
                                 {

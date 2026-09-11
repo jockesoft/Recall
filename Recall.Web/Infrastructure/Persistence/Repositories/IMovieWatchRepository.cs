@@ -11,4 +11,10 @@ public interface IMovieWatchRepository
     /// un-marked. Safe against a concurrent double-submit.
     /// </summary>
     Task<bool> ToggleAsync(Guid userId, int movieTvdbId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every movie the user has marked watched, newest first.</summary>
+    Task<IReadOnlyList<MovieWatch>> GetWatchedMoviesAsync(Guid userId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>A single movie watch mark, flattened for read use.</summary>
+public sealed record MovieWatch(int MovieTvdbId, DateTime WatchedUtc);
