@@ -79,7 +79,7 @@ public sealed class LoginTokenRepositoryTests
     }
 
     [Test]
-    public async Task MarkConsumedAsync_Should_MakeTokenInactive()
+    public async Task MarkConsumedAsync_Should_MakeTokenInactive_AndReturnTrue()
     {
         var userId = Guid.NewGuid();
         await SeedUserAsync(userId);
@@ -95,9 +95,38 @@ public sealed class LoginTokenRepositoryTests
             ExpiresUtc = DateTime.UtcNow.AddMinutes(10)
         });
 
-        await sut.MarkConsumedAsync(tokenId);
-
+        (await sut.MarkConsumedAsync(tokenId)).Should().BeTrue();
         (await sut.GetActiveByHashAsync("hash-2", DateTime.UtcNow)).Should().BeNull();
+    }
+
+    [Test]
+    public async Task MarkConsumedAsync_Should_ReturnFalse_WhenAlreadyConsumed()
+    {
+        var userId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+
+        var tokenId = Guid.NewGuid();
+        await using var db = new AppDbContext(_dbOptions);
+        var sut = new LoginTokenRepository(db);
+        await sut.AddAsync(new LoginToken
+        {
+            Id = tokenId,
+            UserId = userId,
+            TokenHash = "hash-3",
+            ExpiresUtc = DateTime.UtcNow.AddMinutes(10)
+        });
+
+        (await sut.MarkConsumedAsync(tokenId)).Should().BeTrue("the first consume wins");
+        (await sut.MarkConsumedAsync(tokenId)).Should().BeFalse("a second consume of the same token must not also succeed");
+    }
+
+    [Test]
+    public async Task MarkConsumedAsync_Should_ReturnFalse_WhenTokenDoesNotExist()
+    {
+        await using var db = new AppDbContext(_dbOptions);
+        var sut = new LoginTokenRepository(db);
+
+        (await sut.MarkConsumedAsync(Guid.NewGuid())).Should().BeFalse();
     }
 
     [Test]
@@ -119,43 +148,6 @@ public sealed class LoginTokenRepositoryTests
         (await sut.GetActiveByHashAsync("a", DateTime.UtcNow)).Should().BeNull();
         (await sut.GetActiveByHashAsync("b", DateTime.UtcNow)).Should().BeNull();
         (await sut.GetActiveByHashAsync("c", DateTime.UtcNow)).Should().NotBeNull("another user's token is untouched");
-    }
-
-    [Test]
-    public async Task GetMostRecentActiveForUserAsync_Should_ReturnNewestUnconsumedUnexpiredToken()
-    {
-        var userId = Guid.NewGuid();
-        await SeedUserAsync(userId);
-
-        await using var db = new AppDbContext(_dbOptions);
-        var sut = new LoginTokenRepository(db);
-
-        // Oldest active, then a consumed one, then the newest active.
-        await sut.AddAsync(new LoginToken { Id = Guid.NewGuid(), UserId = userId, TokenHash = "old", ExpiresUtc = DateTime.UtcNow.AddMinutes(10) });
-        await Task.Delay(10);
-        var consumedId = Guid.NewGuid();
-        await sut.AddAsync(new LoginToken { Id = consumedId, UserId = userId, TokenHash = "used", ExpiresUtc = DateTime.UtcNow.AddMinutes(10) });
-        await sut.MarkConsumedAsync(consumedId);
-        await Task.Delay(10);
-        await sut.AddAsync(new LoginToken { Id = Guid.NewGuid(), UserId = userId, TokenHash = "new", ExpiresUtc = DateTime.UtcNow.AddMinutes(10) });
-
-        var latest = await sut.GetMostRecentActiveForUserAsync(userId, DateTime.UtcNow);
-
-        latest.Should().NotBeNull();
-        latest!.TokenHash.Should().Be("new");
-    }
-
-    [Test]
-    public async Task GetMostRecentActiveForUserAsync_Should_ReturnNull_WhenAllTokensConsumedOrExpired()
-    {
-        var userId = Guid.NewGuid();
-        await SeedUserAsync(userId);
-
-        await using var db = new AppDbContext(_dbOptions);
-        var sut = new LoginTokenRepository(db);
-        await sut.AddAsync(new LoginToken { Id = Guid.NewGuid(), UserId = userId, TokenHash = "expired", ExpiresUtc = DateTime.UtcNow.AddMinutes(-1) });
-
-        (await sut.GetMostRecentActiveForUserAsync(userId, DateTime.UtcNow)).Should().BeNull();
     }
 
     private async Task SeedUserAsync(Guid userId)

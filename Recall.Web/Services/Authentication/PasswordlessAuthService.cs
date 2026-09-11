@@ -69,18 +69,17 @@ public sealed class PasswordlessAuthService(
 
         // Resend cooldown: if a link is already outstanding and was issued
         // moments ago, don't send another. Stops the form being used to bomb an
-        // inbox regardless of how many requests come in.
-        if (_options.ResendCooldownSeconds > 0)
+        // inbox regardless of how many requests come in. Enforced via the
+        // in-memory abuse guard (an atomic check-and-set) rather than a DB
+        // read-then-later-insert, so two concurrent requests for the same user
+        // can't both slip through before either has recorded a new token.
+        if (_options.ResendCooldownSeconds > 0 &&
+            !abuseGuard.TryStartResendCooldown(user.Id, TimeSpan.FromSeconds(_options.ResendCooldownSeconds)))
         {
-            var mostRecent = await tokenRepository.GetMostRecentActiveForUserAsync(user.Id, nowUtc, cancellationToken);
-            if (mostRecent is not null &&
-                mostRecent.CreatedUtc > nowUtc.AddSeconds(-_options.ResendCooldownSeconds))
-            {
-                logger.LogInformation(
-                    "Passwordless sign-in request for user {UserId} ignored: within the {Cooldown}s resend cooldown.",
-                    user.Id, _options.ResendCooldownSeconds);
-                return;
-            }
+            logger.LogInformation(
+                "Passwordless sign-in request for user {UserId} ignored: within the {Cooldown}s resend cooldown.",
+                user.Id, _options.ResendCooldownSeconds);
+            return;
         }
 
         if (_options.InvalidatePreviousTokens)
@@ -128,7 +127,15 @@ public sealed class PasswordlessAuthService(
         }
 
         // Consume first so a double-submit of the same link can't sign in twice.
-        await tokenRepository.MarkConsumedAsync(active.Id, cancellationToken);
+        // If this call didn't win the race (a concurrent redemption already
+        // consumed it between our read above and this update), treat it exactly
+        // like an invalid token instead of signing in anyway.
+        if (!await tokenRepository.MarkConsumedAsync(active.Id, cancellationToken))
+        {
+            logger.LogWarning(
+                "Passwordless sign-in failed: token {TokenId} was already consumed by a concurrent request.", active.Id);
+            return LoginRedemptionResult.Invalid();
+        }
 
         var user = await userRepository.GetByIdAsync(active.UserId, cancellationToken);
         if (user is null)

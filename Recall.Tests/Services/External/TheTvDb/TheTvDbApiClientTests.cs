@@ -264,6 +264,43 @@ public class TheTvDbApiClientTests
             ItExpr.IsAny<CancellationToken>());
     }
 
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_ReturnAggregate_WhenTranslationFetchFails()
+    {
+        // Arrange: the series call succeeds but the (best-effort) translation call
+        // fails — the aggregate must still come back rather than being discarded.
+        var handlerMock = CreateRoutedHandlerMock(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+
+            if (path.EndsWith("/login", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data":{"token":"test-token"}}""");
+
+            if (path.Contains("/translations/", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.InternalServerError, """{"status":"failure","message":"Server error"}""");
+
+            if (path.Contains("/extended", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """
+                    {
+                      "status":"success",
+                      "data": { "id": 42, "name": "Dark", "episodes": [] }
+                    }
+                    """);
+
+            throw new InvalidOperationException($"Unexpected request path: {path}");
+        });
+
+        var sut = CreateSut(handlerMock.Object);
+
+        // Act
+        var result = await sut.GetSeriesAggregateByIdAsync(42);
+
+        // Assert
+        result.Should().NotBeNull("a failed translation fetch must not discard an already-successful series fetch");
+        result!.TvdbId.Should().Be(42);
+        result.Name.Should().Be("Dark");
+    }
+
     private static TheTvDbApiClient CreateSut(HttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler)
@@ -303,6 +340,21 @@ public class TheTvDbApiClientTests
 
                 return responses.Dequeue();
             });
+
+        return handlerMock;
+    }
+
+    private static Mock<HttpMessageHandler> CreateRoutedHandlerMock(Func<HttpRequestMessage, HttpResponseMessage> responder)
+    {
+        var handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+
+        handlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync((HttpRequestMessage request, CancellationToken _) => responder(request));
 
         return handlerMock;
     }

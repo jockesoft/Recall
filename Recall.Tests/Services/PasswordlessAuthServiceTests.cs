@@ -31,6 +31,7 @@ public sealed class PasswordlessAuthServiceTests
         _mailService = new Mock<IMailService>();
         _abuseGuard = new Mock<ILoginAbuseGuard>();
         _abuseGuard.Setup(x => x.TryAcquire(It.IsAny<string>())).Returns(true);
+        _abuseGuard.Setup(x => x.TryStartResendCooldown(It.IsAny<Guid>(), It.IsAny<TimeSpan>())).Returns(true);
         _options = new LoginTokenOptions { TokenLifetimeMinutes = 15, InvalidatePreviousTokens = true };
 
         _sut = new PasswordlessAuthService(
@@ -167,16 +168,9 @@ public sealed class PasswordlessAuthServiceTests
         _userRepository
             .Setup(x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
-        _tokenRepository
-            .Setup(x => x.GetMostRecentActiveForUserAsync(user.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new LoginToken
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                TokenHash = "x",
-                CreatedUtc = DateTime.UtcNow.AddSeconds(-30),
-                ExpiresUtc = DateTime.UtcNow.AddMinutes(14)
-            });
+        _abuseGuard
+            .Setup(x => x.TryStartResendCooldown(user.Id, TimeSpan.FromSeconds(120)))
+            .Returns(false);
 
         await _sut.RequestLoginAsync("user@test.local", _ => "https://recall.test/x");
 
@@ -195,16 +189,9 @@ public sealed class PasswordlessAuthServiceTests
         _userRepository
             .Setup(x => x.GetOrCreateByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
-        _tokenRepository
-            .Setup(x => x.GetMostRecentActiveForUserAsync(user.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new LoginToken
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                TokenHash = "x",
-                CreatedUtc = DateTime.UtcNow.AddSeconds(-200),
-                ExpiresUtc = DateTime.UtcNow.AddMinutes(11)
-            });
+        _abuseGuard
+            .Setup(x => x.TryStartResendCooldown(user.Id, TimeSpan.FromSeconds(120)))
+            .Returns(true);
 
         await _sut.RequestLoginAsync("user@test.local", _ => "https://recall.test/x");
 
@@ -225,8 +212,8 @@ public sealed class PasswordlessAuthServiceTests
 
         await _sut.RequestLoginAsync("user@test.local", _ => "https://recall.test/x");
 
-        _tokenRepository.Verify(
-            x => x.GetMostRecentActiveForUserAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+        _abuseGuard.Verify(
+            x => x.TryStartResendCooldown(It.IsAny<Guid>(), It.IsAny<TimeSpan>()),
             Times.Never);
         _mailService.Verify(
             x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
@@ -352,6 +339,9 @@ public sealed class PasswordlessAuthServiceTests
         _tokenRepository
             .Setup(x => x.GetActiveByHashAsync(expectedHash, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(token);
+        _tokenRepository
+            .Setup(x => x.MarkConsumedAsync(token.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         _userRepository
             .Setup(x => x.GetByIdAsync(user.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
@@ -364,6 +354,36 @@ public sealed class PasswordlessAuthServiceTests
         result.DisplayName.Should().Be("user");
         result.Role.Should().Be(UserRole.User);
         _tokenRepository.Verify(x => x.MarkConsumedAsync(token.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task RedeemAsync_Should_ReturnInvalid_AndNotSignIn_WhenConsumeLosesRace()
+    {
+        // A concurrent redemption of the same token already consumed it between
+        // our GetActiveByHashAsync read and this call's MarkConsumedAsync.
+        const string raw = "raw-token-value";
+        var expectedHash = Sha256Base64(raw);
+
+        var token = new LoginToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            TokenHash = expectedHash,
+            ExpiresUtc = DateTime.UtcNow.AddMinutes(5)
+        };
+
+        _tokenRepository
+            .Setup(x => x.GetActiveByHashAsync(expectedHash, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(token);
+        _tokenRepository
+            .Setup(x => x.MarkConsumedAsync(token.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await _sut.RedeemAsync(raw);
+
+        result.Succeeded.Should().BeFalse();
+        result.Status.Should().Be(LoginRedemptionStatus.InvalidOrExpired);
+        _userRepository.Verify(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -384,6 +404,9 @@ public sealed class PasswordlessAuthServiceTests
         _tokenRepository
             .Setup(x => x.GetActiveByHashAsync(expectedHash, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(token);
+        _tokenRepository
+            .Setup(x => x.MarkConsumedAsync(token.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         _userRepository
             .Setup(x => x.GetByIdAsync(user.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
@@ -407,6 +430,9 @@ public sealed class PasswordlessAuthServiceTests
         _tokenRepository
             .Setup(x => x.GetActiveByHashAsync(It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(token);
+        _tokenRepository
+            .Setup(x => x.MarkConsumedAsync(token.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         _userRepository
             .Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((AppUserEntity?)null);

@@ -16,4 +16,14 @@ public interface ILoginAbuseGuard
     /// should silently drop the request exactly like an allowlist miss.
     /// </summary>
     bool TryAcquire(string normalizedEmail);
+
+    /// <summary>
+    /// Atomically checks and starts a user's resend cooldown: <c>true</c> when no
+    /// cooldown was active (one now is, for <paramref name="cooldown"/>);
+    /// <c>false</c> when a request for this user already started one that
+    /// hasn't elapsed yet. Backed by in-memory state, so — unlike a
+    /// read-then-write DB check — two concurrent calls for the same user can
+    /// never both return <c>true</c>.
+    /// </summary>
+    bool TryStartResendCooldown(Guid userId, TimeSpan cooldown);
 }

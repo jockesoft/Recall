@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Options;
 
@@ -15,6 +16,13 @@ public sealed class LoginAbuseGuard : ILoginAbuseGuard, IDisposable
 {
     private readonly RateLimiter _siteWideLimiter;
     private readonly PartitionedRateLimiter<string> _perEmailLimiter;
+
+    // Per-user last-resend timestamp, checked and set atomically by
+    // TryStartResendCooldown. Grows by one tiny entry per distinct user who has
+    // ever requested a sign-in and is never pruned — like the rest of this
+    // guard's state, that's fine for Recall's user-base scale and resets on
+    // restart along with everything else here.
+    private readonly ConcurrentDictionary<Guid, DateTime> _lastResendUtc = new();
 
     public LoginAbuseGuard(IOptions<LoginTokenOptions> options)
     {
@@ -47,6 +55,32 @@ public sealed class LoginAbuseGuard : ILoginAbuseGuard, IDisposable
 
         using var emailLease = _perEmailLimiter.AttemptAcquire(normalizedEmail);
         return emailLease.IsAcquired;
+    }
+
+    public bool TryStartResendCooldown(Guid userId, TimeSpan cooldown)
+    {
+        while (true)
+        {
+            var now = DateTime.UtcNow;
+
+            if (!_lastResendUtc.TryGetValue(userId, out var last))
+            {
+                // No entry yet — try to be the first to claim this cooldown window.
+                if (_lastResendUtc.TryAdd(userId, now))
+                    return true;
+
+                continue; // someone else added concurrently; retry and see their value
+            }
+
+            if (now - last < cooldown)
+                return false; // still cooling down
+
+            // Cooldown elapsed — try to replace the stale timestamp atomically.
+            if (_lastResendUtc.TryUpdate(userId, now, last))
+                return true;
+
+            // Someone else updated it between our read and this attempt; retry.
+        }
     }
 
     public void Dispose()

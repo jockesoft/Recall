@@ -64,24 +64,24 @@ public sealed class TheTvDbApiClient(
         string language,
         CancellationToken cancellationToken)
     {
-        SeriesDataDto? seriesDto = null;
-        SeriesTranslationDataDto? translationDto = null;
+        var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+        var translationDtoTask = GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
 
+        // Translation is best-effort — its failure shouldn't cost us the series data.
+        SeriesTranslationDataDto? translationDto = null;
         try
         {
-            var translationDtoTask = GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken);
-            var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
-
-            await Task.WhenAll(seriesDtoTask, translationDtoTask);
-            (seriesDto, translationDto) = (seriesDtoTask.Result, translationDtoTask.Result);
+            translationDto = await translationDtoTask;
         }
         catch (TheTvDbApiException ex)
         {
             logger.LogInformation(
                 ex,
-                "Series/Translation fetch failed for series {SeriesId}, language {Language}. Falling back.",
+                "Translation fetch failed for series {SeriesId}, language {Language}. Falling back to untranslated data.",
                 seriesId, language);
         }
+
+        var seriesDto = await seriesDtoTask; // let a genuine series-fetch failure propagate
 
         if (seriesDto is null)
             return null;
