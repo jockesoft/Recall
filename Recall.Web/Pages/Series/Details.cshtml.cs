@@ -281,9 +281,19 @@ public sealed class DetailsModel(
 
             var result = await watchProgressService.MarkWatchedThroughAsync(userId, id, episodeId, cancellationToken);
 
-            this.SetSuccessToast(result.MarkedCount > 1
-                ? $"Marked {result.MarkedCount} episodes as watched."
-                : "Episode marked as watched.");
+            if (!result.EpisodeFound)
+            {
+                logger.LogWarning(
+                    "MarkWatchedThroughAsync rejected: episode {EpisodeId} is not part of series {SeriesId}.",
+                    episodeId, id);
+                this.SetErrorToast("That episode doesn't belong to this series.");
+            }
+            else
+            {
+                this.SetSuccessToast(result.MarkedCount > 1
+                    ? $"Marked {result.MarkedCount} episodes as watched."
+                    : "Episode marked as watched.");
+            }
         }
         catch (Exception ex)
         {

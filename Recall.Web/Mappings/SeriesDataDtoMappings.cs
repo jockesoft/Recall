@@ -1,6 +1,7 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
+using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Web.Mappings;
 
@@ -32,7 +33,7 @@ public static class SeriesDataDtoMappings
             Name = !string.IsNullOrWhiteSpace(translatedName) ? translatedName : (dto.Name ?? string.Empty),
             Overview = !string.IsNullOrWhiteSpace(translatedOverview) ? translatedOverview : null,
             Slug = dto.Slug,
-            ImageUrl = dto.Image,
+            ImageUrl = ArtworkUrl.Normalize(dto.Image),
             FirstAired = ParseDateOnly(dto.FirstAired),
             LastAired = ParseDateOnly(dto.LastAired),
             NextAired = ParseDateOnly(dto.NextAired),
@@ -95,7 +96,7 @@ public static class SeriesDataDtoMappings
                 Id = s.Id!.Value,
                 Number = s.Number,
                 Name = string.IsNullOrWhiteSpace(s.Name) ? $"Season {s.Number}" : s.Name!,
-                ImageUrl = s.Image,
+                ImageUrl = ArtworkUrl.Normalize(s.Image),
                 Year = s.Year,
                 TypeName = s.Type?.Name ?? s.Type?.Type,
                 Studios = (s.Companies?.Studio ?? [])
@@ -129,7 +130,7 @@ public static class SeriesDataDtoMappings
                 EpisodeNumber = e.Number,
                 Name = string.IsNullOrWhiteSpace(e.Name) ? $"Episode {e.Number}" : e.Name!,
                 Overview = e.Overview,
-                Image = e.Image,
+                Image = ArtworkUrl.Normalize(e.Image),
                 Aired = ParseDateOnly(e.Aired),
                 RuntimeMinutes = e.Runtime,
                 IsMovie = e.IsMovie.HasValue ? e.IsMovie.Value != 0 : null,
@@ -151,14 +152,14 @@ public static class SeriesDataDtoMappings
             {
                 EpisodeId = c.EpisodeId,
                 Id = c.Id,
-                Image = c.Image,
+                Image = ArtworkUrl.Normalize(c.Image),
                 IsFeatured = c.IsFeatured ?? false,
                 MovieId = c.MovieId,
                 Name = c.Name,
                 PeopleId = c.PeopleId,
                 PeopleType = c.PeopleType,
                 PersonName = c.PersonName,
-                PersonImageUrl  = c.PersonImgUrl,
+                PersonImageUrl  = ArtworkUrl.Normalize(c.PersonImgUrl),
                 SeriesId = c.SeriesId,
                 Sort = c.Sort,
                 Type = c.Type,
@@ -176,11 +177,11 @@ public static class SeriesDataDtoMappings
         {
             Id = dto.Id,
             Name = dto.Name,
-            Image = dto.Image,
+            Image = ArtworkUrl.Normalize(dto.Image),
             IsFeatured = dto.IsFeatured ?? false,
             PeopleId = dto.PeopleId,
             PersonName = dto.PersonName,
-            PersonImageUrl = dto.PersonImgUrl,
+            PersonImageUrl = ArtworkUrl.Normalize(dto.PersonImgUrl),
             PeopleType = dto.PeopleType,
             Type = dto.Type,
             Sort = dto.Sort,
@@ -224,7 +225,7 @@ public static class SeriesDataDtoMappings
         return new RelatedItem
         {
             Name = dto.Name,
-            Image = dto.Image,
+            Image = ArtworkUrl.Normalize(dto.Image),
             Year = dto.Year
         };
     }

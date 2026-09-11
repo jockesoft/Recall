@@ -29,6 +29,7 @@ namespace Recall.Web.Infrastructure.Timers;
 public sealed class UpdateOmdbInfoTimer(
     IOmdbSnapshotStore omdbSnapshotStore,
     IOmdbApiClient omdbApiClient,
+    IOmdbRequestBudget requestBudget,
     ITheTvDbService theTvDbService,
     IOptions<OmdbOptions> omdbOptions,
     ILogger<UpdateOmdbInfoTimer> logger) : IJob
@@ -81,6 +82,18 @@ public sealed class UpdateOmdbInfoTimer(
                     await omdbSnapshotStore.UpsertAsync(tvdbId, imdbId: null, data: null, cancellationToken);
                     skipped++;
                     continue;
+                }
+
+                if (!requestBudget.TryAcquire())
+                {
+                    // The shared daily OMDb budget (also drawn on by Episodes/Details'
+                    // on-demand lookups) is exhausted for today. Stop here rather than
+                    // recording false "checked, nothing found" markers for the rest of
+                    // the candidates — they stay stale and are retried next run.
+                    logger.LogInformation(
+                        "UpdateOmdbInfoTimer: daily OMDb request budget exhausted; stopping early ({Enriched} enriched so far).",
+                        enriched);
+                    break;
                 }
 
                 var data = await omdbApiClient.GetByImdbIdAsync(imdbId, cancellationToken);

@@ -93,6 +93,22 @@ public class WatchProgressServiceTests
     }
 
     [Test]
+    public async Task MarkWatchedThroughAsync_Should_NotWriteAnything_WhenEpisodeNotInSeries()
+    {
+        SetupSeries(
+            Ep(1, 1, 1, "2025-01-01"),
+            Ep(2, 1, 2, "2025-01-08"));
+
+        var result = await _sut.MarkWatchedThroughAsync(Guid.NewGuid(), 42, episodeTvdbId: 999);
+
+        result.EpisodeFound.Should().BeFalse();
+        result.MarkedCount.Should().Be(0);
+        _watchRepository.Verify(
+            x => x.MarkWatchedRangeAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
     public async Task GetSeriesProgressAsync_Should_ReturnNextUnwatchedReleasedEpisode()
     {
         SetupSeries(

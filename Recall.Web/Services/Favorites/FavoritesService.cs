@@ -1,7 +1,6 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
-using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Favorites.Models;
 using Recall.Web.Services.WatchTracking;
 
@@ -39,7 +38,7 @@ public sealed class FavoritesService(
         var watchedIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, ids, cancellationToken);
 
         var aggregates = await Task.WhenAll(
-            ids.Select(id => TryGetAggregateAsync(id, cancellationToken)));
+            ids.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)));
 
         var result = new List<FavoriteSeries>(ids.Count);
         foreach (var aggregate in aggregates)
@@ -93,7 +92,7 @@ public sealed class FavoritesService(
             .ToList();
 
         var aggregates = await Task.WhenAll(
-            seriesIds.Select(id => TryGetAggregateAsync(id, cancellationToken)));
+            seriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)));
 
         var bySeriesId = aggregates
             .Where(a => a is not null)
@@ -104,19 +103,6 @@ public sealed class FavoritesService(
             likes.Select(like => BuildFavoriteEpisodeAsync(like, bySeriesId, cancellationToken)));
 
         return built.Where(e => e is not null).Select(e => e!).ToList();
-    }
-
-    private async Task<SeriesAggregate?> TryGetAggregateAsync(int seriesTvdbId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not load series {SeriesId} for favorites.", seriesTvdbId);
-            return null;
-        }
     }
 
     private async Task<FavoriteEpisode?> BuildFavoriteEpisodeAsync(
@@ -159,7 +145,7 @@ public sealed class FavoritesService(
             return new FavoriteEpisode(
                 like.TargetTvdbId,
                 string.IsNullOrWhiteSpace(seriesName) ? "Unknown series" : seriesName,
-                ArtworkUrl.Normalize(imageUrl),
+                imageUrl,
                 seasonNumber,
                 episodeNumber,
                 episodeName);

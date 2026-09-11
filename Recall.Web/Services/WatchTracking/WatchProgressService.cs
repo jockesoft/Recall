@@ -21,10 +21,28 @@ public sealed class WatchProgressService(
         int seriesTvdbId,
         CancellationToken cancellationToken = default)
     {
-        var episodes = await GetOrderedEpisodesAsync(seriesTvdbId, cancellationToken);
-        var watched = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesTvdbId, cancellationToken);
+        var (episodes, watched) = await LoadEpisodesAndWatchedAsync(userId, seriesTvdbId, cancellationToken);
 
         return WatchProgressCalculator.Build(seriesTvdbId, episodes, watched, Today);
+    }
+
+    /// <summary>
+    /// Loads a series' ordered episodes (TheTVDB, via the layered cache) and the
+    /// user's watched ids (the DB) concurrently — the two calls are independent
+    /// and use separate DbContext instances, so there's no benefit to awaiting
+    /// them one after another.
+    /// </summary>
+    private async Task<(IReadOnlyList<WatchableEpisode> Ordered, IReadOnlySet<int> Watched)> LoadEpisodesAndWatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        CancellationToken cancellationToken)
+    {
+        var orderedTask = GetOrderedEpisodesAsync(seriesTvdbId, cancellationToken);
+        var watchedTask = episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesTvdbId, cancellationToken);
+
+        await Task.WhenAll(orderedTask, watchedTask);
+
+        return (orderedTask.Result, watchedTask.Result);
     }
 
     public async Task<IReadOnlyList<WatchableEpisode>> GetOrderedEpisodesAsync(
@@ -46,8 +64,7 @@ public sealed class WatchProgressService(
     {
         try
         {
-            var ordered = await GetOrderedEpisodesAsync(seriesTvdbId, cancellationToken);
-            var watched = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesTvdbId, cancellationToken);
+            var (ordered, watched) = await LoadEpisodesAndWatchedAsync(userId, seriesTvdbId, cancellationToken);
 
             return WatchProgressCalculator.CountPriorUnwatched(ordered, watched, episodeTvdbId);
         }
@@ -67,11 +84,18 @@ public sealed class WatchProgressService(
     {
         var ordered = await GetOrderedEpisodesAsync(seriesTvdbId, cancellationToken);
 
-        var episodeFound = ordered.Any(e => e.Id == episodeTvdbId);
-        var idsToMark = WatchProgressCalculator.IdsThrough(ordered, episodeTvdbId);
+        if (!ordered.Any(e => e.Id == episodeTvdbId))
+        {
+            // The episode isn't part of this series' known episode list (a stale
+            // cache, a renumbered/removed episode, or route/form values that
+            // don't actually match) — don't record a watch against the wrong
+            // series just because IdsThrough would otherwise fall back to it.
+            return new MarkWatchedThroughResult(EpisodeFound: false, MarkedCount: 0);
+        }
 
+        var idsToMark = WatchProgressCalculator.IdsThrough(ordered, episodeTvdbId);
         await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
 
-        return new MarkWatchedThroughResult(episodeFound, idsToMark.Count);
+        return new MarkWatchedThroughResult(EpisodeFound: true, idsToMark.Count);
     }
 }

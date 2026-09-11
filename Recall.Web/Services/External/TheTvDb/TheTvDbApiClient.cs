@@ -145,8 +145,14 @@ public sealed class TheTvDbApiClient(
         // If your API requires a different type (e.g. "official"), switch this.
         const string seasonType = "default";
 
+        // Safety net against a misbehaving pagination response (e.g. Links.Next
+        // staying non-null forever) — no real season has anywhere near this many
+        // pages, so hitting this cap means something upstream is wrong, not that
+        // there's more data to fetch.
+        const int maxPages = 50;
+
         var page = 0;
-        while (true)
+        while (page < maxPages)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -178,6 +184,13 @@ public sealed class TheTvDbApiClient(
                 break;
 
             page++;
+        }
+
+        if (page >= maxPages)
+        {
+            logger.LogWarning(
+                "Stopped paging episodes for series {SeriesId}, season {Season} after {MaxPages} pages — TheTVDB's pagination metadata may be stuck.",
+                seriesId, seasonNumber, maxPages);
         }
 
         return result;
@@ -267,7 +280,7 @@ public sealed class TheTvDbApiClient(
 
     private async Task<T> SendCoreAsync<T>(Func<HttpRequestMessage> requestFactory, bool allowReauth, CancellationToken cancellationToken)
     {
-        var token = await state.GetOrRefreshTokenAsync(httpClient, forceRefresh: false, cancellationToken);
+        var token = await state.GetOrRefreshTokenAsync(httpClient, staleToken: null, cancellationToken);
 
         using var request = requestFactory();
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -277,7 +290,7 @@ public sealed class TheTvDbApiClient(
         if (response.StatusCode == HttpStatusCode.Unauthorized && allowReauth)
         {
             logger.LogInformation("TheTVDB token rejected (401); re-authenticating and retrying once.");
-            await state.GetOrRefreshTokenAsync(httpClient, forceRefresh: true, cancellationToken);
+            await state.GetOrRefreshTokenAsync(httpClient, staleToken: token, cancellationToken);
             return await SendCoreAsync<T>(requestFactory, allowReauth: false, cancellationToken);
         }
 

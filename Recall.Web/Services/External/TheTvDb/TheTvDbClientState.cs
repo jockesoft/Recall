@@ -40,19 +40,25 @@ public sealed class TheTvDbClientState(IOptions<TheTvDbOptions> options, ILogger
     public void Invalidate() => _token = null;
 
     /// <summary>
-    /// Returns the cached token, or logs in (or re-logs in, if forceRefresh) and caches the result.
-    /// Safe to call concurrently — only one login request will actually go out.
+    /// Returns the cached token, logging in if there isn't one yet. Pass
+    /// <paramref name="staleToken"/> — the token a caller just got a 401 for —
+    /// to force a fresh login instead of handing back that same rejected value.
+    /// Safe to call concurrently: if another caller already replaced
+    /// <paramref name="staleToken"/> with a newer one by the time this call gets
+    /// the lock, that newer token is returned and no second login goes out.
     /// </summary>
-    public async Task<string> GetOrRefreshTokenAsync(HttpClient httpClient, bool forceRefresh, CancellationToken cancellationToken)
+    public async Task<string> GetOrRefreshTokenAsync(HttpClient httpClient, string? staleToken, CancellationToken cancellationToken)
     {
-        if (!forceRefresh && _token is not null)
+        if (staleToken is null && _token is not null)
             return _token;
 
         await _authLock.WaitAsync(cancellationToken);
         try
         {
-            // Re-check after acquiring the lock — someone else may have already refreshed it.
-            if (!forceRefresh && _token is not null)
+            // Re-check after acquiring the lock: either someone already logged in
+            // for the first time, or — when refreshing after a 401 — someone
+            // already replaced the exact token we were told is stale.
+            if (_token is not null && (staleToken is null || _token != staleToken))
                 return _token;
 
             if (string.IsNullOrWhiteSpace(_options.ApiKey))

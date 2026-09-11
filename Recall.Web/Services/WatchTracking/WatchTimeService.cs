@@ -1,4 +1,3 @@
-using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 
 namespace Recall.Web.Services.WatchTracking;
@@ -20,7 +19,7 @@ public sealed class WatchTimeService(
             return WatchTimeSummary.Empty;
 
         var aggregates = (await Task.WhenAll(
-                seriesIds.Select(id => TryGetAggregateAsync(id, cancellationToken))))
+                seriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(WatchTimeService), cancellationToken))))
             .Where(a => a is not null)
             .Select(a => a!)
             .ToList();
@@ -49,18 +48,5 @@ public sealed class WatchTimeService(
         }
 
         return new WatchTimeSummary((int)Math.Min(totalMinutes, int.MaxValue), counted);
-    }
-
-    private async Task<SeriesAggregate?> TryGetAggregateAsync(int seriesId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "WatchTimeService: could not load aggregate for series {SeriesId}.", seriesId);
-            return null;
-        }
     }
 }

@@ -301,6 +301,53 @@ public class TheTvDbApiClientTests
         result.Name.Should().Be("Dark");
     }
 
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_StopPaging_WhenLinksNextNeverBecomesNull()
+    {
+        // TheTVDB's own pagination metadata could, in principle, get stuck with
+        // "next" always populated (has happened with other third-party paginated
+        // APIs) — the season-episode loop must still terminate instead of paging
+        // forever.
+        var episodeId = 0;
+        var handlerMock = CreateRoutedHandlerMock(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+
+            if (path.EndsWith("/login", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data":{"token":"test-token"}}""");
+
+            if (path.Contains("/translations/", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.NotFound, """{"status":"failure","message":"no translation"}""");
+
+            if (path.Contains("/extended", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """
+                    {
+                      "status":"success",
+                      "data": { "id": 7, "name": "Stuck", "episodes": [], "seasons": [{ "number": 1 }] }
+                    }
+                    """);
+
+            if (path.Contains("/episodes/default", StringComparison.Ordinal))
+            {
+                var id = ++episodeId;
+                return JsonResponse(HttpStatusCode.OK,
+                    "{\"status\":\"success\",\"data\":{\"episodes\":[{\"id\":" + id +
+                    ",\"seasonNumber\":1,\"number\":" + id + "}],\"links\":{\"next\":\"always-more\"}}}");
+            }
+
+            throw new InvalidOperationException($"Unexpected request path: {path}");
+        });
+
+        var sut = CreateSut(handlerMock.Object);
+
+        // Act
+        var result = await sut.GetSeriesAggregateByIdAsync(7);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Episodes.Should().HaveCount(50, "the pagination loop must stop at its safety cap instead of running forever");
+    }
+
     private static TheTvDbApiClient CreateSut(HttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler)

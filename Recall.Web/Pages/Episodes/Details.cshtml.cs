@@ -28,6 +28,7 @@ public sealed class DetailsModel(
     IRatingRepository ratingRepository,
     IOmdbApiClient omdbApiClient,
     IEpisodeOmdbSnapshotStore episodeOmdbSnapshotStore,
+    IOmdbRequestBudget omdbRequestBudget,
     IOptions<OmdbOptions> omdbOptions)
     : PageModel
 {
@@ -275,9 +276,19 @@ public sealed class DetailsModel(
 
             var result = await watchProgressService.MarkWatchedThroughAsync(userId, seriesId, id, cancellationToken);
 
-            this.SetSuccessToast(result.MarkedCount > 1
-                ? $"Marked {result.MarkedCount} episodes as watched."
-                : "Episode marked as watched.");
+            if (!result.EpisodeFound)
+            {
+                logger.LogWarning(
+                    "MarkWatchedThroughAsync rejected: episode {EpisodeId} is not part of series {SeriesId}.",
+                    id, seriesId);
+                this.SetErrorToast("Could not verify this episode against its series right now.");
+            }
+            else
+            {
+                this.SetSuccessToast(result.MarkedCount > 1
+                    ? $"Marked {result.MarkedCount} episodes as watched."
+                    : "Episode marked as watched.");
+            }
         }
         catch (Exception ex)
         {
@@ -303,6 +314,17 @@ public sealed class DetailsModel(
         var retrievedUtc = await episodeOmdbSnapshotStore.GetRetrievedUtcAsync(episodeTvdbId, cancellationToken);
         if (retrievedUtc is { } retrieved && DateTime.UtcNow - retrieved < OmdbRefreshAge)
             return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
+
+        if (!omdbRequestBudget.TryAcquire())
+        {
+            // The shared daily OMDb budget (also drawn on by UpdateOmdbInfoTimer's
+            // proactive series enrichment) is exhausted for today — serve whatever
+            // is cached rather than risk pushing the combined total over OMDb's
+            // quota and breaking that job too.
+            logger.LogInformation(
+                "Daily OMDb request budget exhausted; skipping live lookup for episode {EpisodeId}.", episodeTvdbId);
+            return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
+        }
 
         try
         {
@@ -383,7 +405,7 @@ public sealed class DetailsModel(
 
             if (Episode is not null)
             {
-                DisplayImage = ArtworkUrl.Normalize(Episode.Image);
+                DisplayImage = Episode.Image;
 
                 if (DateOnly.TryParse(Episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired))
                     AiredDate = aired;
@@ -395,8 +417,7 @@ public sealed class DetailsModel(
                     {
                         SetEpisodeNav(aggregate, currentId);
 
-                        DisplayImage ??= ArtworkUrl.Normalize(
-                            aggregate.Episodes.FirstOrDefault(e => e.Id == currentId)?.Image);
+                        DisplayImage ??= aggregate.Episodes.FirstOrDefault(e => e.Id == currentId)?.Image;
                     }
                 }
 

@@ -1,6 +1,7 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
+using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Web.Mappings;
 
@@ -19,7 +20,7 @@ public static class EpisodeMappings
             AirsBeforeSeason = dto.AirsBeforeSeason,
             FinaleType = dto.FinaleType,
             Id = dto.Id,
-            Image = dto.Image,
+            Image = ArtworkUrl.Normalize(dto.Image),
             ImageType = dto.ImageType,
             IsMovie = dto.IsMovie == 1,
             LastUpdated = dto.LastUpdated,

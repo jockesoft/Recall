@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
-using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages;
@@ -76,7 +75,7 @@ public sealed class DashboardModel(
             return;
 
         var aggregates = (await Task.WhenAll(
-                trackedSeriesIds.Select(id => TryGetAggregateAsync(id.TvdbId, cancellationToken))))
+                trackedSeriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id.TvdbId, logger, nameof(DashboardModel), cancellationToken))))
             .Where(a => a is not null)
             .Select(a => a!)
             .ToList();
@@ -111,7 +110,7 @@ public sealed class DashboardModel(
                     SeasonNumber = ep.SeasonNumber,
                     EpisodeNumber = ep.EpisodeNumber,
                     Name = ep.Name,
-                    ImageUrl = ArtworkUrl.Normalize(aggregate.ImageUrl),
+                    ImageUrl = aggregate.ImageUrl,
                     AiredDate = ep.Aired!.Value,
                     FinaleType = ep.FinaleType,
                     SeriesCaughtUp = seriesCaughtUp
@@ -123,8 +122,7 @@ public sealed class DashboardModel(
                 // Prefer any still already on the aggregate; fall back to the
                 // series cover for now — EnrichCatchUpImagesAsync then swaps in
                 // the real per-episode screencap from the episode endpoint.
-                var summaryImage = ArtworkUrl.Normalize(
-                    aggregate.Episodes.FirstOrDefault(e => e.Id == next.Id)?.Image);
+                var summaryImage = aggregate.Episodes.FirstOrDefault(e => e.Id == next.Id)?.Image;
 
                 catchUp.Add(new CatchUpItem
                 {
@@ -134,7 +132,7 @@ public sealed class DashboardModel(
                     SeasonNumber = next.SeasonNumber,
                     EpisodeNumber = next.EpisodeNumber,
                     Name = next.Name,
-                    ImageUrl = summaryImage ?? ArtworkUrl.Normalize(aggregate.ImageUrl)
+                    ImageUrl = summaryImage ?? aggregate.ImageUrl
                 });
             }
         }
@@ -178,7 +176,7 @@ public sealed class DashboardModel(
 
         return items
             .Zip(episodes, (item, episode) =>
-                ArtworkUrl.Normalize(episode?.Image) is { } image
+                episode?.Image is { } image
                     ? item with { ImageUrl = image }
                     : item)
             .ToList();
@@ -202,23 +200,5 @@ public sealed class DashboardModel(
         var userId = currentUserService.UserId  ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
         await watchedRepository.MarkWatchedAsync(userId, seriesId, episodeId, cancellationToken);
         return RedirectToPage();
-    }
-
-    /// <summary>
-    /// Wraps a single series' aggregate fetch so one series failing upstream
-    /// (timeout, deserialization error, etc.) doesn't take down the whole
-    /// dashboard for every other tracked series.
-    /// </summary>
-    private async Task<SeriesAggregate?> TryGetAggregateAsync(int seriesId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Failed to load series aggregate {SeriesId} for home dashboard.", seriesId);
-            return null;
-        }
     }
 }
