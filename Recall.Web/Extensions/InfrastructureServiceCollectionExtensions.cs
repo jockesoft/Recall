@@ -197,6 +197,12 @@ public static class InfrastructureServiceCollectionExtensions
                 .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
                 .WithDescription("Check for new TVDB info every 60 minutes, but only refresh series and episodes that are due for a refresh."));
 
+            q.ScheduleJob<UpdateMovieInfoTimer>(trigger => trigger
+                .WithIdentity("UpdateMovieInfoTimer-trigger")
+                .StartAt(DateTimeOffset.UtcNow.AddSeconds(15))
+                .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
+                .WithDescription("Check for new TVDB movie info every 60 minutes, but only refresh movies that are due for a refresh."));
+
             q.ScheduleJob<MailTimer>(trigger => trigger
                 .WithIdentity("MailTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(30))

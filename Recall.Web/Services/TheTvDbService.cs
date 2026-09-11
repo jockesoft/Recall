@@ -172,10 +172,42 @@ public sealed class TheTvDbService(
             patched.Count, aggregate.TvdbId);
     }
 
-    public Task<MovieAggregate?> GetMovieAggregateByIdAsync(
+    private static string MovieAggregateCacheKey(int movieId, string language) =>
+        $"movie:aggregate:v1:{movieId}:{language}";
+
+    public async Task<MovieAggregate?> GetMovieAggregateByIdAsync(
         int movieId,
         CancellationToken cancellationToken = default)
-        => apiClient.GetMovieAggregateByIdAsync(movieId, Language, cancellationToken);
+    {
+        var aggregate = await GetLayeredAsync<MovieAggregate>(
+            MovieAggregateCacheKey(movieId, Language),
+            ct => store.GetMovieAggregateAsync(movieId, Language, ct),
+            ct => apiClient.GetMovieAggregateByIdAsync(movieId, Language, ct),
+            aggregate => store.SaveMovieAggregateAsync(aggregate, Language, cancellationToken),
+            MovieAggregateTtl,
+            cancellationToken);
+
+        // Defensive: see DomainImageNormalization / GetSeriesAggregateByIdAsync.
+        return aggregate?.WithNormalizedImages();
+    }
+
+    public async Task<bool> RefreshMovieAggregateByIdAsync(
+        int movieId,
+        CancellationToken cancellationToken = default)
+    {
+        var fresh = (await apiClient.GetMovieAggregateByIdAsync(movieId, Language, cancellationToken))?.WithNormalizedImages();
+        if (fresh is null)
+        {
+            logger.LogWarning("Refresh skipped for movie {MovieId} — TheTVDB returned no aggregate.", movieId);
+            return false;
+        }
+
+        await store.UpsertMovieAggregateAsync(fresh, Language, cancellationToken);
+        await cache.SetAsync(MovieAggregateCacheKey(movieId, Language), fresh, MovieAggregateTtl(fresh), cancellationToken);
+
+        logger.LogInformation("Refreshed movie aggregate {MovieId} (\"{Name}\").", movieId, fresh.Name);
+        return true;
+    }
 
     public Task<Series?> GetSeriesByIdExtendedAsync(
         int seriesId,
@@ -267,6 +299,16 @@ public sealed class TheTvDbService(
     private static TimeSpan AggregateTtl(SeriesAggregate aggregate) =>
         aggregate.Status is { KeepUpdated: false, Name: not null }
         && aggregate.Status.Name.Equals("ended", StringComparison.OrdinalIgnoreCase)
+            ? Jitter(TimeSpan.FromDays(7), 0.10)
+            : Jitter(TimeSpan.FromHours(12), 0.10);
+
+    /// <summary>
+    /// A released movie's metadata rarely changes, so it gets the long TTL;
+    /// anything still upcoming (rumored/planned/in production) is refreshed
+    /// more often since those rows tend to firm up as release approaches.
+    /// </summary>
+    private static TimeSpan MovieAggregateTtl(MovieAggregate aggregate) =>
+        aggregate.Status is { Name: not null } && aggregate.Status.Name.Equals("released", StringComparison.OrdinalIgnoreCase)
             ? Jitter(TimeSpan.FromDays(7), 0.10)
             : Jitter(TimeSpan.FromHours(12), 0.10);
 

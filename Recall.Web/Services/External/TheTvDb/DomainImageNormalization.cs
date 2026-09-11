@@ -3,9 +3,10 @@ using Recall.Web.Domain.TheTvDb;
 namespace Recall.Web.Services.External.TheTvDb;
 
 /// <summary>
-/// Defensive re-normalization applied to every <see cref="SeriesAggregate"/> and
-/// <see cref="Episode"/> <see cref="TheTvDbService"/> hands back, regardless of
-/// which tier (Redis, the Postgres snapshot, or a fresh API fetch) produced it.
+/// Defensive re-normalization applied to every <see cref="SeriesAggregate"/>,
+/// <see cref="MovieAggregate"/> and <see cref="Episode"/> <see cref="TheTvDbService"/>
+/// hands back, regardless of which tier (Redis, the Postgres snapshot, or a fresh
+/// API fetch) produced it.
 ///
 /// Fresh fetches are already normalized at the DTO→domain mapping layer
 /// (<c>SeriesDataDtoMappings</c>/<c>EpisodeMappings</c>), but <c>GetLayeredAsync</c>'s
@@ -29,6 +30,13 @@ public static class DomainImageNormalization
 
     public static Episode WithNormalizedImages(this Episode episode) =>
         episode with { Image = ArtworkUrl.Normalize(episode.Image) };
+
+    public static MovieAggregate WithNormalizedImages(this MovieAggregate aggregate) =>
+        aggregate with
+        {
+            ImageUrl = ArtworkUrl.Normalize(aggregate.ImageUrl),
+            Characters = aggregate.Characters.Select(NormalizeCharacter).ToArray()
+        };
 
     private static SeasonSummary NormalizeSeason(SeasonSummary season) => new()
     {

@@ -78,17 +78,98 @@ public class TheTvDbServiceTests
     }
 
     [Test]
-    public async Task GetMovieAggregateByIdAsync_Should_PassThrough_ToApiClient()
+    public async Task GetMovieAggregateByIdAsync_Should_NormalizeRelativeImagePaths_FromACacheEntryPredatingTheFix()
     {
-        var expected = new MovieAggregate { TvdbId = 287533, Name = "Oppenheimer" };
+        var stale = new MovieAggregate
+        {
+            TvdbId = 7,
+            Name = "Cached Movie",
+            ImageUrl = "/banners/v4/movie/7/posters/7.jpg",
+            Characters = [new Character { Id = 1, Name = "Someone", Image = "/banners/actors/1.jpg" }]
+        };
+        _cache
+            .Setup(c => c.GetAsync<MovieAggregate>("movie:aggregate:v1:7:eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stale);
 
+        var result = await _sut.GetMovieAggregateByIdAsync(7);
+
+        result!.ImageUrl.Should().Be("https://artworks.thetvdb.com/banners/v4/movie/7/posters/7.jpg");
+        result.Characters.Single().Image.Should().Be("https://artworks.thetvdb.com/banners/actors/1.jpg");
+    }
+
+    [Test]
+    public async Task GetMovieAggregateByIdAsync_Should_ReturnFromCache_WithoutTouchingStoreOrApi()
+    {
+        var cached = new MovieAggregate { TvdbId = 7, Name = "Cached Movie" };
+        _cache
+            .Setup(c => c.GetAsync<MovieAggregate>("movie:aggregate:v1:7:eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cached);
+
+        var result = await _sut.GetMovieAggregateByIdAsync(7);
+
+        result.Should().BeEquivalentTo(cached, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
+        _store.Verify(s => s.GetMovieAggregateAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _apiClient.Verify(a => a.GetMovieAggregateByIdAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task GetMovieAggregateByIdAsync_Should_ReturnFromStore_AndWarmCache_WhenCacheMisses()
+    {
+        var stored = new MovieAggregate { TvdbId = 8, Name = "Stored Movie" };
+        _store
+            .Setup(s => s.GetMovieAggregateAsync(8, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stored);
+
+        var result = await _sut.GetMovieAggregateByIdAsync(8);
+
+        result.Should().BeEquivalentTo(stored, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
+        _apiClient.Verify(a => a.GetMovieAggregateByIdAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _cache.Verify(c => c.SetAsync("movie:aggregate:v1:8:eng", stored, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task GetMovieAggregateByIdAsync_Should_FetchFromApi_AndPersist_WhenCacheAndStoreMiss()
+    {
+        var fresh = new MovieAggregate { TvdbId = 9, Name = "Fresh Movie" };
         _apiClient
-            .Setup(x => x.GetMovieAggregateByIdAsync(287533, "eng", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expected);
+            .Setup(a => a.GetMovieAggregateByIdAsync(9, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fresh);
 
-        var result = await _sut.GetMovieAggregateByIdAsync(287533);
+        var result = await _sut.GetMovieAggregateByIdAsync(9);
 
-        result.Should().BeSameAs(expected);
+        result.Should().BeEquivalentTo(fresh, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
+        _store.Verify(s => s.SaveMovieAggregateAsync(fresh, "eng", It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.SetAsync("movie:aggregate:v1:9:eng", fresh, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task RefreshMovieAggregateByIdAsync_Should_Upsert_AndWriteThroughCache()
+    {
+        var fresh = new MovieAggregate { TvdbId = 10, Name = "Refreshed Movie" };
+        _apiClient
+            .Setup(a => a.GetMovieAggregateByIdAsync(10, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fresh);
+
+        var result = await _sut.RefreshMovieAggregateByIdAsync(10);
+
+        result.Should().BeTrue();
+        _store.Verify(s => s.UpsertMovieAggregateAsync(
+            It.Is<MovieAggregate>(a => a.TvdbId == 10), "eng", It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.SetAsync(
+            "movie:aggregate:v1:10:eng", It.IsAny<MovieAggregate>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task RefreshMovieAggregateByIdAsync_Should_ReturnFalse_WhenApiHasNoMovie()
+    {
+        _apiClient
+            .Setup(a => a.GetMovieAggregateByIdAsync(11, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MovieAggregate?)null);
+
+        var result = await _sut.RefreshMovieAggregateByIdAsync(11);
+
+        result.Should().BeFalse();
+        _store.Verify(s => s.UpsertMovieAggregateAsync(It.IsAny<MovieAggregate>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]

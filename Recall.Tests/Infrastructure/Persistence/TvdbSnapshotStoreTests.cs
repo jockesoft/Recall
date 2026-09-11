@@ -107,6 +107,96 @@ public sealed class TvdbSnapshotStoreTests
     }
 
     [Test]
+    public async Task SaveThenGet_MovieAggregate_RoundTripsTheGraph()
+    {
+        var aggregate = new MovieAggregate
+        {
+            TvdbId = 287533,
+            Name = "Oppenheimer",
+            Status = new MovieStatus { Name = "Released", KeepUpdated = true },
+            Genres = ["Drama", "History"],
+            Characters = [new Character { Id = 1, Name = "J. Robert Oppenheimer", PersonName = "Cillian Murphy" }]
+        };
+
+        await NewStore().SaveMovieAggregateAsync(aggregate, "eng");
+
+        var loaded = await NewStore().GetMovieAggregateAsync(287533, "eng");
+
+        loaded.Should().NotBeNull();
+        loaded!.Name.Should().Be("Oppenheimer");
+        loaded.Status!.Name.Should().Be("Released");
+        loaded.Genres.Should().BeEquivalentTo(["Drama", "History"]);
+        loaded.Characters.Should().ContainSingle().Which.PersonName.Should().Be("Cillian Murphy");
+    }
+
+    [Test]
+    public async Task SaveMovieAggregate_IsInsertOnly_DoesNotOverwriteExisting()
+    {
+        await NewStore().SaveMovieAggregateAsync(new MovieAggregate { TvdbId = 200, Name = "Original" }, "eng");
+        await NewStore().SaveMovieAggregateAsync(new MovieAggregate { TvdbId = 200, Name = "Replacement" }, "eng");
+
+        var loaded = await NewStore().GetMovieAggregateAsync(200, "eng");
+
+        loaded!.Name.Should().Be("Original");
+    }
+
+    [Test]
+    public async Task GetMovieAggregate_ReturnsNull_WhenMissing()
+    {
+        (await NewStore().GetMovieAggregateAsync(999, "eng")).Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetMovieAggregate_ReturnsNull_WhenPayloadIsCorrupt()
+    {
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedMovieAggregates.Add(new CachedMovieAggregateEntity
+            {
+                TvdbId = 300,
+                Language = "eng",
+                Name = "Corrupt",
+                Payload = "{ this is not json",
+                RetrievedUtc = DateTime.UtcNow
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        (await NewStore().GetMovieAggregateAsync(300, "eng")).Should().BeNull();
+    }
+
+    [Test]
+    public async Task UpsertMovieAggregate_OverwritesExisting()
+    {
+        await NewStore().SaveMovieAggregateAsync(new MovieAggregate { TvdbId = 400, Name = "Working Title" }, "eng");
+        await NewStore().UpsertMovieAggregateAsync(new MovieAggregate { TvdbId = 400, Name = "Final Title" }, "eng");
+
+        var loaded = await NewStore().GetMovieAggregateAsync(400, "eng");
+
+        loaded!.Name.Should().Be("Final Title");
+    }
+
+    [Test]
+    public async Task GetMovieAggregatesNeedingRefresh_PicksStaleKeepUpdated_ButNotFreshOrUnflagged()
+    {
+        var now = DateTime.UtcNow;
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedMovieAggregates.AddRange(
+                new CachedMovieAggregateEntity { TvdbId = 1, Language = "eng", Name = "Stale, keep-updated", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddHours(-13) },
+                new CachedMovieAggregateEntity { TvdbId = 2, Language = "eng", Name = "Fresh, keep-updated", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddHours(-1) },
+                new CachedMovieAggregateEntity { TvdbId = 3, Language = "eng", Name = "Stale, not keep-updated", Payload = "{}", KeepUpdated = false, RetrievedUtc = now.AddHours(-13) });
+            await seed.SaveChangesAsync();
+        }
+
+        var due = await NewStore().GetMovieAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddHours(-12), limit: 10);
+
+        due.Should().ContainSingle().Which.TvdbId.Should().Be(1);
+    }
+
+    [Test]
     public async Task SaveThenGet_SeriesExtended_And_EpisodeExtended_RoundTrip()
     {
         var store = NewStore();

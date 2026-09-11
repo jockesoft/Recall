@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CachedSeriesAggregateEntity> CachedSeriesAggregates => Set<CachedSeriesAggregateEntity>();
     public DbSet<CachedSeriesExtendedEntity> CachedSeriesExtended => Set<CachedSeriesExtendedEntity>();
     public DbSet<CachedEpisodeExtendedEntity> CachedEpisodesExtended => Set<CachedEpisodeExtendedEntity>();
+    public DbSet<CachedMovieAggregateEntity> CachedMovieAggregates => Set<CachedMovieAggregateEntity>();
 
     // OMDb enrichment snapshot per series, refreshed at most monthly by UpdateOmdbInfoTimer.
     public DbSet<CachedSeriesOmdbEntity> CachedSeriesOmdb => Set<CachedSeriesOmdbEntity>();

@@ -57,6 +57,80 @@ public sealed class TvdbSnapshotStore(
         await InsertAsync(dbContext, entity, aggregate.TvdbId, cancellationToken);
     }
 
+    public async Task<MovieAggregate?> GetMovieAggregateAsync(
+        int tvdbId, string language, CancellationToken cancellationToken = default)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var row = await dbContext.CachedMovieAggregates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TvdbId == tvdbId && x.Language == language, cancellationToken);
+
+        return Deserialize<MovieAggregate>(row?.Payload, tvdbId);
+    }
+
+    public async Task SaveMovieAggregateAsync(
+        MovieAggregate aggregate, string language, CancellationToken cancellationToken = default)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var exists = await dbContext.CachedMovieAggregates
+            .AsNoTracking()
+            .AnyAsync(x => x.TvdbId == aggregate.TvdbId && x.Language == language, cancellationToken);
+        if (exists)
+            return;
+
+        var entity = new CachedMovieAggregateEntity
+        {
+            TvdbId = aggregate.TvdbId,
+            Language = language,
+            Name = aggregate.Name,
+            StatusName = aggregate.Status?.Name,
+            KeepUpdated = aggregate.Status?.KeepUpdated,
+            Payload = JsonSerializer.Serialize(aggregate, JsonOptions),
+            RetrievedUtc = DateTime.UtcNow
+        };
+
+        await InsertAsync(dbContext, entity, aggregate.TvdbId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CachedAggregateKey>> GetMovieAggregatesNeedingRefreshAsync(
+        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        return await dbContext.CachedMovieAggregates
+            .AsNoTracking()
+            .Where(x => x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
+            .OrderBy(x => x.RetrievedUtc)
+            .Take(limit)
+            .Select(x => new CachedAggregateKey(x.TvdbId, x.Language))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task UpsertMovieAggregateAsync(
+        MovieAggregate aggregate, string language, CancellationToken cancellationToken = default)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var row = await dbContext.CachedMovieAggregates
+            .FirstOrDefaultAsync(x => x.TvdbId == aggregate.TvdbId && x.Language == language, cancellationToken);
+
+        if (row is null)
+        {
+            row = new CachedMovieAggregateEntity { TvdbId = aggregate.TvdbId, Language = language };
+            dbContext.CachedMovieAggregates.Add(row);
+        }
+
+        row.Name = aggregate.Name;
+        row.StatusName = aggregate.Status?.Name;
+        row.KeepUpdated = aggregate.Status?.KeepUpdated;
+        row.Payload = JsonSerializer.Serialize(aggregate, JsonOptions);
+        row.RetrievedUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<CachedAggregateKey>> GetAggregatesNeedingRefreshAsync(
         DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default)
     {

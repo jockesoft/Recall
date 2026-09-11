@@ -16,6 +16,9 @@ public interface ITvdbSnapshotStore
     Task<Series?> GetSeriesExtendedAsync(int tvdbId, CancellationToken cancellationToken = default);
     Task SaveSeriesExtendedAsync(Series series, CancellationToken cancellationToken = default);
 
+    Task<MovieAggregate?> GetMovieAggregateAsync(int tvdbId, string language, CancellationToken cancellationToken = default);
+    Task SaveMovieAggregateAsync(MovieAggregate aggregate, string language, CancellationToken cancellationToken = default);
+
     Task<Episode?> GetEpisodeExtendedAsync(int episodeTvdbId, CancellationToken cancellationToken = default);
 
     /// <summary>Batched lookup of cached episode snapshots by id. Missing/corrupt ids are simply absent from the result.</summary>
@@ -30,6 +33,14 @@ public interface ITvdbSnapshotStore
     /// capped at <paramref name="limit"/>. Feeds the background refresh job.
     /// </summary>
     Task<IReadOnlyList<CachedAggregateKey>> GetAggregatesNeedingRefreshAsync(
+        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cached movie aggregate rows flagged <c>keep_updated</c> whose snapshot was
+    /// last retrieved before <paramref name="staleBeforeUtc"/>, oldest first and
+    /// capped at <paramref name="limit"/>. Feeds the background refresh job.
+    /// </summary>
+    Task<IReadOnlyList<CachedAggregateKey>> GetMovieAggregatesNeedingRefreshAsync(
         DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -59,6 +70,12 @@ public interface ITvdbSnapshotStore
     Task UpsertSeriesAggregateAsync(SeriesAggregate aggregate, string language, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Inserts the aggregate snapshot for one movie + language, or overwrites it
+    /// (payload, denormalized columns and <c>retrieved_utc</c>) if a row exists.
+    /// </summary>
+    Task UpsertMovieAggregateAsync(MovieAggregate aggregate, string language, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Inserts the extended-episode snapshot, or overwrites it (payload,
     /// denormalized columns and <c>retrieved_utc</c>) if a row exists.
     /// </summary>
@@ -76,5 +93,5 @@ public interface ITvdbSnapshotStore
         SeriesAggregate aggregate, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Composite key of a <c>cached_series_aggregate</c> row.</summary>
+/// <summary>Composite key of a <c>cached_series_aggregate</c> or <c>cached_movie_aggregate</c> row.</summary>
 public readonly record struct CachedAggregateKey(int TvdbId, string Language);
