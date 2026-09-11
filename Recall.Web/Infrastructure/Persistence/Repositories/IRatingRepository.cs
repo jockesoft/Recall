@@ -33,4 +33,16 @@ public interface IRatingRepository
         RatingTargetType targetType,
         int targetTvdbId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>The community aggregate — average and count — of everyone's rating of a target.</summary>
+    Task<RatingSummary> GetSummaryAsync(
+        RatingTargetType targetType,
+        int targetTvdbId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Aggregate of every rating placed on a single series or episode.</summary>
+public sealed record RatingSummary(double? Average, int Count)
+{
+    public static readonly RatingSummary Empty = new(null, 0);
 }

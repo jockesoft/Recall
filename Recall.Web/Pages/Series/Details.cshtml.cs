@@ -45,6 +45,12 @@ public sealed class DetailsModel(
     /// <summary>The current user's 1-10 rating of this series, or null when unrated.</summary>
     public int? CurrentUserRating { get; private set; }
 
+    /// <summary>Average of every Recall user's rating of this series, when at least one exists.</summary>
+    public double? RecallRatingAverage { get; private set; }
+
+    /// <summary>How many Recall users have rated this series.</summary>
+    public int RecallRatingCount { get; private set; }
+
     public IReadOnlySet<int> WatchedEpisodeIds { get; private set; } = new HashSet<int>();
 
     /// <summary>
@@ -319,6 +325,10 @@ public sealed class DetailsModel(
             // OMDb enrichment (genre, awards, …) — local snapshot only, populated
             // by UpdateOmdbInfoTimer. Absent until the job has run for this series.
             Omdb = await omdbSnapshotStore.GetAsync(id, cancellationToken);
+
+            var ratingSummary = await ratingRepository.GetSummaryAsync(RatingTargetType.Series, id, cancellationToken);
+            RecallRatingAverage = ratingSummary.Average;
+            RecallRatingCount = ratingSummary.Count;
 
             if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
                 return Page();

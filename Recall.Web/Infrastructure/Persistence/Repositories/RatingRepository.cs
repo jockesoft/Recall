@@ -97,4 +97,19 @@ public sealed class RatingRepository(
         dbContext.UserRatings.Remove(existing);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<RatingSummary> GetSummaryAsync(
+        RatingTargetType targetType,
+        int targetTvdbId,
+        CancellationToken cancellationToken = default)
+    {
+        var summary = await dbContext.UserRatings
+            .AsNoTracking()
+            .Where(x => x.TargetType == targetType && x.TargetTvdbId == targetTvdbId)
+            .GroupBy(x => 1)
+            .Select(g => new { Average = g.Average(x => x.Value), Count = g.Count() })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return summary is null ? RatingSummary.Empty : new RatingSummary(summary.Average, summary.Count);
+    }
 }

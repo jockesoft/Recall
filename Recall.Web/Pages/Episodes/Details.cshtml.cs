@@ -40,6 +40,12 @@ public sealed class DetailsModel(
     /// <summary>The current user's 1-10 rating of this episode, or null when unrated.</summary>
     public int? CurrentUserRating { get; private set; }
 
+    /// <summary>Average of every Recall user's rating of this episode, when at least one exists.</summary>
+    public double? RecallRatingAverage { get; private set; }
+
+    /// <summary>How many Recall users have rated this episode.</summary>
+    public int RecallRatingCount { get; private set; }
+
     /// <summary>When the current user marked this episode watched, if they have.</summary>
     public DateTime? WatchedOnUtc { get; private set; }
 
@@ -347,6 +353,10 @@ public sealed class DetailsModel(
                             aggregate.Episodes.FirstOrDefault(e => e.Id == currentId)?.Image);
                     }
                 }
+
+                var ratingSummary = await ratingRepository.GetSummaryAsync(RatingTargetType.Episode, id, cancellationToken);
+                RecallRatingAverage = ratingSummary.Average;
+                RecallRatingCount = ratingSummary.Count;
             }
 
             if (Episode is not null &&

@@ -910,6 +910,21 @@ button.tvdb-badge {
     text-decoration: underline;
 }
 
+/* Episode "ratings" panel — TheTVDB score and the Recall community average
+   (when there is one) alongside the interactive picker for the signed-in
+   user's own rating. Groups everything rating-related in one place instead of
+   scattering it across the meta row and the action buttons. */
+.tvdb-rating-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.75rem;
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+}
+
 /* "Heart" like toggle — outline heart that fills when liked. Used on the
    Series/Details and Episodes/Details action rows. */
 .tvdb-heart {
