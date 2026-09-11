@@ -111,6 +111,30 @@ public class TheTvDbServiceTests
     }
 
     [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_NormalizeRelativeImagePaths_FromACacheEntryPredatingTheFix()
+    {
+        // Regression test: a SeriesAggregate cached before ArtworkUrl.Normalize was
+        // applied at the mapping layer would otherwise keep serving broken
+        // relative image paths (resolving against the app's own origin) forever,
+        // since GetLayeredAsync's tiers have no staleness check of their own.
+        var stale = new SeriesAggregate
+        {
+            TvdbId = 7,
+            Name = "Cached Show",
+            ImageUrl = "/banners/series/7.jpg",
+            Episodes = [new EpisodeSummary { Id = 1, Name = "Pilot", Image = "/banners/v4/episode/11884343/screencap/6a9a171d96372.jpg" }]
+        };
+        _cache
+            .Setup(c => c.GetAsync<SeriesAggregate>("series:aggregate:v1:7:eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stale);
+
+        var result = await _sut.GetSeriesAggregateByIdAsync(7);
+
+        result!.ImageUrl.Should().Be("https://artworks.thetvdb.com/banners/series/7.jpg");
+        result.Episodes.Single().Image.Should().Be("https://artworks.thetvdb.com/banners/v4/episode/11884343/screencap/6a9a171d96372.jpg");
+    }
+
+    [Test]
     public async Task GetSeriesAggregateByIdAsync_Should_ReturnFromCache_WithoutTouchingStoreOrApi()
     {
         var cached = new SeriesAggregate { TvdbId = 7, Name = "Cached Show" };
@@ -120,7 +144,7 @@ public class TheTvDbServiceTests
 
         var result = await _sut.GetSeriesAggregateByIdAsync(7);
 
-        result.Should().BeSameAs(cached);
+        result.Should().BeEquivalentTo(cached, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
         _store.Verify(s => s.GetSeriesAggregateAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _apiClient.Verify(a => a.GetSeriesAggregateByIdAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -135,7 +159,7 @@ public class TheTvDbServiceTests
 
         var result = await _sut.GetSeriesAggregateByIdAsync(8);
 
-        result.Should().BeSameAs(stored);
+        result.Should().BeEquivalentTo(stored, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
         _apiClient.Verify(a => a.GetSeriesAggregateByIdAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _cache.Verify(c => c.SetAsync("series:aggregate:v1:8:eng", stored, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -150,7 +174,7 @@ public class TheTvDbServiceTests
 
         var result = await _sut.GetSeriesAggregateByIdAsync(9);
 
-        result.Should().BeSameAs(fresh);
+        result.Should().BeEquivalentTo(fresh, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
         _store.Verify(s => s.SaveSeriesAggregateAsync(fresh, "eng", It.IsAny<CancellationToken>()), Times.Once);
         _cache.Verify(c => c.SetAsync("series:aggregate:v1:9:eng", fresh, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
     }

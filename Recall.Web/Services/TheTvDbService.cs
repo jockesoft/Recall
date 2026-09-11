@@ -53,10 +53,11 @@ public sealed class TheTvDbService(
     private static string AggregateCacheKey(int seriesId, string language) =>
         $"series:aggregate:v1:{seriesId}:{language}";
 
-    public Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
+    public async Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
         int seriesId,
         CancellationToken cancellationToken = default)
-        => GetLayeredAsync<SeriesAggregate>(
+    {
+        var aggregate = await GetLayeredAsync<SeriesAggregate>(
             AggregateCacheKey(seriesId, Language),
             ct => store.GetSeriesAggregateAsync(seriesId, Language, ct),
             async ct =>
@@ -67,6 +68,12 @@ public sealed class TheTvDbService(
             aggregate => store.SaveSeriesAggregateAsync(aggregate, Language, cancellationToken),
             AggregateTtl,
             cancellationToken);
+
+        // Defensive: heals image paths from any tier (a Postgres snapshot cached
+        // before ArtworkUrl.Normalize was introduced would otherwise keep serving
+        // broken relative paths forever — see DomainImageNormalization).
+        return aggregate?.WithNormalizedImages();
+    }
 
     public async Task<bool> RefreshSeriesAggregateByIdAsync(
         int seriesId,
@@ -79,7 +86,7 @@ public sealed class TheTvDbService(
             return false;
         }
 
-        fresh = await EnrichEpisodesAsync(fresh, cancellationToken);
+        fresh = (await EnrichEpisodesAsync(fresh, cancellationToken)).WithNormalizedImages();
 
         await store.UpsertSeriesAggregateAsync(fresh, Language, cancellationToken);
         await cache.SetAsync(AggregateCacheKey(seriesId, Language), fresh, AggregateTtl(fresh), cancellationToken);
@@ -186,10 +193,11 @@ public sealed class TheTvDbService(
 
     private static TimeSpan EpisodeTtl() => Jitter(TimeSpan.FromHours(12), 0.10);
 
-    public Task<Episode?> GetEpisodeDetailsAsync(
+    public async Task<Episode?> GetEpisodeDetailsAsync(
         int episodeId,
         CancellationToken cancellationToken = default)
-        => GetLayeredAsync<Episode>(
+    {
+        var episode = await GetLayeredAsync<Episode>(
             EpisodeCacheKey(episodeId, Language),
             ct => store.GetEpisodeExtendedAsync(episodeId, ct),
             async ct => (await apiClient.GetEpisodeInformationByIdAsync(episodeId, ct))?.ToDomain(),
@@ -197,11 +205,15 @@ public sealed class TheTvDbService(
             _ => EpisodeTtl(),
             cancellationToken);
 
+        // Defensive: see DomainImageNormalization / GetSeriesAggregateByIdAsync.
+        return episode?.WithNormalizedImages();
+    }
+
     public async Task<bool> RefreshEpisodeDetailsByIdAsync(
         int episodeId,
         CancellationToken cancellationToken = default)
     {
-        var fresh = (await apiClient.GetEpisodeInformationByIdAsync(episodeId, cancellationToken))?.ToDomain();
+        var fresh = (await apiClient.GetEpisodeInformationByIdAsync(episodeId, cancellationToken))?.ToDomain()?.WithNormalizedImages();
         if (fresh is null)
         {
             logger.LogWarning("Refresh skipped for episode {EpisodeId} — TheTVDB returned no episode.", episodeId);

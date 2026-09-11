@@ -1,5 +1,6 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
+using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Web.Mappings;
 
@@ -20,7 +21,7 @@ public static class SeriesMapping
             Episodes = dto.Episodes?.Select(episode => episode.ToDomain()).ToArray() ?? [],
             FirstAired = dto.FirstAired,
             Id = dto.Id,
-            Image = "https://artworks.thetvdb.com" + dto.Image,
+            Image = ArtworkUrl.Normalize(dto.Image),
             IsOrderRandomized = dto.IsOrderRandomized,
             LastAired = dto.LastAired,
             LastUpdated = dto.LastUpdated,
