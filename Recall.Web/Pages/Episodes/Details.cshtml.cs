@@ -1,7 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
@@ -17,7 +16,10 @@ using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages.Episodes;
 
-[Authorize]
+/// <summary>
+/// Public, anonymous-friendly episode details page. Watched/like/rating actions
+/// are only shown and only take effect when signed in.
+/// </summary>
 public sealed class DetailsModel(
     ILogger<DetailsModel> logger,
     ITheTvDbService theTvDbService,
@@ -36,6 +38,8 @@ public sealed class DetailsModel(
     private static readonly TimeSpan OmdbRefreshAge = TimeSpan.FromDays(30);
 
     public Episode? Episode { get; set; }
+
+    public bool IsAuthenticated => currentUserService.IsAuthenticated;
 
     /// <summary>
     /// The still to render: the episode's own image, or — when TheTVDB hasn't

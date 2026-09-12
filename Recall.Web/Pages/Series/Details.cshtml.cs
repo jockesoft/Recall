@@ -11,11 +11,13 @@ using Recall.Web.Mappings;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
-using Microsoft.AspNetCore.Authorization;
 
 namespace Recall.Web.Pages.Series;
 
-[Authorize]
+/// <summary>
+/// Public, anonymous-friendly series details page. Library/watched/like/rating
+/// actions are only shown and only take effect when signed in.
+/// </summary>
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
@@ -36,6 +38,8 @@ public sealed class DetailsModel(
 
     [BindProperty(SupportsGet = true)]
     public int? Season { get; set; }
+
+    public bool IsAuthenticated => currentUserService.IsAuthenticated;
 
     public bool IsTrackedByCurrentUser { get; private set; }
 

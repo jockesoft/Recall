@@ -6,9 +6,17 @@
         string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
             ? null
             : raw.Trim();
+
+    static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength].TrimEnd() + "…";
 }
 @{
     ViewData["Title"] = Model.Series is null ? "Series Details" : Model.Series.Name;
+    ViewData["Description"] = !string.IsNullOrWhiteSpace(Model.Series?.Overview)
+        ? Truncate(Model.Series.Overview, 300)
+        : $"Details, cast, and ratings for {(Model.Series?.Name ?? "this series")} on Recall.nu.";
+    ViewData["Robots"] = Model.Series is not null ? "index, follow" : "noindex, nofollow";
+
     var status = Model.Aggregate?.Status;
     var isContinuing = status is { KeepUpdated: true };
 
@@ -72,51 +80,54 @@
                     </div>
                 }
 
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                    <form method="post" asp-page-handler="ToggleLibrary" asp-route-id="@Model.Series.TvdbId" asp-route-season="@Model.Season">
-                        <button type="submit" class="btn @(Model.IsTrackedByCurrentUser ? "btn-outline-danger" : "btn-primary")">
-                            @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
-                        </button>
-                    </form>
+                @if (Model.IsAuthenticated)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <form method="post" asp-page-handler="ToggleLibrary" asp-route-id="@Model.Series.TvdbId" asp-route-season="@Model.Season">
+                            <button type="submit" class="btn @(Model.IsTrackedByCurrentUser ? "btn-outline-danger" : "btn-primary")">
+                                @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
+                            </button>
+                        </form>
 
-                    @if (Model.WatchProgress is { HasEpisodes: true } progress)
-                    {
-                        if (progress.IsUpToDate)
+                        @if (Model.WatchProgress is { HasEpisodes: true } progress)
                         {
-                            <button type="button" class="btn btn-outline-secondary" disabled>You are up to date</button>
+                            if (progress.IsUpToDate)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" disabled>You are up to date</button>
+                            }
+                            else
+                            {
+                                var next = progress.NextUnwatchedEpisode!;
+                                <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId">
+                                    <input type="hidden" name="episodeId" value="@next.Id" />
+                                    <input type="hidden" name="Season" value="@next.SeasonNumber" />
+                                    <button type="submit" class="btn btn-watch">Mark @next.SlateCode() as watched</button>
+                                </form>
+                            }
                         }
-                        else
-                        {
-                            var next = progress.NextUnwatchedEpisode!;
-                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId">
-                                <input type="hidden" name="episodeId" value="@next.Id" />
-                                <input type="hidden" name="Season" value="@next.SeasonNumber" />
-                                <button type="submit" class="btn btn-watch">Mark @next.SlateCode() as watched</button>
-                            </form>
-                        }
-                    }
 
-                    <partial name="_LikeToggle" model="@(new Recall.Web.Pages.Shared.LikeToggleModel
-                             {
-                                 Handler = "ToggleSeriesLike",
-                                 RouteId = Model.Series.TvdbId,
-                                 HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty },
-                                 IsLiked = Model.IsLikedByCurrentUser,
-                                 TargetNoun = "series"
-                             })" />
-                </div>
+                        <partial name="_LikeToggle" model="@(new Recall.Web.Pages.Shared.LikeToggleModel
+                                 {
+                                     Handler = "ToggleSeriesLike",
+                                     RouteId = Model.Series.TvdbId,
+                                     HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty },
+                                     IsLiked = Model.IsLikedByCurrentUser,
+                                     TargetNoun = "series"
+                                 })" />
+                    </div>
 
-                <div class="mb-3">
-                    <partial name="_RatingWidget" model="@(new Recall.Web.Pages.Shared.RatingWidgetModel
-                             {
-                                 RateHandler = "RateSeries",
-                                 ClearHandler = "ClearSeriesRating",
-                                 RouteId = Model.Series.TvdbId,
-                                 HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty },
-                                 CurrentValue = Model.CurrentUserRating,
-                                 TargetNoun = "series"
-                             })" />
-                </div>
+                    <div class="mb-3">
+                        <partial name="_RatingWidget" model="@(new Recall.Web.Pages.Shared.RatingWidgetModel
+                                 {
+                                     RateHandler = "RateSeries",
+                                     ClearHandler = "ClearSeriesRating",
+                                     RouteId = Model.Series.TvdbId,
+                                     HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty },
+                                     CurrentValue = Model.CurrentUserRating,
+                                     TargetNoun = "series"
+                                 })" />
+                    </div>
+                }
 
                 <dl class="row">
                     <dt class="col-sm-3">TVDB Id</dt>
@@ -415,42 +426,45 @@
                                         }
                                     </div>
 
-                                    @if (isWatched)
+                                    @if (Model.IsAuthenticated)
                                     {
-                                        <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline tvdb-watch-form">
-                                            <input type="hidden" name="episodeId" value="@ep.Id" />
-                                            <input type="hidden" name="Season" value="@selectedSeason" />
-                                            <button type="submit"
-                                                    class="tvdb-watch-dot tvdb-watch-dot--on"
-                                                    title="Mark as unwatched"
-                                                    aria-pressed="true"
-                                                    aria-label="Watched. Click to mark as unwatched.">
-                                                <span aria-hidden="true">&#10003;</span>
+                                        if (isWatched)
+                                        {
+                                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline tvdb-watch-form">
+                                                <input type="hidden" name="episodeId" value="@ep.Id" />
+                                                <input type="hidden" name="Season" value="@selectedSeason" />
+                                                <button type="submit"
+                                                        class="tvdb-watch-dot tvdb-watch-dot--on"
+                                                        title="Mark as unwatched"
+                                                        aria-pressed="true"
+                                                        aria-label="Watched. Click to mark as unwatched.">
+                                                    <span aria-hidden="true">&#10003;</span>
+                                                </button>
+                                            </form>
+                                        }
+                                        else if (!hasAired)
+                                        {
+                                            <button type="button"
+                                                    class="tvdb-watch-dot"
+                                                    title="Hasn't aired yet"
+                                                    aria-pressed="false"
+                                                    aria-label="Can't mark as watched — episode hasn't aired yet"
+                                                    disabled>
                                             </button>
-                                        </form>
-                                    }
-                                    else if (!hasAired)
-                                    {
-                                        <button type="button"
-                                                class="tvdb-watch-dot"
-                                                title="Hasn't aired yet"
-                                                aria-pressed="false"
-                                                aria-label="Can't mark as watched — episode hasn't aired yet"
-                                                disabled>
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <button type="button"
-                                                class="tvdb-watch-dot"
-                                                title="Mark as watched"
-                                                aria-pressed="false"
-                                                aria-label="Mark as watched"
-                                                data-episode-id="@ep.Id"
-                                                data-series-id="@Model.Series.TvdbId"
-                                                data-season="@selectedSeason"
-                                                onclick="handleEpisodeWatchClick(event)">
-                                        </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="tvdb-watch-dot"
+                                                    title="Mark as watched"
+                                                    aria-pressed="false"
+                                                    aria-label="Mark as watched"
+                                                    data-episode-id="@ep.Id"
+                                                    data-series-id="@Model.Series.TvdbId"
+                                                    data-season="@selectedSeason"
+                                                    onclick="handleEpisodeWatchClick(event)">
+                                            </button>
+                                        }
                                     }
                                 </div>
                             </div>
@@ -572,3 +586,18 @@
         }
     }
 </div>
+
+@section Head {
+    @if (Model.Series is not null)
+    {
+        <script type="application/ld+json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "TVSeries",
+            ["name"] = Model.Series.Name,
+            ["description"] = ViewData["Description"],
+            ["image"] = Model.Series.ImageUrl,
+            ["startDate"] = Model.Series.FirstAired
+        }))</script>
+    }
+}

@@ -6,6 +6,10 @@
 @{
     var ep = Model.Episode;
     ViewData["Title"] = ep?.Name ?? "Episode";
+    ViewData["Description"] = !string.IsNullOrWhiteSpace(ep?.Overview)
+        ? (ep.Overview.Length <= 300 ? ep.Overview : ep.Overview[..300].TrimEnd() + "…")
+        : $"Details and ratings for {(ep?.Name ?? "this episode")}{(Model.SeriesName is not null ? $" from {Model.SeriesName}" : "")} on Recall.nu.";
+    ViewData["Robots"] = ep is not null ? "index, follow" : "noindex, nofollow";
 
     string FormatAirMoment(DateOnly date, string? airsTime)
     {
@@ -126,7 +130,7 @@
                     {
                         <span class="tvdb-rating">
                             <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
-                            <span class="tvdb-rating-score"><strong>@ep.Score!.Value.ToString("0.#")</strong>&#8202;/&#8202;10</span>
+                            <span class="tvdb-rating-score"><strong>@ep.Score!.Value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
                             <span class="tvdb-rating-votes">TVDB score</span>
                         </span>
                     }
@@ -134,19 +138,22 @@
                     {
                         <span class="tvdb-rating">
                             <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
-                            <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0")</strong>&#8202;/&#8202;10</span>
+                            <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
                             <span class="tvdb-rating-votes">@Model.RecallRatingCount Recall rating@(Model.RecallRatingCount == 1 ? "" : "s")</span>
                         </span>
                     }
 
-                    <partial name="_RatingWidget" model="@(new RatingWidgetModel
-                             {
-                                 RateHandler = "RateEpisode",
-                                 ClearHandler = "ClearEpisodeRating",
-                                 RouteId = ep.Id!.Value,
-                                 CurrentValue = Model.CurrentUserRating,
-                                 TargetNoun = "episode"
-                             })" />
+                    @if (Model.IsAuthenticated)
+                    {
+                        <partial name="_RatingWidget" model="@(new RatingWidgetModel
+                                 {
+                                     RateHandler = "RateEpisode",
+                                     ClearHandler = "ClearEpisodeRating",
+                                     RouteId = ep.Id!.Value,
+                                     CurrentValue = Model.CurrentUserRating,
+                                     TargetNoun = "episode"
+                                 })" />
+                    }
                 </div>
 
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -181,64 +188,70 @@
                             <span>Airs&nbsp;@FormatAirMoment(Model.AiredDate!.Value, Model.AirsTime)</span>
                         </button>
                     }
-                    else if (Model.IsWatchedByCurrentUser)
+                    else if (Model.IsAuthenticated)
                     {
-                        <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
-                                 {
-                                     Handler = "ToggleWatched",
-                                     RouteId = ep.Id!.Value,
-                                     IsWatched = true,
-                                     WatchedLabel = Model.WatchedOnUtc is { } w
-                                         ? $"Watched on {w.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)}"
-                                         : "Watched"
-                                 })" />
-                    }
-                    else if (Model.PriorUnwatchedCount == 0)
-                    {
-                        <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
-                                 {
-                                     Handler = "ToggleWatched",
-                                     RouteId = ep.Id!.Value,
-                                     IsWatched = false
-                                 })" />
-                    }
-                    else
-                    {
-                        <button type="button" class="btn btn-watch" data-bs-toggle="modal" data-bs-target="#markWatchedModal">
-                            Mark as watched
-                        </button>
+                        if (Model.IsWatchedByCurrentUser)
+                        {
+                            <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
+                                     {
+                                         Handler = "ToggleWatched",
+                                         RouteId = ep.Id!.Value,
+                                         IsWatched = true,
+                                         WatchedLabel = Model.WatchedOnUtc is { } w
+                                             ? $"Watched on {w.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)}"
+                                             : "Watched"
+                                     })" />
+                        }
+                        else if (Model.PriorUnwatchedCount == 0)
+                        {
+                            <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
+                                     {
+                                         Handler = "ToggleWatched",
+                                         RouteId = ep.Id!.Value,
+                                         IsWatched = false
+                                     })" />
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-watch" data-bs-toggle="modal" data-bs-target="#markWatchedModal">
+                                Mark as watched
+                            </button>
 
-                        <div class="modal fade" id="markWatchedModal" tabindex="-1" aria-labelledby="markWatchedModalLabel" aria-hidden="true">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title" id="markWatchedModalLabel">Catch up?</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                    </div>
-                                    <div class="modal-body tvdb-prose">
-                                        You have <strong>@Model.PriorUnwatchedCount</strong> earlier unwatched episode@(Model.PriorUnwatchedCount == 1 ? "" : "s") in this series.
-                                        Mark @(Model.PriorUnwatchedCount == 1 ? "it" : "those") as watched too?
-                                    </div>
-                                    <div class="modal-footer">
-                                        <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id">
-                                            <button type="submit" class="btn btn-outline-dark">Just this episode</button>
-                                        </form>
-                                        <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@ep.Id">
-                                            <button type="submit" class="btn btn-watch">Mark this &amp; earlier episodes</button>
-                                        </form>
+                            <div class="modal fade" id="markWatchedModal" tabindex="-1" aria-labelledby="markWatchedModalLabel" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="markWatchedModalLabel">Catch up?</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body tvdb-prose">
+                                            You have <strong>@Model.PriorUnwatchedCount</strong> earlier unwatched episode@(Model.PriorUnwatchedCount == 1 ? "" : "s") in this series.
+                                            Mark @(Model.PriorUnwatchedCount == 1 ? "it" : "those") as watched too?
+                                        </div>
+                                        <div class="modal-footer">
+                                            <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id">
+                                                <button type="submit" class="btn btn-outline-dark">Just this episode</button>
+                                            </form>
+                                            <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@ep.Id">
+                                                <button type="submit" class="btn btn-watch">Mark this &amp; earlier episodes</button>
+                                            </form>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        }
                     }
 
-                    <partial name="_LikeToggle" model="@(new LikeToggleModel
-                             {
-                                 Handler = "ToggleLike",
-                                 RouteId = ep.Id!.Value,
-                                 IsLiked = Model.IsLikedByCurrentUser,
-                                 TargetNoun = "episode"
-                             })" />
+                    @if (Model.IsAuthenticated)
+                    {
+                        <partial name="_LikeToggle" model="@(new LikeToggleModel
+                                 {
+                                     Handler = "ToggleLike",
+                                     RouteId = ep.Id!.Value,
+                                     IsLiked = Model.IsLikedByCurrentUser,
+                                     TargetNoun = "episode"
+                                 })" />
+                    }
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(ep.Overview))
@@ -345,3 +358,24 @@
         </div>
     }
 </div>
+
+@section Head {
+    @if (ep is not null)
+    {
+        <script type="application/ld+json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "TVEpisode",
+            ["name"] = ep.Name,
+            ["description"] = ViewData["Description"],
+            ["image"] = Model.DisplayImage,
+            ["episodeNumber"] = ep.Number,
+            ["seasonNumber"] = ep.SeasonNumber,
+            ["partOfSeries"] = Model.SeriesName is null ? null : new Dictionary<string, object?>
+            {
+                ["@type"] = "TVSeries",
+                ["name"] = Model.SeriesName
+            }
+        }))</script>
+    }
+}
