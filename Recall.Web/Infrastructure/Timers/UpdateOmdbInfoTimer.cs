@@ -40,10 +40,8 @@ public sealed class UpdateOmdbInfoTimer(
     /// <summary>Upper bound on OMDb calls per run (job runs hourly).</summary>
     private const int MaxRequestsPerRun = 30;
 
-    public async Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var cancellationToken = context.CancellationToken;
-
         if (string.IsNullOrWhiteSpace(omdbOptions.Value.ApiKey))
         {
             logger.LogInformation("UpdateOmdbInfoTimer: no OMDb ApiKey configured — skipping run.");

@@ -194,37 +194,37 @@ public static class InfrastructureServiceCollectionExtensions
             q.ScheduleJob<UpdateTvDbInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateTvDbInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(10))
-                .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
+                .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Check for new TVDB info every 60 minutes, but only refresh series and episodes that are due for a refresh."));
 
             q.ScheduleJob<UpdateMovieInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateMovieInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(15))
-                .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
+                .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Check for new TVDB movie info every 60 minutes, but only refresh movies that are due for a refresh."));
 
             q.ScheduleJob<MailTimer>(trigger => trigger
                 .WithIdentity("MailTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(30))
-                .WithSimpleSchedule(s => s.WithIntervalInMinutes(1).RepeatForever())
+                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())
                 .WithDescription("Drain the outbound email queue once a minute."));
 
             q.ScheduleJob<UpdateOmdbInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateOmdbInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(20))
-                .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
+                .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Refresh OMDb data for cached series — at most 30 requests/hour, each series at most monthly."));
 
             q.ScheduleJob<UpdateMovieOmdbInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateMovieOmdbInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(25))
-                .WithDailyTimeIntervalSchedule(60, IntervalUnit.Minute)
+                .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Refresh OMDb data for cached movies — at most 30 requests/hour, each movie at most monthly."));
 
             q.ScheduleJob<NewEpisodeNotificationTimer>(trigger => trigger
                 .WithIdentity("NewEpisodeNotificationTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(45))
-                .WithSimpleSchedule(s => s.WithIntervalInHours(6).RepeatForever())
+                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(6)).RepeatForever())
                 .WithDescription("Notify users when a series they track has an episode that aired in the last few days."));
         });
 

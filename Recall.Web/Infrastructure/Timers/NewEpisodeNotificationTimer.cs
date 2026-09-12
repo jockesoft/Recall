@@ -38,10 +38,8 @@ public sealed class NewEpisodeNotificationTimer(
     /// <summary>Safety cap on series per run — aggregate reads are cache-first, so this is generous.</summary>
     private const int MaxSeriesPerRun = 500;
 
-    public async Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var cancellationToken = context.CancellationToken;
-
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var earliestAired = today.AddDays(-(int)Lookback.TotalDays);
 

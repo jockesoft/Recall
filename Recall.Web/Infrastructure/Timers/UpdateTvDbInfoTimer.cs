@@ -61,10 +61,8 @@ public class UpdateTvDbInfoTimer(
     /// <summary>Upper bound on episodes refreshed per run.</summary>
     private const int MaxEpisodesPerRun = 25;
 
-    public async Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var cancellationToken = context.CancellationToken;
-
         await RefreshStaleAggregatesAsync(cancellationToken);
         await RefreshStaleEpisodesAsync(cancellationToken);
     }

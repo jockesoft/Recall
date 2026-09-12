@@ -20,9 +20,8 @@ public class UpdateMovieInfoTimer(
     private static readonly TimeSpan MinRefreshAge = TimeSpan.FromHours(12);
     private const int MaxMoviesPerRun = 10;
 
-    public async Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var cancellationToken = context.CancellationToken;
         var staleBeforeUtc = DateTime.UtcNow - MinRefreshAge;
 
         var candidates = await snapshotStore.GetMovieAggregatesNeedingRefreshAsync(

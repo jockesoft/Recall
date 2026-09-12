@@ -27,10 +27,8 @@ public sealed class UpdateMovieOmdbInfoTimer(
     private static readonly TimeSpan MinRefreshAge = TimeSpan.FromDays(30);
     private const int MaxRequestsPerRun = 30;
 
-    public async Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var cancellationToken = context.CancellationToken;
-
         if (string.IsNullOrWhiteSpace(omdbOptions.Value.ApiKey))
         {
             logger.LogInformation("UpdateMovieOmdbInfoTimer: no OMDb ApiKey configured — skipping run.");

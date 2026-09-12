@@ -21,11 +21,11 @@ namespace Recall.Web.Infrastructure.Timers;
 [DisallowConcurrentExecution]
 public sealed class MailTimer(IMailService mailService, ILogger<MailTimer> logger) : IJob
 {
-    public async Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
         try
         {
-            await mailService.SendPendingEmailsAsync(context.CancellationToken);
+            await mailService.SendPendingEmailsAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
