@@ -36,6 +36,19 @@ public sealed class TheTvDbApiClient(
         return envelope.Data ?? [];
     }
 
+    public async Task<IReadOnlyList<SearchByRemoteIdResultDto>> SearchByRemoteIdAsync(
+        string remoteId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(remoteId))
+            return [];
+
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<List<SearchByRemoteIdResultDto>>>(
+            () => new HttpRequestMessage(HttpMethod.Get, $"search/remoteid/{Uri.EscapeDataString(remoteId)}"),
+            cancellationToken);
+
+        return envelope.Data ?? [];
+    }
+
     public async Task<SeriesTranslationDataDto?> GetSeriesTranslationByLanguageAsync(
         int seriesId,
         string language,

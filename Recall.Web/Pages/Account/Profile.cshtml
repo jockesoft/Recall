@@ -113,6 +113,33 @@
                 }
             </section>
 
+            <section class="tvdb-fav-section mb-4">
+                <h2 class="tvdb-fav-title">Import from IMDb</h2>
+
+                @{
+                    var importJob = Model.LatestImportJob;
+                }
+                @if (importJob is null)
+                {
+                    <p class="tvdb-mono text-muted mb-2">Bring in your ratings or watchlist from an IMDb CSV export.</p>
+                }
+                else if (importJob.Status == Recall.Web.Infrastructure.Persistence.Entities.WatchlistImportJobStatus.Processing)
+                {
+                    <p class="tvdb-mono text-muted mb-2">
+                        Importing&hellip; @importJob.ProcessedCount / @importJob.TotalCount rows processed.
+                    </p>
+                }
+                else
+                {
+                    <p class="tvdb-mono text-muted mb-2">
+                        Last import: @importJob.ImportedCount imported, @importJob.NotFoundCount not found.
+                    </p>
+                }
+                <a asp-page="/Account/ImportWatchlist" class="btn btn-outline-primary btn-sm">
+                    @(importJob is null ? "Import watchlist" : "View import")
+                </a>
+            </section>
+
             <div class="d-flex flex-wrap gap-2">
                 <a asp-page="/Account/EditProfile" class="btn btn-primary">Edit profile</a>
                 <form method="post" asp-page="/Account/Logout">

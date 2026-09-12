@@ -226,6 +226,12 @@ public static class InfrastructureServiceCollectionExtensions
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(45))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(6)).RepeatForever())
                 .WithDescription("Notify users when a series they track has an episode that aired in the last few days."));
+
+            q.ScheduleJob<WatchlistImportTimer>(trigger => trigger
+                .WithIdentity("WatchlistImportTimer-trigger")
+                .StartAt(DateTimeOffset.UtcNow.AddSeconds(50))
+                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())
+                .WithDescription("Drain the IMDb watchlist import queue at a steady pace, a few rows per minute."));
         });
 
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

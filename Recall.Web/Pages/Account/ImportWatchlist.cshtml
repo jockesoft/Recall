@@ -1,0 +1,118 @@
+@page
+@model Recall.Web.Pages.Account.ImportWatchlistModel
+@using Recall.Web.Infrastructure.Persistence.Entities
+@{
+    ViewData["Title"] = "Import from IMDb";
+
+    var job = Model.LatestJob;
+    var isProcessing = job is { Status: WatchlistImportJobStatus.Processing };
+    var progressPercent = job is { TotalCount: > 0 }
+        ? (int)Math.Round(100.0 * job.ProcessedCount / job.TotalCount)
+        : 0;
+}
+
+<div class="tvdb-shell">
+    <div class="row justify-content-center">
+        <div class="col-sm-10 col-md-8 col-lg-6">
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <h1 class="tvdb-display mb-0">Import from IMDb</h1>
+                <a asp-page="/Account/Profile" class="tvdb-mono text-muted">&larr; Back to profile</a>
+            </div>
+
+            <p class="tvdb-mono text-muted">
+                Export your list from IMDb (<em>Your Lists &rarr; Ratings</em> or <em>Watchlist</em> &rarr; Export)
+                and upload the CSV here. Rated titles are marked watched with your rating; unrated movies are added
+                to your favorites, and unrated series are added to your library. Matching against TheTVDB happens
+                gradually in the background, a few rows a minute, so a large import can take a while to finish.
+            </p>
+
+            @if (isProcessing)
+            {
+                <section class="mb-4">
+                    <div class="d-flex justify-content-between align-items-baseline mb-1">
+                        <span class="tvdb-eyebrow">Importing @job!.FileName</span>
+                        <span class="tvdb-mono text-muted">@job!.ProcessedCount / @job!.TotalCount</span>
+                    </div>
+                    <div class="progress" role="progressbar" aria-valuenow="@progressPercent" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar" style="width:@(progressPercent)%"></div>
+                    </div>
+                    <p class="tvdb-mono text-muted small mt-2 mb-0">
+                        Refresh this page to check progress — it updates every minute or so.
+                    </p>
+                </section>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="Upload" enctype="multipart/form-data" class="mb-4">
+                    <div class="mb-3">
+                        <label for="file" class="form-label tvdb-eyebrow">CSV file</label>
+                        <input type="file" id="file" name="file" accept=".csv" class="form-control" required />
+                    </div>
+                    <button type="submit" class="btn btn-primary">Start import</button>
+                </form>
+            }
+
+            @if (job is not null)
+            {
+                <section class="mb-4">
+                    <h2 class="tvdb-fav-title">
+                        @(isProcessing ? "Progress so far" : "Last import")
+                    </h2>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">File</dt>
+                        <dd class="col-sm-8">@job.FileName</dd>
+
+                        <dt class="col-sm-4">Imported</dt>
+                        <dd class="col-sm-8">@job.ImportedCount</dd>
+
+                        <dt class="col-sm-4">Already had it</dt>
+                        <dd class="col-sm-8">@job.SkippedCount</dd>
+
+                        <dt class="col-sm-4">No TheTVDB match</dt>
+                        <dd class="col-sm-8">@job.NotFoundCount</dd>
+
+                        @if (job.FailedCount > 0)
+                        {
+                            <dt class="col-sm-4">Failed</dt>
+                            <dd class="col-sm-8">@job.FailedCount</dd>
+                        }
+                    </dl>
+                </section>
+
+                @if (job.Items.Count > 0)
+                {
+                    <section>
+                        <h2 class="tvdb-fav-title">Rows</h2>
+                        <div class="table-responsive">
+                            <table class="table table-sm tvdb-mono">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Title</th>
+                                        <th>Type</th>
+                                        <th>Rating</th>
+                                        <th>Status</th>
+                                        <th>Detail</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in job.Items)
+                                    {
+                                        <tr>
+                                            <td>@item.RowNumber</td>
+                                            <td>@item.Title</td>
+                                            <td>@item.TitleType</td>
+                                            <td>@(item.YourRating?.ToString() ?? "—")</td>
+                                            <td>@item.Status</td>
+                                            <td>@item.ResultMessage</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                }
+            }
+        </div>
+    </div>
+</div>

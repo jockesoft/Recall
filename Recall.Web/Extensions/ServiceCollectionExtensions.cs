@@ -12,6 +12,7 @@ using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Health;
+using Recall.Web.Services.Import;
 using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Sitemap;
 using Recall.Web.Services.WatchTracking;
@@ -100,6 +101,19 @@ public static class ServiceCollectionExtensions
         services.Configure<MailOptions>(configuration.GetSection(MailOptions.SectionName));
         services.AddScoped<IEmailRepository, EmailRepository>();
         services.AddScoped<IMailService, MailService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Bulk import of an IMDb list export: the queue repository plus
+    /// <see cref="WatchlistImportService"/>, which both the upload page (to
+    /// enqueue) and the <c>WatchlistImportTimer</c> job (to drain) resolve.
+    /// </summary>
+    public static IServiceCollection AddWatchlistImport(this IServiceCollection services)
+    {
+        services.AddScoped<IWatchlistImportRepository, WatchlistImportRepository>();
+        services.AddScoped<IWatchlistImportService, WatchlistImportService>();
 
         return services;
     }

@@ -17,6 +17,7 @@ public sealed class ProfileModel(
     IWatchTimeService watchTimeService,
     IFavoritesService favoritesService,
     ILikeRepository likeRepository,
+    IWatchlistImportRepository importRepository,
     ILogger<ProfileModel> logger) : PageModel
 {
     /// <summary>How many liked titles the profile page previews before the "see all" arrow.</summary>
@@ -41,6 +42,9 @@ public sealed class ProfileModel(
 
     public IReadOnlyList<FavoriteTitle> FavoriteTitles { get; private set; } = Array.Empty<FavoriteTitle>();
 
+    /// <summary>The user's most recent IMDb import, if they've ever run one. No items — summary only.</summary>
+    public WatchlistImportJob? LatestImportJob { get; private set; }
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         if (currentUser.UserId is not { } userId)
@@ -62,6 +66,15 @@ public sealed class ProfileModel(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Could not load favorite titles for the profile page.");
+        }
+
+        try
+        {
+            LatestImportJob = await importRepository.GetLatestJobForUserAsync(userId, includeItems: false, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not load the latest watchlist import job for the profile page.");
         }
     }
 

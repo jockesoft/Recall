@@ -29,6 +29,22 @@ public sealed class TheTvDbService(
             .ToArray();
     }
 
+    public async Task<RemoteIdMatch?> ResolveByRemoteIdAsync(string remoteId, CancellationToken cancellationToken = default)
+    {
+        var results = await apiClient.SearchByRemoteIdAsync(remoteId, cancellationToken);
+
+        foreach (var result in results)
+        {
+            if (result.Movie is { } movie)
+                return new RemoteIdMatch(movie.Id, movie.Name, IsMovie: true);
+
+            if (result.Series is { } series)
+                return new RemoteIdMatch(series.Id, series.Name, IsMovie: false);
+        }
+
+        return null;
+    }
+
     public async Task<TvSeriesDetails?> GetSeriesByIdAsync(int seriesId, CancellationToken cancellationToken = default)
     {
         var aggregate = await GetSeriesAggregateByIdAsync(seriesId, cancellationToken);

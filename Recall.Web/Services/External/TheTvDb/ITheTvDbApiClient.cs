@@ -18,6 +18,14 @@ public interface ITheTvDbApiClient
     /// </summary>
     Task<IReadOnlyList<SearchResultDto>> SearchAsync(string query, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Resolves an external id (e.g. an IMDb id like "tt2479478") to whatever
+    /// TheTVDB entities carry it — used by the watchlist importer, which only
+    /// has IMDb ids to start from.
+    /// </summary>
+    Task<IReadOnlyList<SearchByRemoteIdResultDto>> SearchByRemoteIdAsync(
+        string remoteId, CancellationToken cancellationToken = default);
+
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(
         int seriesId,
         string language = "eng",

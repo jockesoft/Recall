@@ -59,6 +59,7 @@ builder.Services.AddOmdb(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddNotifications();
 builder.Services.AddMail(builder.Configuration);
+builder.Services.AddWatchlistImport();
 
 // Deep health probe for uptime monitoring — GET /health returns 200 "Healthy"
 // while Postgres answers a bare SELECT 1, 503 "Unhealthy" otherwise.

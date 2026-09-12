@@ -15,6 +15,13 @@ public interface ITheTvDbService
     Task<IReadOnlyList<SearchResultItem>> SearchAsync(string query, CancellationToken cancellationToken = default);
     Task<TvSeriesDetails?> GetSeriesByIdAsync(int seriesId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Resolves an external id (e.g. an IMDb id) to a TheTVDB series or movie.
+    /// A one-shot lookup with no caching tier — used by the watchlist importer,
+    /// not the read-heavy paths the three-tier cache exists for.
+    /// </summary>
+    Task<RemoteIdMatch?> ResolveByRemoteIdAsync(string remoteId, CancellationToken cancellationToken = default);
+
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);
 
     /// <summary>

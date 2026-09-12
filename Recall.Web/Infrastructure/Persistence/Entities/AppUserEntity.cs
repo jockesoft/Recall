@@ -20,4 +20,5 @@ public sealed class AppUserEntity
     public ICollection<UserMovieWatchEntity> MovieWatches { get; set; } = new List<UserMovieWatchEntity>();
     public ICollection<UserRatingEntity> Ratings { get; set; } = new List<UserRatingEntity>();
     public ICollection<NotificationEntity> Notifications { get; set; } = new List<NotificationEntity>();
+    public ICollection<WatchlistImportJobEntity> WatchlistImportJobs { get; set; } = new List<WatchlistImportJobEntity>();
 }
