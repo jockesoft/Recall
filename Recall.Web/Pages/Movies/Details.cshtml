@@ -112,6 +112,17 @@
                                      TargetNoun = "movie"
                                  })" />
                     </div>
+
+                    <div class="mb-3">
+                        <partial name="_RatingWidget" model="@(new Recall.Web.Pages.Shared.RatingWidgetModel
+                                 {
+                                     RateHandler = "RateMovie",
+                                     ClearHandler = "ClearMovieRating",
+                                     RouteId = movie.TvdbId,
+                                     CurrentValue = Model.CurrentUserRating,
+                                     TargetNoun = "movie"
+                                 })" />
+                    </div>
                 }
 
                 <dl class="row">
@@ -161,6 +172,18 @@
                                 {
                                     <span class="tvdb-rating-votes">@omdbVotes votes</span>
                                 }
+                            </span>
+                        </dd>
+                    }
+
+                    @if (Model.RecallRatingCount > 0)
+                    {
+                        <dt class="col-sm-3">Recall rating</dt>
+                        <dd class="col-sm-9">
+                            <span class="tvdb-rating">
+                                <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                                <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
+                                <span class="tvdb-rating-votes">@Model.RecallRatingCount rating@(Model.RecallRatingCount == 1 ? "" : "s")</span>
                             </span>
                         </dd>
                     }

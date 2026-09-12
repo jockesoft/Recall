@@ -12,15 +12,16 @@ using Recall.Web.Services.External.TheTvDb;
 namespace Recall.Web.Pages.Movies;
 
 /// <summary>
-/// Public, anonymous-friendly movie details page. Like/watched actions are only
-/// shown when signed in; no library/tracking or ratings yet, those need their
-/// own data model.
+/// Public, anonymous-friendly movie details page. Like/watched/rating actions
+/// are only shown when signed in; no library/tracking yet, that needs its own
+/// data model.
 /// </summary>
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
     ILikeRepository likeRepository,
     IMovieWatchRepository movieWatchRepository,
+    IRatingRepository ratingRepository,
     IMovieOmdbSnapshotStore omdbSnapshotStore,
     ILogger<DetailsModel> logger)
     : PageModel
@@ -40,6 +41,15 @@ public sealed class DetailsModel(
 
     public bool IsWatchedByCurrentUser => WatchedOnUtc is not null;
 
+    /// <summary>The current user's 1-10 rating of this movie, or null when unrated.</summary>
+    public int? CurrentUserRating { get; private set; }
+
+    /// <summary>Average of every Recall user's rating of this movie, when at least one exists.</summary>
+    public double? RecallRatingAverage { get; private set; }
+
+    /// <summary>How many Recall users have rated this movie.</summary>
+    public int RecallRatingCount { get; private set; }
+
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (id <= 0) return NotFound();
@@ -53,10 +63,15 @@ public sealed class DetailsModel(
             // by UpdateMovieOmdbInfoTimer. Absent until the job has run for this movie.
             Omdb = await omdbSnapshotStore.GetAsync(id, cancellationToken);
 
+            var ratingSummary = await ratingRepository.GetSummaryAsync(RatingTargetType.Movie, id, cancellationToken);
+            RecallRatingAverage = ratingSummary.Average;
+            RecallRatingCount = ratingSummary.Count;
+
             if (currentUserService.IsAuthenticated && currentUserService.UserId is { } userId)
             {
                 IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Movie, id, cancellationToken);
                 WatchedOnUtc = await movieWatchRepository.GetWatchedUtcAsync(userId, id, cancellationToken);
+                CurrentUserRating = await ratingRepository.GetRatingAsync(userId, RatingTargetType.Movie, id, cancellationToken);
             }
 
             return Page();
@@ -119,6 +134,58 @@ public sealed class DetailsModel(
         {
             logger.LogError(ex, "Failed toggling watched state for movie {MovieId}.", id);
             this.SetErrorToast("Could not update watched status right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostRateMovieAsync(
+        [FromRoute] int id,
+        [FromForm] int value,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to rate a movie.");
+            return RedirectToPage(new { id });
+        }
+
+        if (value is < 1 or > 10)
+            return RedirectToPage(new { id });
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            await ratingRepository.RateAsync(userId, RatingTargetType.Movie, id, id, value, cancellationToken);
+            this.SetSuccessToast("Rating saved.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed rating movie {MovieId}.", id);
+            this.SetErrorToast("Could not save your rating right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostClearMovieRatingAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to rate a movie.");
+            return RedirectToPage(new { id });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+            await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Movie, id, cancellationToken);
+            this.SetInfoToast("Rating removed.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed clearing rating for movie {MovieId}.", id);
+            this.SetErrorToast("Could not update your rating right now.");
         }
 
         return RedirectToPage(new { id });
