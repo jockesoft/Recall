@@ -13,6 +13,7 @@ using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Health;
 using Recall.Web.Services.Notifications;
+using Recall.Web.Services.Sitemap;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Extensions;
@@ -71,6 +72,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IWatchTimeService, WatchTimeService>();
         services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
+        services.AddScoped<ISitemapService, SitemapService>();
         services.AddScoped<IDbHealthProbe, DbHealthProbe>();
 
         return services;
