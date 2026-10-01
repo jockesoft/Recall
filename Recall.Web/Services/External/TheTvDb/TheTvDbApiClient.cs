@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Polly;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure;
+using Recall.Web.Infrastructure.External;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Movies;
@@ -19,6 +21,7 @@ namespace Recall.Web.Services.External.TheTvDb;
 public sealed class TheTvDbApiClient(
     HttpClient httpClient,
     TheTvDbClientState state,
+    [FromKeyedServices(ExternalHttpResilience.TheTvDbPipeline)] ResiliencePipeline<HttpResponseMessage> retryPipeline,
     ILogger<TheTvDbApiClient> logger)
     : ITheTvDbApiClient
 {
@@ -315,39 +318,19 @@ public sealed class TheTvDbApiClient(
     }
 
     /// <summary>
-    /// Sends a request, attaching the current bearer token per-request (never mutating the shared
-    /// HttpClient's default headers, which isn't safe under concurrent calls). Throttles overall
-    /// concurrency via the shared state, and transparently re-authenticates + retries once on 401.
+    /// Sends a request with retries. The order of the layers is the point:
+    /// the retry pipeline is outermost and each attempt takes its own throttle
+    /// slot, so a request that is backing off between attempts is not sitting
+    /// on one of the few concurrent-request slots while it sleeps — and time
+    /// spent queueing for a slot counts against no timeout at all.
     /// </summary>
     private async Task<T> SendAsync<T>(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
     {
-        await state.RequestThrottle.WaitAsync(cancellationToken);
-        try
-        {
-            return await SendCoreAsync<T>(requestFactory, allowReauth: true, cancellationToken);
-        }
-        finally
-        {
-            state.RequestThrottle.Release();
-        }
-    }
+        using var response = await retryPipeline.ExecuteAsync(
+            async token => await SendThrottledAsync(requestFactory, token), cancellationToken);
 
-    private async Task<T> SendCoreAsync<T>(Func<HttpRequestMessage> requestFactory, bool allowReauth, CancellationToken cancellationToken)
-    {
-        var token = await state.GetOrRefreshTokenAsync(httpClient, staleToken: null, cancellationToken);
-
-        using var request = requestFactory();
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (response.StatusCode == HttpStatusCode.Unauthorized && allowReauth)
-        {
-            logger.LogInformation("TheTVDB token rejected (401); re-authenticating and retrying once.");
-            await state.GetOrRefreshTokenAsync(httpClient, staleToken: token, cancellationToken);
-            return await SendCoreAsync<T>(requestFactory, allowReauth: false, cancellationToken);
-        }
-
+        // Already buffered: HttpClient.SendAsync reads the whole body by default,
+        // inside the attempt's timeout.
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -366,5 +349,46 @@ public sealed class TheTvDbApiClient(
             logger.LogError(ex, "Failed to deserialize TheTVDB response.");
             throw new TheTvDbApiException("Failed to deserialize TheTVDB response.", null, ex);
         }
+    }
+
+    /// <summary>One attempt: holds a throttle slot for exactly as long as it is talking to TheTVDB.</summary>
+    private async Task<HttpResponseMessage> SendThrottledAsync(
+        Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
+    {
+        await state.RequestThrottle.WaitAsync(cancellationToken);
+        try
+        {
+            return await SendAuthenticatedAsync(requestFactory, allowReauth: true, cancellationToken);
+        }
+        finally
+        {
+            state.RequestThrottle.Release();
+        }
+    }
+
+    /// <summary>
+    /// Attaches the current bearer token per-request (never mutating the shared HttpClient's default
+    /// headers, which isn't safe under concurrent calls), and transparently re-authenticates and
+    /// resends once on 401.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAuthenticatedAsync(
+        Func<HttpRequestMessage> requestFactory, bool allowReauth, CancellationToken cancellationToken)
+    {
+        var token = await state.GetOrRefreshTokenAsync(httpClient, staleToken: null, cancellationToken);
+
+        using var request = requestFactory();
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized && allowReauth)
+        {
+            response.Dispose();
+            logger.LogInformation("TheTVDB token rejected (401); re-authenticating and retrying once.");
+            await state.GetOrRefreshTokenAsync(httpClient, staleToken: token, cancellationToken);
+            return await SendAuthenticatedAsync(requestFactory, allowReauth: false, cancellationToken);
+        }
+
+        return response;
     }
 }

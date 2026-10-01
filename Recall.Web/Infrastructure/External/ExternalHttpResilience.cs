@@ -9,43 +9,85 @@ namespace Recall.Web.Infrastructure.External;
 /// <summary>
 /// Tunables for the retry pipelines below. Not bound to configuration — the
 /// defaults are the production values; tests shrink the delay so a retry
-/// doesn't cost real seconds.
+/// doesn't cost real seconds, and switch the jitter off when they need a
+/// delay of a known length.
 /// </summary>
 public sealed class ExternalHttpResilienceOptions
 {
-    /// <summary>First retry delay; later ones back off exponentially with jitter.</summary>
+    /// <summary>First retry delay; later ones back off exponentially, capped at <see cref="ExternalHttpResilience.MaxRetryDelay"/>.</summary>
     public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+
+    public bool UseJitter { get; set; } = true;
 }
 
 /// <summary>
-/// Retry + per-attempt timeout for the outbound metadata clients. Each typed
-/// client's own <c>HttpClient.Timeout</c> stays in place as the overall budget
-/// for a call including its retries.
+/// Retry rules for the outbound metadata clients, and the arithmetic that
+/// keeps a call's worst case inside its time budget.
+///
+/// The two clients are wired differently on purpose:
+/// <list type="bullet">
+/// <item>TheTVDB's pipeline is run by <c>TheTvDbApiClient</c> itself, around
+/// each throttled attempt, so a request gives its concurrency slot back while
+/// it waits to retry. <c>HttpClient.Timeout</c> is the per-attempt limit.</item>
+/// <item>OMDb has no throttle, so its pipeline is an ordinary handler inside
+/// the <c>HttpClient</c>, whose <c>Timeout</c> is the overall limit.</item>
+/// </list>
 /// </summary>
 public static class ExternalHttpResilience
 {
-    /// <summary>
-    /// The longest server-requested wait (<c>Retry-After</c>) worth sitting
-    /// through inside a web request. A longer one means "come back later":
-    /// the call fails now instead of being retried early against the server's
-    /// wishes.
-    /// </summary>
-    public static readonly TimeSpan MaxRetryAfter = TimeSpan.FromSeconds(5);
+    /// <summary>Key of the TheTVDB retry pipeline (<c>ResiliencePipeline&lt;HttpResponseMessage&gt;</c>, keyed service).</summary>
+    public const string TheTvDbPipeline = "thetvdb";
 
     /// <summary>
-    /// TheTVDB: up to 3 retries on a transient failure (network error, timeout,
-    /// 408, 5xx) or a 429 whose <c>Retry-After</c> is short. GET only — the
-    /// login POST is left to the client's own 401 handling.
+    /// The longest wait between attempts: caps the exponential backoff, and is
+    /// the longest server-requested <c>Retry-After</c> worth sitting through
+    /// inside a web request. A longer one means "come back later": the call
+    /// fails now instead of being retried early against the server's wishes.
     /// </summary>
-    public static IHttpClientBuilder AddTheTvDbResilience(this IHttpClientBuilder builder)
+    public static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>One TheTVDB round trip, response body included (it is the typed client's <c>HttpClient.Timeout</c>).</summary>
+    public static readonly TimeSpan TheTvDbAttemptTimeout = TimeSpan.FromSeconds(8);
+
+    public const int TheTvDbMaxRetries = 2;
+
+    /// <summary>
+    /// What a page or job may spend on one TheTVDB call, retries and waits
+    /// included — the figure the single-attempt client timeout used to be.
+    /// <see cref="WorstCase"/> for the two values above must stay within it.
+    /// Time spent queueing for a throttle slot is not part of it (it never
+    /// was), and the rare 401 re-login inside an attempt adds up to two more
+    /// round trips.
+    /// </summary>
+    public static readonly TimeSpan TheTvDbOverallBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>Time to response headers for one OMDb attempt.</summary>
+    public static readonly TimeSpan OmdbAttemptTimeout = TimeSpan.FromSeconds(8);
+
+    public const int OmdbMaxRetries = 1;
+
+    /// <summary>The OMDb client's <c>HttpClient.Timeout</c>: the whole call, its retry included.</summary>
+    public static readonly TimeSpan OmdbOverallTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>Every attempt running to its timeout, with the longest allowed wait before each retry.</summary>
+    public static TimeSpan WorstCase(TimeSpan attemptTimeout, int maxRetries) =>
+        attemptTimeout * (maxRetries + 1) + MaxRetryDelay * maxRetries;
+
+    /// <summary>
+    /// TheTVDB: up to <see cref="TheTvDbMaxRetries"/> retries on a transient
+    /// failure (network error, timeout, 408, 5xx) or a 429 whose
+    /// <c>Retry-After</c> is short. Only the client's data calls (all GETs) run
+    /// through it; a failed login surfaces as <c>TheTvDbApiException</c>, which
+    /// is not retried.
+    /// </summary>
+    public static IServiceCollection AddTheTvDbRetryPipeline(this IServiceCollection services)
     {
-        builder.AddResilienceHandler("thetvdb", (pipeline, context) =>
+        services.AddResiliencePipeline<string, HttpResponseMessage>(TheTvDbPipeline, (pipeline, context) =>
         {
-            pipeline.AddRetry(CreateRetry(context.ServiceProvider, maxRetryAttempts: 3, retryTooManyRequests: true));
-            pipeline.AddTimeout(TimeSpan.FromSeconds(10));
+            pipeline.AddRetry(CreateRetry(context.ServiceProvider, TheTvDbMaxRetries, retryTooManyRequests: true));
         });
 
-        return builder;
+        return services;
     }
 
     /// <summary>
@@ -59,8 +101,11 @@ public static class ExternalHttpResilience
     {
         builder.AddResilienceHandler("omdb", (pipeline, context) =>
         {
-            pipeline.AddRetry(CreateRetry(context.ServiceProvider, maxRetryAttempts: 1, retryTooManyRequests: false));
-            pipeline.AddTimeout(TimeSpan.FromSeconds(8));
+            var retry = CreateRetry(context.ServiceProvider, OmdbMaxRetries, retryTooManyRequests: false);
+            retry.DisableForUnsafeHttpMethods();
+
+            pipeline.AddRetry(retry);
+            pipeline.AddTimeout(OmdbAttemptTimeout);
         });
 
         return builder;
@@ -71,24 +116,29 @@ public static class ExternalHttpResilience
     {
         var settings = services.GetRequiredService<IOptions<ExternalHttpResilienceOptions>>().Value;
 
-        var retry = new HttpRetryStrategyOptions
+        return new HttpRetryStrategyOptions
         {
             MaxRetryAttempts = maxRetryAttempts,
             BackoffType = DelayBackoffType.Exponential,
-            UseJitter = true,
+            UseJitter = settings.UseJitter,
             Delay = settings.RetryBaseDelay,
+            MaxDelay = MaxRetryDelay,
             ShouldHandle = args => ValueTask.FromResult(ShouldRetry(args.Outcome, retryTooManyRequests)),
             DelayGenerator = args => ValueTask.FromResult(RetryAfter(args.Outcome.Result))
         };
-
-        retry.DisableForUnsafeHttpMethods();
-        return retry;
     }
 
-    internal static bool ShouldRetry(Outcome<HttpResponseMessage> outcome, bool retryTooManyRequests)
+    public static bool ShouldRetry(Outcome<HttpResponseMessage> outcome, bool retryTooManyRequests)
     {
         if (outcome.Exception is { } exception)
-            return exception is HttpRequestException or TimeoutRejectedException;
+        {
+            // TaskCanceledException wrapping TimeoutException is how HttpClient
+            // reports its own Timeout elapsing — a slow attempt, worth another
+            // try. Any other cancellation is the caller giving up.
+            return exception is HttpRequestException
+                or TimeoutRejectedException
+                or TaskCanceledException { InnerException: TimeoutException };
+        }
 
         if (outcome.Result is not { } response)
             return false;
@@ -101,13 +151,13 @@ public static class ExternalHttpResilience
     }
 
     /// <summary>The server's requested wait, when it sent one we're willing to honor; null falls back to the backoff.</summary>
-    internal static TimeSpan? RetryAfter(HttpResponseMessage? response) =>
-        RequestedWait(response) is { } wait && wait > TimeSpan.Zero && wait <= MaxRetryAfter
+    public static TimeSpan? RetryAfter(HttpResponseMessage? response) =>
+        RequestedWait(response) is { } wait && wait > TimeSpan.Zero && wait <= MaxRetryDelay
             ? wait
             : null;
 
     private static bool AsksToWaitTooLong(HttpResponseMessage response) =>
-        RequestedWait(response) is { } wait && wait > MaxRetryAfter;
+        RequestedWait(response) is { } wait && wait > MaxRetryDelay;
 
     private static TimeSpan? RequestedWait(HttpResponseMessage? response) =>
         response?.Headers.RetryAfter switch

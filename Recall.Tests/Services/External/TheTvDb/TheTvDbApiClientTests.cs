@@ -468,7 +468,8 @@ public class TheTvDbApiClientTests
 
         var logger = new Mock<ILogger<TheTvDbApiClient>>();
 
-        return new TheTvDbApiClient(httpClient, tvdbState, logger.Object);
+        return new TheTvDbApiClient(
+            httpClient, tvdbState, Polly.ResiliencePipeline<HttpResponseMessage>.Empty, logger.Object);
     }
 
     private static Mock<HttpMessageHandler> CreateHandlerMock(Queue<HttpResponseMessage> responses)

@@ -36,9 +36,12 @@ public static class ServiceCollectionExtensions
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TheTvDbOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Accept.Add(new("application/json"));
-            // Overall budget for one call, retries included (each attempt is capped separately).
-            client.Timeout = TimeSpan.FromSeconds(30);
-        }).AddTheTvDbResilience();
+            // One attempt, body included. Retries are run by TheTvDbApiClient around
+            // each throttled attempt (see ExternalHttpResilience), not inside this client.
+            client.Timeout = ExternalHttpResilience.TheTvDbAttemptTimeout;
+        });
+
+        services.AddTheTvDbRetryPipeline();
 
         services.AddScoped<ITheTvDbService, TheTvDbService>();
         return services;
@@ -58,7 +61,7 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Accept.Add(new("application/json"));
             // Overall budget for one call, its single retry included.
-            client.Timeout = TimeSpan.FromSeconds(20);
+            client.Timeout = ExternalHttpResilience.OmdbOverallTimeout;
         }).AddOmdbResilience();
 
         services.AddScoped<IOmdbSnapshotStore, OmdbSnapshotStore>();

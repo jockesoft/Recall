@@ -155,10 +155,13 @@ Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rate
 
 ### TheTVDB (v4 API)
 
-- `Services/External/TheTvDb/TheTvDbApiClient.cs` is pure transport: typed `HttpClient`, 30 s timeout, bearer token attached per request.
-- `TheTvDbClientState` **must stay a singleton**. It holds the cached token and a `SemaphoreSlim(5)` throttle shared by all client instances. On a 401 the client passes the specific stale token back, so only one of several racing requests re-authenticates; the request is retried once.
+- `Services/External/TheTvDb/TheTvDbApiClient.cs` is pure transport: typed `HttpClient` whose 8 s timeout bounds one attempt (body included), bearer token attached per request.
+- `TheTvDbClientState` **must stay a singleton**. It holds the cached token and a `SemaphoreSlim(5)` throttle shared by all client instances. On a 401 the client passes the specific stale token back, so only one of several racing requests re-authenticates; the request is resent once inside the same attempt.
 - Non-success responses throw `TheTvDbApiException`.
-- **Resilience** (`Infrastructure/External/ExternalHttpResilience.cs`, `Microsoft.Extensions.Http.Resilience`): TheTVDB GETs are retried up to 3 times on network errors, timeouts, 408, 5xx and on a 429 whose `Retry-After` is at most 5 s; each attempt is capped at 10 s and `HttpClient.Timeout` (30 s) bounds the whole call. The login POST is not retried. OMDb gets one retry and never on 429, because a retry does not take a permit from `IOmdbRequestBudget`. A new external client should add its own pipeline there.
+- **Resilience** (`Infrastructure/External/ExternalHttpResilience.cs`, `Microsoft.Extensions.Http.Resilience`). Retries happen on network errors, timeouts, 408, 5xx, and for TheTVDB on a 429 whose `Retry-After` is at most 2 s; waits between attempts are capped at 2 s.
+  - **TheTVDB**: 2 retries, run by `TheTvDbApiClient.SendAsync` through a keyed `ResiliencePipeline<HttpResponseMessage>`, *outside* the throttle. Each attempt takes its own slot, so a request backing off does not occupy one of the five slots, and time queueing for a slot counts against no timeout. Worst case 3 × 8 s + 2 × 2 s = 28 s, inside the 30 s budget (`TheTvDbOverallBudget`).
+  - **OMDb**: an ordinary resilience handler inside the `HttpClient`: 1 retry, never on 429 (a retry does not take a permit from `IOmdbRequestBudget`), 8 s per attempt, 20 s client timeout overall.
+  - Changing an attempt timeout or retry count means changing the constants in that file; tests assert the worst case still fits. Do not move the TheTVDB retries into a handler: that puts them back inside the throttle slot.
 - `Services/TheTvDbService.cs` owns the read path through `GetLayeredAsync<T>`: **Redis → Postgres snapshot → API**. A database or API hit is written back up. Nulls are not cached.
 
 | Resource | Redis key (instance prefix `tvdb:`) | Redis TTL (±10% jitter) | Postgres table |
@@ -230,7 +233,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 286 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 294 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: page models (apart from the POST-only checks in `Pages/PostOnlyStateChangeTests.cs`), all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
@@ -349,5 +352,5 @@ Still open:
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (286 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (294 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.
