@@ -4,9 +4,7 @@ services:
     restart: unless-stopped
     image: ghcr.io/jockesoft/recall:latest
     ports:
-      # Loopback only: the reverse proxy on this host is the one way in. Published
-      # on every interface, anyone could reach the app directly and bypass it.
-      - "127.0.0.1:8701:8701"
+      - "8701:8701"
     env_file:
       - .env.prod
     volumes:
@@ -34,10 +32,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      # Loopback only: reachable from this host (dump scripts, psql, an SSH tunnel)
-      # but not from the network. The app itself connects over recall_prodnet.
-      - "127.0.0.1:5433:${POSTGRES_PORT}"
+    ports: # Not needed in prod?? According to AI but needed to be able to connect from host machine for testing/debugging. Can be removed if not needed.
+      - "5433:${POSTGRES_PORT}"
     volumes:
       - pgdata:/var/lib/postgresql
     networks:

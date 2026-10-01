@@ -4,6 +4,15 @@ Onboarding context for AI sessions working in this repository. Everything below 
 
 **Recall.nu** is an ASP.NET Core 10 Razor Pages app for tracking TV series and movies: search TheTVDB, build a library, mark episodes and movies watched, like and rate (1–10), get in-app notifications for newly aired episodes, import an IMDb list export, and see TheTVDB and IMDb (via OMDb) ratings side by side. Sign-in is passwordless (emailed magic link) only.
 
+## Working agreement
+
+Applies to every session.
+
+- Do not create branches, commit, push, stash or rewrite git history. The owner reviews and commits all changes by hand after each session.
+- Work in the current working tree on the current branch and leave every change uncommitted.
+- Do not change the Docker, compose or port setup (compose files, published ports, nginx assumptions) unless explicitly asked. It works as designed.
+- End each session with a summary of the changed files.
+
 ## 1. Solution layout
 
 `Recall.sln` contains two projects. There is no `global.json`, `Directory.Packages.props`, `Directory.Build.props` or `.editorconfig`.
@@ -229,7 +238,6 @@ There are no other hosted services, queues or message brokers. The email and imp
 - `appsettings.json`: defaults, including the local dev connection strings (`Host=localhost…Password=devpassword`, `localhost:6379`) and empty API keys.
 - `appsettings.Development.json`: log levels only. `appsettings.Production.json`: Redis at `redis:6379`, empty `DefaultConnection`, log file under `/var/log/recallapp`.
 - Redis connection: `REDIS_CONNECTION` environment variable, falling back to `ConnectionStrings:RedisConnection`.
-- Trusted reverse proxies: `TrustedProxies__Networks__0`, `TrustedProxies__Addresses__0`, … Setting either list replaces the built-in default (loopback + private ranges) entirely. `RemoteIpAddress`, and so every per-IP rate limiter, is only as trustworthy as this list.
 - Production secrets come from `.env.prod`, loaded by `compose.prod.yml`. `.gitignore` excludes `.env*`; `.env` and `.env.prod` exist in the working directory but are not tracked.
 - **No real secret is committed.** The only credential in the repository is the local-dev Postgres password `devpassword` (also in `README.md`).
 
@@ -276,9 +284,9 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 
 **CI/CD** (`.github/workflows/dotnet.yml`): on push and pull request to `main`, restore, Release build, test with coverage (summary only; coverage does not gate). On push, build `Dockerfile.prod`, push `ghcr.io/<user>/recall:latest` and `:<run number>`, then SSH to the server, run `dump_db.sh` and `docker compose -f compose.prod.yml up -d --pull always`. There is no lint or format step. `nightly-build.yml` builds and tests daily at 05:00 UTC.
 
-**Hosting**: a single Docker host, single app instance (a permanent assumption). `compose.prod.yml` runs the app (port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (host port 5433) and `redis:7`. Both published ports are bound to `127.0.0.1`. CI does not copy `compose.prod.yml` to the server; the copy in `recall-deploy/` there is maintained by hand.
+**Hosting**: a single Docker host, single app instance (a permanent assumption). `compose.prod.yml` runs the app (published port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (host port 5433) and `redis:7`.
 
-**Reverse proxy**: nginx is installed directly on the host (apt, systemd), terminates TLS and proxies to `127.0.0.1:8701`. It must send `Host`, `X-Forwarded-For` (`$proxy_add_x_forwarded_for`) and `X-Forwarded-Proto`; the app builds sign-in links from the scheme and host and keys its rate limiters on the client IP. Requests reach the container from the compose network's gateway, a private address, so the `TrustedProxies` default (loopback + private ranges) works unconfigured. `README.md` shows the nginx block and how to narrow `TrustedProxies__Networks__0` to the compose subnet.
+**Reverse proxy**: the app container sits behind nginx installed directly on the host (apt, systemd), which proxies to the published port 8701. nginx already sends `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`; the app builds sign-in links from the scheme and host and keys its rate limiters on the client IP. The app's `TrustedProxies` default (loopback plus the private ranges) matches this setup, so it needs no server configuration. This setup works and must not change (see the working agreement).
 
 `Recall.Web/Dockerfile` and `compose.yaml` are IDE-generated and not used by CI.
 
@@ -309,7 +317,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 Described only, ranked by impact. Nothing here has been changed.
 
 1. **Anonymous pages spending upstream quota: fixed for OMDb, bounded for TheTVDB.** Anonymous requests never call OMDb, the Details pages are rate-limited per anonymous IP, and the sitemap is capped. What remains by design: an anonymous visitor can still make the app fetch an uncached title from TheTVDB (up to 60 pages a minute per IP; one uncached long-running series is itself hundreds of calls), and each such fetch adds rows to the cache tables and, later, URLs to the sitemap. A crawler spread across many IPs is not bounded by the per-IP limit.
-2. **Forwarded headers: fixed, with a residual default.** Headers are applied only from trusted proxies and the compose ports are loopback-only. The default trusts all private ranges, which matches production (nginx on the host, reaching the container through the compose network's gateway). It could be narrowed to the compose subnet with `TrustedProxies__Networks__0`, at the cost of breaking if Docker reassigns the subnet; see `README.md`.
+2. **Forwarded headers trusted from any source: fixed in the app.** `X-Forwarded-*` is applied only when the request comes from loopback or a private range, which is how nginx on the host reaches the container. A caller arriving from a public address cannot forge its client IP.
 3. **Sessions that could not be revoked: fixed, within 5 minutes.** Deleting or demoting a user takes effect at the next revalidation. There is still no "sign out everywhere" for a user who keeps their account, and no admin UI to do either; both remain manual database edits.
 4. **No HTTP resilience: fixed.** Both metadata clients retry transient failures; see section 7. Not added: a circuit breaker, so a long TheTVDB outage still costs every request its retries.
 5. **Cached aggregates never refreshing: fixed.** Rows without `KeepUpdated = true` are now refreshed every 30 days. Remaining: `cached_series_extended` still has no refresh path, but nothing reads it any more (`ITheTvDbService.GetSeriesByIdExtendedAsync` has no caller outside tests), so the table and method are candidates for removal. The refresh cap (10 series and 10 movies an hour) bounds how fast a large, crawler-filled cache cycles.
