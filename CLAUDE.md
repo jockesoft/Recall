@@ -1,18 +1,244 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Onboarding context for AI sessions working in this repository. Everything below was read from the source on 2026-10-01 (commit `f3e3f57`); claims marked **(inference)** were not seen directly. Where this file and `AGENTS.md` / `README.md` disagree, trust this file and the source.
 
-## What this is
+**Recall.nu** is an ASP.NET Core 10 Razor Pages app for tracking TV series and movies: search TheTVDB, build a library, mark episodes and movies watched, like and rate (1–10), get in-app notifications for newly aired episodes, import an IMDb list export, and see TheTVDB and IMDb (via OMDb) ratings side by side. Sign-in is passwordless (emailed magic link) only.
 
-Recall.nu — an ASP.NET Core 10 Razor Pages app for tracking TV shows: search TheTVDB, build a personal library, mark episodes watched, get notified when new episodes air, rate/like series and episodes, and see IMDb (via OMDb) and TheTVDB ratings side by side. Passwordless (magic-link) sign-in only — no passwords anywhere.
+## 1. Solution layout
 
-There is also an `AGENTS.md` at the repo root with earlier architectural notes; some of it (e.g. page names, the entity list) has drifted from the current code, so prefer this file and the source itself where they disagree.
+`Recall.sln` contains two projects. There is no `global.json`, `Directory.Packages.props`, `Directory.Build.props` or `.editorconfig`.
 
-## Commands
+| Project | Role | References |
+|---|---|---|
+| `Recall.Web` (`Microsoft.NET.Sdk.Web`) | The whole application: UI, services, persistence, jobs | none |
+| `Recall.Tests` (`Microsoft.NET.Sdk`) | NUnit unit and persistence tests | `Recall.Web` |
 
-### Setup (one-time, local dev)
+Layering inside `Recall.Web` is by folder and namespace, not by assembly:
+
+| Folder | Contents |
+|---|---|
+| `Pages/` | Razor Pages, page models, partials and their small view-model classes (`Pages/Shared/*Model.cs`) |
+| `Services/` | Business logic, plus the external HTTP clients under `Services/External/{TheTvDb,Omdb}` |
+| `Infrastructure/` | EF Core (`Persistence/`), Quartz jobs (`Timers/`), options classes, Redis JSON cache, auth helpers, CSV parser |
+| `Domain/` | Plain models: `TheTvDb/`, `Omdb/`, `Internal/` |
+| `Mappings/` | Static extension methods for DTO ↔ domain ↔ entity (no AutoMapper) |
+| `Extensions/` | DI registration extension methods, toast helpers |
+| `Middleware/` | `DevAuthMiddleware` only |
+| `Migrations/` | 22 EF Core migrations plus the model snapshot |
+
+## 2. Stack and versions
+
+- **Framework**: `net10.0` in both projects, nullable and implicit usings enabled. No SDK pin; CI uses `10.0.x`. C# 14 features are in use (`extension` blocks in `Extensions/PageModelToastExtensions.cs`, primary constructors everywhere).
+- **Packages that matter** (`Recall.Web/Recall.Web.csproj`): EF Core 10.0.12, `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, `Microsoft.Extensions.Caching.StackExchangeRedis` 10.0.12, `Quartz` 4.3.0, `Serilog.AspNetCore` 10.0.0 with Console and File sinks.
+- **Referenced but unused in code**: `Swashbuckle.AspNetCore`, `NuGet.Packaging`, `NuGet.Protocol`, `Microsoft.VisualStudio.Web.CodeGeneration.Design`.
+- **Tests** (`Recall.Tests/Recall.Tests.csproj`): NUnit 5.0.0, Moq 4.21.0, AwesomeAssertions 9.6.0, `Microsoft.EntityFrameworkCore.Sqlite`, coverlet. `Microsoft.AspNetCore.Mvc.Testing` is referenced but no test uses `WebApplicationFactory`.
+- **Front end**: no npm, bundler or Tailwind. Vendored files in `wwwroot/lib`: Bootstrap 5.3.3, jQuery 3.7.1, jquery-validation (+ unobtrusive), Font Awesome Free 6.4.2. Custom CSS in `wwwroot/css/tvdb-theme.css` (about 2,500 lines, imports Google Fonts) and `site.css`. JavaScript is one small file (`wwwroot/js/tvdb-type-filter.js`) plus inline `<script>` blocks in pages; `site.js` is empty.
+
+## 3. Hosting and startup (`Recall.Web/Program.cs`)
+
+**Registration order**
+
+1. Serilog from configuration (`UseSerilog`, console + rolling daily file).
+2. `AddRazorPages`, `AddControllers().AddViewLocalization()`, `AddAntiforgery`, `AddHttpContextAccessor`.
+3. `ForwardedHeadersOptions`: X-Forwarded-For/Proto/Host, with `KnownIPNetworks` and `KnownProxies` cleared (every proxy is trusted).
+4. `AddCookieAuthentication`, `AddAppSession`, `AddAuthorization` (no fallback policy).
+5. `AddRedisCache`, `AddPostgres` — both throw at startup if their connection string is missing.
+6. TheTVDB (`TheTvDbClientState` singleton, typed client, `AddTheTvDb`), `AddOmdb`, `AddApplicationServices`, `AddNotifications`, `AddMail`, `AddWatchlistImport`.
+7. Health checks, `AddPasswordlessAuth`, `AddLoginRateLimiting`, `IAppUserRepository`, `AddScheduledJobs` (Quartz).
+
+All of these live in `Extensions/ServiceCollectionExtensions.cs` (application services) and `Extensions/InfrastructureServiceCollectionExtensions.cs` (Redis, Postgres, cookies, session, rate limiting, Quartz). Add new integrations there, not inline in `Program.cs`.
+
+**Lifetimes**
+
+| Lifetime | Services |
+|---|---|
+| Singleton | `TheTvDbClientState`, `IDistributedCacheJson`, `IConnectionMultiplexer`, `IOmdbRequestBudget`, `ILoginAbuseGuard` |
+| Scoped | `AppDbContext`, all repositories, all services, snapshot stores, `ICurrentUserService` |
+| Transient (typed `HttpClient`) | `ITheTvDbApiClient`, `IOmdbApiClient`, `ITurnstileVerifier` |
+| Factory | `IDbContextFactory<AppDbContext>`, for code that fans out in parallel |
+
+**Options binding**: `Configure<T>(GetSection(T.SectionName))` for `TheTvDbOptions` (`TheTvDb`), `OmdbOptions` (`Omdb`), `MailOptions` (`Mail`), `LoginTokenOptions` (`Login`), `TurnstileOptions` (`Turnstile`). No options validation.
+
+**Before serving**: `await app.MigrateDatabaseAsync()` applies pending migrations with 10 retries, 3 s apart. Disable with `Database:MigrateOnStartup=false`.
+
+**Middleware pipeline**: developer exception page (Development) or exception handler that logs and redirects to `/Error` + HSTS → `UseForwardedHeaders` → `UseHttpsRedirection` → `UseStaticFiles` → `UseRouting` → `UseRateLimiter` → `UseSession` → `UseAuthentication` → `DevAuthMiddleware` (Debug builds only) → `UseAuthorization` → endpoints.
+
+**Endpoints**: `/health` (runs `DbHealthCheck`, a `SELECT 1`), `/health/live` (no checks), a default controller route (there are no controllers), `MapStaticAssets`, `MapRazorPages`.
+
+## 4. UI layer
+
+Razor Pages only. No MVC controllers, Blazor or minimal APIs. Two handlers return JSON for inline `fetch` calls: `Series/Details?handler=CheckPriorEpisodes` and `Account/EditProfile?handler=CheckUsername`.
+
+| Page | Access | Purpose |
+|---|---|---|
+| `/` (`Pages/Index`) | anonymous | Landing page; redirects signed-in users to `/Dashboard` |
+| `/Dashboard` | `[Authorize]` | Upcoming episodes (30 days) and the catch-up queue |
+| `/Search` | `[Authorize]` | TheTVDB series + movie search (GET form) |
+| `/Library` | `[Authorize]` | Watching / Up to date / Watched sections |
+| `/Series/Details/{id:int}` | **anonymous read** | Seasons, episodes, progress, like, rating, library toggle |
+| `/Episodes/Details/{id:int}` | **anonymous read** | Episode detail, prev/next, watched, like, rating, IMDb score |
+| `/Movies/Details/{id:int}` | **anonymous read** | Movie detail, watched, like, rating |
+| `/Account/Login`, `/Account/Verify` | anonymous | Request and redeem the magic link |
+| `/Account/Logout` | none | Signs out on GET or POST |
+| `/Account/Profile`, `EditProfile`, `Favorites`, `Notifications`, `ImportWatchlist` | `[Authorize]` | Account area |
+| `/Admin` | `[Authorize(Roles = Roles.Admin)]` | User counts |
+| `/sitemap.xml` (`Pages/Sitemap`) | anonymous | Dynamic sitemap from the cache tables |
+| `/Privacy`, `/Error` | anonymous | Static |
+
+- The three Details pages have no `[Authorize]`. Their POST handlers check `ICurrentUserService.IsAuthenticated` by hand and redirect with an error toast.
+- **Layout** (`Pages/Shared/_Layout.cshtml`): nav, footer attributions, cookie notice, and per-page SEO tags from `ViewData["Title"|"Description"|"Robots"]`. Robots defaults to `noindex, nofollow`; Index, Login, Privacy and the three Details pages opt in. The build number is read from `build.txt` next to the binaries.
+- **Partials** (`Pages/Shared/`): `_SeriesCard`, `_CatchUpCard`, `_UpcomingEpisodeCard`, `_FavoriteEpisodeRow`, `_EpisodeWatchedToggle`, `_LikeToggle`, `_RatingWidget`, `_TypeFilterBar`, `_NotificationBell` (injects `INotificationService` and runs an unread `COUNT` on every signed-in page render), `_ToastMessages`. Each takes a small model class from the same folder.
+- **Forms**: plain `<form method="post" asp-page-handler="…">`, then redirect (PRG). Antiforgery is the Razor Pages default; inline `fetch` calls copy `__RequestVerificationToken` from the page.
+- **Validation**: data annotations on `[BindProperty]` properties (`Login`, `Search`, `EditProfile`) with jQuery unobtrusive validation on the client. Most action handlers take route/form primitives and validate by hand (`if (value is < 1 or > 10)`).
+- **Feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)` write TempData keys that `_ToastMessages` renders.
+
+## 5. Domain model
+
+All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` claim), with cascade delete.
+
+| Entity (table) | Meaning | Unique key |
+|---|---|---|
+| `AppUserEntity` (`app_user`) | Username, email, `Role` (`User`/`Admin`, stored as string) | email; username |
+| `TrackedSeriesEntity` (`tracked_series`) | A series in the user's library, with denormalized name/overview/image/first-aired. `Version` is an `xmin` concurrency token; never set it by hand | (user, tvdb id) |
+| `EpisodeWatchEntity` (`episode_watch`) | One watched episode, with `WatchedUtc` | (user, episode) |
+| `UserMovieWatchEntity` (`user_movie_watch`) | One watched movie | (user, movie) |
+| `UserLikeEntity` (`user_like`) | Like on a `Series`, `Episode` or `Movie` (`LikeTargetType`) | (user, type, target) |
+| `UserRatingEntity` (`user_rating`) | 1–10 rating, same target shape, DB check constraint | (user, type, target) |
+| `NotificationEntity` (`notification`) | In-app notification (only type: `NewEpisode`) | — |
+| `NotifiedEpisodeEntity` (`notified_episode`) | Ledger making new-episode notifications idempotent | (user, episode) |
+| `LoginTokenEntity` (`login_token`) | SHA-256 hash of a magic-link token, expiry, consumed time | token hash |
+| `EmailEntity` (`email`) | Outbound mail queue | — |
+| `WatchlistImportJobEntity` / `WatchlistImportItemEntity` | IMDb CSV import job and its rows | — |
+| `Cached*Entity` (7 tables) | Postgres tier of the metadata caches; `jsonb` payload. Not user data, safe to rebuild | tvdb id (+ language for aggregates) |
+
+**There are no series, season, episode or movie tables.** Metadata exists only as TheTVDB ids on user rows plus JSON snapshots in the cache tables, deserialized into `Domain/TheTvDb` records (`SeriesAggregate`, `Series`, `Episode`, `MovieAggregate`).
+
+**"Watching" vs "watched" is derived, never stored.** `LibraryModel.ClassifyTrackedSeriesAsync` computes it per request:
+
+- **Watching**: tracked series with at least one aired episode not marked watched.
+- **Up to date**: nothing unwatched and TheTVDB status is not "Ended".
+- **Watched**: nothing unwatched and status is "Ended"; watched movies are listed here too.
+
+**Progress** is computed by `Services/WatchTracking/WatchProgressCalculator.Build`: order episodes with `OrderBySeasonAndEpisode` (unknown numbers last, tie-break by id), keep those aired on or before today, and the next episode to watch is the first of those without an `EpisodeWatch` row. Episodes flagged `IsMovie` are excluded. "Mark watched through" (`WatchProgressService.MarkWatchedThroughAsync`) inserts watches for every earlier episode in that order.
+
+Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rated, and nothing else.
+
+## 6. Data access
+
+- **ORM**: EF Core 10 on PostgreSQL via Npgsql. One context, `Infrastructure/Persistence/AppDbContext.cs`. No Dapper or raw SQL.
+- **Configuration**: one `IEntityTypeConfiguration<T>` per entity in `Persistence/Configurations/`, applied with `ApplyConfigurationsFromAssembly`. Tables are singular snake_case, columns snake_case, enums stored as strings, timestamps `timestamp with time zone`.
+- **Context options** (`AddPostgres`): shared `NpgsqlDataSource` with `EnableDynamicJson()`, `SplitQuery` by default, and `MultipleCollectionIncludeWarning` raised to an exception.
+- **Audit timestamps**: `SaveChanges`/`SaveChangesAsync` set `CreatedUtc`/`UpdatedUtc` for nine entity types. `ExecuteUpdateAsync` bypasses this, so those calls set `UpdatedUtc` themselves.
+- **Two ways to get a context**:
+  - Repositories and `EpisodeOmdbSnapshotStore` inject the scoped `AppDbContext`. Calls on it must stay sequential.
+  - `TvdbSnapshotStore`, `OmdbSnapshotStore`, `MovieOmdbSnapshotStore` and `SitemapService` use `IDbContextFactory` and open a context per call, so callers may run them under `Task.WhenAll`.
+- **Repositories** (`Persistence/Repositories/`): interface + sealed implementation, return domain models or small records, reads use `AsNoTracking`. Exception: `IAppUserRepository` returns `AppUserEntity`. `Pages/Admin/Index` injects `AppDbContext` directly.
+- **Concurrency idiom**: check, insert, then catch `DbUpdateException` whose inner `PostgresException` is `UniqueViolation` and treat it as success. Atomic state changes use `ExecuteUpdateAsync` (`LoginTokenRepository.MarkConsumedAsync`).
+- **Migrations**: generate with the CLI; never hand-write (the `Designer.cs` and snapshot must match). They run automatically at startup. There is no design-time factory (`AppDbContextFactory` is commented out), so `dotnet ef` builds the host through `Program.cs`.
+- **Seeding**: none. In local dev the hardcoded dev user row must be inserted by hand (see section 12).
+
+**Query patterns worth knowing before optimizing**
+
+- No classic N+1 over navigation properties; no `Include` calls anywhere.
+- `Dashboard`, `Library`, `Favorites` and `Profile` (via `WatchTimeService`) load one full `SeriesAggregate` JSON per tracked/liked/watched series with `Task.WhenAll` on every request. Each is a Redis GET plus deserialization of a payload holding every episode and character.
+- `NewEpisodeNotificationTimer` loops series, then users, with one watched-ids query and one or two notification queries per pair.
+- `SitemapService.GetCachedEpisodesAsync` returns every row of `cached_episode_extended` with no limit.
+- `RatingRepository.GetSummaryAsync` runs `COUNT` then `AVG` as two queries.
+- `WatchlistImportRepository.RecalculateJobProgressAsync` reloads every item status for the job after each batch.
+
+## 7. External integrations
+
+### TheTVDB (v4 API)
+
+- `Services/External/TheTvDb/TheTvDbApiClient.cs` is pure transport: typed `HttpClient`, 30 s timeout, bearer token attached per request.
+- `TheTvDbClientState` **must stay a singleton**. It holds the cached token and a `SemaphoreSlim(5)` throttle shared by all client instances. On a 401 the client passes the specific stale token back, so only one of several racing requests re-authenticates; the request is retried once.
+- Non-success responses throw `TheTvDbApiException`. There are no retries, backoff or circuit breaker.
+- `Services/TheTvDbService.cs` owns the read path through `GetLayeredAsync<T>`: **Redis → Postgres snapshot → API**. A database or API hit is written back up. Nulls are not cached.
+
+| Resource | Redis key (instance prefix `tvdb:`) | Redis TTL (±10% jitter) | Postgres table |
+|---|---|---|---|
+| Series aggregate | `series:aggregate:v1:{id}:{lang}` | 12 h; 7 d if ended and not keep-updated | `cached_series_aggregate` |
+| Movie aggregate | `movie:aggregate:v1:{id}:{lang}` | 12 h; 7 d if released | `cached_movie_aggregate` |
+| Series extended | `series:extended:v2:{id}` | 12 h | `cached_series_extended` |
+| Episode extended | `episode:extended:v2:{id}:{lang}` | 12 h | `cached_episode_extended` |
+
+- **The Postgres tier has no staleness check on read.** A row is served until something explicitly refreshes it: `Refresh*ByIdAsync` or the hourly jobs. The read path's `Save*` methods are insert-only; only the refresh path upserts. A mapping change therefore does not reach already-cached rows until they are refreshed.
+- Language is hardcoded to `eng`. Episode names are translated per episode, reusing `cached_episode_extended` before calling the API.
+- **Image URLs**: TheTVDB returns absolute and relative paths inconsistently. Every image field goes through `ArtworkUrl.Normalize` at DTO → domain mapping time, and again on every service read via `DomainImageNormalization.WithNormalizedImages()` so old cached rows heal. A new image-bearing field needs both.
+- `SearchAsync` and `ResolveByRemoteIdAsync` are not cached.
+
+### OMDb
+
+- `Services/External/Omdb/OmdbApiClient.cs`: typed client, 20 s timeout, API key in the query string, returns `null` for "not found". It has no cache of its own.
+- Snapshots live in `cached_series_omdb`, `cached_movie_omdb` and `cached_episode_omdb`, refreshed at most every 30 days. A row with a null payload records "checked, nothing found".
+- Series and movies are enriched proactively by hourly jobs. **Episodes are enriched lazily on the request path**, the first time `Episodes/Details` is opened (`DetailsModel.LoadOmdbAsync`).
+- Every OMDb call site must first take a permit from the singleton `IOmdbRequestBudget` (`FixedWindowRateLimiter`, default 900/day via `Omdb:MaxRequestsPerDay`). A new call site must do the same.
+
+### Cloudflare Turnstile
+
+`Services/Authentication/TurnstileVerifier.cs` posts to `siteverify` from the login page. It is disabled when either key is blank and fails closed on network errors.
+
+### SMTP
+
+`Services/MailService.cs` uses `System.Net.Mail.SmtpClient`. In Development it writes `.eml` files to `Recall.Web/mail-pickup/` instead of sending.
+
+### Keys
+
+User secrets in development (`UserSecretsId` in the csproj); environment variables from `.env.prod` in production (`TheTvDb__ApiKey`, `TheTvDb__Pin`, `Omdb__ApiKey`, `Mail__*`, `Turnstile__*`).
+
+## 8. Authentication and authorization
+
+- No ASP.NET Core Identity, external providers or JWT. Cookie authentication only (`AddCookieAuthentication`): cookie `Recall.Auth`, 30-day sliding expiry, HttpOnly, SameSite=Lax, Secure in Release builds. Login and access-denied paths are both `/Account/Login`.
+- **Request a link** (`PasswordlessAuthService.RequestLoginAsync`): normalize email → optional allowlist (`Login:AllowedEmails`; empty means open registration) → `ILoginAbuseGuard` per-address daily cap and site-wide hourly cap → get or create the user → per-user resend cooldown → invalidate earlier tokens → store the SHA-256 hash of a 32-byte random token → queue the email. The page shows the same "link sent" result in every case.
+- **Redeem** (`RedeemAsync`, `Pages/Account/Verify`): look up an unconsumed, unexpired hash, then `MarkConsumedAsync` (atomic `UPDATE … WHERE ConsumedUtc IS NULL`). The result of that update is checked so two simultaneous redemptions cannot both succeed. Then `SignInAsync` with `NameIdentifier`, `Name`, `Email` and `Role` claims.
+- **Bot defenses on the login form**: honeypot field, minimum 2 s render-to-submit time, Turnstile, per-IP rate limit (`login-email` policy, 8 per 5 minutes) and a global limiter on POSTs to `/Account/Login` (300 per minute).
+- **Roles**: `User` and `Admin` (`UserRole` enum; `Roles` constants for attributes). Promotion to Admin is a manual database edit.
+- **Per-user scoping**: `ICurrentUserService.UserId` (parsed from the claim) is passed into every repository call, and every user-data query filters on `UserId`. There are no global query filters.
+- **`DevAuthMiddleware`**: in Debug builds every non-file request runs as a fixed admin (`11111111-1111-1111-1111-111111111111`, `dev-user`, `dev@example.com`). It skips itself when `ASPNETCORE_ENVIRONMENT=Test` and is compiled out of Release. It does not create the user row.
+
+## 9. Background work
+
+Quartz.NET with the default in-memory store, registered in `AddScheduledJobs()`. Implementations are in `Infrastructure/Timers/`, all `[DisallowConcurrentExecution]`. The hosted service waits for running jobs on shutdown.
+
+| Job | Interval | Work per run |
+|---|---|---|
+| `UpdateTvDbInfoTimer` | 60 min | Up to 10 series aggregates with `KeepUpdated = true` older than 12 h; up to 25 episodes older than 30 d, or titled "TBA" and older than 12 h, or aired without an image (max 5 attempts) |
+| `UpdateMovieInfoTimer` | 60 min | Up to 10 movie aggregates with `KeepUpdated = true` older than 12 h |
+| `UpdateOmdbInfoTimer` | 60 min | Up to 30 series whose OMDb snapshot is missing or older than 30 d |
+| `UpdateMovieOmdbInfoTimer` | 60 min | Same, for movies |
+| `MailTimer` | 1 min | Sends up to `Mail:BatchSize` (20) queued emails; gives up after `MaxSendAttempts` (5) |
+| `NewEpisodeNotificationTimer` | 6 h | For up to 500 tracked series, notifies each tracking user about episodes aired in the last 3 days that they have not watched; one notification per series per user |
+| `WatchlistImportTimer` | 1 min | Resolves up to 15 pending import rows through TheTVDB's remote-id search |
+
+There are no other hosted services, queues or message brokers. The email and import "queues" are database tables.
+
+## 10. Configuration and secrets
+
+- `appsettings.json`: defaults, including the local dev connection strings (`Host=localhost…Password=devpassword`, `localhost:6379`) and empty API keys.
+- `appsettings.Development.json`: log levels only. `appsettings.Production.json`: Redis at `redis:6379`, empty `DefaultConnection`, log file under `/var/log/recallapp`.
+- Redis connection: `REDIS_CONNECTION` environment variable, falling back to `ConnectionStrings:RedisConnection`.
+- Production secrets come from `.env.prod`, loaded by `compose.prod.yml`. `.gitignore` excludes `.env*`; `.env` and `.env.prod` exist in the working directory but are not tracked.
+- **No real secret is committed.** The only credential in the repository is the local-dev Postgres password `devpassword` (also in `README.md`).
+
+## 11. Testing
+
+- 209 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
+- **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget.
+- **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite.
+
 ```bash
-dotnet user-secrets init --project ./Recall.Web
+dotnet test Recall.sln                                              # everything
+dotnet test Recall.Tests --filter "FullyQualifiedName~ClassName"    # one fixture
+dotnet test Recall.Tests --filter "Name=MethodName"                 # one test
+cd Recall.Tests && ./run-tests-with-coverage.sh                     # HTML report (needs the reportgenerator tool)
+```
+
+## 12. Build, run and deploy
+
+**One-time local setup**
+
+```bash
 dotnet user-secrets set "TheTvDb:ApiKey" "..." --project ./Recall.Web
 dotnet user-secrets set "TheTvDb:Pin" "..." --project ./Recall.Web
 dotnet user-secrets set "Omdb:ApiKey" "..." --project ./Recall.Web
@@ -23,77 +249,89 @@ docker run --name local_postgres -p 5432:5432 \
   -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=devpassword -e POSTGRES_DB=recall_db \
   -v pgdata:/var/lib/postgresql -d postgres:18.1
 ```
-The app fails to start without both Redis and Postgres reachable — `Program.cs` throws a clear config error at startup rather than a confusing runtime error if either connection string is missing (see `AddRedisCache`/`AddPostgres` in `Extensions/InfrastructureServiceCollectionExtensions.cs`).
 
-In `Debug` builds, `DevAuthMiddleware` auto-signs in every request as a hardcoded admin user (`11111111-1111-1111-1111-111111111111` / `dev-user` / `dev@example.com`, role `Admin`) — no login flow needed locally. It does **not** create that user row for you; if the dev DB is empty, insert it manually first (see README) or you'll get FK errors on anything that touches `AppUsers`. This middleware skips itself when `ASPNETCORE_ENVIRONMENT=Test` (see Testing below), and does nothing at all in Release builds (compiled out via `#if DEBUG`).
+After the first start has created the schema, insert the dev user row into `app_user` (`11111111-1111-1111-1111-111111111111`, `dev-user`, `dev@example.com`). Without it, anything that writes user data fails on the foreign key.
 
-### Run
+**Run, build, migrate**
+
 ```bash
 dotnet watch run --project Recall.Web --launch-profile Recall.Web   # https://localhost:7123
-```
-
-### Build
-```bash
 dotnet build Recall.sln --configuration Release
-```
-
-### Test
-```bash
-dotnet test Recall.sln                                              # everything
-dotnet test Recall.Tests --filter "FullyQualifiedName~ClassName"    # one fixture
-dotnet test Recall.Tests --filter "Name=MethodName"                 # one test
-cd Recall.Tests && ./run-tests-with-coverage.sh                     # HTML coverage report -> coverage-report/index.html
-```
-Tests are NUnit + Moq + AwesomeAssertions. Repository tests spin up a real `AppDbContext` against an in-memory SQLite connection rather than mocking EF Core — see `LoginTokenRepositoryTests.cs` for the pattern (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`). Integration-style tests that exercise the full pipeline run with `ASPNETCORE_ENVIRONMENT=Test`, which `DevAuthMiddleware` specifically checks for and disables itself under — without that, every request through `WebApplicationFactory<Program>` would come in pre-authenticated as admin, making auth/authz impossible to test.
-
-### Database migrations
-```bash
 dotnet ef migrations add <Name> --project Recall.Web --startup-project Recall.Web
 dotnet ef database update --project Recall.Web --startup-project Recall.Web
 ```
-Always generate migrations with the CLI rather than hand-writing them — the `Designer.cs` and snapshot files have to match exactly. `MigrateDatabaseAsync()` also runs automatically on app startup (`Program.cs`), so `dotnet ef database update` is mainly for inspecting a migration before it ships.
 
-### Docker / deploy
-CI (`.github/workflows/dotnet.yml`) builds `Recall.sln` Release, runs the full test suite with coverage on every push/PR to `main`, then on push builds `Dockerfile.prod` and deploys over SSH via `compose.prod.yml`. There's no separate lint step and no `.editorconfig` — the only gate is build + test.
+**CI/CD** (`.github/workflows/dotnet.yml`): on push and pull request to `main`, restore, Release build, test with coverage (summary only; coverage does not gate). On push, build `Dockerfile.prod`, push `ghcr.io/<user>/recall:latest` and `:<run number>`, then SSH to the server, run `dump_db.sh` and `docker compose -f compose.prod.yml up -d --pull always`. There is no lint or format step. `nightly-build.yml` builds and tests daily at 05:00 UTC.
 
-## Architecture
+**Hosting**: a single Docker host. `compose.prod.yml` runs the app (port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (published on host port 5433) and `redis:7`. `Dockerfile.prod` expects `build.txt` in the build context, which only CI writes.
 
-### Layering
-`Pages` (Razor Pages, HTTP in/out) → `Services` (business logic) → `Infrastructure` (EF Core, external HTTP clients, caching, Quartz jobs) → `Domain` (plain models) / `Mappings` (static extension methods converting DTO ↔ domain ↔ entity, no AutoMapper). Repositories (`Infrastructure/Persistence/Repositories/`) always accept and return **domain models, never EF entities** — mapping happens inside the repository implementation.
+`Recall.Web/Dockerfile` and `compose.yaml` are IDE-generated and not used by CI.
 
-Services are registered via extension methods on `IServiceCollection` (`Extensions/ServiceCollectionExtensions.cs` for domain/app services, `Extensions/InfrastructureServiceCollectionExtensions.cs` for cross-cutting infra — Redis, Postgres, cookie auth, session, rate limiting, the Quartz job schedule), called from `Program.cs`. When adding a new integration, follow that pattern rather than inlining registration in `Program.cs`.
+## 13. Conventions
 
-### TheTVDB integration — three-tier cache, read carefully before touching
-`TheTvDbApiClient` (`Services/External/TheTvDb/`) is pure HTTP transport. `TheTvDbClientState` is a **required singleton** holding the cached bearer token and a `SemaphoreSlim(5)` request throttle — it must survive across the typed client's transient instances, or every call re-authenticates. Token refresh after a 401 passes the *specific stale token* being replaced (not a bare `forceRefresh: bool`), so concurrent requests racing to refresh don't all re-login — only the one still holding the token that's known-bad does.
+- **Layering**: `Pages` → `Services` → `Infrastructure` → `Domain`/`Mappings`. In practice page models inject repositories directly for simple reads and writes; services exist where there is real logic.
+- **Class style**: `sealed` classes with primary constructors; interface and implementation in sibling files; records for value shapes; `CancellationToken cancellationToken = default` as the last parameter on every async method; `Async` suffix throughout.
+- **Nullable reference types** are on. `null` means "not found"; exceptions mean failure.
+- **DI**: register through an `AddXxx` extension method. Options classes expose `const string SectionName`.
+- **Mapping**: static `ToDomain()` / `ToEntity()` / `ToAggregate()` extension methods in `Mappings/`.
+- **JSON**: always `RecallJsonOptions.Web`, so Redis and Postgres payloads stay compatible.
+- **User feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)`; never write to `TempData` directly.
+- **Error handling in page handlers**: wrap in `try`, log, set an error toast, redirect or re-render. Jobs and fan-outs use `catch (Exception ex) when (ex is not OperationCanceledException)` so one bad item never aborts a batch.
+- **Best-effort external calls**: reuse `ITheTvDbService.TryGetSeriesAggregateAsync` / `TryGetMovieAggregateAsync` (swallow and log) and `Task<T?>.AsOptionalAsync(...)` (swallows `TheTvDbApiException` only). A primary fetch failure should still propagate.
+- **Episode ordering**: `EpisodeOrderingExtensions.OrderBySeasonAndEpisode` is the single implementation; reuse it.
+- **Parallelism**: only fan out over code that uses `IDbContextFactory`. Never run two operations on the scoped `AppDbContext` at once.
+- **Logging**: structured message templates with `ILogger<T>`; no string interpolation in log calls.
+- **Time**: persistence and jobs use `DateTime.UtcNow`. "Has it aired" checks in pages and `WatchProgressService` use `DateTime.Today`.
+- **Comments**: the codebase explains *why* in comments and XML docs on non-obvious code; keep that density.
+- **SEO**: pages are `noindex` unless they set `ViewData["Robots"]`.
 
-`TheTvDbService` (`Services/TheTvDbService.cs`) owns the actual read path: **Redis → Postgres snapshot (`cached_series_aggregate`/`cached_series_extended`/`cached_episode_extended`) → TheTVDB API**, via the private `GetLayeredAsync<T>` helper. A hit at any tier short-circuits the rest; a DB or API hit gets written back up into Redis. Critically, **the Postgres tier has no staleness check** — a row is treated as good forever until something explicitly re-fetches and upserts it (the `UpdateTvDbInfoTimer` background job, or an explicit `RefreshSeriesAggregateByIdAsync`/`RefreshEpisodeDetailsByIdAsync` call). Keep that in mind before assuming a mapping change takes effect everywhere immediately — old cached rows keep serving whatever they had until refreshed.
+## Observations
 
-Image URLs from TheTVDB are inconsistently absolute-vs-relative depending on field/endpoint. Every raw path must go through `ArtworkUrl.Normalize` (`Services/External/TheTvDb/ArtworkUrl.cs`) — this already happens once at DTO→domain mapping time (`Mappings/SeriesDataDtoMappings.cs`, `Mappings/EpisodeMappings.cs`, `Mappings/SeriesMapping.cs`) and *again* defensively on every `TheTvDbService` read via `DomainImageNormalization.WithNormalizedImages()`, specifically so a row cached before some future mapping fix still gets healed on read instead of serving broken images indefinitely. If you add a new image-bearing field anywhere in this chain, normalize it in both places or it will eventually resurface as a "broken image" bug reported against production.
+Described only, ranked by impact. Nothing here has been changed.
 
-### OMDb integration — same cache philosophy, deliberately lazier
-`OmdbApiClient` is thin HTTP transport with no service-layer cache of its own (unlike TheTVDB). Series enrichment is proactive: `UpdateOmdbInfoTimer` runs hourly, refreshing up to 30 series/run whose `cached_series_omdb` snapshot is missing or >30 days old. Episode enrichment is the opposite — **lazy, on-demand**, fetched the first time someone opens `Episodes/Details` (there are far more episodes than series; eagerly enriching all of them isn't worth the quota) — see `EpisodeOmdbSnapshotStore` and `DetailsModel.LoadOmdbAsync` in `Pages/Episodes/Details.cshtml.cs`. Both paths share one `IOmdbRequestBudget` (a daily `FixedWindowRateLimiter`, default 900/day) so a burst of on-demand episode lookups can't push the combined total over OMDb's real quota and start failing the proactive timer too — if you add a third OMDb call site, it needs to acquire from this same budget.
+1. **Anonymous pages can spend upstream quota.** `Series/Details`, `Episodes/Details` and `Movies/Details` are public, indexable and have no rate limit. A request for an uncached id calls TheTVDB and writes Redis and Postgres rows; an episode page can also make a live OMDb call. `/sitemap.xml` lists every cached episode, so crawlers are invited to each one, and the sitemap has no size cap (the protocol limit is 50,000 URLs). The shared OMDb budget caps the damage at 900 calls a day but lets anonymous traffic starve the hourly enrichment jobs.
+2. **Forwarded headers are trusted from any source.** `KnownIPNetworks` and `KnownProxies` are cleared, and the per-IP login limiter keys on `RemoteIpAddress`. If the app's published port (8701) is reachable without passing through the proxy, `X-Forwarded-For` can be spoofed to bypass that limiter.
+3. **Sessions cannot be revoked.** The role and identity live in a 30-day sliding cookie with no `OnValidatePrincipal` check. Demoting or deleting a user has no effect until the cookie expires.
+4. **No HTTP resilience.** Neither typed client has retry, backoff or circuit breaking; a TheTVDB 429 or transient 5xx surfaces as a failed page or a skipped job item. The Turnstile client uses the default 100 s timeout.
+5. **Some cached rows are never refreshed.** The refresh jobs only pick aggregates where `KeepUpdated = true`, and reads never check age in Postgres. A series or movie cached with `KeepUpdated` false or null is served unchanged indefinitely; `cached_series_extended` has no refresh path at all.
+6. **Two sources for a series' episode list.** Display and progress use the aggregate (`series:aggregate`); "mark watched through" and the prior-unwatched prompt use `GetSeriesByIdExtendedAsync` (`series:extended`, never refreshed, see 5). They can disagree about which episodes exist.
+7. **Write handlers trust client-supplied id pairs.** `Dashboard.OnPostMarkWatchedAsync` and `Series/Details.OnPostToggleEpisodeWatchedAsync` store `(seriesId, episodeId)` without checking that the episode belongs to the series; the Dashboard handler also skips the has-aired check. Episode like and rating fall back to using the episode id as the series id when the lookup returns nothing.
+8. **Single-instance assumptions.** Login abuse limits, the OMDb daily budget, the TheTVDB token and the Quartz schedule are all in process memory, and migrations run at startup. Every deploy resets the OMDb budget and login counters. A second instance would double every job.
+9. **Test gaps.** No page-model or pipeline tests although `Mvc.Testing` is referenced; no job tests; SQLite cannot exercise the Postgres-specific branches; CI coverage is informational only.
+10. **Dead or unused code and dependencies.** Four unused packages (section 2); `AddControllers` and `MapControllerRoute` with no controllers; `AddSession`/`UseSession` with no session use; `IConnectionMultiplexer` registered "for locking" but never injected; `AddHttpClient<ITheTvDbApiClient, …>` registered twice (`Program.cs` and `AddTheTvDb`); `AppDbContextFactory` fully commented out; `UserItem` and `UserMappings` unreferenced; empty `site.js` and an empty `<script type="importmap">`; stale csproj items (`_LoginPartial.cshtml`, `Services\Models\`).
+11. **Convention drift.** `IAppUserRepository` returns entities; `Admin/Index` queries `AppDbContext` directly; control flow by exception message (`ex.Message.Contains("already in your library")`); `OmdbSeries` is also the type for movies and episodes; `EpisodeOmdbSnapshotStore` uses the scoped context while its two siblings use the factory.
+12. **State-changing GETs.** `/Account/Logout` signs out on GET; `Notifications?handler=Open` marks a notification read on GET.
+13. **Unbounded tables.** `login_token`, `email` (including sent magic-link bodies), `notified_episode`, `notification` and import items are never pruned.
+14. **Duplication.** `ApplyAuditTimestamps` repeats the same block nine times; the three OMDb snapshot stores and two OMDb jobs are near copies; the "is authenticated" guard is repeated in every Details POST handler.
+15. **Local time for air dates.** `DateTime.Today` is server-local. Production sets `TZ=UTC`, so it matches the jobs there, but a developer machine does not, and there is no notion of the user's time zone.
+16. **Deployment details.** Postgres is published on host port 5433 in production compose; the image sets a Swedish locale (`sv_SE.UTF-8`), so culture-sensitive date formatting such as the Dashboard's `ToString("dddd, MMMM d")` renders in Swedish on an English site **(inference)**; the log directory is `chmod 777`; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
+17. **Stale documentation and comments.** `AGENTS.md` predates movies, likes, ratings and import. `README.md` backup commands point at a Receptus path. Several comments say jobs are "scheduled in `Program.cs`"; `AddOmdb` says nothing calls OMDb on a request path; `_Layout` says almost every page requires sign-in; `LogoutModel` says the nav links with GET (it posts).
+18. **Debug builds log the raw login token** (`PasswordlessAuthService`, inside `#if DEBUG`). Deliberate for local sign-in, but a Debug build must never be deployed.
 
-### Background jobs (Quartz)
-Registered in `AddScheduledJobs()` (`InfrastructureServiceCollectionExtensions.cs`), implementations in `Infrastructure/Timers/`:
-- `UpdateTvDbInfoTimer` — hourly, refreshes stale series/episode TVDB data
-- `UpdateOmdbInfoTimer` — hourly, proactive series OMDb enrichment (see above)
-- `MailTimer` — every minute, drains the outbound email queue (`EmailEntity`/`IMailService`)
-- `NewEpisodeNotificationTimer` — every 6 hours, raises in-app notifications for newly-aired episodes on tracked series
+## Open questions
 
-### Auth
-Passwordless only: `IPasswordlessAuthService` emails a single-use magic link (`LoginTokenEntity`); redeeming it issues a standard cookie-auth session with `ClaimTypes.NameIdentifier/Name/Email/Role`. `MarkConsumedAsync` is an atomic `UPDATE ... WHERE ConsumedUtc IS NULL` and the service checks its result — required so two near-simultaneous redemptions of the same link can't both succeed. Resend-cooldown and per-address/site-wide volumetric limits are enforced by `ILoginAbuseGuard`, an in-memory (single-instance-deployment) rate limiter — same file also holds the atomic per-user resend-cooldown check. Roles are just `User`/`Admin` (`UserRole` enum, `Roles` class for the string constants `[Authorize(Roles = ...)]` needs); a user is promoted to Admin by editing the DB row directly, there's no in-app role management UI beyond the `/Admin` dashboard being gated on it.
+1. What sits in front of the app in production (reverse proxy, TLS termination), and is port 8701 reachable from outside it?
+2. Is registration open in production, or is `Login:AllowedEmails` still populated?
+3. Which TheTVDB and OMDb plans are in use, and what are their real rate limits?
+4. Are the public Details pages and the full-episode sitemap intended to drive search traffic, and is the resulting upstream API load acceptable?
+5. Are movies meant to become first-class library items (a "want to watch" state), or stay as watched/liked/rated only?
+6. Should "aired" be judged in UTC, server time or the user's time zone?
+7. Is a single app instance a permanent assumption?
+8. Is there a data-retention or account-deletion requirement? The code has no account deletion and prunes nothing, and the Privacy page does not mention either.
+9. `dump_db.sh` and the server-side `.env.prod` are not in the repository. Where are backups stored and tested?
+10. Are the unused packages, the controller route and session registration reserved for planned work (an API, Swagger), or leftovers?
+11. Should `AGENTS.md`, `Recall.Web/Dockerfile` and `compose.yaml` be kept?
+12. The project memory notes that Recall mirrors account features from the sibling Receptus repository. Which Receptus features are still to be ported?
 
-### Pages worth knowing about
-- `Pages/Index` — public, anonymous marketing/landing page (redirects signed-in visitors straight to `/Dashboard`). This is effectively the only page search engines or logged-out visitors ever see; everything else is `[Authorize]`.
-- `Pages/Dashboard` — the signed-in home ("your channel"): upcoming episodes, catch-up queue. (Renamed from `Pages/Index` — don't confuse the two.)
-- `Pages/Series/Details`, `Pages/Episodes/Details` — the two most complex pages: watch progress, likes, 1–10 ratings (own + community average), TheTVDB/IMDb scores, library tracking, all wired through several services at once.
-- `_Layout.cshtml` sets per-page SEO metadata (title/description/OG/canonical/JSON-LD) from `ViewData["Description"]`/`ViewData["Robots"]`, defaulting to `noindex` — since almost everything requires sign-in, indexability is opt-in per page rather than something to remember to lock down on every new authenticated page.
+## Quick facts
 
-### Data model shape
-Everything user-generated hangs off `AppUserEntity` (Guid PK = the `NameIdentifier` claim): `TrackedSeriesEntity` (library), `EpisodeWatchEntity`, `UserLikeEntity` and `UserRatingEntity` (both share the same `{Series, Episode}` target-type-plus-id shape, see `LikeTargetType`/`RatingTargetType`), `NotificationEntity`/`NotifiedEpisodeEntity`, `LoginTokenEntity`, `EmailEntity`. Separately, five `Cached*Entity` tables (`CachedSeriesAggregate`, `CachedSeriesExtended`, `CachedEpisodeExtended`, `CachedSeriesOmdb`, `CachedEpisodeOmdb`) are the Postgres tier of the layered caches described above — not user data, safe to truncate/rebuild from source APIs. `TrackedSeriesEntity.Version` (`uint`) is a Postgres `xmin`-backed optimistic concurrency token; never set it by hand.
-
-### Conventions specific to this repo
-- `this.SetSuccessToast(...)` / `SetErrorToast(...)` / `SetInfoToast(...)` (`Extensions/PageModelToastExtensions.cs`, written using C# 14 `extension` block syntax) for all user-facing feedback — never write to `TempData` directly.
-- Repositories return domain models, never entities, even internally between service and repository.
-- A best-effort external call that shouldn't fail its caller (a translation lookup, an optional series aggregate for a page rendering many series in parallel) has two established helpers to reuse rather than re-inventing: `ITheTvDbService.TryGetSeriesAggregateAsync(...)` (swallow-and-log) and `Task<T?>.AsOptionalAsync(...)` (swallow `TheTvDbApiException` specifically). A *primary* fetch failure should still propagate.
-- `EpisodeOrderingExtensions.OrderBySeasonAndEpisode(...)` is the one place "unknown season/episode sorts last, then tie-break by id" is implemented — reuse it rather than re-deriving the sort per call site.
+- **Stack**: ASP.NET Core 10 Razor Pages, C# 14, one web project plus one test project.
+- **Data**: PostgreSQL 18 through EF Core 10 (Npgsql); Redis 7 as a read-through cache; metadata stored as JSON snapshots, not relational tables.
+- **External APIs**: TheTVDB v4 (primary metadata), OMDb (IMDb ratings), Cloudflare Turnstile, SMTP.
+- **Auth**: passwordless magic link → 30-day cookie; roles `User`/`Admin`; Debug builds auto-sign-in as a fixed admin.
+- **Jobs**: seven Quartz.NET jobs, in-memory schedule, single instance.
+- **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
+- **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
+- **Build**: `dotnet build Recall.sln --configuration Release`
+- **Test**: `dotnet test Recall.sln` (209 tests, NUnit, SQLite in-memory for persistence)
+- **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.
