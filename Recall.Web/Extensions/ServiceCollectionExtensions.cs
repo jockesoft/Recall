@@ -48,8 +48,10 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// OMDb enrichment: the typed API client plus the snapshot store. Fetching is
-    /// driven by <c>UpdateOmdbInfoTimer</c>; nothing calls OMDb on a request path.
+    /// OMDb enrichment: the typed API client plus the snapshot stores. Series and
+    /// movies are fetched by the hourly OMDb jobs; an episode is fetched on demand
+    /// the first time a signed-in user opens it (never for an anonymous request).
+    /// Every caller draws on the shared <see cref="IOmdbRequestBudget"/>.
     /// </summary>
     public static IServiceCollection AddOmdb(this IServiceCollection services, IConfiguration configuration)
     {

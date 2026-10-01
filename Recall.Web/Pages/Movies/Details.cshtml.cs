@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
@@ -16,6 +17,7 @@ namespace Recall.Web.Pages.Movies;
 /// are only shown when signed in; no library/tracking yet, that needs its own
 /// data model.
 /// </summary>
+[EnableRateLimiting(InfrastructureServiceCollectionExtensions.PublicDetailsPolicy)]
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,

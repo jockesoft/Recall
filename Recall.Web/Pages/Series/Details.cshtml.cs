@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
@@ -17,6 +18,7 @@ namespace Recall.Web.Pages.Series;
 /// Public, anonymous-friendly series details page. Library/watched/like/rating
 /// actions are only shown and only take effect when signed in.
 /// </summary>
+[EnableRateLimiting(InfrastructureServiceCollectionExtensions.PublicDetailsPolicy)]
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,

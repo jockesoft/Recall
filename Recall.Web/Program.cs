@@ -52,7 +52,7 @@ builder.Services.AddWatchlistImport();
 builder.Services.AddHealthChecks()
     .AddCheck<DbHealthCheck>("database", tags: ["ready"]);
 builder.Services.AddPasswordlessAuth(builder.Configuration);
-builder.Services.AddLoginRateLimiting();
+builder.Services.AddRateLimiting();
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 
@@ -95,14 +95,16 @@ app.UseHttpsRedirection();
 app.UseStaticFiles(); // important for runtime-created files
 app.UseRouting();
 
-app.UseRateLimiter();
-
 app.UseSession();
 app.UseAuthentication();
 
 #if DEBUG
 app.UseMiddleware<DevAuthMiddleware>();
 #endif
+
+// After authentication: the public-details policy exempts signed-in users, so
+// the limiter has to know who is asking.
+app.UseRateLimiter();
 
 app.UseAuthorization();
 

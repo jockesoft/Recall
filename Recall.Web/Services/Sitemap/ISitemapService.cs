@@ -8,14 +8,32 @@ namespace Recall.Web.Services.Sitemap;
 /// </summary>
 public interface ISitemapService
 {
-    /// <summary>Every distinct series TVDB id currently cached, with its most recent refresh time.</summary>
-    Task<IReadOnlyList<SitemapEntry>> GetCachedSeriesAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Everything the sitemap lists from the cache, trimmed to
+    /// <paramref name="maxEntries"/> in total. Series are filled first, then
+    /// movies, then episodes with whatever room is left — the pages that matter
+    /// most for search are never crowded out by the far more numerous episodes.
+    /// Within each kind the most recently refreshed come first.
+    /// </summary>
+    Task<SitemapContent> GetCachedContentAsync(int maxEntries, CancellationToken cancellationToken = default);
 
-    /// <summary>Every distinct movie TVDB id currently cached, with its most recent refresh time.</summary>
-    Task<IReadOnlyList<SitemapEntry>> GetCachedMoviesAsync(CancellationToken cancellationToken = default);
+    /// <summary>Up to <paramref name="limit"/> distinct cached series, most recently refreshed first.</summary>
+    Task<IReadOnlyList<SitemapEntry>> GetCachedSeriesAsync(int limit, CancellationToken cancellationToken = default);
 
-    /// <summary>Every episode TVDB id currently cached, with its most recent refresh time.</summary>
-    Task<IReadOnlyList<SitemapEntry>> GetCachedEpisodesAsync(CancellationToken cancellationToken = default);
+    /// <summary>Up to <paramref name="limit"/> distinct cached movies, most recently refreshed first.</summary>
+    Task<IReadOnlyList<SitemapEntry>> GetCachedMoviesAsync(int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>Up to <paramref name="limit"/> cached episodes, most recently refreshed first.</summary>
+    Task<IReadOnlyList<SitemapEntry>> GetCachedEpisodesAsync(int limit, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The cached pages chosen for one sitemap, already within its size limit.</summary>
+public sealed record SitemapContent(
+    IReadOnlyList<SitemapEntry> Series,
+    IReadOnlyList<SitemapEntry> Movies,
+    IReadOnlyList<SitemapEntry> Episodes)
+{
+    public int Count => Series.Count + Movies.Count + Episodes.Count;
 }
 
 /// <summary>One cached item's id and last-refresh time, for a single sitemap <c>&lt;url&gt;</c> entry.</summary>

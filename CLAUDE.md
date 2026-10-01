@@ -44,7 +44,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 4. `AddCookieAuthentication`, `AddAppSession`, `AddAuthorization` (no fallback policy).
 5. `AddRedisCache`, `AddPostgres` — both throw at startup if their connection string is missing.
 6. TheTVDB (`AddTheTvDb`: `TheTvDbClientState` singleton, typed client with a retry pipeline), `AddOmdb`, `AddApplicationServices`, `AddNotifications`, `AddMail`, `AddWatchlistImport`.
-7. Health checks, `AddPasswordlessAuth`, `AddLoginRateLimiting`, `IAppUserRepository`, `AddScheduledJobs` (Quartz).
+7. Health checks, `AddPasswordlessAuth`, `AddRateLimiting`, `IAppUserRepository`, `AddScheduledJobs` (Quartz).
 
 All of these live in `Extensions/ServiceCollectionExtensions.cs` (application services) and `Extensions/InfrastructureServiceCollectionExtensions.cs` (Redis, Postgres, cookies, session, rate limiting, Quartz). Add new integrations there, not inline in `Program.cs`.
 
@@ -61,7 +61,7 @@ All of these live in `Extensions/ServiceCollectionExtensions.cs` (application se
 
 **Before serving**: `await app.MigrateDatabaseAsync()` applies pending migrations with 10 retries, 3 s apart. Disable with `Database:MigrateOnStartup=false`.
 
-**Middleware pipeline**: developer exception page (Development) or exception handler that logs and redirects to `/Error` + HSTS → `UseForwardedHeaders` → `UseHttpsRedirection` → `UseStaticFiles` → `UseRouting` → `UseRateLimiter` → `UseSession` → `UseAuthentication` → `DevAuthMiddleware` (Debug builds only) → `UseAuthorization` → endpoints.
+**Middleware pipeline**: developer exception page (Development) or exception handler that logs and redirects to `/Error` + HSTS → `UseForwardedHeaders` → `UseHttpsRedirection` → `UseStaticFiles` → `UseRouting` → `UseSession` → `UseAuthentication` → `DevAuthMiddleware` (Debug builds only) → `UseRateLimiter` → `UseAuthorization` → endpoints. The rate limiter sits after authentication because the `public-details` policy exempts signed-in users.
 
 **Endpoints**: `/health` (runs `DbHealthCheck`, a `SELECT 1`), `/health/live` (no checks), a default controller route (there are no controllers), `MapStaticAssets`, `MapRazorPages`.
 
@@ -85,7 +85,7 @@ Razor Pages only. No MVC controllers, Blazor or minimal APIs. Two handlers retur
 | `/sitemap.xml` (`Pages/Sitemap`) | anonymous | Dynamic sitemap from the cache tables |
 | `/Privacy`, `/Error` | anonymous | Static |
 
-- The three Details pages have no `[Authorize]`. Their POST handlers check `ICurrentUserService.IsAuthenticated` by hand and redirect with an error toast.
+- The three Details pages have no `[Authorize]`. Their POST handlers check `ICurrentUserService.IsAuthenticated` by hand and redirect with an error toast. All three carry `[EnableRateLimiting(PublicDetailsPolicy)]`: an anonymous client IP gets 60 Details page loads a minute across the three (then 429 with `Retry-After`); signed-in users are not limited. Anonymous requests may fetch an uncached title from TheTVDB but never call OMDb.
 - **Layout** (`Pages/Shared/_Layout.cshtml`): nav, footer attributions, cookie notice, and per-page SEO tags from `ViewData["Title"|"Description"|"Robots"]`. Robots defaults to `noindex, nofollow`; Index, Login, Privacy and the three Details pages opt in. The build number is read from `build.txt` next to the binaries.
 - **Partials** (`Pages/Shared/`): `_SeriesCard`, `_CatchUpCard`, `_UpcomingEpisodeCard`, `_FavoriteEpisodeRow`, `_EpisodeWatchedToggle`, `_LikeToggle`, `_RatingWidget`, `_TypeFilterBar`, `_NotificationBell` (injects `INotificationService` and runs an unread `COUNT` on every signed-in page render), `_ToastMessages`. Each takes a small model class from the same folder.
 - **Forms**: plain `<form method="post" asp-page-handler="…">`, then redirect (PRG). Antiforgery is the Razor Pages default; inline `fetch` calls copy `__RequestVerificationToken` from the page. State changes are never GET handlers, including sign-out and opening a notification (which marks it read).
@@ -147,7 +147,7 @@ Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rate
 - No classic N+1 over navigation properties; no `Include` calls anywhere.
 - `Dashboard`, `Library`, `Favorites` and `Profile` (via `WatchTimeService`) load one full `SeriesAggregate` JSON per tracked/liked/watched series with `Task.WhenAll` on every request. Each is a Redis GET plus deserialization of a payload holding every episode and character.
 - `NewEpisodeNotificationTimer` loops series, then users, with one watched-ids query and one or two notification queries per pair.
-- `SitemapService.GetCachedEpisodesAsync` returns every row of `cached_episode_extended` with no limit.
+- The sitemap is capped at 50,000 URLs (`SitemapModel.MaxUrls`): `SitemapService.GetCachedContentAsync` fills series, then movies, then episodes with the room left, most recently refreshed first.
 - `RatingRepository.GetSummaryAsync` runs `COUNT` then `AVG` as two queries.
 - `WatchlistImportRepository.RecalculateJobProgressAsync` reloads every item status for the job after each batch.
 
@@ -180,7 +180,7 @@ Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rate
 
 - `Services/External/Omdb/OmdbApiClient.cs`: typed client, 20 s overall timeout (8 s per attempt, one retry), API key in the query string, returns `null` for "not found". It has no cache of its own.
 - Snapshots live in `cached_series_omdb`, `cached_movie_omdb` and `cached_episode_omdb`, refreshed at most every 30 days. A row with a null payload records "checked, nothing found".
-- Series and movies are enriched proactively by hourly jobs. **Episodes are enriched lazily on the request path**, the first time `Episodes/Details` is opened (`DetailsModel.LoadOmdbAsync`).
+- Series and movies are enriched proactively by hourly jobs. **Episodes are enriched lazily on the request path**, the first time a *signed-in* user opens `Episodes/Details` (`DetailsModel.LoadOmdbAsync`). An anonymous request only ever reads the cached snapshot.
 - Every OMDb call site must first take a permit from the singleton `IOmdbRequestBudget` (`FixedWindowRateLimiter`, default 900/day via `Omdb:MaxRequestsPerDay`). A new call site must do the same.
 
 ### Cloudflare Turnstile
@@ -201,7 +201,7 @@ User secrets in development (`UserSecretsId` in the csproj); environment variabl
 - **Cookie revalidation**: `Infrastructure/Authentication/RecallCookieEvents.cs` (`options.EventsType`) re-reads the user row at most every 5 minutes per session. A missing user is signed out; a changed username, email or role is reissued into the cookie. The last-check time is stored in the cookie's own properties. A database error keeps the session and retries on the next request. `RecallPrincipal.Create` is the single definition of the claim set; use it when issuing a cookie.
 - **Request a link** (`PasswordlessAuthService.RequestLoginAsync`): normalize email → optional allowlist (`Login:AllowedEmails`; empty means open registration) → `ILoginAbuseGuard` per-address daily cap and site-wide hourly cap → get or create the user → per-user resend cooldown → invalidate earlier tokens → store the SHA-256 hash of a 32-byte random token → queue the email. The page shows the same "link sent" result in every case.
 - **Redeem** (`RedeemAsync`, `Pages/Account/Verify`): look up an unconsumed, unexpired hash, then `MarkConsumedAsync` (atomic `UPDATE … WHERE ConsumedUtc IS NULL`). The result of that update is checked so two simultaneous redemptions cannot both succeed. Then `SignInAsync` with `NameIdentifier`, `Name`, `Email` and `Role` claims.
-- **Bot defenses on the login form**: honeypot field, minimum 2 s render-to-submit time, Turnstile, per-IP rate limit (`login-email` policy, 8 per 5 minutes) and a global limiter on POSTs to `/Account/Login` (300 per minute).
+- **Bot defenses on the login form**: honeypot field, minimum 2 s render-to-submit time, Turnstile, per-IP rate limit (`login-email` policy, 8 per 5 minutes) and a global limiter on POSTs to `/Account/Login` (300 per minute). Both rate-limit policies live in `AddRateLimiting`.
 - **Roles**: `User` and `Admin` (`UserRole` enum; `Roles` constants for attributes). Promotion to Admin is a manual database edit.
 - **Per-user scoping**: `ICurrentUserService.UserId` (parsed from the claim) is passed into every repository call, and every user-data query filters on `UserId`. There are no global query filters.
 - **`DevAuthMiddleware`**: in Debug builds every non-file request runs as a fixed admin (`11111111-1111-1111-1111-111111111111`, `dev-user`, `dev@example.com`). It skips itself when `ASPNETCORE_ENVIRONMENT=Test` and is compiled out of Release. It does not create the user row.
@@ -233,10 +233,10 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 294 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 308 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
-- **Not covered**: page models (apart from the POST-only checks in `Pages/PostOnlyStateChangeTests.cs`), all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
+- **Not covered**: page models (apart from `Pages/PostOnlyStateChangeTests.cs` and `Pages/EpisodeDetailsOmdbTests.cs`), all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
 
 ```bash
 dotnet test Recall.sln                                              # everything
@@ -299,12 +299,13 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 - **Comments**: the codebase explains *why* in comments and XML docs on non-obvious code; keep that density.
 - **SEO**: pages are `noindex` unless they set `ViewData["Robots"]`.
 - **Culture**: the process culture is pinned to `en-US` (`Infrastructure/Hosting/AppCulture.cs`). Do not set `LANG`/`LC_ALL` in images or add request localization; machine-readable output (sitemap dates, JSON-LD, anything parsed back) should still pass `CultureInfo.InvariantCulture` explicitly.
+- **Public pages and quota**: a page reachable without sign-in must not call OMDb, and if it can trigger a TheTVDB fetch it needs the `public-details` rate-limit policy. `PublicDetailsRateLimitTests` checks the three current pages carry it.
 
 ## Observations
 
 Described only, ranked by impact. Nothing here has been changed.
 
-1. **Anonymous pages can spend upstream quota.** `Series/Details`, `Episodes/Details` and `Movies/Details` are public, indexable and have no rate limit. A request for an uncached id calls TheTVDB and writes Redis and Postgres rows; an episode page can also make a live OMDb call. `/sitemap.xml` lists every cached episode, so crawlers are invited to each one, and the sitemap has no size cap (the protocol limit is 50,000 URLs). The shared OMDb budget caps the damage at 900 calls a day but lets anonymous traffic starve the hourly enrichment jobs.
+1. **Anonymous pages spending upstream quota: fixed for OMDb, bounded for TheTVDB.** Anonymous requests never call OMDb, the Details pages are rate-limited per anonymous IP, and the sitemap is capped. What remains by design: an anonymous visitor can still make the app fetch an uncached title from TheTVDB (up to 60 pages a minute per IP; one uncached long-running series is itself hundreds of calls), and each such fetch adds rows to the cache tables and, later, URLs to the sitemap. A crawler spread across many IPs is not bounded by the per-IP limit.
 2. **Forwarded headers: fixed, with a residual default.** Headers are applied only from trusted proxies and the compose ports are loopback-only. The default trusts all private ranges, which matches production (nginx on the host, reaching the container through the compose network's gateway). It could be narrowed to the compose subnet with `TrustedProxies__Networks__0`, at the cost of breaking if Docker reassigns the subnet; see `README.md`.
 3. **Sessions that could not be revoked: fixed, within 5 minutes.** Deleting or demoting a user takes effect at the next revalidation. There is still no "sign out everywhere" for a user who keeps their account, and no admin UI to do either; both remain manual database edits.
 4. **No HTTP resilience: fixed.** Both metadata clients retry transient failures; see section 7. Not added: a circuit breaker, so a long TheTVDB outage still costs every request its retries.
@@ -352,5 +353,5 @@ Still open:
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (294 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (308 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

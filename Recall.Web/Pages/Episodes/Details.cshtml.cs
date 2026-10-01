@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
@@ -20,6 +21,7 @@ namespace Recall.Web.Pages.Episodes;
 /// Public, anonymous-friendly episode details page. Watched/like/rating actions
 /// are only shown and only take effect when signed in.
 /// </summary>
+[EnableRateLimiting(InfrastructureServiceCollectionExtensions.PublicDetailsPolicy)]
 public sealed class DetailsModel(
     ILogger<DetailsModel> logger,
     ITheTvDbService theTvDbService,
@@ -334,6 +336,13 @@ public sealed class DetailsModel(
     /// </summary>
     private async Task<OmdbSeries?> LoadOmdbAsync(int episodeTvdbId, string imdbId, CancellationToken cancellationToken)
     {
+        // Anonymous visitors (and crawlers — the sitemap lists every cached
+        // episode) only ever see what is already cached. A live lookup spends
+        // the shared daily OMDb budget, and that is reserved for signed-in
+        // users and the enrichment jobs.
+        if (!currentUserService.IsAuthenticated)
+            return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
+
         if (string.IsNullOrWhiteSpace(omdbOptions.Value.ApiKey))
             return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
 

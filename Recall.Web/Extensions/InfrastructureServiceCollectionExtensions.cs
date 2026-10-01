@@ -208,15 +208,31 @@ public static class InfrastructureServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>Name of the per-IP policy on the public Details pages; see <see cref="PublicDetailsPartition"/>.</summary>
+    public const string PublicDetailsPolicy = "public-details";
+
+    /// <summary>How many Details pages one anonymous client IP may load per minute.</summary>
+    public const int PublicDetailsPermitsPerMinute = 60;
+
     /// <summary>
-    /// Throttles the sign-in form per client IP so it can't be scripted to spray
-    /// login emails. Applied via <c>[EnableRateLimiting("login-email")]</c> on LoginModel.
+    /// The app's rate-limit policies:
+    /// <list type="bullet">
+    /// <item><c>login-email</c> — throttles the sign-in form per client IP so it can't be
+    /// scripted to spray login emails. Applied via <c>[EnableRateLimiting("login-email")]</c>
+    /// on LoginModel, with a site-wide backstop on the same endpoint.</item>
+    /// <item><see cref="PublicDetailsPolicy"/> — bounds what an anonymous client can make the
+    /// app fetch from TheTVDB through the public Series/Episodes/Movies Details pages.</item>
+    /// </list>
+    /// <c>UseRateLimiter</c> must run after authentication: the second policy depends on
+    /// knowing whether the request is signed in.
     /// </summary>
-    public static IServiceCollection AddLoginRateLimiting(this IServiceCollection services)
+    public static IServiceCollection AddRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.AddPolicy(PublicDetailsPolicy, PublicDetailsPartition);
 
             options.AddPolicy("login-email", httpContext =>
             {
@@ -251,11 +267,43 @@ public static class InfrastructureServiceCollectionExtensions
                     "Rate limit exceeded for {Path} from {RemoteIp}",
                     context.HttpContext.Request.Path,
                     context.HttpContext.Connection.RemoteIpAddress);
+
+                // Tells a well-behaved crawler when to come back instead of leaving it to guess.
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                {
+                    context.HttpContext.Response.Headers.RetryAfter =
+                        ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+
                 return ValueTask.CompletedTask;
             };
         });
 
         return services;
+    }
+
+    /// <summary>
+    /// The public Details pages are open to anonymous visitors and search
+    /// engines on purpose, and an uncached series, episode or movie is fetched
+    /// from TheTVDB on demand — so without a limit, anyone walking ids could
+    /// make the app spend its TheTVDB allowance for them. Anonymous requests
+    /// get <see cref="PublicDetailsPermitsPerMinute"/> page loads a minute per
+    /// client IP (plenty for a person, and for a crawler pacing itself);
+    /// signed-in users are not limited.
+    /// </summary>
+    public static RateLimitPartition<string> PublicDetailsPartition(HttpContext httpContext)
+    {
+        if (httpContext.User.Identity?.IsAuthenticated == true)
+            return RateLimitPartition.GetNoLimiter("signed-in");
+
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter($"anonymous:{clientIp}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = PublicDetailsPermitsPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
     }
 
     /// <summary>
