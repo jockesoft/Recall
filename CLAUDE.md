@@ -166,7 +166,7 @@ Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rate
 | Series extended | `series:extended:v2:{id}` | 12 h | `cached_series_extended` |
 | Episode extended | `episode:extended:v2:{id}:{lang}` | 12 h | `cached_episode_extended` |
 
-- **The Postgres tier has no staleness check on read.** A row is served until something explicitly refreshes it: `Refresh*ByIdAsync` or the hourly jobs. The read path's `Save*` methods are insert-only; only the refresh path upserts. A mapping change therefore does not reach already-cached rows until they are refreshed.
+- **The Postgres tier has no staleness check on read.** A row is served until something explicitly refreshes it: `Refresh*ByIdAsync` or the hourly jobs, which revisit keep-updated aggregates after 12 h and all others after 30 d. The read path's `Save*` methods are insert-only; only the refresh path upserts. A mapping change therefore does not reach already-cached rows until they are refreshed, which can take up to 30 days plus queue time.
 - Language is hardcoded to `eng`. Episode names are translated per episode, reusing `cached_episode_extended` before calling the API.
 - **Image URLs**: TheTVDB returns absolute and relative paths inconsistently. Every image field goes through `ArtworkUrl.Normalize` at DTO → domain mapping time, and again on every service read via `DomainImageNormalization.WithNormalizedImages()` so old cached rows heal. A new image-bearing field needs both.
 - `SearchAsync` and `ResolveByRemoteIdAsync` are not cached.
@@ -206,8 +206,8 @@ Quartz.NET with the default in-memory store, registered in `AddScheduledJobs()`.
 
 | Job | Interval | Work per run |
 |---|---|---|
-| `UpdateTvDbInfoTimer` | 60 min | Up to 10 series aggregates with `KeepUpdated = true` older than 12 h; up to 25 episodes older than 30 d, or titled "TBA" and older than 12 h, or aired without an image (max 5 attempts) |
-| `UpdateMovieInfoTimer` | 60 min | Up to 10 movie aggregates with `KeepUpdated = true` older than 12 h |
+| `UpdateTvDbInfoTimer` | 60 min | Up to 10 series aggregates: `KeepUpdated = true` and older than 12 h, or any other row older than 30 d; tracked series first, then oldest. Then up to 25 episodes older than 30 d, or titled "TBA" and older than 12 h, or aired without an image (max 5 attempts) |
+| `UpdateMovieInfoTimer` | 60 min | Up to 10 movie aggregates, same two tiers; movies someone has watched or liked first |
 | `UpdateOmdbInfoTimer` | 60 min | Up to 30 series whose OMDb snapshot is missing or older than 30 d |
 | `UpdateMovieOmdbInfoTimer` | 60 min | Same, for movies |
 | `MailTimer` | 1 min | Sends up to `Mail:BatchSize` (20) queued emails; gives up after `MaxSendAttempts` (5) |
@@ -227,10 +227,10 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 255 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 259 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
-- **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite.
+- **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
 
 ```bash
 dotnet test Recall.sln                                              # everything
@@ -299,7 +299,7 @@ Described only, ranked by impact. Nothing here has been changed.
 2. **Forwarded headers: fixed, with a residual default.** Headers are now applied only from trusted proxies and the compose ports are loopback-only. What remains: the default trusts all private ranges, so any other machine or container on a private network that can reach the app could still forge `X-Forwarded-For`; set `TrustedProxies__Networks__0` to the proxy's exact network to close that. The loopback binding only takes effect once the server's own copy of `compose.prod.yml` is updated.
 3. **Sessions cannot be revoked.** The role and identity live in a 30-day sliding cookie with no `OnValidatePrincipal` check. Demoting or deleting a user has no effect until the cookie expires.
 4. **No HTTP resilience.** Neither typed client has retry, backoff or circuit breaking; a TheTVDB 429 or transient 5xx surfaces as a failed page or a skipped job item. The Turnstile client uses the default 100 s timeout.
-5. **Some cached rows are never refreshed.** The refresh jobs only pick aggregates where `KeepUpdated = true`, and reads never check age in Postgres. A series or movie cached with `KeepUpdated` false or null is served unchanged indefinitely. `cached_series_extended` has no refresh path at all, and after the item-2 change nothing on the watch-progress path reads it; `ITheTvDbService.GetSeriesByIdExtendedAsync` now has no caller outside tests.
+5. **Cached aggregates never refreshing: fixed.** Rows without `KeepUpdated = true` are now refreshed every 30 days. Remaining: `cached_series_extended` still has no refresh path, but nothing reads it any more (`ITheTvDbService.GetSeriesByIdExtendedAsync` has no caller outside tests), so the table and method are candidates for removal. The refresh cap (10 series and 10 movies an hour) bounds how fast a large, crawler-filled cache cycles.
 6. **Two sources for a series' episode list: fixed.** Display, progress, "mark watched through" and the prior-unwatched prompt all read the aggregate.
 7. **Write handlers trusting client-supplied id pairs: fixed for watches, likes and ratings on episodes.** They go through `IWatchProgressService` or refuse when the parent series can't be resolved. Still unvalidated: series and movie like/rating handlers accept any positive id without checking it exists on TheTVDB.
 8. **Single-instance assumptions.** Login abuse limits, the OMDb daily budget, the TheTVDB token and the Quartz schedule are all in process memory, and migrations run at startup. Every deploy resets the OMDb budget and login counters. A second instance would double every job.
@@ -339,5 +339,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (255 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (259 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

@@ -28,20 +28,23 @@ public interface ITvdbSnapshotStore
     Task SaveEpisodeExtendedAsync(Episode episode, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cached aggregate rows flagged <c>keep_updated</c> whose snapshot was last
-    /// retrieved before <paramref name="staleBeforeUtc"/>, oldest first and
-    /// capped at <paramref name="limit"/>. Feeds the background refresh job.
+    /// Cached series aggregate rows that are due a refresh, capped at
+    /// <paramref name="limit"/>. Two tiers: rows flagged <c>keep_updated</c>
+    /// last retrieved before <paramref name="staleBeforeUtc"/>, and every other
+    /// row (flag false or unknown — an ended show, typically) last retrieved
+    /// before the much older <paramref name="settledStaleBeforeUtc"/>, so
+    /// nothing is served unchanged forever. Series in someone's library come
+    /// first, then oldest first. Feeds the background refresh job.
     /// </summary>
     Task<IReadOnlyList<CachedAggregateKey>> GetAggregatesNeedingRefreshAsync(
-        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default);
+        DateTime staleBeforeUtc, DateTime settledStaleBeforeUtc, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cached movie aggregate rows flagged <c>keep_updated</c> whose snapshot was
-    /// last retrieved before <paramref name="staleBeforeUtc"/>, oldest first and
-    /// capped at <paramref name="limit"/>. Feeds the background refresh job.
+    /// The movie counterpart of <see cref="GetAggregatesNeedingRefreshAsync"/>:
+    /// same two tiers, with movies someone has watched or liked first.
     /// </summary>
     Task<IReadOnlyList<CachedAggregateKey>> GetMovieAggregatesNeedingRefreshAsync(
-        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default);
+        DateTime staleBeforeUtc, DateTime settledStaleBeforeUtc, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Cached episode snapshots that are due a refresh: last retrieved before

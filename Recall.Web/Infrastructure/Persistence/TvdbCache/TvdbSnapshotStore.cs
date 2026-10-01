@@ -95,14 +95,20 @@ public sealed class TvdbSnapshotStore(
     }
 
     public async Task<IReadOnlyList<CachedAggregateKey>> GetMovieAggregatesNeedingRefreshAsync(
-        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default)
+        DateTime staleBeforeUtc, DateTime settledStaleBeforeUtc, int limit, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         return await dbContext.CachedMovieAggregates
             .AsNoTracking()
-            .Where(x => x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
-            .OrderBy(x => x.RetrievedUtc)
+            .Where(x => (x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
+                        || (x.KeepUpdated != true && x.RetrievedUtc < settledStaleBeforeUtc))
+            // A movie a user actually has on their pages outranks one that was
+            // only ever opened once (or by a crawler).
+            .OrderByDescending(x =>
+                dbContext.UserMovieWatches.Any(w => w.MovieTvdbId == x.TvdbId)
+                || dbContext.UserLikes.Any(l => l.TargetType == LikeTargetType.Movie && l.TargetTvdbId == x.TvdbId))
+            .ThenBy(x => x.RetrievedUtc)
             .Take(limit)
             .Select(x => new CachedAggregateKey(x.TvdbId, x.Language))
             .ToListAsync(cancellationToken);
@@ -132,14 +138,19 @@ public sealed class TvdbSnapshotStore(
     }
 
     public async Task<IReadOnlyList<CachedAggregateKey>> GetAggregatesNeedingRefreshAsync(
-        DateTime staleBeforeUtc, int limit, CancellationToken cancellationToken = default)
+        DateTime staleBeforeUtc, DateTime settledStaleBeforeUtc, int limit, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         return await dbContext.CachedSeriesAggregates
             .AsNoTracking()
-            .Where(x => x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
-            .OrderBy(x => x.RetrievedUtc)
+            .Where(x => (x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
+                        || (x.KeepUpdated != true && x.RetrievedUtc < settledStaleBeforeUtc))
+            // A series in someone's library outranks one that was only ever
+            // opened once (or by a crawler), so the per-run cap is spent on
+            // data users actually see first.
+            .OrderByDescending(x => dbContext.TrackedSeries.Any(t => t.TvdbId == x.TvdbId))
+            .ThenBy(x => x.RetrievedUtc)
             .Take(limit)
             .Select(x => new CachedAggregateKey(x.TvdbId, x.Language))
             .ToListAsync(cancellationToken);
