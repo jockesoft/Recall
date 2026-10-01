@@ -156,7 +156,7 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 **Query patterns worth knowing before optimizing**
 
 - No classic N+1 over navigation properties; no `Include` calls anywhere.
-- `Dashboard`, `Library`, `Favorites`, `Profile` (via `WatchTimeService`) and `NewEpisodeNotificationTimer` load one `SeriesSummary` per tracked/liked/watched series with `Task.WhenAll` on every request: a Redis GET of a projection of the aggregate (no overviews, characters or seasons; about 40% of the aggregate's size). Measured on 2026-10-01 with the dev user tracking 58 series (10,565 episodes), Debug build, server time excluding TLS: Dashboard 25 → 22 ms, Library 25 → 20 ms, Profile 22 → 17 ms. These pages are not slow; measure before optimizing further.
+- `Dashboard`, `Library`, `Favorites`, `Profile` (via `WatchTimeService`) and `NewEpisodeNotificationTimer` load one full `SeriesAggregate` per tracked/liked/watched series with `Task.WhenAll` on every request: a Redis GET plus deserialization of every episode and character. This is fine as it stands; see the note under TheTVDB in section 7.
 - `NewEpisodeNotificationTimer` loops series, then users, with one watched-ids query and one or two notification queries per pair.
 - The sitemap is capped at 50,000 URLs (`SitemapModel.MaxUrls`): `SitemapService.GetCachedContentAsync` fills series, then movies, then episodes with the room left, most recently refreshed first.
 - `RatingRepository.GetSummaryAsync` gets `COUNT` and `AVG` in one grouped query.
@@ -167,9 +167,9 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 
 ### TheTVDB (v4 API)
 
-Plan: the **free tier, which requires attribution**. The attribution is the "Metadata provided by TheTVDB" link and logo in the footer of `_Layout.cshtml`, which every page that shows TheTVDB data uses.
+Plan: the **free tier, which requires attribution**. The attribution is the "Metadata provided by TheTVDB" link (to `https://thetvdb.com`) and logo in the footer of `_Layout.cshtml`, which every page that shows TheTVDB data uses. The text must stay visible at every screen width; it may wrap or shrink but is never hidden.
 
-- **Summary vs aggregate**: `GetSeriesSummaryByIdAsync` is for code that loads many series at once; `GetSeriesAggregateByIdAsync` is for showing one series in full. A summary is only ever `SeriesSummary.FromAggregate(...)`: cached in Redis beside the aggregate, rebuilt from it on a miss, and rewritten by `RefreshSeriesAggregateByIdAsync`. It has no Postgres row and is never fetched from the API on its own, so the aggregate stays the single source of a series' episode list. A field a list page needs goes into `SeriesSummary` (and bump the key to `v2`), not into a second fetch.
+- **A lighter per-series summary was measured and rejected** (2026-10-01). With the dev user tracking 58 series (10,565 episodes), Dashboard, Library and Profile took 20–25 ms of server time reading full aggregates; a cached projection without overviews and characters saved 3–6 ms per request, which did not justify a second cache entry per series. Everything reads the aggregate. Revisit only if these pages get measurably slow.
 
 - `Services/External/TheTvDb/TheTvDbApiClient.cs` is pure transport: typed `HttpClient` whose 8 s timeout bounds one attempt (body included), bearer token attached per request.
 - `TheTvDbClientState` **must stay a singleton**. It holds the cached token and a `SemaphoreSlim(5)` throttle shared by all client instances. On a 401 the client passes the specific stale token back, so only one of several racing requests re-authenticates; the request is resent once inside the same attempt.
@@ -183,7 +183,6 @@ Plan: the **free tier, which requires attribution**. The attribution is the "Met
 | Resource | Redis key (instance prefix `tvdb:`) | Redis TTL (±10% jitter) | Postgres table |
 |---|---|---|---|
 | Series aggregate | `series:aggregate:v1:{id}:{lang}` | 12 h; 7 d if ended and not keep-updated | `cached_series_aggregate` |
-| Series summary | `series:summary:v1:{id}:{lang}` | same as its aggregate | none: derived from the aggregate |
 | Movie aggregate | `movie:aggregate:v1:{id}:{lang}` | 12 h; 7 d if released | `cached_movie_aggregate` |
 | Series extended | `series:extended:v2:{id}` | 12 h | `cached_series_extended` |
 | Episode extended | `episode:extended:v2:{id}:{lang}` | 12 h | `cached_episode_extended` |
@@ -254,7 +253,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 380 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 370 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`), the retention deletes and `PruneOldDataTimer`, audit timestamps, the OMDb JSON format, and UTC air dates. Tests that need a clock use `TestSupport/FixedTimeProvider`.
 - **Not covered**: page models (apart from the four fixtures in `Recall.Tests/Pages/`), every Quartz job except `PruneOldDataTimer`, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Notification`/`TrackedSeries` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
@@ -313,7 +312,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 - **JSON**: always `RecallJsonOptions.Web`, so Redis and Postgres payloads stay compatible.
 - **User feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)`; never write to `TempData` directly.
 - **Error handling in page handlers**: wrap in `try`, log, set an error toast, redirect or re-render. Jobs and fan-outs use `catch (Exception ex) when (ex is not OperationCanceledException)` so one bad item never aborts a batch.
-- **Best-effort external calls**: reuse `ITheTvDbService.TryGetSeriesSummaryAsync` (many series at once), `TryGetSeriesAggregateAsync` / `TryGetMovieAggregateAsync` (swallow and log) and `Task<T?>.AsOptionalAsync(...)` (swallows `TheTvDbApiException` only). A primary fetch failure should still propagate.
+- **Best-effort external calls**: reuse `ITheTvDbService.TryGetSeriesAggregateAsync` / `TryGetMovieAggregateAsync` (swallow and log) and `Task<T?>.AsOptionalAsync(...)` (swallows `TheTvDbApiException` only). A primary fetch failure should still propagate.
 - **Episode ordering**: `EpisodeOrderingExtensions.OrderBySeasonAndEpisode` is the single implementation; reuse it.
 - **Recording a watch**: call `IWatchProgressService`; it validates the series/episode pair and the air date. Page handlers map the returned `EpisodeWatchOutcome` to a toast.
 - **Movie watchlist and watched state**: call `IMovieTrackingService`; it keeps "on the watchlist" and "watched" mutually exclusive.
@@ -381,5 +380,5 @@ Still open:
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (380 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (370 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

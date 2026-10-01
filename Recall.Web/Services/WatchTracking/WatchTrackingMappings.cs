@@ -27,16 +27,6 @@ internal static class WatchTrackingMappings
                 e.Aired,
                 e.Name));
 
-    public static IEnumerable<WatchableEpisode> ToWatchableEpisodes(this SeriesSummary summary) =>
-        summary.Episodes
-            .Where(e => e.IsMovie != true)
-            .Select(e => new WatchableEpisode(
-                e.Id,
-                e.SeasonNumber,
-                e.EpisodeNumber,
-                e.Aired,
-                e.Name));
-
     private static DateOnly? ParseDate(string? value) =>
         DateOnly.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
             ? date

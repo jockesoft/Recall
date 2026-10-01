@@ -19,7 +19,7 @@ public sealed class WatchTimeService(
             return WatchTimeSummary.Empty;
 
         var aggregates = (await Task.WhenAll(
-                seriesIds.Select(id => theTvDbService.TryGetSeriesSummaryAsync(id, logger, nameof(WatchTimeService), cancellationToken))))
+                seriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(WatchTimeService), cancellationToken))))
             .Where(a => a is not null)
             .Select(a => a!)
             .ToList();

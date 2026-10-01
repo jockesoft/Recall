@@ -25,17 +25,6 @@ public interface ITheTvDbService
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The lightweight view of a series for pages that load many of them at once
-    /// (dashboard, library, favorites, watch time): card fields plus the episode
-    /// list without overviews. Always a projection of the aggregate — cached on
-    /// its own, rebuilt from the aggregate on a miss, and rewritten whenever the
-    /// aggregate is refreshed — so the two can't disagree about which episodes
-    /// exist. Use <see cref="GetSeriesAggregateByIdAsync"/> when showing one
-    /// series in full.
-    /// </summary>
-    Task<SeriesSummary?> GetSeriesSummaryByIdAsync(int seriesId, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Bypasses the read tiers: fetches the series aggregate straight from
     /// TheTVDB and overwrites both the local snapshot and the Redis entry.
     /// Returns <c>false</c> when the API has nothing for the id.

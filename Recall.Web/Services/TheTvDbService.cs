@@ -86,35 +86,6 @@ public sealed class TheTvDbService(
         return aggregate?.WithNormalizedImages();
     }
 
-    private static string SummaryCacheKey(int seriesId, string language) =>
-        $"series:summary:v1:{seriesId}:{language}";
-
-    public async Task<SeriesSummary?> GetSeriesSummaryByIdAsync(
-        int seriesId,
-        CancellationToken cancellationToken = default)
-    {
-        var cacheKey = SummaryCacheKey(seriesId, Language);
-
-        var cached = await cache.GetAsync<SeriesSummary>(cacheKey, cancellationToken);
-        if (cached is not null)
-            return cached;
-
-        // No tier of its own below Redis: a summary is only ever derived from the
-        // aggregate, which brings its own Redis -> Postgres -> API read path.
-        var aggregate = await GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
-        if (aggregate is null)
-            return null;
-
-        return await CacheSummaryAsync(aggregate, cancellationToken);
-    }
-
-    private async Task<SeriesSummary> CacheSummaryAsync(SeriesAggregate aggregate, CancellationToken cancellationToken)
-    {
-        var summary = SeriesSummary.FromAggregate(aggregate);
-        await cache.SetAsync(SummaryCacheKey(aggregate.TvdbId, Language), summary, AggregateTtl(aggregate), cancellationToken);
-        return summary;
-    }
-
     public async Task<bool> RefreshSeriesAggregateByIdAsync(
         int seriesId,
         CancellationToken cancellationToken = default)
@@ -130,11 +101,6 @@ public sealed class TheTvDbService(
 
         await store.UpsertSeriesAggregateAsync(fresh, Language, cancellationToken);
         await cache.SetAsync(AggregateCacheKey(seriesId, Language), fresh, AggregateTtl(fresh), cancellationToken);
-
-        // The summary is a projection of the aggregate: whenever the aggregate
-        // changes, its cached summary is rewritten with it, so list pages never
-        // show an older episode list than the series page does.
-        await CacheSummaryAsync(fresh, cancellationToken);
 
         logger.LogInformation("Refreshed series aggregate {SeriesId} ({EpisodeCount} episodes).", seriesId, fresh.Episodes.Count);
 

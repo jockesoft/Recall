@@ -1519,8 +1519,11 @@ img.rounded.shadow-sm {
 }
 
 @media (max-width: 576px) {
-    .footer .thetvdbattribution span {
-        display: none;
+    /* The "Metadata provided by TheTVDB" text stays visible on a phone — the
+       attribution is the wording, not just the logo. It may wrap beside the
+       logo; it must never be hidden. */
+    .footer .thetvdbattribution {
+        text-align: left;
     }
 
     /* No lead-in text on a phone — the OMDb chip collapses to

@@ -49,8 +49,8 @@ public sealed class FavoritesService(
             : new HashSet<int>();
 
         var seriesAggregatesTask = seriesIds.Count > 0
-            ? Task.WhenAll(seriesIds.Select(id => theTvDbService.TryGetSeriesSummaryAsync(id, logger, nameof(FavoritesService), cancellationToken)))
-            : Task.FromResult(Array.Empty<SeriesSummary?>());
+            ? Task.WhenAll(seriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)))
+            : Task.FromResult(Array.Empty<SeriesAggregate?>());
 
         var movieAggregatesTask = movieIds.Count > 0
             ? Task.WhenAll(movieIds.Select(id => theTvDbService.TryGetMovieAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)))
@@ -131,7 +131,7 @@ public sealed class FavoritesService(
             .ToList();
 
         var aggregates = await Task.WhenAll(
-            seriesIds.Select(id => theTvDbService.TryGetSeriesSummaryAsync(id, logger, nameof(FavoritesService), cancellationToken)));
+            seriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id, logger, nameof(FavoritesService), cancellationToken)));
 
         var bySeriesId = aggregates
             .Where(a => a is not null)
@@ -146,7 +146,7 @@ public sealed class FavoritesService(
 
     private async Task<FavoriteEpisode?> BuildFavoriteEpisodeAsync(
         UserLike like,
-        IReadOnlyDictionary<int, SeriesSummary> bySeriesId,
+        IReadOnlyDictionary<int, SeriesAggregate> bySeriesId,
         CancellationToken cancellationToken)
     {
         try
