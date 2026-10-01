@@ -107,9 +107,64 @@ public sealed class WatchProgressService(
         // Season 0 (specials) sorts first, so "everything earlier" can include a
         // special that hasn't aired yet — leave those out.
         var idsToMark = WatchProgressCalculator.IdsThrough(WithoutUnaired(ordered), episodeTvdbId);
-        await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
 
-        return new MarkWatchedThroughResult(EpisodeFound: true, idsToMark.Count);
+        return new MarkWatchedThroughResult(EpisodeFound: true, idsToMark.Count, Batch: batch);
+    }
+
+    public async Task<SeasonWatchResult> MarkSeasonWatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var season = await GetSeasonEpisodesAsync(seriesTvdbId, seasonNumber, cancellationToken);
+        if (season.Count == 0)
+            return new SeasonWatchResult(SeasonFound: false, WatchedBatch.Empty);
+
+        var idsToMark = season
+            .Where(e => !AirDate.IsInFuture(e.Aired))
+            .Select(e => e.Id)
+            .ToList();
+
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
+
+        return new SeasonWatchResult(SeasonFound: true, batch);
+    }
+
+    public async Task<int> MarkSeasonUnwatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var season = await GetSeasonEpisodesAsync(seriesTvdbId, seasonNumber, cancellationToken);
+
+        return await episodeWatchRepository.MarkUnwatchedRangeAsync(
+            userId, season.Select(e => e.Id).ToList(), cancellationToken);
+    }
+
+    public Task<int> UndoWatchedBatchAsync(
+        Guid userId,
+        int seriesTvdbId,
+        DateTime batchWatchedUtc,
+        CancellationToken cancellationToken = default)
+        => episodeWatchRepository.UndoWatchedBatchAsync(userId, seriesTvdbId, batchWatchedUtc, cancellationToken);
+
+    /// <summary>
+    /// Every aggregate entry in the season — including movie-flagged ones, since
+    /// the season list on Series/Details shows (and lets you tick) those too.
+    /// </summary>
+    private async Task<IReadOnlyList<Domain.TheTvDb.EpisodeSummary>> GetSeasonEpisodesAsync(
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken)
+    {
+        var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
+
+        return aggregate is null
+            ? []
+            : aggregate.Episodes.Where(e => e.SeasonNumber == seasonNumber).ToList();
     }
 
     public async Task<EpisodeWatchOutcome> MarkEpisodeWatchedAsync(

@@ -29,6 +29,7 @@ public class WatchProgressServiceTests
     private const int SeriesId = 42;
     private const string Past = "2025-01-01";
     private const string Future = "2999-01-01";
+    private static readonly DateTime BatchStamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 
     private static EpisodeSummary Ep(int id, int season, int number, string? aired, bool isMovie = false) => new()
     {
@@ -70,7 +71,7 @@ public class WatchProgressServiceTests
         _watchRepository
             .Setup(x => x.MarkWatchedRangeAsync(It.IsAny<Guid>(), SeriesId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
             .Callback<Guid, int, IEnumerable<int>, CancellationToken>((_, _, ids, _) => marked.AddRange(ids))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(() => new WatchedBatch(marked.Count, BatchStamp));
         return marked;
     }
 
@@ -325,5 +326,66 @@ public class WatchProgressServiceTests
 
         _watchRepository.Verify(
             x => x.MarkWatchedAsync(It.IsAny<Guid>(), SeriesId, 7001, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task MarkWatchedThroughAsync_Should_ReturnTheBatch_SoTheCallerCanOfferAnUndo()
+    {
+        SetupSeries(Ep(1, 1, 1, Past), Ep(2, 1, 2, Past));
+        CaptureMarkedRange();
+
+        var result = await _sut.MarkWatchedThroughAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 2);
+
+        result.Batch.Should().Be(new WatchedBatch(2, BatchStamp));
+    }
+
+    [Test]
+    public async Task MarkSeasonWatchedAsync_Should_MarkOnlyThatSeasonsAiredEpisodes()
+    {
+        SetupSeries(
+            Ep(1, 1, 1, Past),
+            Ep(2, 1, 2, Past),
+            Ep(3, 1, 3, Future),
+            Ep(4, 1, 4, aired: null),
+            Ep(99, 1, 5, Past, isMovie: true),
+            Ep(20, 2, 1, Past));
+        var marked = CaptureMarkedRange();
+
+        var result = await _sut.MarkSeasonWatchedAsync(Guid.NewGuid(), SeriesId, seasonNumber: 1);
+
+        result.SeasonFound.Should().BeTrue();
+        marked.Should().BeEquivalentTo([1, 2, 4, 99], "the unaired episode and the other season are left alone");
+        result.Batch.InsertedCount.Should().Be(4);
+    }
+
+    [Test]
+    public async Task MarkSeasonWatchedAsync_Should_NotWriteAnything_ForASeasonTheSeriesDoesNotHave()
+    {
+        SetupSeries(Ep(1, 1, 1, Past));
+
+        var result = await _sut.MarkSeasonWatchedAsync(Guid.NewGuid(), SeriesId, seasonNumber: 7);
+
+        result.SeasonFound.Should().BeFalse();
+        VerifyNothingWritten();
+    }
+
+    [Test]
+    public async Task MarkSeasonUnwatchedAsync_Should_UnwatchEveryEpisodeOfThatSeasonOnly()
+    {
+        var userId = Guid.NewGuid();
+        SetupSeries(
+            Ep(1, 1, 1, Past),
+            Ep(2, 1, 2, Future),
+            Ep(20, 2, 1, Past));
+        IEnumerable<int>? unwatched = null;
+        _watchRepository
+            .Setup(x => x.MarkUnwatchedRangeAsync(userId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, IEnumerable<int>, CancellationToken>((_, ids, _) => unwatched = ids.ToList())
+            .ReturnsAsync(1);
+
+        var removed = await _sut.MarkSeasonUnwatchedAsync(userId, SeriesId, seasonNumber: 1);
+
+        removed.Should().Be(1);
+        unwatched.Should().BeEquivalentTo([1, 2]);
     }
 }

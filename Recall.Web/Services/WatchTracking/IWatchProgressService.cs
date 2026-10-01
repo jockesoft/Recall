@@ -1,3 +1,5 @@
+using Recall.Web.Infrastructure.Persistence.Repositories;
+
 namespace Recall.Web.Services.WatchTracking;
 
 /// <summary>
@@ -74,12 +76,49 @@ public interface IWatchProgressService
         int seriesTvdbId,
         int episodeTvdbId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks every episode of one season watched, skipping ones already marked
+    /// and any whose air date is still in the future.
+    /// </summary>
+    Task<SeasonWatchResult> MarkSeasonWatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Removes the user's watches for every episode of one season. Returns how many were removed.</summary>
+    Task<int> MarkSeasonUnwatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reverses one bulk mark (a season, or "this and earlier"), identified by
+    /// the <see cref="WatchedBatch.WatchedUtc"/> it returned. Only the rows that
+    /// call inserted are removed. Returns how many were removed.
+    /// </summary>
+    Task<int> UndoWatchedBatchAsync(
+        Guid userId,
+        int seriesTvdbId,
+        DateTime batchWatchedUtc,
+        CancellationToken cancellationToken = default);
 }
 
 /// <param name="EpisodeFound">False when the episode isn't part of the series' episode list.</param>
 /// <param name="MarkedCount">Episodes covered (the target plus earlier aired ones); 0 when nothing was written.</param>
 /// <param name="HasAired">False when the target episode's air date is still in the future.</param>
-public sealed record MarkWatchedThroughResult(bool EpisodeFound, int MarkedCount, bool HasAired = true);
+/// <param name="Batch">What was actually inserted, for an undo; null when nothing was written.</param>
+public sealed record MarkWatchedThroughResult(
+    bool EpisodeFound,
+    int MarkedCount,
+    bool HasAired = true,
+    WatchedBatch? Batch = null);
+
+/// <param name="SeasonFound">False when the series has no episodes in that season.</param>
+/// <param name="Batch">What was actually inserted; <see cref="WatchedBatch.InsertedCount"/> is 0 when the season was already fully marked.</param>
+public sealed record SeasonWatchResult(bool SeasonFound, WatchedBatch Batch);
 
 public enum EpisodeWatchOutcome
 {

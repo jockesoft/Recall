@@ -149,7 +149,7 @@ public sealed class EpisodeWatchRepository(
             .ToListAsync(cancellationToken);
     }
 
-    public async Task MarkWatchedRangeAsync(
+    public async Task<WatchedBatch> MarkWatchedRangeAsync(
         Guid userId,
         int seriesTvdbId,
         IEnumerable<int> episodeTvdbIds,
@@ -157,7 +157,7 @@ public sealed class EpisodeWatchRepository(
     {
         var ids = episodeTvdbIds as ICollection<int> ?? episodeTvdbIds.ToList();
         if (ids.Count == 0)
-            return;
+            return WatchedBatch.Empty;
 
         var alreadyWatched = await dbContext.EpisodeWatches
             .Where(x => x.UserId == userId && ids.Contains(x.EpisodeTvdbId))
@@ -166,21 +166,58 @@ public sealed class EpisodeWatchRepository(
 
         var alreadyWatchedSet = alreadyWatched.ToHashSet();
 
+        // One timestamp for the whole batch, truncated to the millisecond: the
+        // undo finds these rows again by comparing WatchedUtc for equality, and
+        // Postgres keeps microseconds where .NET keeps 100 ns ticks — an
+        // untruncated value would not survive the round trip unchanged.
+        var now = DateTime.UtcNow;
+        var batchWatchedUtc = new DateTime(now.Ticks - now.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
+
         var toInsert = ids
+            .Distinct()
             .Where(id => !alreadyWatchedSet.Contains(id))
             .Select(id => new EpisodeWatchEntity
             {
                 UserId = userId,
                 SeriesTvdbId = seriesTvdbId,
                 EpisodeTvdbId = id,
-                WatchedUtc = DateTime.UtcNow
+                WatchedUtc = batchWatchedUtc
             })
             .ToList();
 
         if (toInsert.Count == 0)
-            return;
+            return WatchedBatch.Empty;
 
         await dbContext.EpisodeWatches.AddRangeAsync(toInsert, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new WatchedBatch(toInsert.Count, batchWatchedUtc);
+    }
+
+    public Task<int> UndoWatchedBatchAsync(
+        Guid userId,
+        int seriesTvdbId,
+        DateTime batchWatchedUtc,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.EpisodeWatches
+            .Where(x => x.UserId == userId
+                        && x.SeriesTvdbId == seriesTvdbId
+                        && x.WatchedUtc == batchWatchedUtc)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    public async Task<int> MarkUnwatchedRangeAsync(
+        Guid userId,
+        IEnumerable<int> episodeTvdbIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = episodeTvdbIds as ICollection<int> ?? episodeTvdbIds.ToList();
+        if (ids.Count == 0)
+            return 0;
+
+        return await dbContext.EpisodeWatches
+            .Where(x => x.UserId == userId && ids.Contains(x.EpisodeTvdbId))
+            .ExecuteDeleteAsync(cancellationToken);
     }
 }

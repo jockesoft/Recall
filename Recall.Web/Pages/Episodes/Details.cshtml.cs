@@ -308,9 +308,12 @@ public sealed class DetailsModel(
             }
             else
             {
-                this.SetSuccessToast(result.MarkedCount > 1
-                    ? $"Marked {result.MarkedCount} episodes as watched."
-                    : "Episode marked as watched.");
+                this.SetSuccessToastWithWatchedUndo(
+                    result.MarkedCount > 1
+                        ? $"Marked {result.MarkedCount} episodes as watched."
+                        : "Episode marked as watched.",
+                    seriesId,
+                    result.Batch);
             }
         }
         catch (Exception ex)

@@ -57,11 +57,38 @@ public interface IEpisodeWatchRepository
 
     /// <summary>
     /// Marks multiple episodes watched in one round trip, skipping any that
-    /// are already marked. Used by "mark this and every earlier episode."
+    /// are already marked. Used by "mark this and every earlier episode" and
+    /// "mark season watched". Every row it inserts carries the same
+    /// <c>WatchedUtc</c>, returned in the batch so the caller can offer an undo.
     /// </summary>
-    Task MarkWatchedRangeAsync(
+    Task<WatchedBatch> MarkWatchedRangeAsync(
         Guid userId,
         int seriesTvdbId,
         IEnumerable<int> episodeTvdbIds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes exactly the rows one <see cref="MarkWatchedRangeAsync"/> call
+    /// inserted — the user's watches in that series stamped with the batch's
+    /// <c>WatchedUtc</c> — and nothing the user had marked before or since.
+    /// Returns how many were removed.
+    /// </summary>
+    Task<int> UndoWatchedBatchAsync(
+        Guid userId,
+        int seriesTvdbId,
+        DateTime batchWatchedUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Removes the user's watches for the given episodes. Returns how many were removed.</summary>
+    Task<int> MarkUnwatchedRangeAsync(
+        Guid userId,
+        IEnumerable<int> episodeTvdbIds,
+        CancellationToken cancellationToken = default);
+}
+
+/// <param name="InsertedCount">Rows actually written (already-watched episodes are skipped).</param>
+/// <param name="WatchedUtc">The timestamp shared by every inserted row; identifies the batch for an undo.</param>
+public sealed record WatchedBatch(int InsertedCount, DateTime WatchedUtc)
+{
+    public static WatchedBatch Empty { get; } = new(0, DateTime.MinValue);
 }

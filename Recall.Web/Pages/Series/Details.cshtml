@@ -388,7 +388,38 @@
                 }
             </div>
 
-            <h5 class="mb-3 tvdb-eyebrow">Episodes &middot; @Model.GetSeasonName(selectedSeason)</h5>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <h5 class="mb-0 tvdb-eyebrow">Episodes &middot; @Model.GetSeasonName(selectedSeason)</h5>
+
+                @if (Model.IsAuthenticated && filteredEpisodes.Count > 0)
+                {
+                    var seasonHasMarkable = filteredEpisodes.Any(e =>
+                        !Model.WatchedEpisodeIds.Contains(e.Id) && !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(e.Aired));
+                    var seasonWatchedCount = filteredEpisodes.Count(e => Model.WatchedEpisodeIds.Contains(e.Id));
+
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (seasonHasMarkable)
+                        {
+                            <form method="post" asp-page-handler="MarkSeasonWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline">
+                                <input type="hidden" name="Season" value="@selectedSeason" />
+                                <button type="submit" class="btn btn-outline-dark btn-sm rounded-pill px-3">
+                                    Mark season watched
+                                </button>
+                            </form>
+                        }
+                        @if (seasonWatchedCount > 0)
+                        {
+                            <form method="post" asp-page-handler="MarkSeasonUnwatched" asp-route-id="@Model.Series.TvdbId" class="d-inline"
+                                  onsubmit="return confirm('Mark @seasonWatchedCount watched episode@(seasonWatchedCount == 1 ? "" : "s") in this season as not watched? The watched dates will be lost.');">
+                                <input type="hidden" name="Season" value="@selectedSeason" />
+                                <button type="submit" class="btn btn-outline-dark btn-sm rounded-pill px-3">
+                                    Mark season unwatched
+                                </button>
+                            </form>
+                        }
+                    </div>
+                }
+            </div>
 
             @if (filteredEpisodes.Count == 0)
             {
@@ -400,7 +431,7 @@
                     @foreach (var ep in filteredEpisodes)
                     {
                         var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
-                        var hasAired = ep.Aired is { } airedOn && airedOn <= Recall.Web.Services.WatchTracking.AirDate.Today;
+                        var hasAired = !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(ep.Aired);
                         <div class="list-group-item @(isWatched ? "is-watched" : "")">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>

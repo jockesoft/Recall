@@ -112,6 +112,36 @@ public sealed class WatchProgressServicePersistenceTests
         (await StoredWatchesAsync()).Should().BeEquivalentTo([(SeriesId, 1), (SeriesId, 2), (SeriesId, 3)]);
     }
 
+    [Test]
+    public async Task UndoWatchedBatchAsync_Should_PutASeasonBackExactlyAsItWas()
+    {
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var sut = CreateSut(dbContext);
+        await sut.MarkEpisodeWatchedAsync(_userId, SeriesId, 2);
+
+        var season = await sut.MarkSeasonWatchedAsync(_userId, SeriesId, seasonNumber: 1);
+        season.Batch.InsertedCount.Should().Be(2);
+        (await StoredWatchesAsync()).Should().BeEquivalentTo([(SeriesId, 1), (SeriesId, 2), (SeriesId, 3)]);
+
+        var removed = await sut.UndoWatchedBatchAsync(_userId, SeriesId, season.Batch.WatchedUtc);
+
+        removed.Should().Be(2);
+        (await StoredWatchesAsync()).Should().BeEquivalentTo([(SeriesId, 2)], "the episode watched before the bulk mark stays watched");
+    }
+
+    [Test]
+    public async Task MarkSeasonUnwatchedAsync_Should_ClearTheSeason()
+    {
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var sut = CreateSut(dbContext);
+        await sut.MarkSeasonWatchedAsync(_userId, SeriesId, seasonNumber: 1);
+
+        var removed = await sut.MarkSeasonUnwatchedAsync(_userId, SeriesId, seasonNumber: 1);
+
+        removed.Should().Be(3);
+        (await StoredWatchesAsync()).Should().BeEmpty();
+    }
+
     private WatchProgressService CreateSut(AppDbContext dbContext) =>
         new(
             _tvDbService.Object,

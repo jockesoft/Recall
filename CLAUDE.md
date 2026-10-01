@@ -90,7 +90,7 @@ Razor Pages only. No MVC controllers, Blazor or minimal APIs. Two handlers retur
 - **Partials** (`Pages/Shared/`): `_SeriesCard`, `_CatchUpCard`, `_UpcomingEpisodeCard`, `_FavoriteEpisodeRow`, `_EpisodeWatchedToggle`, `_LikeToggle`, `_RatingWidget`, `_TypeFilterBar`, `_NotificationBell` (injects `INotificationService` and runs an unread `COUNT` on every signed-in page render), `_ToastMessages`. Each takes a small model class from the same folder.
 - **Forms**: plain `<form method="post" asp-page-handler="…">`, then redirect (PRG). Antiforgery is the Razor Pages default; inline `fetch` calls copy `__RequestVerificationToken` from the page.
 - **Validation**: data annotations on `[BindProperty]` properties (`Login`, `Search`, `EditProfile`) with jQuery unobtrusive validation on the client. Most action handlers take route/form primitives and validate by hand (`if (value is < 1 or > 10)`).
-- **Feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)` write TempData keys that `_ToastMessages` renders.
+- **Feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)` write TempData keys that `_ToastMessages` renders. `SetSuccessToastWithWatchedUndo(message, seriesId, batch)` adds an Undo button to the toast: a POST form to `Series/Details?handler=UndoWatched`, shown when the bulk mark inserted more than one row.
 
 ## 5. Domain model
 
@@ -122,6 +122,8 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 **Progress** is computed by `Services/WatchTracking/WatchProgressCalculator.Build`: order episodes with `OrderBySeasonAndEpisode` (unknown numbers last, tie-break by id), keep those aired on or before today, and the next episode to watch is the first of those without an `EpisodeWatch` row. Episodes flagged `IsMovie` are excluded. The episode list always comes from the series aggregate.
 
 **Watch writes go through `IWatchProgressService`**, never straight to `IEpisodeWatchRepository`: `MarkEpisodeWatchedAsync` / `ToggleEpisodeWatchedAsync` first verify the episode belongs to the submitted series (the aggregate, falling back to the episode's own record) and reject a future air date. `MarkWatchedThroughAsync` marks the target and every earlier episode, skipping any with a future air date.
+
+**Bulk marks and undo.** `MarkSeasonWatchedAsync` / `MarkSeasonUnwatchedAsync` act on one season of the aggregate. Every row a bulk mark inserts (`EpisodeWatchRepository.MarkWatchedRangeAsync`) shares one `WatchedUtc`, truncated to the millisecond and returned as a `WatchedBatch`; `UndoWatchedBatchAsync` deletes exactly the user's rows in that series with that timestamp. Keep the truncation: Postgres stores microseconds, so an untruncated .NET timestamp would not compare equal after a round trip (SQLite tests cannot show this; it was verified by hand against Postgres).
 
 Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rated, and nothing else.
 
@@ -225,7 +227,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 242 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 255 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite.
@@ -337,5 +339,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (242 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (255 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

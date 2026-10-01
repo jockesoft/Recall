@@ -2,13 +2,29 @@
     var success = TempData["Toast.Success"] as string;
     var error = TempData["Toast.Error"] as string;
     var info = TempData["Toast.Info"] as string;
+
+    // Set by SetSuccessToastWithWatchedUndo after a bulk "mark watched".
+    var undoSeriesId = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedSeriesKey] as string;
+    var undoStamp = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedStampKey] as string;
+    var offerUndo = !string.IsNullOrWhiteSpace(success)
+                    && int.TryParse(undoSeriesId, out _)
+                    && long.TryParse(undoStamp, out _);
 }
 
 <div class="tvdb-toast-stack">
     @if (!string.IsNullOrWhiteSpace(success))
     {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @* A toast offering an undo stays until dismissed (data-toast-persist skips the auto-close below). *@
+        <div class="alert alert-success alert-dismissible fade show" role="alert" data-toast-persist="@(offerUndo ? "true" : null)">
             @success
+            @if (offerUndo)
+            {
+                <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undoSeriesId" class="d-inline ms-2">
+                    <input type="hidden" name="stamp" value="@undoStamp" />
+                    <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                    <button type="submit" class="btn btn-sm btn-outline-dark">Undo</button>
+                </form>
+            }
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
@@ -40,6 +56,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             var toasts = document.querySelectorAll('.tvdb-toast-stack .alert');
             toasts.forEach(function (toastEl) {
+                if (toastEl.hasAttribute('data-toast-persist')) return;
                 setTimeout(function () {
                     if (typeof bootstrap === 'undefined') return;
                     var alert = bootstrap.Alert.getOrCreateInstance(toastEl);
