@@ -271,7 +271,9 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 
 **CI/CD** (`.github/workflows/dotnet.yml`): on push and pull request to `main`, restore, Release build, test with coverage (summary only; coverage does not gate). On push, build `Dockerfile.prod`, push `ghcr.io/<user>/recall:latest` and `:<run number>`, then SSH to the server, run `dump_db.sh` and `docker compose -f compose.prod.yml up -d --pull always`. There is no lint or format step. `nightly-build.yml` builds and tests daily at 05:00 UTC.
 
-**Hosting**: a single Docker host. `compose.prod.yml` runs the app (port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (host port 5433) and `redis:7`. Both published ports are bound to `127.0.0.1`, so the reverse proxy on the host is the only way in. CI does not copy `compose.prod.yml` to the server; the copy in `recall-deploy/` there is maintained by hand. `Dockerfile.prod` expects `build.txt` in the build context, which only CI writes.
+**Hosting**: a single Docker host, single app instance (a permanent assumption). `compose.prod.yml` runs the app (port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (host port 5433) and `redis:7`. Both published ports are bound to `127.0.0.1`. CI does not copy `compose.prod.yml` to the server; the copy in `recall-deploy/` there is maintained by hand.
+
+**Reverse proxy**: nginx is installed directly on the host (apt, systemd), terminates TLS and proxies to `127.0.0.1:8701`. It must send `Host`, `X-Forwarded-For` (`$proxy_add_x_forwarded_for`) and `X-Forwarded-Proto`; the app builds sign-in links from the scheme and host and keys its rate limiters on the client IP. Requests reach the container from the compose network's gateway, a private address, so the `TrustedProxies` default (loopback + private ranges) works unconfigured. `README.md` shows the nginx block and how to narrow `TrustedProxies__Networks__0` to the compose subnet.
 
 `Recall.Web/Dockerfile` and `compose.yaml` are IDE-generated and not used by CI.
 
@@ -300,7 +302,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 Described only, ranked by impact. Nothing here has been changed.
 
 1. **Anonymous pages can spend upstream quota.** `Series/Details`, `Episodes/Details` and `Movies/Details` are public, indexable and have no rate limit. A request for an uncached id calls TheTVDB and writes Redis and Postgres rows; an episode page can also make a live OMDb call. `/sitemap.xml` lists every cached episode, so crawlers are invited to each one, and the sitemap has no size cap (the protocol limit is 50,000 URLs). The shared OMDb budget caps the damage at 900 calls a day but lets anonymous traffic starve the hourly enrichment jobs.
-2. **Forwarded headers: fixed, with a residual default.** Headers are now applied only from trusted proxies and the compose ports are loopback-only. What remains: the default trusts all private ranges, so any other machine or container on a private network that can reach the app could still forge `X-Forwarded-For`; set `TrustedProxies__Networks__0` to the proxy's exact network to close that. The loopback binding only takes effect once the server's own copy of `compose.prod.yml` is updated.
+2. **Forwarded headers: fixed, with a residual default.** Headers are applied only from trusted proxies and the compose ports are loopback-only. The default trusts all private ranges, which matches production (nginx on the host, reaching the container through the compose network's gateway). It could be narrowed to the compose subnet with `TrustedProxies__Networks__0`, at the cost of breaking if Docker reassigns the subnet; see `README.md`.
 3. **Sessions that could not be revoked: fixed, within 5 minutes.** Deleting or demoting a user takes effect at the next revalidation. There is still no "sign out everywhere" for a user who keeps their account, and no admin UI to do either; both remain manual database edits.
 4. **No HTTP resilience: fixed.** Both metadata clients retry transient failures; see section 7. Not added: a circuit breaker, so a long TheTVDB outage still costs every request its retries.
 5. **Cached aggregates never refreshing: fixed.** Rows without `KeepUpdated = true` are now refreshed every 30 days. Remaining: `cached_series_extended` still has no refresh path, but nothing reads it any more (`ITheTvDbService.GetSeriesByIdExtendedAsync` has no caller outside tests), so the table and method are candidates for removal. The refresh cap (10 series and 10 movies an hour) bounds how fast a large, crawler-filled cache cycles.
@@ -320,18 +322,22 @@ Described only, ranked by impact. Nothing here has been changed.
 
 ## Open questions
 
-1. What sits in front of the app in production (reverse proxy, TLS termination), and is port 8701 reachable from outside it?
-2. Is registration open in production, or is `Login:AllowedEmails` still populated?
-3. Which TheTVDB and OMDb plans are in use, and what are their real rate limits?
-4. Are the public Details pages and the full-episode sitemap intended to drive search traffic, and is the resulting upstream API load acceptable?
-5. Are movies meant to become first-class library items (a "want to watch" state), or stay as watched/liked/rated only?
-6. Should "aired" be judged in UTC, server time or the user's time zone?
-7. Is a single app instance a permanent assumption?
-8. Is there a data-retention or account-deletion requirement? The code has no account deletion and prunes nothing, and the Privacy page does not mention either.
-9. `dump_db.sh` and the server-side `.env.prod` are not in the repository. Where are backups stored and tested?
-10. Are the unused packages, the controller route and session registration reserved for planned work (an API, Swagger), or leftovers?
-11. Should `AGENTS.md`, `Recall.Web/Dockerfile` and `compose.yaml` be kept?
-12. The project memory notes that Recall mirrors account features from the sibling Receptus repository. Which Receptus features are still to be ported?
+Answered (2026-10-01), recorded here because the code alone does not show them:
+
+- **Proxy**: nginx on the host in front of the container; see section 12.
+- **Registration** is open to anyone in production (`Login:AllowedEmails` empty), so Turnstile and the in-memory abuse caps carry the load.
+- **Public Details pages and the sitemap are meant to drive search traffic.** Keep them indexable; protect upstream quota some other way than requiring sign-in.
+- **Movies are first-class**: a watchlist ("want to watch") is wanted, not only watched/liked/rated.
+- **"Aired" is judged in UTC.** **A single app instance** is a permanent assumption.
+
+Still open:
+
+1. Which TheTVDB and OMDb plans are in use, and what are their real rate limits?
+2. Is there a data-retention or account-deletion requirement? The code has no account deletion and prunes nothing, and the Privacy page does not mention either.
+3. `dump_db.sh` and the server-side `.env.prod` are not in the repository. Where are backups stored and tested?
+4. Are the unused packages, the controller route and session registration reserved for planned work (an API, Swagger), or leftovers?
+5. Should `AGENTS.md`, `Recall.Web/Dockerfile` and `compose.yaml` be kept?
+6. The project memory notes that Recall mirrors account features from the sibling Receptus repository. Which Receptus features are still to be ported?
 
 ## Quick facts
 
