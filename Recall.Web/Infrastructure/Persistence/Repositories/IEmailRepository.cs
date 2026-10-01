@@ -22,6 +22,11 @@ public interface IEmailRepository
     /// </summary>
     Task MarkSentAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Records a failed delivery attempt (increments <c>send_attempts</c>).</summary>
-    Task RecordFailedAttemptAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Records a failed delivery attempt (increments <c>send_attempts</c>). When
+    /// that brings the count to <paramref name="maxAttempts"/> the message is
+    /// abandoned — <see cref="GetPendingAsync"/> will never return it again —
+    /// so its text and HTML bodies are erased in the same statement.
+    /// </summary>
+    Task RecordFailedAttemptAsync(Guid id, int maxAttempts, CancellationToken cancellationToken = default);
 }

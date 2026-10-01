@@ -150,7 +150,7 @@ public sealed class MailServiceTests
         await _sut.SendPendingEmailsAsync();
 
         _repository.Verify(x => x.MarkSentAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-        _repository.Verify(x => x.RecordFailedAttemptAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _repository.Verify(x => x.RecordFailedAttemptAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -183,7 +183,7 @@ public sealed class MailServiceTests
 
         foreach (var email in pending)
             _repository.Verify(x => x.MarkSentAsync(email.Id, It.IsAny<CancellationToken>()), Times.Once);
-        _repository.Verify(x => x.RecordFailedAttemptAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _repository.Verify(x => x.RecordFailedAttemptAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
 
         Directory.GetFiles(_pickupDirectory, "*.eml").Should().HaveCount(2);
     }
@@ -219,7 +219,7 @@ public sealed class MailServiceTests
 
         _repository.Verify(x => x.MarkSentAsync(good.Id, It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.MarkSentAsync(bad.Id, It.IsAny<CancellationToken>()), Times.Never);
-        _repository.Verify(x => x.RecordFailedAttemptAsync(bad.Id, It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(x => x.RecordFailedAttemptAsync(bad.Id, _options.MaxSendAttempts, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static OutboundEmail Pending(string to, string subject, string? htmlBody = null) => new()

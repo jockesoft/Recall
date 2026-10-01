@@ -85,7 +85,7 @@ public sealed class EmailRepositoryTests
     }
 
     [Test]
-    public async Task RecordFailedAttemptAsync_Should_KeepTheBodies_ForTheRetry()
+    public async Task RecordFailedAttemptAsync_Should_KeepTheBodies_WhileRetriesRemain()
     {
         var id = Guid.NewGuid();
 
@@ -93,11 +93,44 @@ public sealed class EmailRepositoryTests
         var sut = new EmailRepository(dbContext);
         await sut.AddAsync(SignInEmail(id));
 
-        await sut.RecordFailedAttemptAsync(id);
+        await sut.RecordFailedAttemptAsync(id, maxAttempts: 3);
+        await sut.RecordFailedAttemptAsync(id, maxAttempts: 3);
 
-        var pending = await sut.GetPendingAsync(maxCount: 10, maxAttempts: 5);
+        var pending = await sut.GetPendingAsync(maxCount: 10, maxAttempts: 3);
         pending.Should().ContainSingle();
-        pending[0].SendAttempts.Should().Be(1);
+        pending[0].SendAttempts.Should().Be(2);
         pending[0].Body.Should().Contain("raw-secret-token");
+        pending[0].HtmlBody.Should().Contain("raw-secret-token");
+    }
+
+    [Test]
+    public async Task RecordFailedAttemptAsync_Should_EraseBothBodies_OnTheAttemptThatGivesUp()
+    {
+        var abandonedId = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+
+        await using (var dbContext = new AppDbContext(_dbOptions))
+        {
+            var sut = new EmailRepository(dbContext);
+            await sut.AddAsync(SignInEmail(abandonedId));
+            await sut.AddAsync(SignInEmail(otherId));
+
+            for (var attempt = 0; attempt < 3; attempt++)
+                await sut.RecordFailedAttemptAsync(abandonedId, maxAttempts: 3);
+
+            (await sut.GetPendingAsync(maxCount: 10, maxAttempts: 3))
+                .Select(x => x.Id).Should().Equal(otherId);
+        }
+
+        await using var read = new AppDbContext(_dbOptions);
+        var abandoned = await read.Emails.AsNoTracking().SingleAsync(x => x.Id == abandonedId);
+        var other = await read.Emails.AsNoTracking().SingleAsync(x => x.Id == otherId);
+
+        abandoned.SendAttempts.Should().Be(3);
+        abandoned.SentUtc.Should().BeNull();
+        abandoned.Body.Should().BeEmpty();
+        abandoned.HtmlBody.Should().BeNull();
+        abandoned.ToAddress.Should().Be("alice@test.local");
+        other.Body.Should().Contain("raw-secret-token", "only the message that gave up is erased");
     }
 }

@@ -104,7 +104,7 @@ public sealed class MailService(
             {
                 // One bad message shouldn't abort the batch — bump its attempt
                 // count and move on; it'll be retried next run.
-                await emailRepository.RecordFailedAttemptAsync(email.Id, CancellationToken.None);
+                await emailRepository.RecordFailedAttemptAsync(email.Id, _options.MaxSendAttempts, CancellationToken.None);
                 logger.LogWarning(
                     ex,
                     "MailService: failed to send email {EmailId} to {To} (attempt {Attempt}/{Max}).",
