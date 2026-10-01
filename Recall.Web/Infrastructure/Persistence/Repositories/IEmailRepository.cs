@@ -16,7 +16,10 @@ public interface IEmailRepository
         int maxAttempts,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Marks a message delivered (sets <c>sent_utc</c>).</summary>
+    /// <summary>
+    /// Marks a message delivered (sets <c>sent_utc</c>) and erases its text and
+    /// HTML bodies. The row stays as a record of what was sent to whom and when.
+    /// </summary>
     Task MarkSentAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Records a failed delivery attempt (increments <c>send_attempts</c>).</summary>

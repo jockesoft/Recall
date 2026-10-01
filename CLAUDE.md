@@ -24,7 +24,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 | `Mappings/` | Static extension methods for DTO ↔ domain ↔ entity (no AutoMapper) |
 | `Extensions/` | DI registration extension methods, toast helpers |
 | `Middleware/` | `DevAuthMiddleware` only |
-| `Migrations/` | 22 EF Core migrations plus the model snapshot |
+| `Migrations/` | 23 EF Core migrations plus the model snapshot |
 
 ## 2. Stack and versions
 
@@ -107,7 +107,7 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 | `NotificationEntity` (`notification`) | In-app notification (only type: `NewEpisode`) | — |
 | `NotifiedEpisodeEntity` (`notified_episode`) | Ledger making new-episode notifications idempotent | (user, episode) |
 | `LoginTokenEntity` (`login_token`) | SHA-256 hash of a magic-link token, expiry, consumed time | token hash |
-| `EmailEntity` (`email`) | Outbound mail queue | — |
+| `EmailEntity` (`email`) | Outbound mail queue. `MarkSentAsync` erases `body` and `html_body` on delivery, so a sent row keeps only recipient, subject and timestamps | — |
 | `WatchlistImportJobEntity` / `WatchlistImportItemEntity` | IMDb CSV import job and its rows | — |
 | `Cached*Entity` (7 tables) | Postgres tier of the metadata caches; `jsonb` payload. Not user data, safe to rebuild | tvdb id (+ language for aggregates) |
 
@@ -139,6 +139,7 @@ Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rate
 - **Repositories** (`Persistence/Repositories/`): interface + sealed implementation, return domain models or small records, reads use `AsNoTracking`. Exception: `IAppUserRepository` returns `AppUserEntity`. `Pages/Admin/Index` injects `AppDbContext` directly.
 - **Concurrency idiom**: check, insert, then catch `DbUpdateException` whose inner `PostgresException` is `UniqueViolation` and treat it as success. Atomic state changes use `ExecuteUpdateAsync` (`LoginTokenRepository.MarkConsumedAsync`).
 - **Migrations**: generate with the CLI; never hand-write (the `Designer.cs` and snapshot must match). They run automatically at startup. There is no design-time factory (`AppDbContextFactory` is commented out), so `dotnet ef` builds the host through `Program.cs`.
+- **Data-only migrations**: still generate the (empty) migration with the CLI, then add `migrationBuilder.Sql(...)` to `Up`; see `ClearSentEmailBodies`. On macOS the EF tool leaves a stray `Recall.Web/bin\Debug/` folder (literal backslash) that `.gitignore` does not match; delete it.
 - **Seeding**: none. In local dev the hardcoded dev user row must be inserted by hand (see section 12).
 
 **Query patterns worth knowing before optimizing**
@@ -229,7 +230,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 277 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 280 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
@@ -309,7 +310,7 @@ Described only, ranked by impact. Nothing here has been changed.
 10. **Dead or unused code and dependencies.** Four unused packages (section 2); `AddControllers` and `MapControllerRoute` with no controllers; `AddSession`/`UseSession` with no session use; `IConnectionMultiplexer` registered "for locking" but never injected; `AppDbContextFactory` fully commented out; `UserItem` and `UserMappings` unreferenced; empty `site.js` and an empty `<script type="importmap">`; stale csproj items (`_LoginPartial.cshtml`, `Services\Models\`).
 11. **Convention drift.** `IAppUserRepository` returns entities; `Admin/Index` queries `AppDbContext` directly; control flow by exception message (`ex.Message.Contains("already in your library")`); `OmdbSeries` is also the type for movies and episodes; `EpisodeOmdbSnapshotStore` uses the scoped context while its two siblings use the factory.
 12. **State-changing GETs.** `/Account/Logout` signs out on GET; `Notifications?handler=Open` marks a notification read on GET.
-13. **Unbounded tables.** `login_token`, `email` (including sent magic-link bodies), `notified_episode`, `notification` and import items are never pruned.
+13. **Unbounded tables.** `login_token`, `email`, `notified_episode`, `notification` and import items are never pruned. Sent emails no longer keep their bodies (so no magic-link text is retained), but the rows remain, and a message that exhausted its send attempts keeps its body indefinitely.
 14. **Duplication.** `ApplyAuditTimestamps` repeats the same block nine times; the three OMDb snapshot stores and two OMDb jobs are near copies; the "is authenticated" guard is repeated in every Details POST handler.
 15. **Local time for air dates: fixed.** All air-date checks use the UTC date via `AirDate`. There is still no notion of the user's time zone, and the Dashboard header prints the server-local date.
 16. **Deployment details.** The image sets a Swedish locale (`sv_SE.UTF-8`), so culture-sensitive date formatting such as the Dashboard's `ToString("dddd, MMMM d")` renders in Swedish on an English site **(inference)**; the log directory is `chmod 777`; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
@@ -341,5 +342,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (277 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (280 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

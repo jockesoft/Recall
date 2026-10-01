@@ -34,6 +34,11 @@ public sealed class EmailRepository(AppDbContext dbContext) : IEmailRepository
             .ExecuteUpdateAsync(
                 s => s
                     .SetProperty(x => x.SentUtc, DateTime.UtcNow)
+                    // The content has done its job once delivered. For a sign-in
+                    // email it holds the raw magic-link token, which must not sit
+                    // readable in the table (or in its backups) afterwards.
+                    .SetProperty(x => x.Body, string.Empty)
+                    .SetProperty(x => x.HtmlBody, (string?)null)
                     .SetProperty(x => x.UpdatedUtc, DateTime.UtcNow),
                 cancellationToken);
     }
