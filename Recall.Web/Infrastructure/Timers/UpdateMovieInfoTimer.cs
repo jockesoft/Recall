@@ -6,8 +6,9 @@ namespace Recall.Web.Infrastructure.Timers;
 
 /// <summary>
 /// Keeps the local TheTVDB movie snapshots fresh. Each run refreshes up to
-/// <see cref="MaxMoviesPerRun"/> <c>cached_movie_aggregate</c> rows that carry
-/// TheTVDB's <c>keep_updated</c> flag and are older than <see cref="MinRefreshAge"/>.
+/// <see cref="MaxMoviesPerRun"/> <c>cached_movie_aggregate</c> rows: those carrying
+/// TheTVDB's <c>keep_updated</c> flag once older than <see cref="MinRefreshAge"/>,
+/// and every other row once older than <see cref="SettledMaxAge"/>.
 /// Mirrors the series-aggregate half of <see cref="UpdateTvDbInfoTimer"/> — movies
 /// have no seasons/episodes, so there's no equivalent episode-refresh pass.
 /// </summary>
@@ -18,18 +19,20 @@ public class UpdateMovieInfoTimer(
     ILogger<UpdateMovieInfoTimer> logger) : IJob
 {
     private static readonly TimeSpan MinRefreshAge = TimeSpan.FromHours(12);
+    private static readonly TimeSpan SettledMaxAge = TimeSpan.FromDays(30);
     private const int MaxMoviesPerRun = 10;
 
     public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var staleBeforeUtc = DateTime.UtcNow - MinRefreshAge;
+        var now = DateTime.UtcNow;
+        var staleBeforeUtc = now - MinRefreshAge;
 
         var candidates = await snapshotStore.GetMovieAggregatesNeedingRefreshAsync(
-            staleBeforeUtc, MaxMoviesPerRun, cancellationToken);
+            staleBeforeUtc, now - SettledMaxAge, MaxMoviesPerRun, cancellationToken);
 
         if (candidates.Count == 0)
         {
-            logger.LogInformation("UpdateMovieInfoTimer: no keep-updated movies are due for a refresh.");
+            logger.LogInformation("UpdateMovieInfoTimer: no movies are due for a refresh.");
             return;
         }
 

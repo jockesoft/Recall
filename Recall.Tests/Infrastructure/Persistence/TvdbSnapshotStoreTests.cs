@@ -191,9 +191,114 @@ public sealed class TvdbSnapshotStoreTests
         }
 
         var due = await NewStore().GetMovieAggregatesNeedingRefreshAsync(
-            staleBeforeUtc: now.AddHours(-12), limit: 10);
+            staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 10);
 
         due.Should().ContainSingle().Which.TvdbId.Should().Be(1);
+    }
+
+    [Test]
+    public async Task GetMovieAggregatesNeedingRefresh_AlsoPicksUnflaggedRows_OnceOlderThanTheSettledAge()
+    {
+        var now = DateTime.UtcNow;
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedMovieAggregates.AddRange(
+                new CachedMovieAggregateEntity { TvdbId = 1, Language = "eng", Name = "Released long ago, never refreshed", Payload = "{}", KeepUpdated = false, RetrievedUtc = now.AddDays(-31) },
+                new CachedMovieAggregateEntity { TvdbId = 2, Language = "eng", Name = "Flag unknown, never refreshed", Payload = "{}", KeepUpdated = null, RetrievedUtc = now.AddDays(-45) },
+                new CachedMovieAggregateEntity { TvdbId = 3, Language = "eng", Name = "Released, refreshed last week", Payload = "{}", KeepUpdated = false, RetrievedUtc = now.AddDays(-7) });
+            await seed.SaveChangesAsync();
+        }
+
+        var due = await NewStore().GetMovieAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 10);
+
+        due.Select(x => x.TvdbId).Should().Equal(2, 1);
+    }
+
+    [Test]
+    public async Task GetMovieAggregatesNeedingRefresh_PutsMoviesAUserHasWatchlistedWatchedOrLikedFirst()
+    {
+        var now = DateTime.UtcNow;
+        var userId = Guid.NewGuid();
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.AppUsers.Add(new AppUserEntity { Id = userId, Username = "u", Email = "u@test.local" });
+            seed.CachedMovieAggregates.AddRange(
+                new CachedMovieAggregateEntity { TvdbId = 1, Language = "eng", Name = "Oldest, nobody's", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-9) },
+                new CachedMovieAggregateEntity { TvdbId = 2, Language = "eng", Name = "Watched", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-2) },
+                new CachedMovieAggregateEntity { TvdbId = 3, Language = "eng", Name = "Liked", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-3) },
+                new CachedMovieAggregateEntity { TvdbId = 4, Language = "eng", Name = "On a watchlist", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-1) });
+            seed.TrackedMovies.Add(new TrackedMovieEntity { Id = Guid.NewGuid(), UserId = userId, TvdbId = 4, Name = "On a watchlist" });
+            seed.UserMovieWatches.Add(new UserMovieWatchEntity { Id = Guid.NewGuid(), UserId = userId, MovieTvdbId = 2, WatchedUtc = now });
+            seed.UserLikes.Add(new UserLikeEntity { Id = Guid.NewGuid(), UserId = userId, TargetType = LikeTargetType.Movie, TargetTvdbId = 3, SeriesTvdbId = 3 });
+            // A like on a *series* that happens to share id 1 must not promote movie 1.
+            seed.UserLikes.Add(new UserLikeEntity { Id = Guid.NewGuid(), UserId = userId, TargetType = LikeTargetType.Series, TargetTvdbId = 1, SeriesTvdbId = 1 });
+            await seed.SaveChangesAsync();
+        }
+
+        var due = await NewStore().GetMovieAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 10);
+
+        due.Select(x => x.TvdbId).Should().Equal(3, 2, 4, 1);
+    }
+
+    [Test]
+    public async Task GetAggregatesNeedingRefresh_PicksBothTiers_ButNotRowsStillFreshForTheirTier()
+    {
+        var now = DateTime.UtcNow;
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedSeriesAggregates.AddRange(
+                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Continuing, stale", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddHours(-13) },
+                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "Continuing, fresh", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddHours(-1) },
+                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "Ended, cached two weeks ago", Payload = "{}", KeepUpdated = false, RetrievedUtc = now.AddDays(-14) },
+                new CachedSeriesAggregateEntity { TvdbId = 4, Language = "eng", Name = "Ended, never refreshed", Payload = "{}", KeepUpdated = false, RetrievedUtc = now.AddDays(-40) },
+                new CachedSeriesAggregateEntity { TvdbId = 5, Language = "eng", Name = "Flag unknown, never refreshed", Payload = "{}", KeepUpdated = null, RetrievedUtc = now.AddDays(-60) });
+            await seed.SaveChangesAsync();
+        }
+
+        var due = await NewStore().GetAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 10);
+
+        due.Select(x => x.TvdbId).Should().Equal(5, 4, 1);
+    }
+
+    [Test]
+    public async Task GetAggregatesNeedingRefresh_PutsTrackedSeriesFirst_ThenOldest_WithinTheCap()
+    {
+        var now = DateTime.UtcNow;
+        var userId = Guid.NewGuid();
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.AppUsers.Add(new AppUserEntity { Id = userId, Username = "u", Email = "u@test.local" });
+            seed.CachedSeriesAggregates.AddRange(
+                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Untracked, oldest", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-9) },
+                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "Untracked", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-8) },
+                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "Tracked, newer", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-1) },
+                new CachedSeriesAggregateEntity { TvdbId = 4, Language = "eng", Name = "Tracked, older", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-2) });
+            await seed.SaveChangesAsync();
+
+            // Raw SQL: tracked_series.xmin is a Postgres system column that EF
+            // never writes, but on SQLite it is an ordinary NOT NULL column, so
+            // an EF insert of TrackedSeriesEntity fails here.
+            foreach (var tvdbId in new[] { 3, 4 })
+            {
+                await seed.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                     INSERT INTO tracked_series (id, user_id, tvdb_id, name, created_utc, updated_utc, xmin)
+                     VALUES ({Guid.NewGuid()}, {userId}, {tvdbId}, {"Tracked"}, {now}, {now}, 1)
+                     """);
+            }
+        }
+
+        var due = await NewStore().GetAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 3);
+
+        due.Select(x => x.TvdbId).Should().Equal(4, 3, 1);
     }
 
     [Test]

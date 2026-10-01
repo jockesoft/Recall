@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.HttpOverrides;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Hosting;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Middleware;
-using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Health;
 using Serilog;
+
+// English-only site: don't inherit the host's language for dates and numbers.
+AppCulture.PinToEnglish();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,18 +26,7 @@ builder.Services.AddControllers().AddViewLocalization();
 builder.Services.AddAntiforgery();
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders =
-        ForwardedHeaders.XForwardedFor |
-        ForwardedHeaders.XForwardedProto |
-        ForwardedHeaders.XForwardedHost;
-
-    // If your proxy is internal/docker/network-local and not explicitly listed,
-    // clear these so forwarded headers are accepted.
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
-});
+builder.Services.AddTrustedForwardedHeaders(builder.Configuration);
 
 builder.Services.AddCookieAuthentication();
 builder.Services.AddAppSession();
@@ -48,11 +39,6 @@ builder.Services.AddPostgres(builder.Configuration);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 #endif
 
-builder.Services.AddSingleton<TheTvDbClientState>();
-builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
-{
-    client.BaseAddress = new Uri("https://api4.thetvdb.com/v4/");
-});
 // Add TheTVDB integration
 builder.Services.AddTheTvDb(builder.Configuration);
 builder.Services.AddOmdb(builder.Configuration);
@@ -66,7 +52,7 @@ builder.Services.AddWatchlistImport();
 builder.Services.AddHealthChecks()
     .AddCheck<DbHealthCheck>("database", tags: ["ready"]);
 builder.Services.AddPasswordlessAuth(builder.Configuration);
-builder.Services.AddLoginRateLimiting();
+builder.Services.AddRateLimiting();
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 
@@ -109,14 +95,16 @@ app.UseHttpsRedirection();
 app.UseStaticFiles(); // important for runtime-created files
 app.UseRouting();
 
-app.UseRateLimiter();
-
 app.UseSession();
 app.UseAuthentication();
 
 #if DEBUG
 app.UseMiddleware<DevAuthMiddleware>();
 #endif
+
+// After authentication: the public-details policy exempts signed-in users, so
+// the limiter has to know who is asking.
+app.UseRateLimiter();
 
 app.UseAuthorization();
 

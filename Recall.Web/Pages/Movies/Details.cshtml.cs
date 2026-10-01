@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
@@ -7,20 +8,22 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.WatchTracking;
 using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Web.Pages.Movies;
 
 /// <summary>
-/// Public, anonymous-friendly movie details page. Like/watched/rating actions
-/// are only shown when signed in; no library/tracking yet, that needs its own
-/// data model.
+/// Public, anonymous-friendly movie details page. Watchlist/watched/like/rating
+/// actions are only shown and only take effect when signed in.
 /// </summary>
+[EnableRateLimiting(InfrastructureServiceCollectionExtensions.PublicDetailsPolicy)]
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
     ILikeRepository likeRepository,
     IMovieWatchRepository movieWatchRepository,
+    IMovieTrackingService movieTrackingService,
     IRatingRepository ratingRepository,
     IMovieOmdbSnapshotStore omdbSnapshotStore,
     ILogger<DetailsModel> logger)
@@ -40,6 +43,9 @@ public sealed class DetailsModel(
     public DateTime? WatchedOnUtc { get; private set; }
 
     public bool IsWatchedByCurrentUser => WatchedOnUtc is not null;
+
+    /// <summary>Whether the movie is on the current user's watchlist. Never true for a watched movie.</summary>
+    public bool IsOnWatchlist { get; private set; }
 
     /// <summary>The current user's 1-10 rating of this movie, or null when unrated.</summary>
     public int? CurrentUserRating { get; private set; }
@@ -71,6 +77,7 @@ public sealed class DetailsModel(
             {
                 IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Movie, id, cancellationToken);
                 WatchedOnUtc = await movieWatchRepository.GetWatchedUtcAsync(userId, id, cancellationToken);
+                IsOnWatchlist = await movieTrackingService.IsOnWatchlistAsync(userId, id, cancellationToken);
                 CurrentUserRating = await ratingRepository.GetRatingAsync(userId, RatingTargetType.Movie, id, cancellationToken);
             }
 
@@ -123,7 +130,9 @@ public sealed class DetailsModel(
         try
         {
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-            var isNowWatched = await movieWatchRepository.ToggleAsync(userId, id, cancellationToken);
+            // Through the service, not the repository: marking watched also
+            // takes the movie off the watchlist.
+            var isNowWatched = await movieTrackingService.ToggleWatchedAsync(userId, id, cancellationToken);
 
             if (isNowWatched)
                 this.SetSuccessToast("Movie marked as watched.");
@@ -134,6 +143,50 @@ public sealed class DetailsModel(
         {
             logger.LogError(ex, "Failed toggling watched state for movie {MovieId}.", id);
             this.SetErrorToast("Could not update watched status right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostToggleWatchlistAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (id <= 0)
+            return NotFound();
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to use your watchlist.");
+            return RedirectToPage(new { id });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+            if (await movieTrackingService.RemoveFromWatchlistAsync(userId, id, cancellationToken))
+            {
+                this.SetInfoToast("Removed from your watchlist.");
+                return RedirectToPage(new { id });
+            }
+
+            switch (await movieTrackingService.AddToWatchlistAsync(userId, id, cancellationToken: cancellationToken))
+            {
+                case MovieWatchlistOutcome.Added:
+                case MovieWatchlistOutcome.AlreadyOnWatchlist:
+                    this.SetSuccessToast("Added to your watchlist.");
+                    break;
+                case MovieWatchlistOutcome.AlreadyWatched:
+                    this.SetInfoToast("You've already watched this movie.");
+                    break;
+                case MovieWatchlistOutcome.MovieNotFound:
+                    this.SetErrorToast("Could not find that movie on TheTVDB.");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed toggling the watchlist for movie {MovieId}.", id);
+            this.SetErrorToast("Could not update your watchlist right now.");
         }
 
         return RedirectToPage(new { id });

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
@@ -20,6 +21,7 @@ namespace Recall.Web.Pages.Episodes;
 /// Public, anonymous-friendly episode details page. Watched/like/rating actions
 /// are only shown and only take effect when signed in.
 /// </summary>
+[EnableRateLimiting(InfrastructureServiceCollectionExtensions.PublicDetailsPolicy)]
 public sealed class DetailsModel(
     ILogger<DetailsModel> logger,
     ITheTvDbService theTvDbService,
@@ -88,7 +90,7 @@ public sealed class DetailsModel(
     /// Drives "Aired" vs "Airs" wording and whether the watched button is enabled.
     /// </summary>
     public bool HasAired =>
-        AiredDate is not { } aired || aired <= DateOnly.FromDateTime(DateTime.Today);
+        !AirDate.IsInFuture(AiredDate);
 
     /// <summary>
     /// How many episodes before this one (by season/episode order) the current
@@ -125,9 +127,15 @@ public sealed class DetailsModel(
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
             var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
-            var seriesId = episode?.SeriesId is > 0 ? episode.SeriesId.Value : id;
+            if (episode?.SeriesId is not > 0)
+            {
+                // No parent series to record this against — refuse rather than
+                // store the episode's own id in the series column.
+                this.SetErrorToast("Could not verify this episode against its series right now.");
+                return RedirectToPage(new { id });
+            }
 
-            await likeRepository.ToggleAsync(userId, LikeTargetType.Episode, id, seriesId, cancellationToken);
+            await likeRepository.ToggleAsync(userId, LikeTargetType.Episode, id, episode.SeriesId.Value, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -160,9 +168,15 @@ public sealed class DetailsModel(
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
             var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
-            var seriesId = episode?.SeriesId is > 0 ? episode.SeriesId.Value : id;
+            if (episode?.SeriesId is not > 0)
+            {
+                // No parent series to record this against — refuse rather than
+                // store the episode's own id in the series column.
+                this.SetErrorToast("Could not verify this episode against its series right now.");
+                return RedirectToPage(new { id });
+            }
 
-            await ratingRepository.RateAsync(userId, RatingTargetType.Episode, id, seriesId, value, cancellationToken);
+            await ratingRepository.RateAsync(userId, RatingTargetType.Episode, id, episode.SeriesId.Value, value, cancellationToken);
             this.SetSuccessToast("Rating saved.");
         }
         catch (Exception ex)
@@ -225,17 +239,20 @@ public sealed class DetailsModel(
                 return RedirectToPage(new { id });
             }
 
-            var isWatched = await episodeWatchRepository.IsWatchedAsync(userId, id, cancellationToken);
-
-            if (isWatched)
+            switch (await watchProgressService.ToggleEpisodeWatchedAsync(userId, episode.SeriesId.Value, id, cancellationToken))
             {
-                await episodeWatchRepository.MarkUnwatchedAsync(userId, id, cancellationToken);
-                this.SetInfoToast("Episode marked as not watched.");
-            }
-            else
-            {
-                await episodeWatchRepository.MarkWatchedAsync(userId, episode.SeriesId.Value, id, cancellationToken);
-                this.SetSuccessToast("Episode marked as watched.");
+                case EpisodeWatchOutcome.MarkedUnwatched:
+                    this.SetInfoToast("Episode marked as not watched.");
+                    break;
+                case EpisodeWatchOutcome.MarkedWatched:
+                    this.SetSuccessToast("Episode marked as watched.");
+                    break;
+                case EpisodeWatchOutcome.NotAired:
+                    this.SetErrorToast("You can't mark an episode as watched before it has aired.");
+                    break;
+                case EpisodeWatchOutcome.EpisodeNotInSeries:
+                    this.SetErrorToast("Could not verify this episode against its series right now.");
+                    break;
             }
         }
         catch (Exception ex)
@@ -287,11 +304,18 @@ public sealed class DetailsModel(
                     id, seriesId);
                 this.SetErrorToast("Could not verify this episode against its series right now.");
             }
+            else if (!result.HasAired)
+            {
+                this.SetErrorToast("You can't mark an episode as watched before it has aired.");
+            }
             else
             {
-                this.SetSuccessToast(result.MarkedCount > 1
-                    ? $"Marked {result.MarkedCount} episodes as watched."
-                    : "Episode marked as watched.");
+                this.SetSuccessToastWithWatchedUndo(
+                    result.MarkedCount > 1
+                        ? $"Marked {result.MarkedCount} episodes as watched."
+                        : "Episode marked as watched.",
+                    seriesId,
+                    result.Batch);
             }
         }
         catch (Exception ex)
@@ -312,6 +336,13 @@ public sealed class DetailsModel(
     /// </summary>
     private async Task<OmdbSeries?> LoadOmdbAsync(int episodeTvdbId, string imdbId, CancellationToken cancellationToken)
     {
+        // Anonymous visitors (and crawlers — the sitemap lists every cached
+        // episode) only ever see what is already cached. A live lookup spends
+        // the shared daily OMDb budget, and that is reserved for signed-in
+        // users and the enrichment jobs.
+        if (!currentUserService.IsAuthenticated)
+            return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
+
         if (string.IsNullOrWhiteSpace(omdbOptions.Value.ApiKey))
             return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
 

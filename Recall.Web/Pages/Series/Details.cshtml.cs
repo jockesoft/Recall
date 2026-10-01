@@ -1,6 +1,6 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
@@ -18,6 +18,7 @@ namespace Recall.Web.Pages.Series;
 /// Public, anonymous-friendly series details page. Library/watched/like/rating
 /// actions are only shown and only take effect when signed in.
 /// </summary>
+[EnableRateLimiting(InfrastructureServiceCollectionExtensions.PublicDetailsPolicy)]
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
@@ -222,25 +223,23 @@ public sealed class DetailsModel(
         try
         {
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-            var isWatched = await episodeWatchRepository.IsWatchedAsync(userId, episodeId, cancellationToken);
 
-            if (isWatched)
+            switch (await watchProgressService.ToggleEpisodeWatchedAsync(userId, id, episodeId, cancellationToken))
             {
-                await episodeWatchRepository.MarkUnwatchedAsync(userId, episodeId, cancellationToken);
-                this.SetInfoToast("Episode marked as not watched.");
-            }
-            else
-            {
-                if (!await HasEpisodeAiredAsync(episodeId, cancellationToken))
-                {
+                case EpisodeWatchOutcome.MarkedUnwatched:
+                    this.SetInfoToast("Episode marked as not watched.");
+                    break;
+                case EpisodeWatchOutcome.MarkedWatched:
+                    // Make sure the series is in the users library, otherwise why track progress
+                    await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
+                    this.SetSuccessToast("Episode marked as watched.");
+                    break;
+                case EpisodeWatchOutcome.NotAired:
                     this.SetErrorToast("You can't mark an episode as watched before it has aired.");
-                    return RedirectToPage(new { id, season = Season });
-                }
-
-                // Make sure the series is in the users library, otherwise why track progress
-                await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
-                await episodeWatchRepository.MarkWatchedAsync(userId, id, episodeId, cancellationToken);
-                this.SetSuccessToast("Episode marked as watched.");
+                    break;
+                case EpisodeWatchOutcome.EpisodeNotInSeries:
+                    this.SetErrorToast("That episode doesn't belong to this series.");
+                    break;
             }
         }
         catch (Exception ex)
@@ -274,15 +273,6 @@ public sealed class DetailsModel(
         {
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
-            if (!await HasEpisodeAiredAsync(episodeId, cancellationToken))
-            {
-                this.SetErrorToast("You can't mark an episode as watched before it has aired.");
-                return RedirectToPage(new { id, season = Season });
-            }
-
-            // Make sure the series is in the users library, otherwise why track progress
-            await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
-
             var result = await watchProgressService.MarkWatchedThroughAsync(userId, id, episodeId, cancellationToken);
 
             if (!result.EpisodeFound)
@@ -292,11 +282,20 @@ public sealed class DetailsModel(
                     episodeId, id);
                 this.SetErrorToast("That episode doesn't belong to this series.");
             }
+            else if (!result.HasAired)
+            {
+                this.SetErrorToast("You can't mark an episode as watched before it has aired.");
+            }
             else
             {
-                this.SetSuccessToast(result.MarkedCount > 1
-                    ? $"Marked {result.MarkedCount} episodes as watched."
-                    : "Episode marked as watched.");
+                // Make sure the series is in the users library, otherwise why track progress
+                await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
+                this.SetSuccessToastWithWatchedUndo(
+                    result.MarkedCount > 1
+                        ? $"Marked {result.MarkedCount} episodes as watched."
+                        : "Episode marked as watched.",
+                    id,
+                    result.Batch);
             }
         }
         catch (Exception ex)
@@ -306,6 +305,135 @@ public sealed class DetailsModel(
         }
 
         return RedirectToPage(new { id, season = Season });
+    }
+
+    /// <summary>Marks every aired episode of the selected season watched.</summary>
+    public async Task<IActionResult> OnPostMarkSeasonWatchedAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (Season is not { } season)
+            return RedirectToPage(new { id });
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to track watched episodes.");
+            return RedirectToPage(new { id, season });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+            var result = await watchProgressService.MarkSeasonWatchedAsync(userId, id, season, cancellationToken);
+
+            if (!result.SeasonFound)
+            {
+                this.SetErrorToast("That season doesn't belong to this series.");
+            }
+            else if (result.Batch.InsertedCount == 0)
+            {
+                this.SetInfoToast("Nothing to mark — every aired episode in this season is already watched.");
+            }
+            else
+            {
+                // Make sure the series is in the users library, otherwise why track progress
+                await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
+                this.SetSuccessToastWithWatchedUndo(
+                    result.Batch.InsertedCount == 1
+                        ? "Marked 1 episode as watched."
+                        : $"Marked {result.Batch.InsertedCount} episodes as watched.",
+                    id,
+                    result.Batch);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed marking season {Season} of series {SeriesId} as watched.", season, id);
+            this.SetErrorToast("Could not update watched status right now.");
+        }
+
+        return RedirectToPage(new { id, season });
+    }
+
+    /// <summary>Removes the watched mark from every episode of the selected season.</summary>
+    public async Task<IActionResult> OnPostMarkSeasonUnwatchedAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (Season is not { } season)
+            return RedirectToPage(new { id });
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to track watched episodes.");
+            return RedirectToPage(new { id, season });
+        }
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+            var removed = await watchProgressService.MarkSeasonUnwatchedAsync(userId, id, season, cancellationToken);
+
+            this.SetInfoToast(removed == 1
+                ? "Marked 1 episode as not watched."
+                : $"Marked {removed} episodes as not watched.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed marking season {Season} of series {SeriesId} as not watched.", season, id);
+            this.SetErrorToast("Could not update watched status right now.");
+        }
+
+        return RedirectToPage(new { id, season });
+    }
+
+    /// <summary>
+    /// Reverses one bulk "mark watched" — posted by the Undo button in the
+    /// success toast (see <c>_ToastMessages.cshtml</c>), from this page or from
+    /// Episodes/Details. <paramref name="stamp"/> is the batch's
+    /// <c>WatchedUtc</c> in ticks; only the current user's own rows carrying
+    /// exactly that timestamp are removed, so a forged value can at worst
+    /// un-watch the sender's own episodes.
+    /// </summary>
+    public async Task<IActionResult> OnPostUndoWatchedAsync(
+        [FromRoute] int id,
+        [FromForm] long stamp,
+        [FromForm] string? returnUrl,
+        CancellationToken cancellationToken)
+    {
+        IActionResult Back() =>
+            !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
+                ? LocalRedirect(returnUrl)
+                : RedirectToPage(new { id, season = Season });
+
+        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        {
+            this.SetErrorToast("You need to be signed in to track watched episodes.");
+            return Back();
+        }
+
+        if (stamp <= 0 || stamp > DateTime.MaxValue.Ticks)
+            return Back();
+
+        try
+        {
+            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+            var removed = await watchProgressService.UndoWatchedBatchAsync(
+                userId, id, new DateTime(stamp, DateTimeKind.Utc), cancellationToken);
+
+            this.SetInfoToast(removed switch
+            {
+                0 => "Nothing left to undo.",
+                1 => "Undone — 1 episode marked as not watched.",
+                _ => $"Undone — {removed} episodes marked as not watched."
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed undoing a bulk watch for series {SeriesId}.", id);
+            this.SetErrorToast("Could not undo that right now.");
+        }
+
+        return Back();
     }
 
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
@@ -377,27 +505,6 @@ public sealed class DetailsModel(
     {
         if (season == 0) return "SP";
         else return "S" + season.ToString("D2");
-    }
-
-    /// <summary>
-    /// True only when the episode has a known air date that is today or earlier.
-    /// An unknown/unparseable or future air date counts as "not aired", so it
-    /// can't be marked watched. Mirrors the client-side guard in the view.
-    /// </summary>
-    private async Task<bool> HasEpisodeAiredAsync(int episodeId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var episode = await theTvDbService.GetEpisodeDetailsAsync(episodeId, cancellationToken);
-            return episode is not null
-                && DateOnly.TryParse(episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired)
-                && aired <= DateOnly.FromDateTime(DateTime.Today);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not verify air date for episode {EpisodeId}; treating as not aired.", episodeId);
-            return false;
-        }
     }
 
     private async Task AddToPersonalLibraryAsync(

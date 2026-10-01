@@ -50,6 +50,38 @@ dotnet watch run --project Recall.Web --launch-profile Recall.Web
 On the server after first deploy run:
 mkdir -p logs dataprotection-keys && sudo chown -R 64198:64198 logs dataprotection-keys
 
+Reverse proxy on the server
+
+Production runs the app in Docker behind nginx installed directly on the host (apt, systemd). nginx
+terminates TLS and proxies to `127.0.0.1:8701`. `compose.prod.yml` publishes the app on `127.0.0.1:8701`
+and Postgres on `127.0.0.1:5433` only, so nginx is the only way in from outside. CI does not copy
+`compose.prod.yml` to the server — update the copy in `recall-deploy/` by hand when it changes.
+
+nginx must send these three headers (the app builds sign-in links from the scheme and host, and
+rate-limits per client IP):
+```
+location / {
+    proxy_pass http://127.0.0.1:8701;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+`$proxy_add_x_forwarded_for` appends the real client address to whatever the client sent; the app reads
+only that last entry (`TrustedProxies:ForwardLimit` is 1), so a forged `X-Forwarded-For` is ignored.
+
+Requests reach the container from the compose network's gateway, a private address. The app trusts
+`X-Forwarded-*` from loopback and the private ranges by default, so this works with nothing configured.
+To trust only the compose network instead, look up its subnet and add it to `.env.prod`:
+```
+# docker network inspect recall-deploy_recall_prodnet --format '{{(index .IPAM.Config 0).Subnet}}'
+# TrustedProxies__Networks__0=172.18.0.0/16
+```
+Setting it replaces the default entirely. Docker may hand the network a different subnet if it is ever
+recreated (`docker compose down` then `up`); a stale value here makes the app ignore nginx's headers, which
+shows up as sign-in links with `http://` and every visitor sharing one rate-limit bucket. Re-check the
+subnet after recreating the network, or pin it under `networks:` in `compose.prod.yml`.
+
 
 Take database dump from postgres container
 

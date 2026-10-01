@@ -1,11 +1,16 @@
+using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Quartz;
+using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Infrastructure.Caching;
+using Recall.Web.Infrastructure.Hosting;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Timers;
 using Serilog;
@@ -51,8 +56,77 @@ public static class InfrastructureServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Applies <c>X-Forwarded-For/Proto/Host</c>, but only from the proxies named
+    /// in the <c>TrustedProxies</c> section (<see cref="TrustedProxyOptions"/>) —
+    /// or, when that section is empty, from loopback and the private ranges. A
+    /// request arriving from anywhere else keeps its real connection address, so
+    /// a caller that reaches the app without passing through the proxy can't
+    /// spoof its way around the per-IP rate limiters with a forged header.
+    /// </summary>
+    public static IServiceCollection AddTrustedForwardedHeaders(this IServiceCollection services, IConfiguration configuration)
+    {
+        var settings = configuration.GetSection(TrustedProxyOptions.SectionName).Get<TrustedProxyOptions>()
+                       ?? new TrustedProxyOptions();
+
+        if (settings.ForwardLimit < 1)
+        {
+            throw new InvalidOperationException(
+                $"{TrustedProxyOptions.SectionName}:ForwardLimit must be at least 1 (was {settings.ForwardLimit}).");
+        }
+
+        var configuredAddresses = (settings.Addresses ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        var configuredNetworks = (settings.Networks ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+
+        // Parsed here rather than inside the options callback so a typo fails
+        // startup with a clear message instead of the first request.
+        var addresses = configuredAddresses.Select(ParseProxyAddress).ToArray();
+        var networks = (configuredAddresses.Length == 0 && configuredNetworks.Length == 0
+                ? TrustedProxyOptions.DefaultNetworks
+                : configuredNetworks)
+            .Select(ParseProxyNetwork)
+            .ToArray();
+
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders =
+                ForwardedHeaders.XForwardedFor |
+                ForwardedHeaders.XForwardedProto |
+                ForwardedHeaders.XForwardedHost;
+            options.ForwardLimit = settings.ForwardLimit;
+
+            // Replace the framework's loopback-only defaults with exactly the set above.
+            options.KnownProxies.Clear();
+            options.KnownIPNetworks.Clear();
+
+            foreach (var address in addresses)
+                options.KnownProxies.Add(address);
+
+            foreach (var network in networks)
+                options.KnownIPNetworks.Add(network);
+        });
+
+        return services;
+    }
+
+    private static IPAddress ParseProxyAddress(string value) =>
+        IPAddress.TryParse(value.Trim(), out var address)
+            ? address
+            : throw new InvalidOperationException(
+                $"{TrustedProxyOptions.SectionName}:{nameof(TrustedProxyOptions.Addresses)} contains \"{value}\", which is not an IP address.");
+
+    private static System.Net.IPNetwork ParseProxyNetwork(string value) =>
+        System.Net.IPNetwork.TryParse(value.Trim(), out var network)
+            ? network
+            : throw new InvalidOperationException(
+                $"{TrustedProxyOptions.SectionName}:{nameof(TrustedProxyOptions.Networks)} contains \"{value}\", which is not a network in CIDR notation (e.g. 172.18.0.0/16).");
+
     public static IServiceCollection AddCookieAuthentication(this IServiceCollection services)
     {
+        // Re-checks the cookie against the user row every few minutes — see RecallCookieEvents.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<RecallCookieEvents>();
+
         services
             .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
@@ -62,6 +136,7 @@ public static class InfrastructureServiceCollectionExtensions
                 options.AccessDeniedPath = "/Account/Login";
                 options.ExpireTimeSpan = TimeSpan.FromDays(30);
                 options.SlidingExpiration = true;
+                options.EventsType = typeof(RecallCookieEvents);
                 options.Cookie.Name = "Recall.Auth";
                 options.Cookie.HttpOnly = true;
                 // Lax (not Strict) so the cookie survives the top-level GET navigation
@@ -133,15 +208,31 @@ public static class InfrastructureServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>Name of the per-IP policy on the public Details pages; see <see cref="PublicDetailsPartition"/>.</summary>
+    public const string PublicDetailsPolicy = "public-details";
+
+    /// <summary>How many Details pages one anonymous client IP may load per minute.</summary>
+    public const int PublicDetailsPermitsPerMinute = 60;
+
     /// <summary>
-    /// Throttles the sign-in form per client IP so it can't be scripted to spray
-    /// login emails. Applied via <c>[EnableRateLimiting("login-email")]</c> on LoginModel.
+    /// The app's rate-limit policies:
+    /// <list type="bullet">
+    /// <item><c>login-email</c> — throttles the sign-in form per client IP so it can't be
+    /// scripted to spray login emails. Applied via <c>[EnableRateLimiting("login-email")]</c>
+    /// on LoginModel, with a site-wide backstop on the same endpoint.</item>
+    /// <item><see cref="PublicDetailsPolicy"/> — bounds what an anonymous client can make the
+    /// app fetch from TheTVDB through the public Series/Episodes/Movies Details pages.</item>
+    /// </list>
+    /// <c>UseRateLimiter</c> must run after authentication: the second policy depends on
+    /// knowing whether the request is signed in.
     /// </summary>
-    public static IServiceCollection AddLoginRateLimiting(this IServiceCollection services)
+    public static IServiceCollection AddRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.AddPolicy(PublicDetailsPolicy, PublicDetailsPartition);
 
             options.AddPolicy("login-email", httpContext =>
             {
@@ -176,11 +267,43 @@ public static class InfrastructureServiceCollectionExtensions
                     "Rate limit exceeded for {Path} from {RemoteIp}",
                     context.HttpContext.Request.Path,
                     context.HttpContext.Connection.RemoteIpAddress);
+
+                // Tells a well-behaved crawler when to come back instead of leaving it to guess.
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                {
+                    context.HttpContext.Response.Headers.RetryAfter =
+                        ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+
                 return ValueTask.CompletedTask;
             };
         });
 
         return services;
+    }
+
+    /// <summary>
+    /// The public Details pages are open to anonymous visitors and search
+    /// engines on purpose, and an uncached series, episode or movie is fetched
+    /// from TheTVDB on demand — so without a limit, anyone walking ids could
+    /// make the app spend its TheTVDB allowance for them. Anonymous requests
+    /// get <see cref="PublicDetailsPermitsPerMinute"/> page loads a minute per
+    /// client IP (plenty for a person, and for a crawler pacing itself);
+    /// signed-in users are not limited.
+    /// </summary>
+    public static RateLimitPartition<string> PublicDetailsPartition(HttpContext httpContext)
+    {
+        if (httpContext.User.Identity?.IsAuthenticated == true)
+            return RateLimitPartition.GetNoLimiter("signed-in");
+
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter($"anonymous:{clientIp}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = PublicDetailsPermitsPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
     }
 
     /// <summary>

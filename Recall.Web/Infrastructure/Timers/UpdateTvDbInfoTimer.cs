@@ -13,8 +13,11 @@ namespace Recall.Web.Infrastructure.Timers;
 
 /// <summary>
 /// Keeps the local TheTVDB snapshots fresh. Each run refreshes up to
-/// <see cref="MaxSeriesPerRun"/> <c>cached_series_aggregate</c> rows that carry
-/// TheTVDB's <c>keep_updated</c> flag and are older than <see cref="MinRefreshAge"/>,
+/// <see cref="MaxSeriesPerRun"/> <c>cached_series_aggregate</c> rows — those
+/// carrying TheTVDB's <c>keep_updated</c> flag once older than
+/// <see cref="MinRefreshAge"/>, and every other row once older than
+/// <see cref="SettledMaxAge"/> (an ended show still gets corrections, artwork,
+/// or the occasional revival) —
 /// then up to <see cref="MaxEpisodesPerRun"/> <c>cached_episode_extended</c> rows
 /// that are either older than <see cref="EpisodeMaxAge"/>, still titled "TBA" and
 /// older than <see cref="TbaEpisodeMaxAge"/>, or missing their still image despite
@@ -33,6 +36,13 @@ public class UpdateTvDbInfoTimer(
 {
     /// <summary>Don't re-fetch a series from TheTVDB more often than this.</summary>
     private static readonly TimeSpan MinRefreshAge = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// Re-fetch a series that is not flagged <c>keep_updated</c> at least this
+    /// often. Without it such a row would be served unchanged forever — the
+    /// Postgres tier has no staleness check on read.
+    /// </summary>
+    private static readonly TimeSpan SettledMaxAge = TimeSpan.FromDays(30);
 
     /// <summary>Re-fetch a cached episode at least this often.</summary>
     private static readonly TimeSpan EpisodeMaxAge = TimeSpan.FromDays(30);
@@ -69,14 +79,15 @@ public class UpdateTvDbInfoTimer(
 
     private async Task RefreshStaleAggregatesAsync(CancellationToken cancellationToken)
     {
-        var staleBeforeUtc = DateTime.UtcNow - MinRefreshAge;
+        var now = DateTime.UtcNow;
+        var staleBeforeUtc = now - MinRefreshAge;
 
         var candidates = await snapshotStore.GetAggregatesNeedingRefreshAsync(
-            staleBeforeUtc, MaxSeriesPerRun, cancellationToken);
+            staleBeforeUtc, now - SettledMaxAge, MaxSeriesPerRun, cancellationToken);
 
         if (candidates.Count == 0)
         {
-            logger.LogInformation("UpdateTvDbInfoTimer: no keep-updated series are due for a refresh.");
+            logger.LogInformation("UpdateTvDbInfoTimer: no series are due for a refresh.");
             return;
         }
 

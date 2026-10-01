@@ -7,12 +7,12 @@ namespace Recall.Web.Pages.Account;
 
 public sealed class LogoutModel : PageModel
 {
-    // The nav bar links here with a plain GET, so support both verbs.
-    public Task<IActionResult> OnGetAsync() => SignOutAndRedirectAsync();
+    // GET changes nothing: signing out on a plain link would let any page on
+    // the web log a visitor out with an <img> tag. The nav bar and the profile
+    // page both post a form (which carries the antiforgery token).
+    public IActionResult OnGet() => RedirectToPage("/Index");
 
-    public Task<IActionResult> OnPostAsync() => SignOutAndRedirectAsync();
-
-    private async Task<IActionResult> SignOutAndRedirectAsync()
+    public async Task<IActionResult> OnPostAsync()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return RedirectToPage("/Index");

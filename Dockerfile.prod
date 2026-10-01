@@ -23,23 +23,20 @@ COPY build.txt /app/publish/build.txt
 # ============================================
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 
-# Install locale + fonts (same as dev)
+# Install time zone data + fonts (same as dev)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tzdata \
-        locales \
         fonts-dejavu \
         fonts-liberation \
         fontconfig \
         procps && \
-    sed -i '/sv_SE.UTF-8/s/^# //g' /etc/locale.gen && \
-    locale-gen && \
     rm -rf /var/lib/apt/lists/*
 
+# No LANG/LC_ALL: the app is English-only and pins its own culture at startup
+# (AppCulture.PinToEnglish), so the container's locale must not decide how
+# dates and numbers render.
 ENV TZ=UTC
-ENV LANG=sv_SE.UTF-8 \
-    LANGUAGE=sv_SE:sv \
-    LC_ALL=sv_SE.UTF-8
 
 # Log folder
 RUN mkdir -p /var/log/recallapp && chmod -R 777 /var/log/recallapp

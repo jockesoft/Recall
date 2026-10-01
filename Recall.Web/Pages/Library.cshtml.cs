@@ -38,16 +38,20 @@ public sealed class LibraryModel(
     IWatchProgressService watchProgressService,
     IEpisodeWatchRepository episodeWatchRepository,
     IMovieWatchRepository movieWatchRepository,
+    ITrackedMovieRepository trackedMovieRepository,
     ITheTvDbService theTvDbService,
     ILikeRepository likeRepository,
     ILogger<LibraryModel> logger)
     : PageModel
 {
     public IReadOnlyList<LibraryCardItem> Watching { get; private set; } = [];
+
+    /// <summary>Movies on the watchlist — wanted, not yet watched. Most recently added first.</summary>
+    public IReadOnlyList<LibraryCardItem> ToWatch { get; private set; } = [];
     public IReadOnlyList<LibraryCardItem> UpToDate { get; private set; } = [];
     public IReadOnlyList<LibraryCardItem> Watched { get; private set; } = [];
 
-    public bool IsEmpty => Watching.Count == 0 && UpToDate.Count == 0 && Watched.Count == 0;
+    public bool IsEmpty => Watching.Count == 0 && ToWatch.Count == 0 && UpToDate.Count == 0 && Watched.Count == 0;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -67,6 +71,7 @@ public sealed class LibraryModel(
             var trackedSeries = await trackedSeriesRepository.GetByUserAsync(userId, cancellationToken);
             var likedSeries = await likeRepository.GetLikesAsync(userId, LikeTargetType.Series, cancellationToken);
             var watchedMovies = await movieWatchRepository.GetWatchedMoviesAsync(userId, cancellationToken);
+            var watchlistMovies = await trackedMovieRepository.GetByUserAsync(userId, cancellationToken);
 
             var likedSeriesIds = likedSeries.Select(l => l.TargetTvdbId).ToHashSet();
 
@@ -76,6 +81,7 @@ public sealed class LibraryModel(
 
             await ClassifyTrackedSeriesAsync(userId, trackedSeries, likedSeriesIds, watching, upToDate, watched, cancellationToken);
             await AddWatchedMoviesAsync(watchedMovies, watched, cancellationToken);
+            ToWatch = await BuildWatchlistAsync(watchlistMovies, cancellationToken);
 
             Watching = watching.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
             UpToDate = upToDate.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
@@ -166,6 +172,36 @@ public sealed class LibraryModel(
                 IsLiked: false,
                 Caption: $"Watched {watchedMovies[i].WatchedUtc.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"));
         }
+    }
+
+    /// <summary>
+    /// Keeps the watchlist's own order (most recently added first). A movie whose
+    /// aggregate can't be loaded right now still gets a card, from the title
+    /// stored when it was added — it shouldn't vanish from the list because
+    /// TheTVDB had a bad moment.
+    /// </summary>
+    private async Task<IReadOnlyList<LibraryCardItem>> BuildWatchlistAsync(
+        IReadOnlyList<TrackedMovie> watchlistMovies,
+        CancellationToken cancellationToken)
+    {
+        if (watchlistMovies.Count == 0)
+            return [];
+
+        var aggregates = await Task.WhenAll(
+            watchlistMovies.Select(m => theTvDbService.TryGetMovieAggregateAsync(m.MovieTvdbId, logger, nameof(LibraryModel), cancellationToken)));
+
+        return watchlistMovies
+            .Select((tracked, i) => new LibraryCardItem(
+                SearchResultType.Movie,
+                tracked.MovieTvdbId,
+                aggregates[i]?.Name ?? tracked.Name,
+                aggregates[i]?.ImageUrl,
+                aggregates[i]?.ReleaseDate,
+                WatchedEpisodes: 0,
+                ReleasedEpisodes: 0,
+                IsLiked: false,
+                Caption: $"Added {tracked.AddedUtc.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"))
+            .ToList();
     }
 
     public async Task<IActionResult> OnPostToggleSeriesLikeAsync(int id, CancellationToken cancellationToken)

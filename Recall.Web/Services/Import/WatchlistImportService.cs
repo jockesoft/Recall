@@ -4,14 +4,15 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
 
+using Recall.Web.Services.WatchTracking;
+
 namespace Recall.Web.Services.Import;
 
 public sealed class WatchlistImportService(
     IWatchlistImportRepository importRepository,
     ITheTvDbService theTvDbService,
     ITrackedSeriesRepository trackedSeriesRepository,
-    IMovieWatchRepository movieWatchRepository,
-    ILikeRepository likeRepository,
+    IMovieTrackingService movieTrackingService,
     IRatingRepository ratingRepository,
     ILogger<WatchlistImportService> logger) : IWatchlistImportService
 {
@@ -105,6 +106,12 @@ public sealed class WatchlistImportService(
     /// movie watchlist in the data model, so it's recorded as a like instead,
     /// same as hearting the movie from its details page.
     /// </summary>
+    /// <summary>
+    /// A rated movie is one the user has seen: mark it watched and carry the
+    /// rating over. An unrated one is on their IMDb list because they mean to
+    /// see it: it goes on the watchlist. (It is not liked — an import must not
+    /// invent an opinion, the same reason an unrated row never gets a rating.)
+    /// </summary>
     private async Task ProcessMovieAsync(WatchlistImportItem item, RemoteIdMatch match, CancellationToken cancellationToken)
     {
         if (item.YourRating is { } rating)
@@ -112,11 +119,7 @@ public sealed class WatchlistImportService(
             await ratingRepository.RateAsync(
                 item.UserId, RatingTargetType.Movie, match.TvdbId, match.TvdbId, rating, cancellationToken);
 
-            var alreadyWatched =
-                await movieWatchRepository.GetWatchedUtcAsync(item.UserId, match.TvdbId, cancellationToken) is not null;
-
-            if (!alreadyWatched)
-                await movieWatchRepository.ToggleAsync(item.UserId, match.TvdbId, cancellationToken);
+            var alreadyWatched = await movieTrackingService.MarkWatchedAsync(item.UserId, match.TvdbId, cancellationToken);
 
             await importRepository.MarkItemResultAsync(
                 item.Id,
@@ -129,23 +132,24 @@ public sealed class WatchlistImportService(
             return;
         }
 
-        var alreadyLiked = await likeRepository.IsLikedAsync(item.UserId, LikeTargetType.Movie, match.TvdbId, cancellationToken);
-        if (!alreadyLiked)
-            await likeRepository.ToggleAsync(item.UserId, LikeTargetType.Movie, match.TvdbId, match.TvdbId, cancellationToken);
+        // The remote-id lookup already told us the movie exists and what it's
+        // called, so the watchlist entry needs no second TheTVDB call.
+        var name = string.IsNullOrWhiteSpace(match.Name) ? item.Title : match.Name;
+        var outcome = await movieTrackingService.AddToWatchlistAsync(item.UserId, match.TvdbId, name, cancellationToken);
 
-        await importRepository.MarkItemResultAsync(
-            item.Id,
-            alreadyLiked ? WatchlistImportItemStatus.AlreadyInLibrary : WatchlistImportItemStatus.Imported,
-            match.TvdbId,
-            alreadyLiked ? "Already in your favorites." : "Added to your favorites.",
-            cancellationToken);
+        var (status, message) = outcome switch
+        {
+            MovieWatchlistOutcome.Added =>
+                (WatchlistImportItemStatus.Imported, "Added to your watchlist."),
+            MovieWatchlistOutcome.AlreadyWatched =>
+                (WatchlistImportItemStatus.AlreadyInLibrary, "Already watched."),
+            _ =>
+                (WatchlistImportItemStatus.AlreadyInLibrary, "Already on your watchlist.")
+        };
+
+        await importRepository.MarkItemResultAsync(item.Id, status, match.TvdbId, message, cancellationToken);
     }
 
-    /// <summary>
-    /// Series rows only ever add the show to the library — never touch episodes,
-    /// which would mean exactly the kind of TVDB burst this whole import queue
-    /// exists to avoid. Mirrors <c>Series/Details</c>'s "Add to library" action.
-    /// </summary>
     private async Task ProcessSeriesAsync(WatchlistImportItem item, RemoteIdMatch match, CancellationToken cancellationToken)
     {
         var existing = await trackedSeriesRepository.GetByUserAndTvdbIdAsync(item.UserId, match.TvdbId, cancellationToken);

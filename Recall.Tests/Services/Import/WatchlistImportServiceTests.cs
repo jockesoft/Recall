@@ -6,6 +6,7 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.Import;
+using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Tests.Services.Import;
 
@@ -15,7 +16,7 @@ public sealed class WatchlistImportServiceTests
     private Mock<IWatchlistImportRepository> _importRepository = null!;
     private Mock<ITheTvDbService> _theTvDbService = null!;
     private Mock<ITrackedSeriesRepository> _trackedSeriesRepository = null!;
-    private Mock<IMovieWatchRepository> _movieWatchRepository = null!;
+    private Mock<IMovieTrackingService> _movieTrackingService = null!;
     private Mock<ILikeRepository> _likeRepository = null!;
     private Mock<IRatingRepository> _ratingRepository = null!;
     private WatchlistImportService _sut = null!;
@@ -28,7 +29,8 @@ public sealed class WatchlistImportServiceTests
         _importRepository = new Mock<IWatchlistImportRepository>();
         _theTvDbService = new Mock<ITheTvDbService>();
         _trackedSeriesRepository = new Mock<ITrackedSeriesRepository>();
-        _movieWatchRepository = new Mock<IMovieWatchRepository>();
+        _movieTrackingService = new Mock<IMovieTrackingService>();
+        // Not a dependency any more — kept only to prove no like is ever created.
         _likeRepository = new Mock<ILikeRepository>();
         _ratingRepository = new Mock<IRatingRepository>();
 
@@ -36,8 +38,7 @@ public sealed class WatchlistImportServiceTests
             _importRepository.Object,
             _theTvDbService.Object,
             _trackedSeriesRepository.Object,
-            _movieWatchRepository.Object,
-            _likeRepository.Object,
+            _movieTrackingService.Object,
             _ratingRepository.Object,
             NullLogger<WatchlistImportService>.Instance);
     }
@@ -63,98 +64,112 @@ public sealed class WatchlistImportServiceTests
             .Setup(x => x.ClaimNextPendingBatchAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(items);
 
+    private void SetUpMovieMatch(WatchlistImportItem item, int tvdbId, string? name = "A Movie") =>
+        _theTvDbService
+            .Setup(x => x.ResolveByRemoteIdAsync(item.ImdbId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RemoteIdMatch(tvdbId, name, IsMovie: true));
+
+    private void VerifyNeverRated() =>
+        _ratingRepository.Verify(x => x.RateAsync(
+                It.IsAny<Guid>(), It.IsAny<RatingTargetType>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never, "an unrated row must never invent a rating");
+
     [Test]
     public async Task ProcessNextBatchAsync_Should_MarkWatchedAndRate_ForRatedUnwatchedMovie()
     {
         var item = Item(yourRating: 8);
         SetUpBatch(item);
-
-        _theTvDbService
-            .Setup(x => x.ResolveByRemoteIdAsync(item.ImdbId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RemoteIdMatch(555, "A Movie", IsMovie: true));
-
-        _movieWatchRepository
-            .Setup(x => x.GetWatchedUtcAsync(UserId, 555, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DateTime?)null);
+        SetUpMovieMatch(item, 555);
+        _movieTrackingService
+            .Setup(x => x.MarkWatchedAsync(UserId, 555, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
         await _sut.ProcessNextBatchAsync(10);
 
         _ratingRepository.Verify(x =>
             x.RateAsync(UserId, RatingTargetType.Movie, 555, 555, 8, It.IsAny<CancellationToken>()), Times.Once);
-        _movieWatchRepository.Verify(x => x.ToggleAsync(UserId, 555, It.IsAny<CancellationToken>()), Times.Once);
+        _movieTrackingService.Verify(x => x.MarkWatchedAsync(UserId, 555, It.IsAny<CancellationToken>()), Times.Once);
         _importRepository.Verify(x => x.MarkItemResultAsync(
-            item.Id, WatchlistImportItemStatus.Imported, 555, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            item.Id, WatchlistImportItemStatus.Imported, 555, "Marked watched and rated 8/10.", It.IsAny<CancellationToken>()), Times.Once);
         _importRepository.Verify(x => x.RecalculateJobProgressAsync(item.JobId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
-    public async Task ProcessNextBatchAsync_Should_NotReToggleWatched_ForRatedAlreadyWatchedMovie()
+    public async Task ProcessNextBatchAsync_Should_OnlyUpdateTheRating_ForRatedAlreadyWatchedMovie()
     {
         var item = Item(yourRating: 9);
         SetUpBatch(item);
-
-        _theTvDbService
-            .Setup(x => x.ResolveByRemoteIdAsync(item.ImdbId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RemoteIdMatch(555, "A Movie", IsMovie: true));
-
-        _movieWatchRepository
-            .Setup(x => x.GetWatchedUtcAsync(UserId, 555, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(DateTime.UtcNow.AddDays(-1));
+        SetUpMovieMatch(item, 555);
+        _movieTrackingService
+            .Setup(x => x.MarkWatchedAsync(UserId, 555, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         await _sut.ProcessNextBatchAsync(10);
 
         _ratingRepository.Verify(x =>
             x.RateAsync(UserId, RatingTargetType.Movie, 555, 555, 9, It.IsAny<CancellationToken>()), Times.Once);
-        _movieWatchRepository.Verify(x => x.ToggleAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _movieTrackingService.Verify(
+            x => x.ToggleWatchedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never, "a toggle would un-watch a movie that was already watched");
         _importRepository.Verify(x => x.MarkItemResultAsync(
-            item.Id, WatchlistImportItemStatus.Imported, 555, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            item.Id, WatchlistImportItemStatus.Imported, 555, "Already watched — rating updated to 9/10.", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
-    public async Task ProcessNextBatchAsync_Should_LikeUnratedMovie_WhenNotAlreadyLiked()
+    public async Task ProcessNextBatchAsync_Should_PutAnUnratedMovieOnTheWatchlist_NotLikeIt()
     {
         var item = Item(yourRating: null);
         SetUpBatch(item);
-
-        _theTvDbService
-            .Setup(x => x.ResolveByRemoteIdAsync(item.ImdbId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RemoteIdMatch(777, "A Movie", IsMovie: true));
-
-        _likeRepository
-            .Setup(x => x.IsLikedAsync(UserId, LikeTargetType.Movie, 777, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        SetUpMovieMatch(item, 777);
+        _movieTrackingService
+            .Setup(x => x.AddToWatchlistAsync(UserId, 777, "A Movie", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MovieWatchlistOutcome.Added);
 
         await _sut.ProcessNextBatchAsync(10);
 
-        _ratingRepository.Verify(x => x.RateAsync(
-            It.IsAny<Guid>(), It.IsAny<RatingTargetType>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Never, "an unrated row must never invent a rating");
-        _movieWatchRepository.Verify(x => x.ToggleAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
-        _likeRepository.Verify(x => x.ToggleAsync(UserId, LikeTargetType.Movie, 777, 777, It.IsAny<CancellationToken>()), Times.Once);
+        VerifyNeverRated();
+        _movieTrackingService.Verify(x => x.AddToWatchlistAsync(UserId, 777, "A Movie", It.IsAny<CancellationToken>()), Times.Once);
+        _movieTrackingService.Verify(
+            x => x.MarkWatchedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _likeRepository.VerifyNoOtherCalls();
         _importRepository.Verify(x => x.MarkItemResultAsync(
-            item.Id, WatchlistImportItemStatus.Imported, 777, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            item.Id, WatchlistImportItemStatus.Imported, 777, "Added to your watchlist.", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
-    public async Task ProcessNextBatchAsync_Should_ReportAlreadyInLibrary_ForUnratedAlreadyLikedMovie()
+    public async Task ProcessNextBatchAsync_Should_UseTheCsvTitle_WhenTheTvDbMatchHasNoName()
     {
         var item = Item(yourRating: null);
         SetUpBatch(item);
-
-        _theTvDbService
-            .Setup(x => x.ResolveByRemoteIdAsync(item.ImdbId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RemoteIdMatch(777, "A Movie", IsMovie: true));
-
-        _likeRepository
-            .Setup(x => x.IsLikedAsync(UserId, LikeTargetType.Movie, 777, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        SetUpMovieMatch(item, 777, name: null);
+        _movieTrackingService
+            .Setup(x => x.AddToWatchlistAsync(UserId, 777, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MovieWatchlistOutcome.Added);
 
         await _sut.ProcessNextBatchAsync(10);
 
-        _likeRepository.Verify(x => x.ToggleAsync(It.IsAny<Guid>(), It.IsAny<LikeTargetType>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Never, "toggling an existing like would un-like it");
+        _movieTrackingService.Verify(
+            x => x.AddToWatchlistAsync(UserId, 777, "Some Title", It.IsAny<CancellationToken>()), Times.Once,
+            "a name is what spares the service a second TheTVDB lookup");
+    }
+
+    [TestCase(MovieWatchlistOutcome.AlreadyOnWatchlist, "Already on your watchlist.")]
+    [TestCase(MovieWatchlistOutcome.AlreadyWatched, "Already watched.")]
+    public async Task ProcessNextBatchAsync_Should_ReportAlreadyInLibrary_ForAnUnratedMovieTheUserAlreadyHas(
+        MovieWatchlistOutcome outcome, string expectedMessage)
+    {
+        var item = Item(yourRating: null);
+        SetUpBatch(item);
+        SetUpMovieMatch(item, 777);
+        _movieTrackingService
+            .Setup(x => x.AddToWatchlistAsync(UserId, 777, It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(outcome);
+
+        await _sut.ProcessNextBatchAsync(10);
+
+        VerifyNeverRated();
         _importRepository.Verify(x => x.MarkItemResultAsync(
-            item.Id, WatchlistImportItemStatus.AlreadyInLibrary, 777, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            item.Id, WatchlistImportItemStatus.AlreadyInLibrary, 777, expectedMessage, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

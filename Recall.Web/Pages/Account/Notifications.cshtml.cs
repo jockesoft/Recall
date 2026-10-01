@@ -37,8 +37,10 @@ public sealed class NotificationsModel(
     /// <summary>
     /// Marks the notification read, then sends the user to whatever it points at
     /// (e.g. the episode page). Falls back to the list when there's no target.
+    /// POST, not GET: it changes state, and a GET can be triggered by a link
+    /// prefetcher or another site without the user ever clicking.
     /// </summary>
-    public async Task<IActionResult> OnGetOpenAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostOpenAsync(Guid id, CancellationToken cancellationToken)
     {
         if (currentUser.UserId is not { } userId)
             return RedirectToPage();

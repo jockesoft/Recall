@@ -1,3 +1,4 @@
+using System.Globalization;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 
 namespace Recall.Web.Services.WatchTracking;
@@ -8,7 +9,7 @@ public sealed class WatchProgressService(
     ILogger<WatchProgressService> logger)
     : IWatchProgressService
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly Today => AirDate.Today;
 
     public SeriesWatchProgress BuildProgress(
         int seriesTvdbId,
@@ -49,11 +50,15 @@ public sealed class WatchProgressService(
         int seriesTvdbId,
         CancellationToken cancellationToken = default)
     {
-        var series = await theTvDbService.GetSeriesByIdExtendedAsync(seriesTvdbId, cancellationToken);
+        // The aggregate, not GetSeriesByIdExtendedAsync: it's what Series/Details,
+        // the dashboard and the library render and count from, and the only one
+        // of the two the refresh job keeps current — so "mark watched through"
+        // can't disagree with the page about which episodes exist.
+        var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
 
-        return series is null
+        return aggregate is null
             ? []
-            : WatchProgressCalculator.Order(series.ToWatchableEpisodes());
+            : WatchProgressCalculator.Order(aggregate.ToWatchableEpisodes());
     }
 
     public async Task<int> GetPriorUnwatchedCountAsync(
@@ -66,7 +71,9 @@ public sealed class WatchProgressService(
         {
             var (ordered, watched) = await LoadEpisodesAndWatchedAsync(userId, seriesTvdbId, cancellationToken);
 
-            return WatchProgressCalculator.CountPriorUnwatched(ordered, watched, episodeTvdbId);
+            // Same set MarkWatchedThroughAsync would write, so the "also mark N
+            // earlier episodes?" prompt never promises more than it does.
+            return WatchProgressCalculator.CountPriorUnwatched(WithoutUnaired(ordered), watched, episodeTvdbId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -83,8 +90,9 @@ public sealed class WatchProgressService(
         CancellationToken cancellationToken = default)
     {
         var ordered = await GetOrderedEpisodesAsync(seriesTvdbId, cancellationToken);
+        var target = ordered.FirstOrDefault(e => e.Id == episodeTvdbId);
 
-        if (!ordered.Any(e => e.Id == episodeTvdbId))
+        if (target is null)
         {
             // The episode isn't part of this series' known episode list (a stale
             // cache, a renumbered/removed episode, or route/form values that
@@ -93,9 +101,137 @@ public sealed class WatchProgressService(
             return new MarkWatchedThroughResult(EpisodeFound: false, MarkedCount: 0);
         }
 
-        var idsToMark = WatchProgressCalculator.IdsThrough(ordered, episodeTvdbId);
-        await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
+        if (AirDate.IsInFuture(target.Aired))
+            return new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 0, HasAired: false);
 
-        return new MarkWatchedThroughResult(EpisodeFound: true, idsToMark.Count);
+        // Season 0 (specials) sorts first, so "everything earlier" can include a
+        // special that hasn't aired yet — leave those out.
+        var idsToMark = WatchProgressCalculator.IdsThrough(WithoutUnaired(ordered), episodeTvdbId);
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
+
+        return new MarkWatchedThroughResult(EpisodeFound: true, idsToMark.Count, Batch: batch);
     }
+
+    public async Task<SeasonWatchResult> MarkSeasonWatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var season = await GetSeasonEpisodesAsync(seriesTvdbId, seasonNumber, cancellationToken);
+        if (season.Count == 0)
+            return new SeasonWatchResult(SeasonFound: false, WatchedBatch.Empty);
+
+        var idsToMark = season
+            .Where(e => !AirDate.IsInFuture(e.Aired))
+            .Select(e => e.Id)
+            .ToList();
+
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
+
+        return new SeasonWatchResult(SeasonFound: true, batch);
+    }
+
+    public async Task<int> MarkSeasonUnwatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var season = await GetSeasonEpisodesAsync(seriesTvdbId, seasonNumber, cancellationToken);
+
+        return await episodeWatchRepository.MarkUnwatchedRangeAsync(
+            userId, season.Select(e => e.Id).ToList(), cancellationToken);
+    }
+
+    public Task<int> UndoWatchedBatchAsync(
+        Guid userId,
+        int seriesTvdbId,
+        DateTime batchWatchedUtc,
+        CancellationToken cancellationToken = default)
+        => episodeWatchRepository.UndoWatchedBatchAsync(userId, seriesTvdbId, batchWatchedUtc, cancellationToken);
+
+    /// <summary>
+    /// Every aggregate entry in the season — including movie-flagged ones, since
+    /// the season list on Series/Details shows (and lets you tick) those too.
+    /// </summary>
+    private async Task<IReadOnlyList<Domain.TheTvDb.EpisodeSummary>> GetSeasonEpisodesAsync(
+        int seriesTvdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken)
+    {
+        var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
+
+        return aggregate is null
+            ? []
+            : aggregate.Episodes.Where(e => e.SeasonNumber == seasonNumber).ToList();
+    }
+
+    public async Task<EpisodeWatchOutcome> MarkEpisodeWatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int episodeTvdbId,
+        CancellationToken cancellationToken = default)
+    {
+        var lookup = await FindEpisodeInSeriesAsync(seriesTvdbId, episodeTvdbId, cancellationToken);
+
+        if (!lookup.Found)
+        {
+            logger.LogWarning(
+                "Watch rejected: episode {EpisodeId} is not part of series {SeriesId}.", episodeTvdbId, seriesTvdbId);
+            return EpisodeWatchOutcome.EpisodeNotInSeries;
+        }
+
+        if (AirDate.IsInFuture(lookup.Aired))
+            return EpisodeWatchOutcome.NotAired;
+
+        await episodeWatchRepository.MarkWatchedAsync(userId, seriesTvdbId, episodeTvdbId, cancellationToken);
+        return EpisodeWatchOutcome.MarkedWatched;
+    }
+
+    public async Task<EpisodeWatchOutcome> ToggleEpisodeWatchedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int episodeTvdbId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await episodeWatchRepository.IsWatchedAsync(userId, episodeTvdbId, cancellationToken))
+        {
+            await episodeWatchRepository.MarkUnwatchedAsync(userId, episodeTvdbId, cancellationToken);
+            return EpisodeWatchOutcome.MarkedUnwatched;
+        }
+
+        return await MarkEpisodeWatchedAsync(userId, seriesTvdbId, episodeTvdbId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Confirms an episode belongs to a series. The aggregate is checked first
+    /// (already cached for any page that offers a watch button, and it includes
+    /// the movie-flagged entries the watchable list drops). An episode missing
+    /// from it — a special the aggregate omits, or one added since its last
+    /// refresh — gets a second chance against its own cached record, which
+    /// names its parent series.
+    /// </summary>
+    private async Task<(bool Found, DateOnly? Aired)> FindEpisodeInSeriesAsync(
+        int seriesTvdbId,
+        int episodeTvdbId,
+        CancellationToken cancellationToken)
+    {
+        var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
+        if (aggregate?.Episodes.FirstOrDefault(e => e.Id == episodeTvdbId) is { } summary)
+            return (true, summary.Aired);
+
+        var episode = await theTvDbService.GetEpisodeDetailsAsync(episodeTvdbId, cancellationToken);
+        if (episode?.SeriesId != seriesTvdbId)
+            return (false, null);
+
+        var aired = DateOnly.TryParse(episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : (DateOnly?)null;
+
+        return (true, aired);
+    }
+
+    private static IReadOnlyList<WatchableEpisode> WithoutUnaired(IReadOnlyList<WatchableEpisode> ordered) =>
+        ordered.Where(e => !AirDate.IsInFuture(e.Aired)).ToList();
 }

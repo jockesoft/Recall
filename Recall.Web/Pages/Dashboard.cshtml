@@ -10,7 +10,7 @@
 
     string DayGroup(DateOnly aired)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = Recall.Web.Services.WatchTracking.AirDate.Today;
         var days = aired.DayNumber - today.DayNumber;
         return days switch
         {

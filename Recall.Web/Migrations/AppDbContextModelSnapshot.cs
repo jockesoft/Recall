@@ -557,6 +557,45 @@ namespace Recall.Web.Migrations
                     b.ToTable("notified_episode", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedMovieEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_utc");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("TvdbId")
+                        .HasColumnType("integer")
+                        .HasColumnName("tvdb_id");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_utc");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TvdbId");
+
+                    b.HasIndex("UserId", "TvdbId")
+                        .IsUnique();
+
+                    b.ToTable("tracked_movie", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedSeriesEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -922,6 +961,17 @@ namespace Recall.Web.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedMovieEntity", b =>
+                {
+                    b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", "User")
+                        .WithMany("TrackedMovies")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedSeriesEntity", b =>
                 {
                     b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", "User")
@@ -1001,6 +1051,8 @@ namespace Recall.Web.Migrations
                     b.Navigation("Notifications");
 
                     b.Navigation("Ratings");
+
+                    b.Navigation("TrackedMovies");
 
                     b.Navigation("TrackedSeries");
 

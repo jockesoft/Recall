@@ -15,6 +15,9 @@ namespace Recall.Web.Pages;
 public sealed class SitemapModel(ISitemapService sitemapService, ILogger<SitemapModel> logger) : PageModel
 {
     private const string SiteUrl = "https://recall.nu";
+
+    /// <summary>The sitemap protocol's limit on URLs in one file; search engines reject a larger one.</summary>
+    public const int MaxUrls = 50_000;
     private static readonly XNamespace Ns = "http://www.sitemaps.org/schemas/sitemap/0.9";
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -28,17 +31,14 @@ public sealed class SitemapModel(ISitemapService sitemapService, ILogger<Sitemap
 
         try
         {
-            var seriesTask = sitemapService.GetCachedSeriesAsync(cancellationToken);
-            var moviesTask = sitemapService.GetCachedMoviesAsync(cancellationToken);
-            var episodesTask = sitemapService.GetCachedEpisodesAsync(cancellationToken);
+            // Series and movies first, episodes with the room that's left.
+            var content = await sitemapService.GetCachedContentAsync(MaxUrls - urls.Count, cancellationToken);
 
-            await Task.WhenAll(seriesTask, moviesTask, episodesTask);
-
-            urls.AddRange(seriesTask.Result.Select(e =>
+            urls.AddRange(content.Series.Select(e =>
                 BuildUrl($"/Series/Details/{e.TvdbId}", e.LastModifiedUtc, "weekly", "0.7")));
-            urls.AddRange(moviesTask.Result.Select(e =>
+            urls.AddRange(content.Movies.Select(e =>
                 BuildUrl($"/Movies/Details/{e.TvdbId}", e.LastModifiedUtc, "monthly", "0.7")));
-            urls.AddRange(episodesTask.Result.Select(e =>
+            urls.AddRange(content.Episodes.Select(e =>
                 BuildUrl($"/Episodes/Details/{e.TvdbId}", e.LastModifiedUtc, "monthly", "0.5")));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
