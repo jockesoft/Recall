@@ -110,7 +110,7 @@ public sealed class LibraryModel(
             return;
 
         var aggregates = (await Task.WhenAll(
-                trackedSeries.Select(s => theTvDbService.TryGetSeriesAggregateAsync(s.TvdbId, logger, nameof(LibraryModel), cancellationToken))))
+                trackedSeries.Select(s => theTvDbService.TryGetSeriesSummaryAsync(s.TvdbId, logger, nameof(LibraryModel), cancellationToken))))
             .Where(a => a is not null)
             .Select(a => a!)
             .ToList();
@@ -123,7 +123,7 @@ public sealed class LibraryModel(
             var progress = watchProgressService.BuildProgress(aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedEpisodeIds);
 
             // TheTVDB's own status text — "Ended" means no more episodes are coming.
-            var hasEnded = aggregate.Status?.Name?.Equals("Ended", StringComparison.OrdinalIgnoreCase) == true;
+            var hasEnded = aggregate.StatusName?.Equals("Ended", StringComparison.OrdinalIgnoreCase) == true;
 
             var item = new LibraryCardItem(
                 SearchResultType.Series,

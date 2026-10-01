@@ -116,57 +116,34 @@ public sealed class WatchlistImportRepository(AppDbContext dbContext) : IWatchli
         if (job is null)
             return;
 
-        var items = await dbContext.WatchlistImportItems
+        // Counted in the database: at most one row per status comes back, instead
+        // of every item of the job (up to 5,000) after each batch of 15.
+        var countsByStatus = await dbContext.WatchlistImportItems
             .AsNoTracking()
             .Where(x => x.JobId == jobId)
-            .Select(x => x.Status)
-            .ToListAsync(cancellationToken);
+            .GroupBy(x => x.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
 
-        ApplyCounts(job, items);
+        ApplyCounts(job, countsByStatus);
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static void ApplyCounts(WatchlistImportJobEntity job, IEnumerable<WatchlistImportItemEntity> items)
-        => ApplyCounts(job, items.Select(x => x.Status));
+        => ApplyCounts(job, items.GroupBy(x => x.Status).ToDictionary(g => g.Key, g => g.Count()));
 
-    private static void ApplyCounts(WatchlistImportJobEntity job, IEnumerable<WatchlistImportItemStatus> statuses)
+    private static void ApplyCounts(WatchlistImportJobEntity job, IReadOnlyDictionary<WatchlistImportItemStatus, int> countsByStatus)
     {
-        var processed = 0;
-        var imported = 0;
-        var skipped = 0;
-        var notFound = 0;
-        var failed = 0;
+        int Count(WatchlistImportItemStatus status) => countsByStatus.GetValueOrDefault(status);
 
-        foreach (var status in statuses)
-        {
-            switch (status)
-            {
-                case WatchlistImportItemStatus.Pending:
-                    continue;
-                case WatchlistImportItemStatus.Imported:
-                    imported++;
-                    break;
-                case WatchlistImportItemStatus.AlreadyInLibrary:
-                case WatchlistImportItemStatus.Unsupported:
-                    skipped++;
-                    break;
-                case WatchlistImportItemStatus.NotFound:
-                    notFound++;
-                    break;
-                case WatchlistImportItemStatus.Failed:
-                    failed++;
-                    break;
-            }
+        job.ImportedCount = Count(WatchlistImportItemStatus.Imported);
+        job.SkippedCount = Count(WatchlistImportItemStatus.AlreadyInLibrary) + Count(WatchlistImportItemStatus.Unsupported);
+        job.NotFoundCount = Count(WatchlistImportItemStatus.NotFound);
+        job.FailedCount = Count(WatchlistImportItemStatus.Failed);
 
-            processed++;
-        }
-
-        job.ProcessedCount = processed;
-        job.ImportedCount = imported;
-        job.SkippedCount = skipped;
-        job.NotFoundCount = notFound;
-        job.FailedCount = failed;
+        // Everything that is no longer pending.
+        job.ProcessedCount = job.ImportedCount + job.SkippedCount + job.NotFoundCount + job.FailedCount;
 
         if (job.ProcessedCount >= job.TotalCount && job.Status != WatchlistImportJobStatus.Completed)
         {

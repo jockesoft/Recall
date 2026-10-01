@@ -68,7 +68,7 @@ public sealed class NewEpisodeNotificationTimer(
 
             try
             {
-                var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
+                var aggregate = await theTvDbService.GetSeriesSummaryByIdAsync(seriesId, cancellationToken);
                 if (aggregate is null)
                     continue;
 

@@ -42,6 +42,12 @@ public sealed record CatchUpItem
 
     /// <summary>Still for the next episode (full URL); falls back to the series cover.</summary>
     public string? ImageUrl { get; init; }
+
+    /// <summary>
+    /// True when the series summary already had this episode's own still, so
+    /// there is nothing to look up. Not rendered.
+    /// </summary>
+    public bool HasEpisodeImage { get; init; }
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +86,7 @@ public sealed class DashboardModel(
             return;
 
         var aggregates = (await Task.WhenAll(
-                trackedSeriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id.TvdbId, logger, nameof(DashboardModel), cancellationToken))))
+                trackedSeriesIds.Select(id => theTvDbService.TryGetSeriesSummaryAsync(id.TvdbId, logger, nameof(DashboardModel), cancellationToken))))
             .Where(a => a is not null)
             .Select(a => a!)
             .ToList();
@@ -137,7 +143,8 @@ public sealed class DashboardModel(
                     SeasonNumber = next.SeasonNumber,
                     EpisodeNumber = next.EpisodeNumber,
                     Name = next.Name,
-                    ImageUrl = summaryImage ?? aggregate.ImageUrl
+                    ImageUrl = summaryImage ?? aggregate.ImageUrl,
+                    HasEpisodeImage = summaryImage is not null
                 });
             }
         }
@@ -169,15 +176,23 @@ public sealed class DashboardModel(
     /// episode from the (layered-cached) episode endpoint — the same source
     /// Episodes/Details uses — and swap in its screencap when it has one.
     /// </summary>
+    /// <summary>
+    /// Fills in the still for catch-up cards whose series summary didn't have
+    /// one — the dedicated episode record sometimes does. Cards that already
+    /// have their episode's still are left alone, which for most libraries
+    /// means no per-episode lookups at all.
+    /// </summary>
     private async Task<List<CatchUpItem>> EnrichCatchUpImagesAsync(
         List<CatchUpItem> items,
         CancellationToken cancellationToken)
     {
-        if (items.Count == 0)
+        if (items.All(item => item.HasEpisodeImage))
             return items;
 
         var episodes = await Task.WhenAll(
-            items.Select(item => TryGetEpisodeAsync(item.EpisodeId, cancellationToken)));
+            items.Select(item => item.HasEpisodeImage
+                ? Task.FromResult<Episode?>(null)
+                : TryGetEpisodeAsync(item.EpisodeId, cancellationToken)));
 
         return items
             .Zip(episodes, (item, episode) =>

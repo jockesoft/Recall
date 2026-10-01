@@ -103,15 +103,18 @@ public sealed class RatingRepository(
         int targetTvdbId,
         CancellationToken cancellationToken = default)
     {
-        var query = dbContext.UserRatings
+        // One round trip: COUNT and AVG over the same rows in a single statement.
+        // Grouping by a constant yields one row when there are ratings and none
+        // when there aren't (a bare AVG over no rows would be NULL instead).
+        var summary = await dbContext.UserRatings
             .AsNoTracking()
-            .Where(x => x.TargetType == targetType && x.TargetTvdbId == targetTvdbId);
+            .Where(x => x.TargetType == targetType && x.TargetTvdbId == targetTvdbId)
+            .GroupBy(_ => 1)
+            .Select(g => new { Count = g.Count(), Average = g.Average(x => x.Value) })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var count = await query.CountAsync(cancellationToken);
-        if (count == 0)
-            return RatingSummary.Empty;
-
-        var average = await query.AverageAsync(x => x.Value, cancellationToken);
-        return new RatingSummary(average, count);
+        return summary is null
+            ? RatingSummary.Empty
+            : new RatingSummary(summary.Average, summary.Count);
     }
 }

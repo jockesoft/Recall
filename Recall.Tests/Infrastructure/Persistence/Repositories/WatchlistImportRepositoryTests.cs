@@ -185,6 +185,55 @@ public sealed class WatchlistImportRepositoryTests
         final.CompletedUtc.Should().NotBeNull();
     }
 
+    [Test]
+    public async Task RecalculateJobProgressAsync_Should_CountEveryStatusIntoItsBucket_ForThatJobOnly()
+    {
+        var userId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+        await SeedUserAsync(otherUserId);
+
+        await using var db = new AppDbContext(_dbOptions);
+        var sut = new WatchlistImportRepository(db);
+
+        var job = await sut.CreateJobAsync(userId, "export.csv",
+        [
+            new NewWatchlistImportItem(1, "tt0000001", "Imported A", "Movie", 8, IsSupported: true),
+            new NewWatchlistImportItem(2, "tt0000002", "Imported B", "Movie", 7, IsSupported: true),
+            new NewWatchlistImportItem(3, "tt0000003", "Already There", "TV Series", null, IsSupported: true),
+            new NewWatchlistImportItem(4, "tt0000004", "Not Found", "Movie", null, IsSupported: true),
+            new NewWatchlistImportItem(5, "tt0000005", "Failed", "Movie", null, IsSupported: true),
+            new NewWatchlistImportItem(6, "tt0000006", "Still Pending", "Movie", null, IsSupported: true),
+            new NewWatchlistImportItem(7, "tt0000007", "A Video Game", "Video Game", null, IsSupported: false)
+        ]);
+
+        // Another job's rows must not leak into this one's counts.
+        var otherJob = await sut.CreateJobAsync(otherUserId, "other.csv",
+        [
+            new NewWatchlistImportItem(1, "tt0000009", "Someone Else's", "Movie", 5, IsSupported: true)
+        ]);
+        await sut.MarkItemResultAsync(otherJob.Items[0].Id, WatchlistImportItemStatus.Imported, 9, "ok", CancellationToken.None);
+
+        var ids = job.Items.OrderBy(i => i.RowNumber).Select(i => i.Id).ToArray();
+        await sut.MarkItemResultAsync(ids[0], WatchlistImportItemStatus.Imported, 1, "ok", CancellationToken.None);
+        await sut.MarkItemResultAsync(ids[1], WatchlistImportItemStatus.Imported, 2, "ok", CancellationToken.None);
+        await sut.MarkItemResultAsync(ids[2], WatchlistImportItemStatus.AlreadyInLibrary, 3, "already", CancellationToken.None);
+        await sut.MarkItemResultAsync(ids[3], WatchlistImportItemStatus.NotFound, null, "no match", CancellationToken.None);
+        await sut.MarkItemResultAsync(ids[4], WatchlistImportItemStatus.Failed, null, "boom", CancellationToken.None);
+
+        await sut.RecalculateJobProgressAsync(job.Id);
+
+        var result = await sut.GetLatestJobForUserAsync(userId, includeItems: false);
+        result!.TotalCount.Should().Be(7);
+        result.ImportedCount.Should().Be(2);
+        result.SkippedCount.Should().Be(2, "one already in the library plus the unsupported title type");
+        result.NotFoundCount.Should().Be(1);
+        result.FailedCount.Should().Be(1);
+        result.ProcessedCount.Should().Be(6, "everything except the row still pending");
+        result.Status.Should().Be(WatchlistImportJobStatus.Processing);
+        result.CompletedUtc.Should().BeNull();
+    }
+
     private async Task SeedUserAsync(Guid userId)
     {
         await using var dbContext = new AppDbContext(_dbOptions);

@@ -64,17 +64,32 @@ The app accepts `X-Forwarded-*` from loopback and the private address ranges, wh
 host reaches the container, so nothing needs configuring for this.
 
 
-Take database dump from postgres container (run from the folder the dump should be saved in)
+Back up the production database
+
+Runs on the server. The Postgres container is `recall_postgres` (database `recall_db`, user `recall_user`);
+dumps are gzipped into `/var/backups/recall/`. Nothing here contains a password: the user, database and
+password come from the server's `.env.prod`.
 
 ```
-docker exec -t PostgreSQL_recall pg_dump -U postgres -d recall_db > dump.sql
-docker exec -t PostgreSQL_recall pg_dump -U postgres -d recall_db | gzip > dump.sql.gz
-```
+# In the folder that holds .env.prod: load POSTGRES_USER, POSTGRES_DB and POSTGRES_PASSWORD
+set -a; . ./.env.prod; set +a
 
-Restore DB Dump
+docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" recall_postgres \
+  pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  | gzip > "/var/backups/recall/recall_db_$(date +%Y%m%d_%H%M%S).sql.gz"
 ```
-docker cp dump.sql.gz PostgreSQL_recall:/dump.sql.gz
-docker exec -i PostgreSQL_recall bash -c "gunzip -c /dump.sql.gz | psql -U postgres -d recall_db"
+Do not add `-t` to `docker exec` here: a terminal rewrites line endings and corrupts the dump.
+
+Restore a backup
+
+The dump is plain SQL without `DROP` statements, so restore it into an empty database, with the app
+container stopped. Replace the file name with the backup to restore.
+```
+set -a; . ./.env.prod; set +a
+
+gunzip -c /var/backups/recall/recall_db_YYYYMMDD_HHMMSS.sql.gz \
+  | docker exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" recall_postgres \
+      psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
 
 Add update to DB

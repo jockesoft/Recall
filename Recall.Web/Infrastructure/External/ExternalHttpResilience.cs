@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Polly;
+using Recall.Web.Infrastructure.External.Omdb;
 using Polly.Timeout;
 
 namespace Recall.Web.Infrastructure.External;
@@ -30,7 +31,8 @@ public sealed class ExternalHttpResilienceOptions
 /// each throttled attempt, so a request gives its concurrency slot back while
 /// it waits to retry. <c>HttpClient.Timeout</c> is the per-attempt limit.</item>
 /// <item>OMDb has no throttle, so its pipeline is an ordinary handler inside
-/// the <c>HttpClient</c>, whose <c>Timeout</c> is the overall limit.</item>
+/// the <c>HttpClient</c>, whose <c>Timeout</c> is the overall limit. Its retry
+/// draws on the shared daily request budget.</item>
 /// </list>
 /// </summary>
 public static class ExternalHttpResilience
@@ -91,17 +93,31 @@ public static class ExternalHttpResilience
     }
 
     /// <summary>
-    /// OMDb: a single retry on a transient failure, and never on 429. OMDb's
-    /// 429 means the daily quota is gone, so a retry cannot succeed, and a
-    /// retry does not take a permit from <c>IOmdbRequestBudget</c> — keeping
-    /// them to one, and to failures that didn't count against the quota in the
-    /// first place, is what keeps that budget honest.
+    /// OMDb: a single retry on a transient failure, and never on 429 (OMDb's
+    /// 429 means the daily quota is gone, so a retry cannot succeed).
+    ///
+    /// Every request OMDb receives counts against its daily limit, retries
+    /// included. The caller takes a permit from <see cref="IOmdbRequestBudget"/>
+    /// for the first attempt; a retry takes its own here, and when the budget
+    /// has none left there is no retry — the first failure is what the caller
+    /// sees.
     /// </summary>
     public static IHttpClientBuilder AddOmdbResilience(this IHttpClientBuilder builder)
     {
         builder.AddResilienceHandler("omdb", (pipeline, context) =>
         {
+            var budget = context.ServiceProvider.GetRequiredService<IOmdbRequestBudget>();
             var retry = CreateRetry(context.ServiceProvider, OmdbMaxRetries, retryTooManyRequests: false);
+
+            // Polly also asks this after the final attempt, when no retry can
+            // follow; the attempt-number check keeps that from spending a permit
+            // on a request that will never be sent. The budget is asked last, so
+            // a permit is only taken for a retry that is otherwise going ahead.
+            retry.ShouldHandle = args => ValueTask.FromResult(
+                args.AttemptNumber < OmdbMaxRetries
+                && ShouldRetry(args.Outcome, retryTooManyRequests: false)
+                && budget.TryAcquire());
+
             retry.DisableForUnsafeHttpMethods();
 
             pipeline.AddRetry(retry);

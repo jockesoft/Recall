@@ -55,4 +55,41 @@ public class TheTvDbServiceExtensionsTests
 
         act.Should().ThrowAsync<OperationCanceledException>();
     }
+
+    [Test]
+    public async Task TryGetSeriesSummaryAsync_Should_ReturnSummary_OnSuccess()
+    {
+        var summary = new SeriesSummary { TvdbId = 42, Name = "Dark" };
+        _theTvDbService
+            .Setup(x => x.GetSeriesSummaryByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(summary);
+
+        var result = await _theTvDbService.Object.TryGetSeriesSummaryAsync(42, NullLogger.Instance, "UnitTest");
+
+        result.Should().BeSameAs(summary);
+    }
+
+    [Test]
+    public async Task TryGetSeriesSummaryAsync_Should_ReturnNull_WhenCallThrows()
+    {
+        _theTvDbService
+            .Setup(x => x.GetSeriesSummaryByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        var result = await _theTvDbService.Object.TryGetSeriesSummaryAsync(42, NullLogger.Instance, "UnitTest");
+
+        result.Should().BeNull("one bad series shouldn't fail a page that is loading fifty of them");
+    }
+
+    [Test]
+    public async Task TryGetSeriesSummaryAsync_Should_Propagate_OperationCanceledException()
+    {
+        _theTvDbService
+            .Setup(x => x.GetSeriesSummaryByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+
+        Func<Task> act = () => _theTvDbService.Object.TryGetSeriesSummaryAsync(42, NullLogger.Instance, "UnitTest");
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
 }

@@ -69,8 +69,8 @@ public sealed class FavoritesServiceTests
             movieLikes: [new UserLike(LikeTargetType.Movie, 2, 2, now.AddMinutes(-5))]);
 
         _theTvDbService
-            .Setup(x => x.GetSeriesAggregateByIdAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SeriesAggregate { TvdbId = 1, Name = "Some Series" });
+            .Setup(x => x.GetSeriesSummaryByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesSummary { TvdbId = 1, Name = "Some Series" });
         _theTvDbService
             .Setup(x => x.GetMovieAggregateByIdAsync(2, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MovieAggregate { TvdbId = 2, Name = "Some Movie" });
@@ -97,8 +97,8 @@ public sealed class FavoritesServiceTests
             movieLikes: [new UserLike(LikeTargetType.Movie, 3, 3, now.AddMinutes(-2))]);
 
         _theTvDbService
-            .Setup(x => x.GetSeriesAggregateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((int id, CancellationToken _) => new SeriesAggregate { TvdbId = id, Name = $"Series {id}" });
+            .Setup(x => x.GetSeriesSummaryByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int id, CancellationToken _) => new SeriesSummary { TvdbId = id, Name = $"Series {id}" });
         _theTvDbService
             .Setup(x => x.GetMovieAggregateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((int id, CancellationToken _) => new MovieAggregate { TvdbId = id, Name = $"Movie {id}" });
@@ -119,8 +119,8 @@ public sealed class FavoritesServiceTests
             movieLikes: [new UserLike(LikeTargetType.Movie, 2, 2, now)]);
 
         _theTvDbService
-            .Setup(x => x.GetSeriesAggregateByIdAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((SeriesAggregate?)null);
+            .Setup(x => x.GetSeriesSummaryByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SeriesSummary?)null);
         _theTvDbService
             .Setup(x => x.GetMovieAggregateByIdAsync(2, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MovieAggregate { TvdbId = 2, Name = "Still Here" });
@@ -138,7 +138,7 @@ public sealed class FavoritesServiceTests
         var result = await _sut.GetLikedTitlesAsync(Guid.NewGuid(), limit: null);
 
         result.Should().BeEmpty();
-        _theTvDbService.Verify(x => x.GetSeriesAggregateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _theTvDbService.Verify(x => x.GetSeriesSummaryByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
         _theTvDbService.Verify(x => x.GetMovieAggregateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

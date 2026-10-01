@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.External;
+using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
 
@@ -66,7 +67,30 @@ public class ExternalHttpResilienceTests
         return response;
     }
 
-    private static ServiceProvider BuildServices(ScriptedHandler handler, TimeSpan? retryDelay = null)
+    /// <summary>Counts the permits the client's own retry takes. The caller's permit for the first attempt is not its concern.</summary>
+    private sealed class CountingBudget(int available = int.MaxValue) : IOmdbRequestBudget
+    {
+        private int _available = available;
+
+        public int Acquired { get; private set; }
+        public int Refused { get; private set; }
+
+        public bool TryAcquire()
+        {
+            if (_available <= 0)
+            {
+                Refused++;
+                return false;
+            }
+
+            _available--;
+            Acquired++;
+            return true;
+        }
+    }
+
+    private static ServiceProvider BuildServices(
+        ScriptedHandler handler, TimeSpan? retryDelay = null, IOmdbRequestBudget? omdbBudget = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -82,6 +106,8 @@ public class ExternalHttpResilienceTests
         services.AddLogging();
         services.AddTheTvDb(configuration);
         services.AddOmdb(configuration);
+        if (omdbBudget is not null)
+            services.AddSingleton(omdbBudget); // the last registration wins
         services.Configure<ExternalHttpResilienceOptions>(o =>
         {
             o.RetryBaseDelay = retryDelay ?? TimeSpan.FromMilliseconds(1);
@@ -341,5 +367,73 @@ public class ExternalHttpResilienceTests
             await act.Should().ThrowAsync<HttpRequestException>();
             handler.DataAttempts.Should().Be(1);
         }
+    }
+
+    [Test]
+    public async Task Omdb_Retry_Should_TakeOnePermitFromTheBudget()
+    {
+        var budget = new CountingBudget();
+        var handler = new ScriptedHandler(
+            () => Status(HttpStatusCode.ServiceUnavailable),
+            () => Json(OmdbJson));
+        await using var services = BuildServices(handler, omdbBudget: budget);
+
+        await services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
+
+        handler.DataAttempts.Should().Be(2);
+        budget.Acquired.Should().Be(1, "the second request is a real one against OMDb's daily limit");
+    }
+
+    [Test]
+    public async Task Omdb_Should_NotRetry_WhenTheBudgetHasNoPermitLeft()
+    {
+        var budget = new CountingBudget(available: 0);
+        var handler = new ScriptedHandler(
+            () => Status(HttpStatusCode.ServiceUnavailable),
+            () => Json(OmdbJson));
+        await using var services = BuildServices(handler, omdbBudget: budget);
+
+        var act = () => services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+        handler.DataAttempts.Should().Be(1, "without a permit the retry is not sent");
+        budget.Refused.Should().Be(1);
+    }
+
+    [Test]
+    public async Task Omdb_Should_TakeOnlyOnePermit_WhenTheRetryFailsToo()
+    {
+        // Two requests go out. The pipeline is asked "retry?" after each, but
+        // after the second there is no retry left to pay for.
+        var budget = new CountingBudget();
+        var handler = new ScriptedHandler(() => Status(HttpStatusCode.ServiceUnavailable));
+        await using var services = BuildServices(handler, omdbBudget: budget);
+
+        var act = () => services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+        handler.DataAttempts.Should().Be(2);
+        budget.Acquired.Should().Be(1);
+    }
+
+    [Test]
+    public async Task Omdb_Should_TakeNoPermit_WhenNothingIsRetried()
+    {
+        var budget = new CountingBudget();
+
+        // First try succeeds.
+        await using (var services = BuildServices(new ScriptedHandler(() => Json(OmdbJson)), omdbBudget: budget))
+            await services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
+
+        // Failures that are never retried: quota exhausted, and a client error.
+        foreach (var status in new[] { HttpStatusCode.TooManyRequests, HttpStatusCode.NotFound })
+        {
+            await using var services = BuildServices(new ScriptedHandler(() => Status(status)), omdbBudget: budget);
+            var act = () => services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
+            await act.Should().ThrowAsync<HttpRequestException>();
+        }
+
+        budget.Acquired.Should().Be(0);
+        budget.Refused.Should().Be(0, "the budget must not even be asked for a request that won't be retried");
     }
 }

@@ -29,6 +29,30 @@ public static class TheTvDbServiceExtensions
     }
 
     /// <summary>
+    /// Best-effort series summary fetch, for pages and jobs that load many
+    /// series at once: swallows any exception except cancellation, logs a
+    /// warning tagged with <paramref name="context"/>, and returns <c>null</c>
+    /// instead of letting one bad series take the rest down.
+    /// </summary>
+    public static async Task<SeriesSummary?> TryGetSeriesSummaryAsync(
+        this ITheTvDbService theTvDbService,
+        int seriesTvdbId,
+        ILogger logger,
+        string context,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await theTvDbService.GetSeriesSummaryByIdAsync(seriesTvdbId, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "{Context}: could not load series summary {SeriesId}.", context, seriesTvdbId);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Best-effort movie aggregate fetch: swallows any exception except
     /// cancellation, logs a warning tagged with <paramref name="context"/>, and
     /// returns <c>null</c> instead of letting one bad movie take down a page or
