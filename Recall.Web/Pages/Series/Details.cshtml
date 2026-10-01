@@ -400,7 +400,7 @@
                     @foreach (var ep in filteredEpisodes)
                     {
                         var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
-                        var hasAired = ep.Aired is { } airedOn && airedOn <= DateOnly.FromDateTime(DateTime.Today);
+                        var hasAired = ep.Aired is { } airedOn && airedOn <= Recall.Web.Services.WatchTracking.AirDate.Today;
                         <div class="list-group-item @(isWatched ? "is-watched" : "")">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>

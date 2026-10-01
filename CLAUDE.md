@@ -119,7 +119,9 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 - **Up to date**: nothing unwatched and TheTVDB status is not "Ended".
 - **Watched**: nothing unwatched and status is "Ended"; watched movies are listed here too.
 
-**Progress** is computed by `Services/WatchTracking/WatchProgressCalculator.Build`: order episodes with `OrderBySeasonAndEpisode` (unknown numbers last, tie-break by id), keep those aired on or before today, and the next episode to watch is the first of those without an `EpisodeWatch` row. Episodes flagged `IsMovie` are excluded. "Mark watched through" (`WatchProgressService.MarkWatchedThroughAsync`) inserts watches for every earlier episode in that order.
+**Progress** is computed by `Services/WatchTracking/WatchProgressCalculator.Build`: order episodes with `OrderBySeasonAndEpisode` (unknown numbers last, tie-break by id), keep those aired on or before today, and the next episode to watch is the first of those without an `EpisodeWatch` row. Episodes flagged `IsMovie` are excluded. The episode list always comes from the series aggregate.
+
+**Watch writes go through `IWatchProgressService`**, never straight to `IEpisodeWatchRepository`: `MarkEpisodeWatchedAsync` / `ToggleEpisodeWatchedAsync` first verify the episode belongs to the submitted series (the aggregate, falling back to the episode's own record) and reject a future air date. `MarkWatchedThroughAsync` marks the target and every earlier episode, skipping any with a future air date.
 
 Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rated, and nothing else.
 
@@ -223,7 +225,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 226 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 242 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite.
@@ -280,9 +282,10 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 - **Error handling in page handlers**: wrap in `try`, log, set an error toast, redirect or re-render. Jobs and fan-outs use `catch (Exception ex) when (ex is not OperationCanceledException)` so one bad item never aborts a batch.
 - **Best-effort external calls**: reuse `ITheTvDbService.TryGetSeriesAggregateAsync` / `TryGetMovieAggregateAsync` (swallow and log) and `Task<T?>.AsOptionalAsync(...)` (swallows `TheTvDbApiException` only). A primary fetch failure should still propagate.
 - **Episode ordering**: `EpisodeOrderingExtensions.OrderBySeasonAndEpisode` is the single implementation; reuse it.
+- **Recording a watch**: call `IWatchProgressService`; it validates the series/episode pair and the air date. Page handlers map the returned `EpisodeWatchOutcome` to a toast.
 - **Parallelism**: only fan out over code that uses `IDbContextFactory`. Never run two operations on the scoped `AppDbContext` at once.
 - **Logging**: structured message templates with `ILogger<T>`; no string interpolation in log calls.
-- **Time**: persistence and jobs use `DateTime.UtcNow`. "Has it aired" checks in pages and `WatchProgressService` use `DateTime.Today`.
+- **Time**: persistence and jobs use `DateTime.UtcNow`. Air-date comparisons use `AirDate.Today` / `AirDate.IsInFuture` (`Services/WatchTracking/AirDate.cs`), the UTC date; do not use `DateTime.Today` for them. An unknown air date is not treated as unaired.
 - **Comments**: the codebase explains *why* in comments and XML docs on non-obvious code; keep that density.
 - **SEO**: pages are `noindex` unless they set `ViewData["Robots"]`.
 
@@ -294,9 +297,9 @@ Described only, ranked by impact. Nothing here has been changed.
 2. **Forwarded headers: fixed, with a residual default.** Headers are now applied only from trusted proxies and the compose ports are loopback-only. What remains: the default trusts all private ranges, so any other machine or container on a private network that can reach the app could still forge `X-Forwarded-For`; set `TrustedProxies__Networks__0` to the proxy's exact network to close that. The loopback binding only takes effect once the server's own copy of `compose.prod.yml` is updated.
 3. **Sessions cannot be revoked.** The role and identity live in a 30-day sliding cookie with no `OnValidatePrincipal` check. Demoting or deleting a user has no effect until the cookie expires.
 4. **No HTTP resilience.** Neither typed client has retry, backoff or circuit breaking; a TheTVDB 429 or transient 5xx surfaces as a failed page or a skipped job item. The Turnstile client uses the default 100 s timeout.
-5. **Some cached rows are never refreshed.** The refresh jobs only pick aggregates where `KeepUpdated = true`, and reads never check age in Postgres. A series or movie cached with `KeepUpdated` false or null is served unchanged indefinitely; `cached_series_extended` has no refresh path at all.
-6. **Two sources for a series' episode list.** Display and progress use the aggregate (`series:aggregate`); "mark watched through" and the prior-unwatched prompt use `GetSeriesByIdExtendedAsync` (`series:extended`, never refreshed, see 5). They can disagree about which episodes exist.
-7. **Write handlers trust client-supplied id pairs.** `Dashboard.OnPostMarkWatchedAsync` and `Series/Details.OnPostToggleEpisodeWatchedAsync` store `(seriesId, episodeId)` without checking that the episode belongs to the series; the Dashboard handler also skips the has-aired check. Episode like and rating fall back to using the episode id as the series id when the lookup returns nothing.
+5. **Some cached rows are never refreshed.** The refresh jobs only pick aggregates where `KeepUpdated = true`, and reads never check age in Postgres. A series or movie cached with `KeepUpdated` false or null is served unchanged indefinitely. `cached_series_extended` has no refresh path at all, and after the item-2 change nothing on the watch-progress path reads it; `ITheTvDbService.GetSeriesByIdExtendedAsync` now has no caller outside tests.
+6. **Two sources for a series' episode list: fixed.** Display, progress, "mark watched through" and the prior-unwatched prompt all read the aggregate.
+7. **Write handlers trusting client-supplied id pairs: fixed for watches, likes and ratings on episodes.** They go through `IWatchProgressService` or refuse when the parent series can't be resolved. Still unvalidated: series and movie like/rating handlers accept any positive id without checking it exists on TheTVDB.
 8. **Single-instance assumptions.** Login abuse limits, the OMDb daily budget, the TheTVDB token and the Quartz schedule are all in process memory, and migrations run at startup. Every deploy resets the OMDb budget and login counters. A second instance would double every job.
 9. **Test gaps.** No page-model or pipeline tests although `Mvc.Testing` is referenced; no job tests; SQLite cannot exercise the Postgres-specific branches; CI coverage is informational only.
 10. **Dead or unused code and dependencies.** Four unused packages (section 2); `AddControllers` and `MapControllerRoute` with no controllers; `AddSession`/`UseSession` with no session use; `IConnectionMultiplexer` registered "for locking" but never injected; `AddHttpClient<ITheTvDbApiClient, …>` registered twice (`Program.cs` and `AddTheTvDb`); `AppDbContextFactory` fully commented out; `UserItem` and `UserMappings` unreferenced; empty `site.js` and an empty `<script type="importmap">`; stale csproj items (`_LoginPartial.cshtml`, `Services\Models\`).
@@ -304,7 +307,7 @@ Described only, ranked by impact. Nothing here has been changed.
 12. **State-changing GETs.** `/Account/Logout` signs out on GET; `Notifications?handler=Open` marks a notification read on GET.
 13. **Unbounded tables.** `login_token`, `email` (including sent magic-link bodies), `notified_episode`, `notification` and import items are never pruned.
 14. **Duplication.** `ApplyAuditTimestamps` repeats the same block nine times; the three OMDb snapshot stores and two OMDb jobs are near copies; the "is authenticated" guard is repeated in every Details POST handler.
-15. **Local time for air dates.** `DateTime.Today` is server-local. Production sets `TZ=UTC`, so it matches the jobs there, but a developer machine does not, and there is no notion of the user's time zone.
+15. **Local time for air dates: fixed.** All air-date checks use the UTC date via `AirDate`. There is still no notion of the user's time zone, and the Dashboard header prints the server-local date.
 16. **Deployment details.** The image sets a Swedish locale (`sv_SE.UTF-8`), so culture-sensitive date formatting such as the Dashboard's `ToString("dddd, MMMM d")` renders in Swedish on an English site **(inference)**; the log directory is `chmod 777`; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
 17. **Stale documentation and comments.** `AGENTS.md` predates movies, likes, ratings and import. `README.md` backup commands point at a Receptus path. Several comments say jobs are "scheduled in `Program.cs`"; `AddOmdb` says nothing calls OMDb on a request path; `_Layout` says almost every page requires sign-in; `LogoutModel` says the nav links with GET (it posts).
 18. **Debug builds log the raw login token** (`PasswordlessAuthService`, inside `#if DEBUG`). Deliberate for local sign-in, but a Debug build must never be deployed.
@@ -334,5 +337,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (226 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (242 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

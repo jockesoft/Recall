@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
@@ -83,7 +84,7 @@ public sealed class DashboardModel(
         var seriesIds = aggregates.Select(a => a.TvdbId).ToList();
         var watchedIds = await watchedRepository.GetWatchedEpisodeIdsAsync(userId, seriesIds, cancellationToken);
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = AirDate.Today;
         var upcomingCutoff = today.AddDays(UpcomingWindowDays);
         var thisWeekCutoff = today.AddDays(ThisWeekWindowDays);
 
@@ -198,7 +199,25 @@ public sealed class DashboardModel(
     public async Task<IActionResult> OnPostMarkWatchedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
     {
         var userId = currentUserService.UserId  ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-        await watchedRepository.MarkWatchedAsync(userId, seriesId, episodeId, cancellationToken);
+
+        try
+        {
+            switch (await watchProgressService.MarkEpisodeWatchedAsync(userId, seriesId, episodeId, cancellationToken))
+            {
+                case EpisodeWatchOutcome.EpisodeNotInSeries:
+                    this.SetErrorToast("That episode doesn't belong to this series.");
+                    break;
+                case EpisodeWatchOutcome.NotAired:
+                    this.SetErrorToast("You can't mark an episode as watched before it has aired.");
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed marking episode {EpisodeId} of series {SeriesId} watched from the dashboard.", episodeId, seriesId);
+            this.SetErrorToast("Could not update watched status right now.");
+        }
+
         return RedirectToPage();
     }
 }

@@ -75,5 +75,5 @@ public sealed class UpcomingEpisodeCardModel
 
     /// <summary>Whole days from today until the episode airs (never negative).</summary>
     public int DaysUntilAired =>
-        Math.Max(0, AiredDate.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber);
+        Math.Max(0, AiredDate.DayNumber - Recall.Web.Services.WatchTracking.AirDate.Today.DayNumber);
 }
