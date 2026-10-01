@@ -38,7 +38,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 
 **Registration order**
 
-1. Serilog from configuration (`UseSerilog`, console + rolling daily file).
+1. `AppCulture.PinToEnglish()` before anything else, then Serilog from configuration (`UseSerilog`, console + rolling daily file).
 2. `AddRazorPages`, `AddControllers().AddViewLocalization()`, `AddAntiforgery`, `AddHttpContextAccessor`.
 3. `AddTrustedForwardedHeaders`: X-Forwarded-For/Proto/Host, applied only when the request comes from a trusted proxy. The `TrustedProxies` section (`Infrastructure/Hosting/TrustedProxyOptions.cs`) lists `Addresses` and `Networks`; with both empty the default is loopback plus the private ranges. An invalid entry fails startup.
 4. `AddCookieAuthentication`, `AddAppSession`, `AddAuthorization` (no fallback policy).
@@ -230,7 +230,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 284 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 285 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: page models (apart from the POST-only checks in `Pages/PostOnlyStateChangeTests.cs`), all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
@@ -293,6 +293,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 - **Time**: persistence and jobs use `DateTime.UtcNow`. Air-date comparisons use `AirDate.Today` / `AirDate.IsInFuture` (`Services/WatchTracking/AirDate.cs`), the UTC date; do not use `DateTime.Today` for them. An unknown air date is not treated as unaired.
 - **Comments**: the codebase explains *why* in comments and XML docs on non-obvious code; keep that density.
 - **SEO**: pages are `noindex` unless they set `ViewData["Robots"]`.
+- **Culture**: the process culture is pinned to `en-US` (`Infrastructure/Hosting/AppCulture.cs`). Do not set `LANG`/`LC_ALL` in images or add request localization; machine-readable output (sitemap dates, JSON-LD, anything parsed back) should still pass `CultureInfo.InvariantCulture` explicitly.
 
 ## Observations
 
@@ -313,7 +314,7 @@ Described only, ranked by impact. Nothing here has been changed.
 13. **Unbounded tables.** `login_token`, `email`, `notified_episode`, `notification` and import items are never pruned. Sent emails no longer keep their bodies (so no magic-link text is retained), but the rows remain, and a message that exhausted its send attempts keeps its body indefinitely.
 14. **Duplication.** `ApplyAuditTimestamps` repeats the same block nine times; the three OMDb snapshot stores and two OMDb jobs are near copies; the "is authenticated" guard is repeated in every Details POST handler.
 15. **Local time for air dates: fixed.** All air-date checks use the UTC date via `AirDate`. There is still no notion of the user's time zone, and the Dashboard header prints the server-local date.
-16. **Deployment details.** The image sets a Swedish locale (`sv_SE.UTF-8`), so culture-sensitive date formatting such as the Dashboard's `ToString("dddd, MMMM d")` renders in Swedish on an English site **(inference)**; the log directory is `chmod 777`; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
+16. **Deployment details.** The Swedish locale is gone: `Dockerfile.prod` no longer generates or sets `sv_SE.UTF-8`, and the app pins its own culture (`AppCulture.PinToEnglish`, `en-US`) at startup, so dates and numbers render in English whatever the host is set to. This was confirmed, not inferred: on a Swedish-locale machine the Dashboard header read "torsdag, oktober 1" before and "Thursday, October 1" after. Still open: the log directory is `chmod 777`; the image installs fonts nothing in the app uses; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
 17. **Stale documentation and comments.** `AGENTS.md` predates movies, likes, ratings and import. `README.md` backup commands point at a Receptus path. Several comments say jobs are "scheduled in `Program.cs`"; `AddOmdb` says nothing calls OMDb on a request path; `_Layout` says almost every page requires sign-in.
 18. **Debug builds log the raw login token** (`PasswordlessAuthService`, inside `#if DEBUG`). Deliberate for local sign-in, but a Debug build must never be deployed.
 
@@ -342,5 +343,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (284 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (285 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

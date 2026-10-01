@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Hosting;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Middleware;
 using Recall.Web.Services.Health;
 using Serilog;
+
+// English-only site: don't inherit the host's language for dates and numbers.
+AppCulture.PinToEnglish();
 
 var builder = WebApplication.CreateBuilder(args);
 
