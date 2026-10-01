@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Services.Authentication;
 
 namespace Recall.Web.Pages.Account;
@@ -28,19 +28,9 @@ public sealed class VerifyModel(IPasswordlessAuthService authService) : PageMode
         if (!result.Succeeded)
             return Page();
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, result.UserId.ToString()),
-            new(ClaimTypes.Name, result.DisplayName),
-            new(ClaimTypes.Email, result.Email),
-            new(ClaimTypes.Role, result.Role.ToString())
-        };
-
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity),
+            RecallPrincipal.Create(result.UserId, result.DisplayName, result.Email, result.Role),
             new AuthenticationProperties { IsPersistent = true });
 
         var target = !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl! : "/Dashboard";

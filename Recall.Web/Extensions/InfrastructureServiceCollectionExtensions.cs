@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Quartz;
+using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Infrastructure.Caching;
 using Recall.Web.Infrastructure.Hosting;
 using Recall.Web.Infrastructure.Persistence;
@@ -121,6 +123,10 @@ public static class InfrastructureServiceCollectionExtensions
 
     public static IServiceCollection AddCookieAuthentication(this IServiceCollection services)
     {
+        // Re-checks the cookie against the user row every few minutes — see RecallCookieEvents.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<RecallCookieEvents>();
+
         services
             .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
@@ -130,6 +136,7 @@ public static class InfrastructureServiceCollectionExtensions
                 options.AccessDeniedPath = "/Account/Login";
                 options.ExpireTimeSpan = TimeSpan.FromDays(30);
                 options.SlidingExpiration = true;
+                options.EventsType = typeof(RecallCookieEvents);
                 options.Cookie.Name = "Recall.Auth";
                 options.Cookie.HttpOnly = true;
                 // Lax (not Strict) so the cookie survives the top-level GET navigation

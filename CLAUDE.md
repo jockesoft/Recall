@@ -53,7 +53,7 @@ All of these live in `Extensions/ServiceCollectionExtensions.cs` (application se
 | Lifetime | Services |
 |---|---|
 | Singleton | `TheTvDbClientState`, `IDistributedCacheJson`, `IConnectionMultiplexer`, `IOmdbRequestBudget`, `ILoginAbuseGuard` |
-| Scoped | `AppDbContext`, all repositories, all services, snapshot stores, `ICurrentUserService` |
+| Scoped | `AppDbContext`, all repositories, all services, snapshot stores, `ICurrentUserService`, `RecallCookieEvents` |
 | Transient (typed `HttpClient`) | `ITheTvDbApiClient`, `IOmdbApiClient`, `ITurnstileVerifier` |
 | Factory | `IDbContextFactory<AppDbContext>`, for code that fans out in parallel |
 
@@ -193,6 +193,7 @@ User secrets in development (`UserSecretsId` in the csproj); environment variabl
 ## 8. Authentication and authorization
 
 - No ASP.NET Core Identity, external providers or JWT. Cookie authentication only (`AddCookieAuthentication`): cookie `Recall.Auth`, 30-day sliding expiry, HttpOnly, SameSite=Lax, Secure in Release builds. Login and access-denied paths are both `/Account/Login`.
+- **Cookie revalidation**: `Infrastructure/Authentication/RecallCookieEvents.cs` (`options.EventsType`) re-reads the user row at most every 5 minutes per session. A missing user is signed out; a changed username, email or role is reissued into the cookie. The last-check time is stored in the cookie's own properties. A database error keeps the session and retries on the next request. `RecallPrincipal.Create` is the single definition of the claim set; use it when issuing a cookie.
 - **Request a link** (`PasswordlessAuthService.RequestLoginAsync`): normalize email → optional allowlist (`Login:AllowedEmails`; empty means open registration) → `ILoginAbuseGuard` per-address daily cap and site-wide hourly cap → get or create the user → per-user resend cooldown → invalidate earlier tokens → store the SHA-256 hash of a 32-byte random token → queue the email. The page shows the same "link sent" result in every case.
 - **Redeem** (`RedeemAsync`, `Pages/Account/Verify`): look up an unconsumed, unexpired hash, then `MarkConsumedAsync` (atomic `UPDATE … WHERE ConsumedUtc IS NULL`). The result of that update is checked so two simultaneous redemptions cannot both succeed. Then `SignInAsync` with `NameIdentifier`, `Name`, `Email` and `Role` claims.
 - **Bot defenses on the login form**: honeypot field, minimum 2 s render-to-submit time, Turnstile, per-IP rate limit (`login-email` policy, 8 per 5 minutes) and a global limiter on POSTs to `/Account/Login` (300 per minute).
@@ -227,7 +228,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 259 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 268 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
@@ -297,7 +298,7 @@ Described only, ranked by impact. Nothing here has been changed.
 
 1. **Anonymous pages can spend upstream quota.** `Series/Details`, `Episodes/Details` and `Movies/Details` are public, indexable and have no rate limit. A request for an uncached id calls TheTVDB and writes Redis and Postgres rows; an episode page can also make a live OMDb call. `/sitemap.xml` lists every cached episode, so crawlers are invited to each one, and the sitemap has no size cap (the protocol limit is 50,000 URLs). The shared OMDb budget caps the damage at 900 calls a day but lets anonymous traffic starve the hourly enrichment jobs.
 2. **Forwarded headers: fixed, with a residual default.** Headers are now applied only from trusted proxies and the compose ports are loopback-only. What remains: the default trusts all private ranges, so any other machine or container on a private network that can reach the app could still forge `X-Forwarded-For`; set `TrustedProxies__Networks__0` to the proxy's exact network to close that. The loopback binding only takes effect once the server's own copy of `compose.prod.yml` is updated.
-3. **Sessions cannot be revoked.** The role and identity live in a 30-day sliding cookie with no `OnValidatePrincipal` check. Demoting or deleting a user has no effect until the cookie expires.
+3. **Sessions that could not be revoked: fixed, within 5 minutes.** Deleting or demoting a user takes effect at the next revalidation. There is still no "sign out everywhere" for a user who keeps their account, and no admin UI to do either; both remain manual database edits.
 4. **No HTTP resilience.** Neither typed client has retry, backoff or circuit breaking; a TheTVDB 429 or transient 5xx surfaces as a failed page or a skipped job item. The Turnstile client uses the default 100 s timeout.
 5. **Cached aggregates never refreshing: fixed.** Rows without `KeepUpdated = true` are now refreshed every 30 days. Remaining: `cached_series_extended` still has no refresh path, but nothing reads it any more (`ITheTvDbService.GetSeriesByIdExtendedAsync` has no caller outside tests), so the table and method are candidates for removal. The refresh cap (10 series and 10 movies an hour) bounds how fast a large, crawler-filled cache cycles.
 6. **Two sources for a series' episode list: fixed.** Display, progress, "mark watched through" and the prior-unwatched prompt all read the aggregate.
@@ -339,5 +340,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (259 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (268 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.
