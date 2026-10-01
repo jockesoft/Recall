@@ -79,7 +79,7 @@ Razor Pages only. No MVC controllers, Blazor or minimal APIs. Two handlers retur
 | `/Episodes/Details/{id:int}` | **anonymous read** | Episode detail, prev/next, watched, like, rating, IMDb score |
 | `/Movies/Details/{id:int}` | **anonymous read** | Movie detail, watched, like, rating |
 | `/Account/Login`, `/Account/Verify` | anonymous | Request and redeem the magic link |
-| `/Account/Logout` | none | Signs out on GET or POST |
+| `/Account/Logout` | none | Signs out on POST only; a GET just redirects home |
 | `/Account/Profile`, `EditProfile`, `Favorites`, `Notifications`, `ImportWatchlist` | `[Authorize]` | Account area |
 | `/Admin` | `[Authorize(Roles = Roles.Admin)]` | User counts |
 | `/sitemap.xml` (`Pages/Sitemap`) | anonymous | Dynamic sitemap from the cache tables |
@@ -88,7 +88,7 @@ Razor Pages only. No MVC controllers, Blazor or minimal APIs. Two handlers retur
 - The three Details pages have no `[Authorize]`. Their POST handlers check `ICurrentUserService.IsAuthenticated` by hand and redirect with an error toast.
 - **Layout** (`Pages/Shared/_Layout.cshtml`): nav, footer attributions, cookie notice, and per-page SEO tags from `ViewData["Title"|"Description"|"Robots"]`. Robots defaults to `noindex, nofollow`; Index, Login, Privacy and the three Details pages opt in. The build number is read from `build.txt` next to the binaries.
 - **Partials** (`Pages/Shared/`): `_SeriesCard`, `_CatchUpCard`, `_UpcomingEpisodeCard`, `_FavoriteEpisodeRow`, `_EpisodeWatchedToggle`, `_LikeToggle`, `_RatingWidget`, `_TypeFilterBar`, `_NotificationBell` (injects `INotificationService` and runs an unread `COUNT` on every signed-in page render), `_ToastMessages`. Each takes a small model class from the same folder.
-- **Forms**: plain `<form method="post" asp-page-handler="…">`, then redirect (PRG). Antiforgery is the Razor Pages default; inline `fetch` calls copy `__RequestVerificationToken` from the page.
+- **Forms**: plain `<form method="post" asp-page-handler="…">`, then redirect (PRG). Antiforgery is the Razor Pages default; inline `fetch` calls copy `__RequestVerificationToken` from the page. State changes are never GET handlers, including sign-out and opening a notification (which marks it read).
 - **Validation**: data annotations on `[BindProperty]` properties (`Login`, `Search`, `EditProfile`) with jQuery unobtrusive validation on the client. Most action handlers take route/form primitives and validate by hand (`if (value is < 1 or > 10)`).
 - **Feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)` write TempData keys that `_ToastMessages` renders. `SetSuccessToastWithWatchedUndo(message, seriesId, batch)` adds an Undo button to the toast: a POST form to `Series/Details?handler=UndoWatched`, shown when the bulk mark inserted more than one row.
 
@@ -230,10 +230,10 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 280 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 284 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
-- **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
+- **Not covered**: page models (apart from the POST-only checks in `Pages/PostOnlyStateChangeTests.cs`), all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
 
 ```bash
 dotnet test Recall.sln                                              # everything
@@ -309,12 +309,12 @@ Described only, ranked by impact. Nothing here has been changed.
 9. **Test gaps.** No page-model or pipeline tests although `Mvc.Testing` is referenced; no job tests; SQLite cannot exercise the Postgres-specific branches; CI coverage is informational only.
 10. **Dead or unused code and dependencies.** Four unused packages (section 2); `AddControllers` and `MapControllerRoute` with no controllers; `AddSession`/`UseSession` with no session use; `IConnectionMultiplexer` registered "for locking" but never injected; `AppDbContextFactory` fully commented out; `UserItem` and `UserMappings` unreferenced; empty `site.js` and an empty `<script type="importmap">`; stale csproj items (`_LoginPartial.cshtml`, `Services\Models\`).
 11. **Convention drift.** `IAppUserRepository` returns entities; `Admin/Index` queries `AppDbContext` directly; control flow by exception message (`ex.Message.Contains("already in your library")`); `OmdbSeries` is also the type for movies and episodes; `EpisodeOmdbSnapshotStore` uses the scoped context while its two siblings use the factory.
-12. **State-changing GETs.** `/Account/Logout` signs out on GET; `Notifications?handler=Open` marks a notification read on GET.
+12. **State-changing GETs: fixed.** Logout and notification-open are POST-only. Convention: anything that changes state is a POST handler behind the antiforgery token.
 13. **Unbounded tables.** `login_token`, `email`, `notified_episode`, `notification` and import items are never pruned. Sent emails no longer keep their bodies (so no magic-link text is retained), but the rows remain, and a message that exhausted its send attempts keeps its body indefinitely.
 14. **Duplication.** `ApplyAuditTimestamps` repeats the same block nine times; the three OMDb snapshot stores and two OMDb jobs are near copies; the "is authenticated" guard is repeated in every Details POST handler.
 15. **Local time for air dates: fixed.** All air-date checks use the UTC date via `AirDate`. There is still no notion of the user's time zone, and the Dashboard header prints the server-local date.
 16. **Deployment details.** The image sets a Swedish locale (`sv_SE.UTF-8`), so culture-sensitive date formatting such as the Dashboard's `ToString("dddd, MMMM d")` renders in Swedish on an English site **(inference)**; the log directory is `chmod 777`; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
-17. **Stale documentation and comments.** `AGENTS.md` predates movies, likes, ratings and import. `README.md` backup commands point at a Receptus path. Several comments say jobs are "scheduled in `Program.cs`"; `AddOmdb` says nothing calls OMDb on a request path; `_Layout` says almost every page requires sign-in; `LogoutModel` says the nav links with GET (it posts).
+17. **Stale documentation and comments.** `AGENTS.md` predates movies, likes, ratings and import. `README.md` backup commands point at a Receptus path. Several comments say jobs are "scheduled in `Program.cs`"; `AddOmdb` says nothing calls OMDb on a request path; `_Layout` says almost every page requires sign-in.
 18. **Debug builds log the raw login token** (`PasswordlessAuthService`, inside `#if DEBUG`). Deliberate for local sign-in, but a Debug build must never be deployed.
 
 ## Open questions
@@ -342,5 +342,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (280 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (284 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

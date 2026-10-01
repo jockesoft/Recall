@@ -349,6 +349,15 @@ hr {
     transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.05s ease;
 }
 
+/* Each row is a submit button (opening one marks it read, so it's a POST) —
+   undo the button defaults so it still reads as a full-width row. */
+button.tvdb-notification {
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
 .tvdb-notification:hover,
 .tvdb-notification:focus-visible {
     border-color: var(--tvdb-signal);

@@ -39,8 +39,9 @@
                 <div class="tvdb-notification-list">
                     @foreach (var n in Model.Notifications)
                     {
-                        <a class="tvdb-notification @(n.IsRead ? null : "is-unread")"
-                           asp-page-handler="Open" asp-route-id="@n.Id">
+                        @* A form, not a link: opening marks the notification read. *@
+                        <form method="post" asp-page-handler="Open" asp-route-id="@n.Id">
+                        <button type="submit" class="tvdb-notification @(n.IsRead ? null : "is-unread")">
                             <span class="tvdb-notification-icon">
                                 <i class="@n.IconClass" aria-hidden="true"></i>
                             </span>
@@ -52,7 +53,8 @@
                                 }
                                 <span class="tvdb-notification-time">@n.RelativeTime</span>
                             </span>
-                        </a>
+                        </button>
+                        </form>
                     }
                 </div>
             }
