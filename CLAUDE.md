@@ -40,7 +40,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 - **Framework**: `net10.0` in both projects, nullable and implicit usings enabled. No SDK pin; CI uses `10.0.x`. C# 14 features are in use (`extension` blocks in `Extensions/PageModelToastExtensions.cs`, primary constructors everywhere).
 - **Packages that matter** (`Recall.Web/Recall.Web.csproj`): EF Core 10.0.12, `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, `Microsoft.Extensions.Caching.StackExchangeRedis` 10.0.12, `Quartz` 4.3.0, `Microsoft.Extensions.Http.Resilience` 10.10.0, `Serilog.AspNetCore` 10.0.0 with Console and File sinks.
 - Every package referenced by `Recall.Web` is used. (Swashbuckle, the two `NuGet.*` packages and the Visual Studio code-generation package were removed; scaffolding with `dotnet aspnet-codegenerator` would need the last one back.)
-- **Tests** (`Recall.Tests/Recall.Tests.csproj`): NUnit 5.0.0, Moq 4.21.0, AwesomeAssertions 9.6.0, `Microsoft.EntityFrameworkCore.Sqlite`, coverlet. `Microsoft.AspNetCore.Mvc.Testing` is referenced but no test uses `WebApplicationFactory`.
+- **Tests** (`Recall.Tests/Recall.Tests.csproj`): NUnit 5.0.0, Moq 4.21.0, AwesomeAssertions 9.6.0, `Microsoft.EntityFrameworkCore.Sqlite`, coverlet. `Microsoft.AspNetCore.Mvc.Testing` drives the pipeline tests.
 - **Front end**: no npm, bundler or Tailwind. Vendored files in `wwwroot/lib`: Bootstrap 5.3.3, jQuery 3.7.1, jquery-validation (+ unobtrusive), Font Awesome Free 6.4.2. Custom CSS in `wwwroot/css/tvdb-theme.css` (about 2,500 lines, imports Google Fonts) and `site.css`. JavaScript is one small file (`wwwroot/js/tvdb-type-filter.js`) plus inline `<script>` blocks in pages.
 
 ## 3. Hosting and startup (`Recall.Web/Program.cs`)
@@ -204,7 +204,7 @@ Plan: the **free tier, 1,000 requests a day**. `Omdb:MaxRequestsPerDay` defaults
 
 ### Cloudflare Turnstile
 
-`Services/Authentication/TurnstileVerifier.cs` posts to `siteverify` from the login page, with a 10 s timeout and no retry. It is disabled when either key is blank and fails closed on network errors.
+`Services/Authentication/TurnstileVerifier.cs` posts to `siteverify` from the login page, with a 10 s timeout and no retry. It is disabled when either key is blank and fails closed on any failure: a rejected token, a network error, an error status, an unreadable body, or a timeout. Only the caller's own cancellation propagates.
 
 ### SMTP
 
@@ -253,10 +253,14 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 370 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 562 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`), the retention deletes and `PruneOldDataTimer`, audit timestamps, the OMDb JSON format, and UTC air dates. Tests that need a clock use `TestSupport/FixedTimeProvider`.
-- **Not covered**: page models (apart from the four fixtures in `Recall.Tests/Pages/`), every Quartz job except `PruneOldDataTimer`, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Notification`/`TrackedSeries` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
+- **Page-model tests** (`Recall.Tests/Pages/`) construct the page model directly with Moq dependencies and call the handler. `TestSupport/PageModelTesting.cs` supplies `WithTempData()` and `SuccessToast()` / `ErrorToast()` / `InfoToast()`. Covered: Dashboard, Library, and every POST handler on the three Details pages (sign-in guard, validation, each outcome's toast, the error path).
+- **Job tests** (`Recall.Tests/Infrastructure/Timers/`) call `Execute` with mocked stores and services and check the per-run cap and that one failing item doesn't stop the batch. All eight jobs are covered.
+- **Pipeline tests** (`Recall.Tests/Pipeline/`) start the real app with `RecallWebApplicationFactory`: environment `Test` (so `DevAuthMiddleware` stands aside), SQLite instead of Postgres, an in-memory distributed cache instead of Redis, a mocked `ITheTvDbService`, migrations off, and the Quartz hosted service removed. They need nothing running locally or in CI. `Program.cs` ends with `public partial class Program;` for this. Keep this set small: public page renders, protected pages redirect to login, POSTs without an antiforgery token are rejected.
+- **HTTP clients** are tested with `TestSupport/StubHttpMessageHandler`; anything needing a clock uses `TestSupport/FixedTimeProvider`.
+- **Not covered**: the GET side of the Details, Search, Profile, Favorites, Notifications, Import and Admin page models; `DevAuthMiddleware`; the `Like`/`Notification`/`TrackedSeries` repositories. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite; a Testcontainers-based suite for it was proposed on 2026-10-01 and not yet built. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
 
 ```bash
 dotnet test Recall.sln                                              # everything
@@ -339,7 +343,7 @@ Ranked by impact. Items marked fixed are kept for the record, with whatever rema
 6. **Two sources for a series' episode list: fixed.** Display, progress, "mark watched through" and the prior-unwatched prompt all read the aggregate.
 7. **Write handlers trusting client-supplied id pairs: fixed for watches, likes and ratings on episodes.** They go through `IWatchProgressService` or refuse when the parent series can't be resolved. Still unvalidated: series and movie like/rating handlers accept any positive id without checking it exists on TheTVDB.
 8. **Single-instance assumptions.** Login abuse limits, the OMDb daily budget, the TheTVDB token and the Quartz schedule are all in process memory, and migrations run at startup. Every deploy resets the OMDb budget and login counters. A second instance would double every job.
-9. **Test gaps.** Few page-model tests and no pipeline tests although `Mvc.Testing` is referenced; only one job has tests; SQLite cannot exercise the Postgres-specific branches; CI coverage is informational only.
+9. **Test gaps: mostly fixed.** Page models, all jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient` and a small pipeline suite are now tested (see section 11 for what remains). Still open: nothing runs against real Postgres, so the `UniqueViolation` catch blocks, the `xmin` token and `jsonb` are untested; CI coverage is informational only.
 10. **Dead or unused code and dependencies: fixed.** The four unused packages, the controller and session registrations, the unused Redis multiplexer, `AppDbContextFactory`, `UserItem`/`UserMappings`, `site.js`, the empty import map and the stale csproj items are gone. Left alone: `Microsoft.AspNetCore.Mvc.Testing` in the test project (unused, see 9), and `Recall.Web/Dockerfile` and `compose.yaml` (Docker setup is not changed without being asked).
 11. **Convention drift: mostly fixed.** "Already in your library" is a return value, the admin counts come from `IAppUserRepository`, and movies and episodes have their own OMDb types. Remaining: `IAppUserRepository` still returns entities, and `EpisodeOmdbSnapshotStore` uses the scoped context while its two siblings use the factory.
 12. **State-changing GETs: fixed.** Logout and notification-open are POST-only. Convention: anything that changes state is a POST handler behind the antiforgery token.
@@ -380,5 +384,5 @@ Still open:
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (370 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (562 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

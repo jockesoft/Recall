@@ -49,8 +49,11 @@ public sealed class TurnstileVerifier(
 
             return result?.Success == true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
+            // The filter lets a real cancellation (the visitor went away) through,
+            // but not HttpClient's own timeout, which also surfaces as an
+            // OperationCanceledException and has to count as a failed challenge.
             // Cloudflare being unreachable shouldn't be the reason a human
             // can't sign in — but it also shouldn't be treated as a pass, so
             // log it and fail closed like an actual failed challenge.

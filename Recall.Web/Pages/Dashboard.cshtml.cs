@@ -42,6 +42,12 @@ public sealed record CatchUpItem
 
     /// <summary>Still for the next episode (full URL); falls back to the series cover.</summary>
     public string? ImageUrl { get; init; }
+
+    /// <summary>
+    /// True when the series aggregate already had this episode's own still, so
+    /// there is nothing left to look up. Not rendered.
+    /// </summary>
+    public bool HasEpisodeImage { get; init; }
 }
 
 // ---------------------------------------------------------------------------
@@ -124,10 +130,12 @@ public sealed class DashboardModel(
 
             if (progress.NextUnwatchedEpisode is { } next)
             {
-                // Prefer any still already on the aggregate; fall back to the
-                // series cover for now — EnrichCatchUpImagesAsync then swaps in
-                // the real per-episode screencap from the episode endpoint.
+                // Prefer the still already on the aggregate. Without one, show the
+                // series cover for now — EnrichCatchUpImagesAsync then tries the
+                // episode's own record for a screencap.
                 var summaryImage = aggregate.Episodes.FirstOrDefault(e => e.Id == next.Id)?.Image;
+                if (string.IsNullOrWhiteSpace(summaryImage))
+                    summaryImage = null;
 
                 catchUp.Add(new CatchUpItem
                 {
@@ -137,7 +145,8 @@ public sealed class DashboardModel(
                     SeasonNumber = next.SeasonNumber,
                     EpisodeNumber = next.EpisodeNumber,
                     Name = next.Name,
-                    ImageUrl = summaryImage ?? aggregate.ImageUrl
+                    ImageUrl = summaryImage ?? aggregate.ImageUrl,
+                    HasEpisodeImage = summaryImage is not null
                 });
             }
         }
@@ -164,20 +173,23 @@ public sealed class DashboardModel(
     }
 
     /// <summary>
-    /// The series-extended payload doesn't carry per-episode stills, so the
-    /// "Catch up" cards would otherwise show the series poster. Fetch each next
-    /// episode from the (layered-cached) episode endpoint — the same source
-    /// Episodes/Details uses — and swap in its screencap when it has one.
+    /// Fills in the still for "Catch up" cards whose aggregate didn't have one:
+    /// the episode's own (layered-cached) record — the same source
+    /// Episodes/Details uses — sometimes does. A card that already has its
+    /// episode's still is left alone, so a library whose next episodes all have
+    /// stills costs no per-episode lookups at all.
     /// </summary>
     private async Task<List<CatchUpItem>> EnrichCatchUpImagesAsync(
         List<CatchUpItem> items,
         CancellationToken cancellationToken)
     {
-        if (items.Count == 0)
+        if (items.All(item => item.HasEpisodeImage))
             return items;
 
         var episodes = await Task.WhenAll(
-            items.Select(item => TryGetEpisodeAsync(item.EpisodeId, cancellationToken)));
+            items.Select(item => item.HasEpisodeImage
+                ? Task.FromResult<Episode?>(null)
+                : TryGetEpisodeAsync(item.EpisodeId, cancellationToken)));
 
         return items
             .Zip(episodes, (item, episode) =>

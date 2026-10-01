@@ -117,3 +117,9 @@ app.MapRazorPages()
     .WithStaticAssets();
 
 app.Run();
+
+/// <summary>
+/// Makes the top-level-statements entry point visible to Recall.Tests, whose
+/// pipeline tests start the app through <c>WebApplicationFactory&lt;Program&gt;</c>.
+/// </summary>
+public partial class Program;
