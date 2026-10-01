@@ -40,14 +40,15 @@ public sealed class EpisodeWatchRepository(
         int episodeTvdbId,
         CancellationToken cancellationToken = default)
     {
-        dbContext.EpisodeWatches.Add(new EpisodeWatchEntity
+        var entity = new EpisodeWatchEntity
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             SeriesTvdbId = seriesTvdbId,
             EpisodeTvdbId = episodeTvdbId,
             WatchedUtc = DateTime.UtcNow
-        });
+        };
+        dbContext.EpisodeWatches.Add(entity);
 
         try
         {
@@ -55,6 +56,9 @@ public sealed class EpisodeWatchRepository(
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
+            // Already watched, which is what was asked for. Detach the row that
+            // lost, or the next save on this context would try to insert it again.
+            dbContext.Entry(entity).State = EntityState.Detached;
             logger.LogInformation(
                 ex,
                 "Episode watch already exists for user {UserId}, episode {EpisodeTvdbId}.",

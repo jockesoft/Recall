@@ -15,12 +15,13 @@ Applies to every session.
 
 ## 1. Solution layout
 
-`Recall.sln` contains two projects. There is no `global.json`, `Directory.Packages.props`, `Directory.Build.props` or `.editorconfig`.
+`Recall.sln` contains three projects. There is no `global.json`, `Directory.Packages.props`, `Directory.Build.props` or `.editorconfig`.
 
 | Project | Role | References |
 |---|---|---|
 | `Recall.Web` (`Microsoft.NET.Sdk.Web`) | The whole application: UI, services, persistence, jobs | none |
 | `Recall.Tests` (`Microsoft.NET.Sdk`) | NUnit unit and persistence tests | `Recall.Web` |
+| `Recall.Tests.Postgres` (`Microsoft.NET.Sdk`) | NUnit tests that need a real PostgreSQL, started with Testcontainers | `Recall.Web` |
 
 Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 
@@ -40,7 +41,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 - **Framework**: `net10.0` in both projects, nullable and implicit usings enabled. No SDK pin; CI uses `10.0.x`. C# 14 features are in use (`extension` blocks in `Extensions/PageModelToastExtensions.cs`, primary constructors everywhere).
 - **Packages that matter** (`Recall.Web/Recall.Web.csproj`): EF Core 10.0.12, `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, `Microsoft.Extensions.Caching.StackExchangeRedis` 10.0.12, `Quartz` 4.3.0, `Microsoft.Extensions.Http.Resilience` 10.10.0, `Serilog.AspNetCore` 10.0.0 with Console and File sinks.
 - Every package referenced by `Recall.Web` is used. (Swashbuckle, the two `NuGet.*` packages and the Visual Studio code-generation package were removed; scaffolding with `dotnet aspnet-codegenerator` would need the last one back.)
-- **Tests** (`Recall.Tests/Recall.Tests.csproj`): NUnit 5.0.0, Moq 4.21.0, AwesomeAssertions 9.6.0, `Microsoft.EntityFrameworkCore.Sqlite`, coverlet. `Microsoft.AspNetCore.Mvc.Testing` drives the pipeline tests.
+- **Tests** (`Recall.Tests/Recall.Tests.csproj`): NUnit 5.0.0, Moq 4.21.0, AwesomeAssertions 9.6.0, `Microsoft.EntityFrameworkCore.Sqlite`, coverlet. `Recall.Tests.Postgres` uses the same NUnit and AwesomeAssertions versions plus `Testcontainers.PostgreSql` 4.15.0. `Microsoft.AspNetCore.Mvc.Testing` drives the pipeline tests.
 - **Front end**: no npm, bundler or Tailwind. Vendored files in `wwwroot/lib`: Bootstrap 5.3.3, jQuery 3.7.1, jquery-validation (+ unobtrusive), Font Awesome Free 6.4.2. Custom CSS in `wwwroot/css/tvdb-theme.css` (about 2,500 lines, imports Google Fonts) and `site.css`. JavaScript is one small file (`wwwroot/js/tvdb-type-filter.js`) plus inline `<script>` blocks in pages.
 
 ## 3. Hosting and startup (`Recall.Web/Program.cs`)
@@ -148,7 +149,7 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
   - Repositories and `EpisodeOmdbSnapshotStore` inject the scoped `AppDbContext`. Calls on it must stay sequential.
   - `TvdbSnapshotStore`, `OmdbSnapshotStore`, `MovieOmdbSnapshotStore` and `SitemapService` use `IDbContextFactory` and open a context per call, so callers may run them under `Task.WhenAll`.
 - **Repositories** (`Persistence/Repositories/`): interface + sealed implementation, return domain models or small records, reads use `AsNoTracking`. Exception: `IAppUserRepository` returns `AppUserEntity`. No page model touches `AppDbContext`. An expected outcome is a return value (`AddAsync` returns `false` for "already there"), not an exception for the caller to pattern-match.
-- **Concurrency idiom**: check, insert, then catch `DbUpdateException` whose inner `PostgresException` is `UniqueViolation` and treat it as success. Atomic state changes use `ExecuteUpdateAsync` (`LoginTokenRepository.MarkConsumedAsync`).
+- **Concurrency idiom**: check, insert, then catch `DbUpdateException` whose inner `PostgresException` is `UniqueViolation` and treat it as success. The catch must also take the losing row out of the context (`Entry(entity).State = EntityState.Detached`, or `ChangeTracker.Clear()`), otherwise the next `SaveChanges` on the same scoped context retries the insert and throws. Atomic state changes use `ExecuteUpdateAsync` (`LoginTokenRepository.MarkConsumedAsync`).
 - **Migrations**: generate with the CLI; never hand-write (the `Designer.cs` and snapshot must match). They run automatically at startup. There is no design-time factory, so `dotnet ef` builds the host through `Program.cs`.
 - **Data-only migrations**: still generate the (empty) migration with the CLI, then add `migrationBuilder.Sql(...)` to `Up`; see `ClearSentEmailBodies`. To try one against real rows without touching dev data, create a scratch database on the local Postgres container and pass `--connection` to `dotnet ef database update <previous migration>`, seed, then update to latest. On macOS the `dotnet ef` tool leaves a stray `Recall.Web/bin\Debug/` folder (literal backslash) that `.gitignore` does not match; delete it after running any `dotnet ef` command.
 - **Seeding**: none. In local dev the hardcoded dev user row must be inserted by hand (see section 12).
@@ -253,17 +254,27 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 562 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 641 tests, all passing as of this writing: 562 in `Recall.Tests` and 79 in `Recall.Tests.Postgres`. NUnit + Moq + AwesomeAssertions. Folders in `Recall.Tests` mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`), the retention deletes and `PruneOldDataTimer`, audit timestamps, the OMDb JSON format, and UTC air dates. Tests that need a clock use `TestSupport/FixedTimeProvider`.
 - **Page-model tests** (`Recall.Tests/Pages/`) construct the page model directly with Moq dependencies and call the handler. `TestSupport/PageModelTesting.cs` supplies `WithTempData()` and `SuccessToast()` / `ErrorToast()` / `InfoToast()`. Covered: Dashboard, Library, and every POST handler on the three Details pages (sign-in guard, validation, each outcome's toast, the error path).
 - **Job tests** (`Recall.Tests/Infrastructure/Timers/`) call `Execute` with mocked stores and services and check the per-run cap and that one failing item doesn't stop the batch. All eight jobs are covered.
 - **Pipeline tests** (`Recall.Tests/Pipeline/`) start the real app with `RecallWebApplicationFactory`: environment `Test` (so `DevAuthMiddleware` stands aside), SQLite instead of Postgres, an in-memory distributed cache instead of Redis, a mocked `ITheTvDbService`, migrations off, and the Quartz hosted service removed. They need nothing running locally or in CI. `Program.cs` ends with `public partial class Program;` for this. Keep this set small: public page renders, protected pages redirect to login, POSTs without an antiforgery token are rejected.
 - **HTTP clients** are tested with `TestSupport/StubHttpMessageHandler`; anything needing a clock uses `TestSupport/FixedTimeProvider`.
-- **Not covered**: the GET side of the Details, Search, Profile, Favorites, Notifications, Import and Admin page models; `DevAuthMiddleware`; the `Like`/`Notification`/`TrackedSeries` repositories. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite; a Testcontainers-based suite for it was proposed on 2026-10-01 and not yet built. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
+- **PostgreSQL tests** (`Recall.Tests.Postgres`) cover what SQLite cannot. `PostgresSuite` (a `[SetUpFixture]`) starts one `postgres:18.1` container per run with `Testcontainers.PostgreSql` and builds a template database by applying the real migrations; a fixture derives from `PostgresFixture` and gets its own database cloned from the template (`CREATE DATABASE … TEMPLATE`). Tests in a fixture share that database, so each works on its own user (`SeedUserAsync`) and its own ids (`NextId`); a fixture whose queries take "the first N rows" truncates the tables it reads in `[SetUp]`. What is covered:
+  - `Migrations/`: all migrations apply to an empty database, re-applying is a no-op, the model has no changes missing from the migrations (`HasPendingModelChanges`), and the four data-moving migrations are tested by stopping at the migration before (`MigrationDatabase.MigrateToAsync`), seeding rows with plain SQL, applying the rest and asserting. A new migration that contains `migrationBuilder.Sql` gets a test here.
+  - `Concurrency/UniqueViolationTests`: every `UniqueViolation` catch block. `CompetingWriteInterceptor` inserts the competing row just before the first `SaveChanges`, so the violation happens on every run. Each test also checks the context still saves afterwards.
+  - `Concurrency/TrackedSeriesXminTests`: the `xmin` token (insert through EF, version changes on update, stale update and stale delete throw `DbUpdateConcurrencyException`).
+  - `Snapshots/JsonbSnapshotTests`: `jsonb` round-trips for the seven cache tables, that the payload is stored as a document and not a quoted string, and that PostgreSQL rejects a payload that is not JSON.
+  - `Queries/PostgresQueryTests`: the OMDb anti-join, the refresh queues that order by a correlated `EXISTS`, the import queue and its `GROUP BY` progress count, the rating average, and case-insensitive user names.
+  - `WatchTracking/BulkWatchUndoTests`: the bulk-watch timestamp is stored exactly as returned and the undo removes exactly that batch.
+- **Docker and the PostgreSQL tests**: without a reachable Docker the suite is reported as ignored (every test in it skipped, with the reason), so `dotnet test Recall.sln` stays green; with the `CI` environment variable set it fails instead. Only "Docker unreachable" is turned into ignored; a failed image pull or a broken migration fails the run. `DockerAvailabilityTests` sits outside the suite's namespace so it runs either way. Measured on 2026-10-01 on the development Mac with the image cached: 7.2 s for the project on its own (container 2.5 s, migrations 0.6 s, tests about 3 s); `dotnet test Recall.sln` stays at about 8.3 s because the two test projects run in parallel.
+- **Not covered**: the GET side of the Details, Search, Profile, Favorites, Notifications, Import and Admin page models; `DevAuthMiddleware`; most read methods of the `Like` and `Notification` repositories. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests in `Recall.Tests` that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`. Anything that depends on `xmin`, `jsonb` or a unique violation belongs in `Recall.Tests.Postgres`.
 
 ```bash
-dotnet test Recall.sln                                              # everything
+dotnet test Recall.sln                                              # everything (the PostgreSQL tests need Docker)
+dotnet test Recall.Tests                                            # without the PostgreSQL tests
+dotnet test Recall.Tests.Postgres                                   # only the PostgreSQL tests
 dotnet test Recall.Tests --filter "FullyQualifiedName~ClassName"    # one fixture
 dotnet test Recall.Tests --filter "Name=MethodName"                 # one test
 cd Recall.Tests && ./run-tests-with-coverage.sh                     # HTML report (needs the reportgenerator tool)
@@ -296,7 +307,7 @@ dotnet ef migrations add <Name> --project Recall.Web --startup-project Recall.We
 dotnet ef database update --project Recall.Web --startup-project Recall.Web
 ```
 
-**CI/CD** (`.github/workflows/dotnet.yml`): on push and pull request to `main`, restore, Release build, test with coverage (summary only; coverage does not gate). On push, build `Dockerfile.prod`, push `ghcr.io/<user>/recall:latest` and `:<run number>`, then SSH to the server, run `dump_db.sh` and `docker compose -f compose.prod.yml up -d --pull always`. There is no lint or format step. `nightly-build.yml` builds and tests daily at 05:00 UTC.
+**CI/CD** (`.github/workflows/dotnet.yml`): on push and pull request to `main`, restore, Release build, test `Recall.Tests` with coverage (summary only; coverage does not gate), then test `Recall.Tests.Postgres` in its own step (the runner's Docker starts the container; no coverage is collected there, so the summary reflects `Recall.Tests` only). On push, build `Dockerfile.prod`, push `ghcr.io/<user>/recall:latest` and `:<run number>`, then SSH to the server, run `dump_db.sh` and `docker compose -f compose.prod.yml up -d --pull always`. There is no lint or format step. `nightly-build.yml` builds and tests the whole solution daily at 05:00 UTC, PostgreSQL tests included.
 
 **Hosting**: a single Docker host, single app instance (a permanent assumption). `compose.prod.yml` runs the app (published port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (host port 5433) and `redis:7`.
 
@@ -343,7 +354,7 @@ Ranked by impact. Items marked fixed are kept for the record, with whatever rema
 6. **Two sources for a series' episode list: fixed.** Display, progress, "mark watched through" and the prior-unwatched prompt all read the aggregate.
 7. **Write handlers trusting client-supplied id pairs: fixed for watches, likes and ratings on episodes.** They go through `IWatchProgressService` or refuse when the parent series can't be resolved. Still unvalidated: series and movie like/rating handlers accept any positive id without checking it exists on TheTVDB.
 8. **Single-instance assumptions.** Login abuse limits, the OMDb daily budget, the TheTVDB token and the Quartz schedule are all in process memory, and migrations run at startup. Every deploy resets the OMDb budget and login counters. A second instance would double every job.
-9. **Test gaps: mostly fixed.** Page models, all jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient` and a small pipeline suite are now tested (see section 11 for what remains). Still open: nothing runs against real Postgres, so the `UniqueViolation` catch blocks, the `xmin` token and `jsonb` are untested; CI coverage is informational only.
+9. **Test gaps: mostly fixed.** Page models, all jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient` and a small pipeline suite are tested, and `Recall.Tests.Postgres` runs the migrations, the `UniqueViolation` catch blocks, the `xmin` token, `jsonb` and the provider-specific queries against real PostgreSQL (see section 11 for what remains). Writing those tests found that `EpisodeWatchRepository.MarkWatchedAsync`, `LikeRepository.ToggleAsync` and `MovieWatchRepository.ToggleAsync` left the row that lost the race pending in the context; they now detach it. Still open: CI coverage is informational only and does not include the PostgreSQL tests.
 10. **Dead or unused code and dependencies: fixed.** The four unused packages, the controller and session registrations, the unused Redis multiplexer, `AppDbContextFactory`, `UserItem`/`UserMappings`, `site.js`, the empty import map and the stale csproj items are gone. Left alone: `Microsoft.AspNetCore.Mvc.Testing` in the test project (unused, see 9), and `Recall.Web/Dockerfile` and `compose.yaml` (Docker setup is not changed without being asked).
 11. **Convention drift: mostly fixed.** "Already in your library" is a return value, the admin counts come from `IAppUserRepository`, and movies and episodes have their own OMDb types. Remaining: `IAppUserRepository` still returns entities, and `EpisodeOmdbSnapshotStore` uses the scoped context while its two siblings use the factory.
 12. **State-changing GETs: fixed.** Logout and notification-open are POST-only. Convention: anything that changes state is a POST handler behind the antiforgery token.
@@ -376,7 +387,7 @@ Still open:
 
 ## Quick facts
 
-- **Stack**: ASP.NET Core 10 Razor Pages, C# 14, one web project plus one test project. Tracks series (library + per-episode watches) and movies (watchlist + watched).
+- **Stack**: ASP.NET Core 10 Razor Pages, C# 14, one web project plus two test projects. Tracks series (library + per-episode watches) and movies (watchlist + watched).
 - **Data**: PostgreSQL 18 through EF Core 10 (Npgsql); Redis 7 as a read-through cache; metadata stored as JSON snapshots, not relational tables.
 - **External APIs**: TheTVDB v4 (primary metadata), OMDb (IMDb ratings), Cloudflare Turnstile, SMTP.
 - **Auth**: passwordless magic link → 30-day cookie; roles `User`/`Admin`; Debug builds auto-sign-in as a fixed admin.
@@ -384,5 +395,5 @@ Still open:
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (562 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (641 tests, NUnit; SQLite in-memory for persistence, plus a Testcontainers PostgreSQL suite that needs Docker and is skipped without it)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

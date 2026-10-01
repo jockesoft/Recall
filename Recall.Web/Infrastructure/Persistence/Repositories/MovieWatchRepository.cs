@@ -30,13 +30,14 @@ public sealed class MovieWatchRepository(
             return false;
         }
 
-        dbContext.UserMovieWatches.Add(new UserMovieWatchEntity
+        var entity = new UserMovieWatchEntity
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             MovieTvdbId = movieTvdbId,
             WatchedUtc = DateTime.UtcNow
-        });
+        };
+        dbContext.UserMovieWatches.Add(entity);
 
         try
         {
@@ -46,7 +47,9 @@ public sealed class MovieWatchRepository(
             when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             // A concurrent request already inserted the same watch mark — that's
-            // fine, the end state is still "watched".
+            // fine, the end state is still "watched". Detach the row that lost,
+            // or the next save on this context would try to insert it again.
+            dbContext.Entry(entity).State = EntityState.Detached;
             logger.LogInformation(
                 "Movie watch already exists for user {UserId}, movie {MovieTvdbId}.",
                 userId, movieTvdbId);

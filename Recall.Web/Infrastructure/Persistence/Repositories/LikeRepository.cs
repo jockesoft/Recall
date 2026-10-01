@@ -45,14 +45,15 @@ public sealed class LikeRepository(
             return false;
         }
 
-        dbContext.UserLikes.Add(new UserLikeEntity
+        var entity = new UserLikeEntity
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             TargetType = targetType,
             TargetTvdbId = targetTvdbId,
             SeriesTvdbId = seriesTvdbId
-        });
+        };
+        dbContext.UserLikes.Add(entity);
 
         try
         {
@@ -62,7 +63,9 @@ public sealed class LikeRepository(
             when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             // A concurrent request already inserted the same like — that's fine,
-            // the end state is still "liked".
+            // the end state is still "liked". Detach the row that lost, or the
+            // next save on this context would try to insert it again.
+            dbContext.Entry(entity).State = EntityState.Detached;
             logger.LogInformation(
                 "Like already exists for user {UserId}, {TargetType} {TargetId}.",
                 userId, targetType, targetTvdbId);
