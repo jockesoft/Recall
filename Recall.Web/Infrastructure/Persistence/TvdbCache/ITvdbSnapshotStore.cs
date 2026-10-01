@@ -41,7 +41,8 @@ public interface ITvdbSnapshotStore
 
     /// <summary>
     /// The movie counterpart of <see cref="GetAggregatesNeedingRefreshAsync"/>:
-    /// same two tiers, with movies someone has watched or liked first.
+    /// same two tiers, with movies on someone's watchlist, or that someone has
+    /// watched or liked, first.
     /// </summary>
     Task<IReadOnlyList<CachedAggregateKey>> GetMovieAggregatesNeedingRefreshAsync(
         DateTime staleBeforeUtc, DateTime settledStaleBeforeUtc, int limit, CancellationToken cancellationToken = default);

@@ -5,7 +5,7 @@
 @{
     ViewData["Title"] = "My Library";
 
-    var allItems = Model.Watching.Concat(Model.UpToDate).Concat(Model.Watched);
+    var allItems = Model.Watching.Concat(Model.ToWatch).Concat(Model.UpToDate).Concat(Model.Watched);
     var hasSeries = allItems.Any(i => i.Type == SearchResultType.Series);
     var hasMovies = allItems.Any(i => i.Type == SearchResultType.Movie);
     var showFilters = hasSeries && hasMovies;
@@ -42,7 +42,7 @@
     @if (Model.IsEmpty)
     {
         <div class="alert alert-info" role="alert">
-            Your library is empty. Search and save series, or mark a movie as watched, to get started.
+            Your library is empty. Search and save series, or add a movie to your watchlist, to get started.
         </div>
     }
     else
@@ -53,6 +53,19 @@
                 <h4 class="mb-3 tvdb-eyebrow">Watching &middot; @Model.Watching.Count</h4>
                 <div class="tvdb-series-grid mb-4">
                     @foreach (var item in Model.Watching)
+                    {
+                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.ToWatch.Count > 0)
+        {
+            <div class="tvdb-library-section" data-library-section>
+                <h4 class="mb-3 tvdb-eyebrow">To Watch &middot; @Model.ToWatch.Count</h4>
+                <div class="tvdb-series-grid mb-4">
+                    @foreach (var item in Model.ToWatch)
                     {
                         <partial name="_SeriesCard" model="@ToCardModel(item)" />
                     }

@@ -24,7 +24,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 | `Mappings/` | Static extension methods for DTO ↔ domain ↔ entity (no AutoMapper) |
 | `Extensions/` | DI registration extension methods, toast helpers |
 | `Middleware/` | `DevAuthMiddleware` only |
-| `Migrations/` | 24 EF Core migrations plus the model snapshot |
+| `Migrations/` | 26 EF Core migrations plus the model snapshot |
 
 ## 2. Stack and versions
 
@@ -74,10 +74,10 @@ Razor Pages only. No MVC controllers, Blazor or minimal APIs. Two handlers retur
 | `/` (`Pages/Index`) | anonymous | Landing page; redirects signed-in users to `/Dashboard` |
 | `/Dashboard` | `[Authorize]` | Upcoming episodes (30 days) and the catch-up queue |
 | `/Search` | `[Authorize]` | TheTVDB series + movie search (GET form) |
-| `/Library` | `[Authorize]` | Watching / Up to date / Watched sections |
+| `/Library` | `[Authorize]` | Watching / To Watch (movies) / Up to date / Watched sections |
 | `/Series/Details/{id:int}` | **anonymous read** | Seasons, episodes, progress, like, rating, library toggle |
 | `/Episodes/Details/{id:int}` | **anonymous read** | Episode detail, prev/next, watched, like, rating, IMDb score |
-| `/Movies/Details/{id:int}` | **anonymous read** | Movie detail, watched, like, rating |
+| `/Movies/Details/{id:int}` | **anonymous read** | Movie detail, watchlist add/remove, watched, like, rating |
 | `/Account/Login`, `/Account/Verify` | anonymous | Request and redeem the magic link |
 | `/Account/Logout` | none | Signs out on POST only; a GET just redirects home |
 | `/Account/Profile`, `EditProfile`, `Favorites`, `Notifications`, `ImportWatchlist` | `[Authorize]` | Account area |
@@ -101,6 +101,7 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 | `AppUserEntity` (`app_user`) | Username, email, `Role` (`User`/`Admin`, stored as string) | email; username |
 | `TrackedSeriesEntity` (`tracked_series`) | A series in the user's library, with denormalized name/overview/image/first-aired. `Version` is an `xmin` concurrency token; never set it by hand | (user, tvdb id) |
 | `EpisodeWatchEntity` (`episode_watch`) | One watched episode, with `WatchedUtc` | (user, episode) |
+| `TrackedMovieEntity` (`tracked_movie`) | A movie on the user's watchlist ("want to watch"), with the title as known when added. No `xmin` token, unlike `tracked_series` | (user, tvdb id) |
 | `UserMovieWatchEntity` (`user_movie_watch`) | One watched movie | (user, movie) |
 | `UserLikeEntity` (`user_like`) | Like on a `Series`, `Episode` or `Movie` (`LikeTargetType`) | (user, type, target) |
 | `UserRatingEntity` (`user_rating`) | 1–10 rating, same target shape, DB check constraint | (user, type, target) |
@@ -117,6 +118,7 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 
 - **Watching**: tracked series with at least one aired episode not marked watched.
 - **Up to date**: nothing unwatched and TheTVDB status is not "Ended".
+- **To watch**: movies on the watchlist (`tracked_movie`), most recently added first.
 - **Watched**: nothing unwatched and status is "Ended"; watched movies are listed here too.
 
 **Progress** is computed by `Services/WatchTracking/WatchProgressCalculator.Build`: order episodes with `OrderBySeasonAndEpisode` (unknown numbers last, tie-break by id), keep those aired on or before today, and the next episode to watch is the first of those without an `EpisodeWatch` row. Episodes flagged `IsMovie` are excluded. The episode list always comes from the series aggregate.
@@ -125,7 +127,7 @@ All user data hangs off `AppUserEntity` (Guid PK, equal to the `NameIdentifier` 
 
 **Bulk marks and undo.** `MarkSeasonWatchedAsync` / `MarkSeasonUnwatchedAsync` act on one season of the aggregate. Every row a bulk mark inserts (`EpisodeWatchRepository.MarkWatchedRangeAsync`) shares one `WatchedUtc`, truncated to the millisecond and returned as a `WatchedBatch`; `UndoWatchedBatchAsync` deletes exactly the user's rows in that series with that timestamp. Keep the truncation: Postgres stores microseconds, so an untruncated .NET timestamp would not compare equal after a round trip (SQLite tests cannot show this; it was verified by hand against Postgres).
 
-Movies have no library row. A movie is watched (`UserMovieWatch`), liked or rated, and nothing else.
+**Movies** are on the watchlist (`TrackedMovie`) or watched (`UserMovieWatch`), never both, and independently liked or rated. `IMovieTrackingService` (`Services/WatchTracking/MovieTrackingService.cs`) owns that rule: marking a movie watched takes it off the watchlist, a watched movie can't be added, and un-watching does not put it back. Page models and the importer call the service, not the two repositories, for writes.
 
 ## 6. Data access
 
@@ -213,12 +215,12 @@ Quartz.NET with the default in-memory store, registered in `AddScheduledJobs()`.
 | Job | Interval | Work per run |
 |---|---|---|
 | `UpdateTvDbInfoTimer` | 60 min | Up to 10 series aggregates: `KeepUpdated = true` and older than 12 h, or any other row older than 30 d; tracked series first, then oldest. Then up to 25 episodes older than 30 d, or titled "TBA" and older than 12 h, or aired without an image (max 5 attempts) |
-| `UpdateMovieInfoTimer` | 60 min | Up to 10 movie aggregates, same two tiers; movies someone has watched or liked first |
+| `UpdateMovieInfoTimer` | 60 min | Up to 10 movie aggregates, same two tiers; movies on a watchlist, watched or liked first |
 | `UpdateOmdbInfoTimer` | 60 min | Up to 30 series whose OMDb snapshot is missing or older than 30 d |
 | `UpdateMovieOmdbInfoTimer` | 60 min | Same, for movies |
 | `MailTimer` | 1 min | Sends up to `Mail:BatchSize` (20) queued emails; gives up after `MaxSendAttempts` (5) |
 | `NewEpisodeNotificationTimer` | 6 h | For up to 500 tracked series, notifies each tracking user about episodes aired in the last 3 days that they have not watched; one notification per series per user |
-| `WatchlistImportTimer` | 1 min | Resolves up to 15 pending import rows through TheTVDB's remote-id search |
+| `WatchlistImportTimer` | 1 min | Resolves up to 15 pending import rows through TheTVDB's remote-id search. A rated movie is marked watched and rated; an unrated movie goes on the watchlist; a series goes into the library (and is rated if the row has a rating) |
 
 There are no other hosted services, queues or message brokers. The email and import "queues" are database tables.
 
@@ -233,7 +235,7 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 308 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 325 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: page models (apart from `Pages/PostOnlyStateChangeTests.cs` and `Pages/EpisodeDetailsOmdbTests.cs`), all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite. `TrackedSeriesEntity` cannot be inserted through EF on SQLite at all (`xmin` becomes an ordinary NOT NULL column); tests that need a tracked series seed it with raw SQL, see `TvdbSnapshotStoreTests`.
@@ -293,6 +295,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 - **Best-effort external calls**: reuse `ITheTvDbService.TryGetSeriesAggregateAsync` / `TryGetMovieAggregateAsync` (swallow and log) and `Task<T?>.AsOptionalAsync(...)` (swallows `TheTvDbApiException` only). A primary fetch failure should still propagate.
 - **Episode ordering**: `EpisodeOrderingExtensions.OrderBySeasonAndEpisode` is the single implementation; reuse it.
 - **Recording a watch**: call `IWatchProgressService`; it validates the series/episode pair and the air date. Page handlers map the returned `EpisodeWatchOutcome` to a toast.
+- **Movie watchlist and watched state**: call `IMovieTrackingService`; it keeps "on the watchlist" and "watched" mutually exclusive.
 - **Parallelism**: only fan out over code that uses `IDbContextFactory`. Never run two operations on the scoped `AppDbContext` at once.
 - **Logging**: structured message templates with `ILogger<T>`; no string interpolation in log calls.
 - **Time**: persistence and jobs use `DateTime.UtcNow`. Air-date comparisons use `AirDate.Today` / `AirDate.IsInFuture` (`Services/WatchTracking/AirDate.cs`), the UTC date; do not use `DateTime.Today` for them. An unknown air date is not treated as unaired.
@@ -331,7 +334,7 @@ Answered (2026-10-01), recorded here because the code alone does not show them:
 - **Proxy**: nginx on the host in front of the container; see section 12.
 - **Registration** is open to anyone in production (`Login:AllowedEmails` empty), so Turnstile and the in-memory abuse caps carry the load.
 - **Public Details pages and the sitemap are meant to drive search traffic.** Keep them indexable; protect upstream quota some other way than requiring sign-in.
-- **Movies are first-class**: a watchlist ("want to watch") is wanted, not only watched/liked/rated.
+- **Movies are first-class**: they have a watchlist ("want to watch"), built as `tracked_movie`.
 - **"Aired" is judged in UTC.** **A single app instance** is a permanent assumption.
 
 Still open:
@@ -345,7 +348,7 @@ Still open:
 
 ## Quick facts
 
-- **Stack**: ASP.NET Core 10 Razor Pages, C# 14, one web project plus one test project.
+- **Stack**: ASP.NET Core 10 Razor Pages, C# 14, one web project plus one test project. Tracks series (library + per-episode watches) and movies (watchlist + watched).
 - **Data**: PostgreSQL 18 through EF Core 10 (Npgsql); Redis 7 as a read-through cache; metadata stored as JSON snapshots, not relational tables.
 - **External APIs**: TheTVDB v4 (primary metadata), OMDb (IMDb ratings), Cloudflare Turnstile, SMTP.
 - **Auth**: passwordless magic link → 30-day cookie; roles `User`/`Admin`; Debug builds auto-sign-in as a fixed admin.
@@ -353,5 +356,5 @@ Still open:
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (308 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (325 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

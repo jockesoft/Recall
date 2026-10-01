@@ -217,7 +217,7 @@ public sealed class TvdbSnapshotStoreTests
     }
 
     [Test]
-    public async Task GetMovieAggregatesNeedingRefresh_PutsMoviesAUserHasWatchedOrLikedFirst()
+    public async Task GetMovieAggregatesNeedingRefresh_PutsMoviesAUserHasWatchlistedWatchedOrLikedFirst()
     {
         var now = DateTime.UtcNow;
         var userId = Guid.NewGuid();
@@ -228,7 +228,9 @@ public sealed class TvdbSnapshotStoreTests
             seed.CachedMovieAggregates.AddRange(
                 new CachedMovieAggregateEntity { TvdbId = 1, Language = "eng", Name = "Oldest, nobody's", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-9) },
                 new CachedMovieAggregateEntity { TvdbId = 2, Language = "eng", Name = "Watched", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-2) },
-                new CachedMovieAggregateEntity { TvdbId = 3, Language = "eng", Name = "Liked", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-3) });
+                new CachedMovieAggregateEntity { TvdbId = 3, Language = "eng", Name = "Liked", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-3) },
+                new CachedMovieAggregateEntity { TvdbId = 4, Language = "eng", Name = "On a watchlist", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-1) });
+            seed.TrackedMovies.Add(new TrackedMovieEntity { Id = Guid.NewGuid(), UserId = userId, TvdbId = 4, Name = "On a watchlist" });
             seed.UserMovieWatches.Add(new UserMovieWatchEntity { Id = Guid.NewGuid(), UserId = userId, MovieTvdbId = 2, WatchedUtc = now });
             seed.UserLikes.Add(new UserLikeEntity { Id = Guid.NewGuid(), UserId = userId, TargetType = LikeTargetType.Movie, TargetTvdbId = 3, SeriesTvdbId = 3 });
             // A like on a *series* that happens to share id 1 must not promote movie 1.
@@ -239,7 +241,7 @@ public sealed class TvdbSnapshotStoreTests
         var due = await NewStore().GetMovieAggregatesNeedingRefreshAsync(
             staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 10);
 
-        due.Select(x => x.TvdbId).Should().Equal(3, 2, 1);
+        due.Select(x => x.TvdbId).Should().Equal(3, 2, 4, 1);
     }
 
     [Test]

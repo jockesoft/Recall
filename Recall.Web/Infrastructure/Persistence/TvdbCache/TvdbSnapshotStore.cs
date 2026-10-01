@@ -106,7 +106,8 @@ public sealed class TvdbSnapshotStore(
             // A movie a user actually has on their pages outranks one that was
             // only ever opened once (or by a crawler).
             .OrderByDescending(x =>
-                dbContext.UserMovieWatches.Any(w => w.MovieTvdbId == x.TvdbId)
+                dbContext.TrackedMovies.Any(t => t.TvdbId == x.TvdbId)
+                || dbContext.UserMovieWatches.Any(w => w.MovieTvdbId == x.TvdbId)
                 || dbContext.UserLikes.Any(l => l.TargetType == LikeTargetType.Movie && l.TargetTvdbId == x.TvdbId))
             .ThenBy(x => x.RetrievedUtc)
             .Take(limit)

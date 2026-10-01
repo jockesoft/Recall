@@ -104,6 +104,18 @@
                                          : "Watched"
                                  })" />
 
+                        @* Want-to-watch. Not offered once the movie is watched — marking it watched takes it off the list. *@
+                        @if (!Model.IsWatchedByCurrentUser)
+                        {
+                            <form method="post" asp-page-handler="ToggleWatchlist" asp-route-id="@movie.TvdbId" class="d-inline">
+                                <button type="submit"
+                                        class="btn @(Model.IsOnWatchlist ? "btn-outline-danger" : "btn-primary")"
+                                        aria-pressed="@(Model.IsOnWatchlist ? "true" : "false")">
+                                    @(Model.IsOnWatchlist ? "Remove from watchlist" : "Add to watchlist")
+                                </button>
+                            </form>
+                        }
+
                         <partial name="_LikeToggle" model="@(new LikeToggleModel
                                  {
                                      Handler = "ToggleMovieLike",
