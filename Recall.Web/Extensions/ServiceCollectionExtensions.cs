@@ -1,5 +1,7 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Recall.Web.Infrastructure.Authentication;
+using Recall.Web.Infrastructure.External;
 using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.Mail;
@@ -25,13 +27,18 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<TheTvDbOptions>(configuration.GetSection(TheTvDbOptions.SectionName));
 
+        // Must outlive the transient typed client: it holds the bearer token and
+        // the shared request throttle (see TheTvDbClientState).
+        services.TryAddSingleton<TheTvDbClientState>();
+
         services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>((sp, client) =>
         {
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TheTvDbOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Accept.Add(new("application/json"));
+            // Overall budget for one call, retries included (each attempt is capped separately).
             client.Timeout = TimeSpan.FromSeconds(30);
-        });
+        }).AddTheTvDbResilience();
 
         services.AddScoped<ITheTvDbService, TheTvDbService>();
         return services;
@@ -50,8 +57,9 @@ public static class ServiceCollectionExtensions
             var options = sp.GetRequiredService<IOptions<OmdbOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Accept.Add(new("application/json"));
+            // Overall budget for one call, its single retry included.
             client.Timeout = TimeSpan.FromSeconds(20);
-        });
+        }).AddOmdbResilience();
 
         services.AddScoped<IOmdbSnapshotStore, OmdbSnapshotStore>();
         services.AddScoped<IEpisodeOmdbSnapshotStore, EpisodeOmdbSnapshotStore>();
@@ -132,7 +140,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILoginTokenRepository, LoginTokenRepository>();
         services.AddScoped<IPasswordlessAuthService, PasswordlessAuthService>();
         services.AddSingleton<ILoginAbuseGuard, LoginAbuseGuard>();
-        services.AddHttpClient<ITurnstileVerifier, TurnstileVerifier>();
+        // No retry (it's a POST, and a human can just resubmit the form) — but
+        // don't let a slow Cloudflare hold the sign-in request for the default 100 s.
+        services.AddHttpClient<ITurnstileVerifier, TurnstileVerifier>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
 
         return services;
     }

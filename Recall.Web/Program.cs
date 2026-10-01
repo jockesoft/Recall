@@ -3,7 +3,6 @@ using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Middleware;
-using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Health;
 using Serilog;
 
@@ -36,11 +35,6 @@ builder.Services.AddPostgres(builder.Configuration);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 #endif
 
-builder.Services.AddSingleton<TheTvDbClientState>();
-builder.Services.AddHttpClient<ITheTvDbApiClient, TheTvDbApiClient>(client =>
-{
-    client.BaseAddress = new Uri("https://api4.thetvdb.com/v4/");
-});
 // Add TheTVDB integration
 builder.Services.AddTheTvDb(builder.Configuration);
 builder.Services.AddOmdb(builder.Configuration);
