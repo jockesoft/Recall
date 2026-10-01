@@ -1,11 +1,14 @@
+using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using Quartz;
 using Recall.Web.Infrastructure.Caching;
+using Recall.Web.Infrastructure.Hosting;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Timers;
 using Serilog;
@@ -50,6 +53,71 @@ public static class InfrastructureServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Applies <c>X-Forwarded-For/Proto/Host</c>, but only from the proxies named
+    /// in the <c>TrustedProxies</c> section (<see cref="TrustedProxyOptions"/>) —
+    /// or, when that section is empty, from loopback and the private ranges. A
+    /// request arriving from anywhere else keeps its real connection address, so
+    /// a caller that reaches the app without passing through the proxy can't
+    /// spoof its way around the per-IP rate limiters with a forged header.
+    /// </summary>
+    public static IServiceCollection AddTrustedForwardedHeaders(this IServiceCollection services, IConfiguration configuration)
+    {
+        var settings = configuration.GetSection(TrustedProxyOptions.SectionName).Get<TrustedProxyOptions>()
+                       ?? new TrustedProxyOptions();
+
+        if (settings.ForwardLimit < 1)
+        {
+            throw new InvalidOperationException(
+                $"{TrustedProxyOptions.SectionName}:ForwardLimit must be at least 1 (was {settings.ForwardLimit}).");
+        }
+
+        var configuredAddresses = (settings.Addresses ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        var configuredNetworks = (settings.Networks ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+
+        // Parsed here rather than inside the options callback so a typo fails
+        // startup with a clear message instead of the first request.
+        var addresses = configuredAddresses.Select(ParseProxyAddress).ToArray();
+        var networks = (configuredAddresses.Length == 0 && configuredNetworks.Length == 0
+                ? TrustedProxyOptions.DefaultNetworks
+                : configuredNetworks)
+            .Select(ParseProxyNetwork)
+            .ToArray();
+
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders =
+                ForwardedHeaders.XForwardedFor |
+                ForwardedHeaders.XForwardedProto |
+                ForwardedHeaders.XForwardedHost;
+            options.ForwardLimit = settings.ForwardLimit;
+
+            // Replace the framework's loopback-only defaults with exactly the set above.
+            options.KnownProxies.Clear();
+            options.KnownIPNetworks.Clear();
+
+            foreach (var address in addresses)
+                options.KnownProxies.Add(address);
+
+            foreach (var network in networks)
+                options.KnownIPNetworks.Add(network);
+        });
+
+        return services;
+    }
+
+    private static IPAddress ParseProxyAddress(string value) =>
+        IPAddress.TryParse(value.Trim(), out var address)
+            ? address
+            : throw new InvalidOperationException(
+                $"{TrustedProxyOptions.SectionName}:{nameof(TrustedProxyOptions.Addresses)} contains \"{value}\", which is not an IP address.");
+
+    private static System.Net.IPNetwork ParseProxyNetwork(string value) =>
+        System.Net.IPNetwork.TryParse(value.Trim(), out var network)
+            ? network
+            : throw new InvalidOperationException(
+                $"{TrustedProxyOptions.SectionName}:{nameof(TrustedProxyOptions.Networks)} contains \"{value}\", which is not a network in CIDR notation (e.g. 172.18.0.0/16).");
 
     public static IServiceCollection AddCookieAuthentication(this IServiceCollection services)
     {

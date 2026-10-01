@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.HttpOverrides;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
@@ -24,18 +23,7 @@ builder.Services.AddControllers().AddViewLocalization();
 builder.Services.AddAntiforgery();
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders =
-        ForwardedHeaders.XForwardedFor |
-        ForwardedHeaders.XForwardedProto |
-        ForwardedHeaders.XForwardedHost;
-
-    // If your proxy is internal/docker/network-local and not explicitly listed,
-    // clear these so forwarded headers are accepted.
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
-});
+builder.Services.AddTrustedForwardedHeaders(builder.Configuration);
 
 builder.Services.AddCookieAuthentication();
 builder.Services.AddAppSession();

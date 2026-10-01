@@ -50,6 +50,21 @@ dotnet watch run --project Recall.Web --launch-profile Recall.Web
 On the server after first deploy run:
 mkdir -p logs dataprotection-keys && sudo chown -R 64198:64198 logs dataprotection-keys
 
+Reverse proxy on the server
+
+`compose.prod.yml` publishes the app on `127.0.0.1:8701` and Postgres on `127.0.0.1:5433` only, so the
+reverse proxy on the same host is the only way in. CI does not copy `compose.prod.yml` to the server —
+update the copy in `recall-deploy/` by hand when it changes.
+
+The app believes `X-Forwarded-For/Proto/Host` only from loopback and the private ranges by default. To
+trust exactly one network or address instead, add to `.env.prod`:
+```
+TrustedProxies__Networks__0=172.18.0.0/16
+# TrustedProxies__Addresses__0=203.0.113.50
+# TrustedProxies__ForwardLimit=2   # only for a chain such as CDN -> proxy -> app
+```
+The proxy must set the header itself, e.g. nginx: `proxy_set_header X-Forwarded-For $remote_addr;`
+
 
 Take database dump from postgres container
 

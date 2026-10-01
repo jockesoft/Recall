@@ -40,7 +40,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 
 1. Serilog from configuration (`UseSerilog`, console + rolling daily file).
 2. `AddRazorPages`, `AddControllers().AddViewLocalization()`, `AddAntiforgery`, `AddHttpContextAccessor`.
-3. `ForwardedHeadersOptions`: X-Forwarded-For/Proto/Host, with `KnownIPNetworks` and `KnownProxies` cleared (every proxy is trusted).
+3. `AddTrustedForwardedHeaders`: X-Forwarded-For/Proto/Host, applied only when the request comes from a trusted proxy. The `TrustedProxies` section (`Infrastructure/Hosting/TrustedProxyOptions.cs`) lists `Addresses` and `Networks`; with both empty the default is loopback plus the private ranges. An invalid entry fails startup.
 4. `AddCookieAuthentication`, `AddAppSession`, `AddAuthorization` (no fallback policy).
 5. `AddRedisCache`, `AddPostgres` — both throw at startup if their connection string is missing.
 6. TheTVDB (`TheTvDbClientState` singleton, typed client, `AddTheTvDb`), `AddOmdb`, `AddApplicationServices`, `AddNotifications`, `AddMail`, `AddWatchlistImport`.
@@ -57,7 +57,7 @@ All of these live in `Extensions/ServiceCollectionExtensions.cs` (application se
 | Transient (typed `HttpClient`) | `ITheTvDbApiClient`, `IOmdbApiClient`, `ITurnstileVerifier` |
 | Factory | `IDbContextFactory<AppDbContext>`, for code that fans out in parallel |
 
-**Options binding**: `Configure<T>(GetSection(T.SectionName))` for `TheTvDbOptions` (`TheTvDb`), `OmdbOptions` (`Omdb`), `MailOptions` (`Mail`), `LoginTokenOptions` (`Login`), `TurnstileOptions` (`Turnstile`). No options validation.
+**Options binding**: `Configure<T>(GetSection(T.SectionName))` for `TheTvDbOptions` (`TheTvDb`), `OmdbOptions` (`Omdb`), `MailOptions` (`Mail`), `LoginTokenOptions` (`Login`), `TurnstileOptions` (`Turnstile`). No options validation, except `TrustedProxyOptions` (`TrustedProxies`), which is read and validated eagerly at registration.
 
 **Before serving**: `await app.MigrateDatabaseAsync()` applies pending migrations with 10 retries, 3 s apart. Disable with `Database:MigrateOnStartup=false`.
 
@@ -217,14 +217,15 @@ There are no other hosted services, queues or message brokers. The email and imp
 - `appsettings.json`: defaults, including the local dev connection strings (`Host=localhost…Password=devpassword`, `localhost:6379`) and empty API keys.
 - `appsettings.Development.json`: log levels only. `appsettings.Production.json`: Redis at `redis:6379`, empty `DefaultConnection`, log file under `/var/log/recallapp`.
 - Redis connection: `REDIS_CONNECTION` environment variable, falling back to `ConnectionStrings:RedisConnection`.
+- Trusted reverse proxies: `TrustedProxies__Networks__0`, `TrustedProxies__Addresses__0`, … Setting either list replaces the built-in default (loopback + private ranges) entirely. `RemoteIpAddress`, and so every per-IP rate limiter, is only as trustworthy as this list.
 - Production secrets come from `.env.prod`, loaded by `compose.prod.yml`. `.gitignore` excludes `.env*`; `.env` and `.env.prod` exist in the working directory but are not tracked.
 - **No real secret is committed.** The only credential in the repository is the local-dev Postgres password `devpassword` (also in `README.md`).
 
 ## 11. Testing
 
-- 209 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
+- 226 tests in `Recall.Tests`, all passing as of this writing. NUnit + Moq + AwesomeAssertions. Folders mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
-- **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget.
+- **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`).
 - **Not covered**: every page model, all Quartz jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient`, `DevAuthMiddleware`, the `Like`/`Rating`/`Notification`/`TrackedSeries`/`AppUser`/`Email` repositories, and anything through the HTTP pipeline. Postgres-only behavior (`jsonb`, `xmin`, the `UniqueViolation` catch blocks) is not exercised by SQLite.
 
 ```bash
@@ -263,7 +264,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 
 **CI/CD** (`.github/workflows/dotnet.yml`): on push and pull request to `main`, restore, Release build, test with coverage (summary only; coverage does not gate). On push, build `Dockerfile.prod`, push `ghcr.io/<user>/recall:latest` and `:<run number>`, then SSH to the server, run `dump_db.sh` and `docker compose -f compose.prod.yml up -d --pull always`. There is no lint or format step. `nightly-build.yml` builds and tests daily at 05:00 UTC.
 
-**Hosting**: a single Docker host. `compose.prod.yml` runs the app (port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (published on host port 5433) and `redis:7`. `Dockerfile.prod` expects `build.txt` in the build context, which only CI writes.
+**Hosting**: a single Docker host. `compose.prod.yml` runs the app (port 8701, logs and Data Protection keys on bind mounts), `postgres:18.1` (host port 5433) and `redis:7`. Both published ports are bound to `127.0.0.1`, so the reverse proxy on the host is the only way in. CI does not copy `compose.prod.yml` to the server; the copy in `recall-deploy/` there is maintained by hand. `Dockerfile.prod` expects `build.txt` in the build context, which only CI writes.
 
 `Recall.Web/Dockerfile` and `compose.yaml` are IDE-generated and not used by CI.
 
@@ -290,7 +291,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 Described only, ranked by impact. Nothing here has been changed.
 
 1. **Anonymous pages can spend upstream quota.** `Series/Details`, `Episodes/Details` and `Movies/Details` are public, indexable and have no rate limit. A request for an uncached id calls TheTVDB and writes Redis and Postgres rows; an episode page can also make a live OMDb call. `/sitemap.xml` lists every cached episode, so crawlers are invited to each one, and the sitemap has no size cap (the protocol limit is 50,000 URLs). The shared OMDb budget caps the damage at 900 calls a day but lets anonymous traffic starve the hourly enrichment jobs.
-2. **Forwarded headers are trusted from any source.** `KnownIPNetworks` and `KnownProxies` are cleared, and the per-IP login limiter keys on `RemoteIpAddress`. If the app's published port (8701) is reachable without passing through the proxy, `X-Forwarded-For` can be spoofed to bypass that limiter.
+2. **Forwarded headers: fixed, with a residual default.** Headers are now applied only from trusted proxies and the compose ports are loopback-only. What remains: the default trusts all private ranges, so any other machine or container on a private network that can reach the app could still forge `X-Forwarded-For`; set `TrustedProxies__Networks__0` to the proxy's exact network to close that. The loopback binding only takes effect once the server's own copy of `compose.prod.yml` is updated.
 3. **Sessions cannot be revoked.** The role and identity live in a 30-day sliding cookie with no `OnValidatePrincipal` check. Demoting or deleting a user has no effect until the cookie expires.
 4. **No HTTP resilience.** Neither typed client has retry, backoff or circuit breaking; a TheTVDB 429 or transient 5xx surfaces as a failed page or a skipped job item. The Turnstile client uses the default 100 s timeout.
 5. **Some cached rows are never refreshed.** The refresh jobs only pick aggregates where `KeepUpdated = true`, and reads never check age in Postgres. A series or movie cached with `KeepUpdated` false or null is served unchanged indefinitely; `cached_series_extended` has no refresh path at all.
@@ -304,7 +305,7 @@ Described only, ranked by impact. Nothing here has been changed.
 13. **Unbounded tables.** `login_token`, `email` (including sent magic-link bodies), `notified_episode`, `notification` and import items are never pruned.
 14. **Duplication.** `ApplyAuditTimestamps` repeats the same block nine times; the three OMDb snapshot stores and two OMDb jobs are near copies; the "is authenticated" guard is repeated in every Details POST handler.
 15. **Local time for air dates.** `DateTime.Today` is server-local. Production sets `TZ=UTC`, so it matches the jobs there, but a developer machine does not, and there is no notion of the user's time zone.
-16. **Deployment details.** Postgres is published on host port 5433 in production compose; the image sets a Swedish locale (`sv_SE.UTF-8`), so culture-sensitive date formatting such as the Dashboard's `ToString("dddd, MMMM d")` renders in Swedish on an English site **(inference)**; the log directory is `chmod 777`; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
+16. **Deployment details.** The image sets a Swedish locale (`sv_SE.UTF-8`), so culture-sensitive date formatting such as the Dashboard's `ToString("dddd, MMMM d")` renders in Swedish on an English site **(inference)**; the log directory is `chmod 777`; the Copilot setup workflow uses `postgres:16-alpine` against 18.1 elsewhere.
 17. **Stale documentation and comments.** `AGENTS.md` predates movies, likes, ratings and import. `README.md` backup commands point at a Receptus path. Several comments say jobs are "scheduled in `Program.cs`"; `AddOmdb` says nothing calls OMDb on a request path; `_Layout` says almost every page requires sign-in; `LogoutModel` says the nav links with GET (it posts).
 18. **Debug builds log the raw login token** (`PasswordlessAuthService`, inside `#if DEBUG`). Deliberate for local sign-in, but a Debug build must never be deployed.
 
@@ -333,5 +334,5 @@ Described only, ranked by impact. Nothing here has been changed.
 - **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (209 tests, NUnit, SQLite in-memory for persistence)
+- **Test**: `dotnet test Recall.sln` (226 tests, NUnit, SQLite in-memory for persistence)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.
