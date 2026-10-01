@@ -5,7 +5,7 @@ namespace Recall.Web.Infrastructure.Persistence.Entities;
 /// <c>MailService.QueueEmailAsync</c> and drained by the <c>MailTimer</c> Quartz
 /// job — a lightweight transactional-outbox table, not a full mail log.
 /// </summary>
-public sealed class EmailEntity
+public sealed class EmailEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

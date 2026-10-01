@@ -55,8 +55,12 @@ public sealed class DashboardModel(
     IEpisodeWatchRepository watchedRepository,
     IWatchProgressService watchProgressService,
     ILogger<DashboardModel> logger,
-    ICurrentUserService currentUserService) : PageModel
+    ICurrentUserService currentUserService,
+    TimeProvider timeProvider) : PageModel
 {
+    /// <summary>Today's date in UTC — the date every air-date comparison on this page (and its view) uses.</summary>
+    public DateOnly Today => AirDate.Today(timeProvider);
+
     private const int UpcomingWindowDays = 30;
     private const int ThisWeekWindowDays = 7;
 
@@ -84,7 +88,7 @@ public sealed class DashboardModel(
         var seriesIds = aggregates.Select(a => a.TvdbId).ToList();
         var watchedIds = await watchedRepository.GetWatchedEpisodeIdsAsync(userId, seriesIds, cancellationToken);
 
-        var today = AirDate.Today;
+        var today = Today;
         var upcomingCutoff = today.AddDays(UpcomingWindowDays);
         var thisWeekCutoff = today.AddDays(ThisWeekWindowDays);
 

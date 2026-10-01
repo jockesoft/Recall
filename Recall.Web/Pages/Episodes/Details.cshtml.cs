@@ -33,7 +33,8 @@ public sealed class DetailsModel(
     IOmdbApiClient omdbApiClient,
     IEpisodeOmdbSnapshotStore episodeOmdbSnapshotStore,
     IOmdbRequestBudget omdbRequestBudget,
-    IOptions<OmdbOptions> omdbOptions)
+    IOptions<OmdbOptions> omdbOptions,
+    TimeProvider timeProvider)
     : PageModel
 {
     /// <summary>Only refresh an episode's OMDb data this rarely — matches UpdateOmdbInfoTimer's series cadence.</summary>
@@ -68,7 +69,7 @@ public sealed class DetailsModel(
     public string? ImdbId { get; private set; }
 
     /// <summary>OMDb enrichment for this episode, when available (fetched lazily and cached).</summary>
-    public OmdbSeries? Omdb { get; private set; }
+    public OmdbEpisode? Omdb { get; private set; }
 
     /// <summary>When the current user marked this episode watched, if they have.</summary>
     public DateTime? WatchedOnUtc { get; private set; }
@@ -90,7 +91,7 @@ public sealed class DetailsModel(
     /// Drives "Aired" vs "Airs" wording and whether the watched button is enabled.
     /// </summary>
     public bool HasAired =>
-        !AirDate.IsInFuture(AiredDate);
+        !AirDate.IsInFuture(AiredDate, AirDate.Today(timeProvider));
 
     /// <summary>
     /// How many episodes before this one (by season/episode order) the current
@@ -116,16 +117,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to like an episode.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "like an episode");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
             if (episode?.SeriesId is not > 0)
             {
@@ -154,19 +150,14 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to rate an episode.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "rate an episode");
 
         if (value is < 1 or > 10)
             return RedirectToPage(new { id });
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
             if (episode?.SeriesId is not > 0)
             {
@@ -193,15 +184,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to rate an episode.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "rate an episode");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Episode, id, cancellationToken);
             this.SetInfoToast("Rating removed.");
         }
@@ -219,16 +206,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to track watched episodes.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "track watched episodes");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
             if (episode is null)
                 return NotFound();
@@ -273,16 +255,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to track watched episodes.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "track watched episodes");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var episode = await theTvDbService.GetEpisodeDetailsAsync(id, cancellationToken);
             if (episode is null)
                 return NotFound();
@@ -334,7 +311,17 @@ public sealed class DetailsModel(
     /// only enriched on demand — there are far more of them, so eagerly fetching
     /// every one isn't worth the OMDb quota.
     /// </summary>
-    private async Task<OmdbSeries?> LoadOmdbAsync(int episodeTvdbId, string imdbId, CancellationToken cancellationToken)
+    /// <summary>
+    /// What every POST handler here returns to an anonymous caller: the page is
+    /// public, so <c>[Authorize]</c> can't guard its handlers.
+    /// </summary>
+    private IActionResult SignInRequired(int id, string toDoWhat)
+    {
+        this.SetErrorToast($"You need to be signed in to {toDoWhat}.");
+        return RedirectToPage(new { id });
+    }
+
+    private async Task<OmdbEpisode?> LoadOmdbAsync(int episodeTvdbId, string imdbId, CancellationToken cancellationToken)
     {
         // Anonymous visitors (and crawlers — the sitemap lists every cached
         // episode) only ever see what is already cached. A live lookup spends
@@ -363,7 +350,7 @@ public sealed class DetailsModel(
 
         try
         {
-            var data = await omdbApiClient.GetByImdbIdAsync(imdbId, "episode", cancellationToken);
+            var data = await omdbApiClient.GetEpisodeAsync(imdbId, cancellationToken);
             await episodeOmdbSnapshotStore.UpsertAsync(episodeTvdbId, imdbId, data, cancellationToken);
             return data;
         }
@@ -471,12 +458,8 @@ public sealed class DetailsModel(
                 }
             }
 
-            if (Episode is not null &&
-                currentUserService.IsAuthenticated &&
-                !string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+            if (Episode is not null && currentUserService.TryGetUserId(out var userId))
             {
-                var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
                 WatchedOnUtc = await episodeWatchRepository.GetWatchedUtcAsync(userId, id, cancellationToken);
                 IsWatchedByCurrentUser = WatchedOnUtc is not null;
 

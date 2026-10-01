@@ -12,7 +12,7 @@ public enum RatingTargetType
 /// A user's 1-10 rating of a series, a single episode, or a movie. One row per
 /// (user, target type, target id); rating again overwrites the previous value.
 /// </summary>
-public sealed class UserRatingEntity
+public sealed class UserRatingEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

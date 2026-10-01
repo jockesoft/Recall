@@ -6,6 +6,14 @@ namespace Recall.Web.Infrastructure.Persistence.Repositories;
 
 public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserRepository
 {
+    public async Task<UserCounts> GetCountsAsync(CancellationToken cancellationToken = default)
+    {
+        var total = await dbContext.AppUsers.CountAsync(cancellationToken);
+        var admins = await dbContext.AppUsers.CountAsync(x => x.Role == UserRole.Admin, cancellationToken);
+
+        return new UserCounts(total, admins);
+    }
+
     public Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 

@@ -14,7 +14,12 @@ public interface ITrackedSeriesRepository
     /// <summary>Ids of the users that track the given series.</summary>
     Task<IReadOnlyList<Guid>> GetUserIdsTrackingAsync(int tvdbId, CancellationToken cancellationToken = default);
 
-    Task AddAsync(TrackedSeries trackedSeries, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Adds the series to the user's library. Returns <c>false</c> when it was
+    /// already there — which, since callers check first, means a concurrent
+    /// request added it in between.
+    /// </summary>
+    Task<bool> AddAsync(TrackedSeries trackedSeries, CancellationToken cancellationToken = default);
 
     Task RemoveAsync(Guid userId, Guid trackedSeriesId, CancellationToken cancellationToken = default);
 }

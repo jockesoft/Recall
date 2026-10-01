@@ -5,6 +5,7 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
+using Recall.Tests.TestSupport;
 
 namespace Recall.Tests.Services;
 
@@ -13,17 +14,22 @@ public class WatchProgressServiceTests
 {
     private Mock<ITheTvDbService> _tvDbService = null!;
     private Mock<IEpisodeWatchRepository> _watchRepository = null!;
+    private FixedTimeProvider _time = null!;
     private WatchProgressService _sut = null!;
+
+    private WatchProgressService CreateSut(TimeProvider timeProvider) => new(
+        _tvDbService.Object,
+        _watchRepository.Object,
+        timeProvider,
+        NullLogger<WatchProgressService>.Instance);
 
     [SetUp]
     public void SetUp()
     {
         _tvDbService = new Mock<ITheTvDbService>();
         _watchRepository = new Mock<IEpisodeWatchRepository>();
-        _sut = new WatchProgressService(
-            _tvDbService.Object,
-            _watchRepository.Object,
-            NullLogger<WatchProgressService>.Instance);
+        _time = new FixedTimeProvider(new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero));
+        _sut = CreateSut(_time);
     }
 
     private const int SeriesId = 42;
@@ -387,5 +393,56 @@ public class WatchProgressServiceTests
 
         removed.Should().Be(1);
         unwatched.Should().BeEquivalentTo([1, 2]);
+    }
+
+    [Test]
+    public async Task AiredToday_Should_CountAsAired_AndTomorrowAsNot()
+    {
+        // The clock reads 2026-10-01 12:00 UTC.
+        SetupSeries(
+            Ep(1, 1, 1, "2026-10-01"),
+            Ep(2, 1, 2, "2026-10-02"));
+        SetupWatched();
+
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(EpisodeWatchOutcome.NotAired);
+
+        var progress = await _sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId);
+        progress.ReleasedCount.Should().Be(1);
+    }
+
+    [Test]
+    public async Task AirDates_Should_BeJudgedByTheUtcDate_NotTheMachinesLocalDate()
+    {
+        // 23:30 UTC on Oct 1. On a machine fourteen hours ahead it is already
+        // Oct 2 — and on one twelve hours behind it is still Oct 1 at 11:30.
+        // Either way "today" is Oct 1, so an Oct 2 episode has not aired.
+        var lateEvening = new DateTimeOffset(2026, 10, 1, 23, 30, 0, TimeSpan.Zero);
+        SetupSeries(
+            Ep(1, 1, 1, "2026-10-01"),
+            Ep(2, 1, 2, "2026-10-02"));
+        SetupWatched();
+
+        foreach (var offsetHours in new[] { 14, -12, 0 })
+        {
+            var zone = TimeZoneInfo.CreateCustomTimeZone($"test{offsetHours}", TimeSpan.FromHours(offsetHours), "test", "test");
+            var sut = CreateSut(new FixedTimeProvider(lateEvening, zone));
+
+            (await sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(
+                EpisodeWatchOutcome.NotAired, $"with the machine at UTC{offsetHours:+0;-0}");
+            (await sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId)).ReleasedCount.Should().Be(1);
+        }
+    }
+
+    [Test]
+    public async Task TheSameEpisode_Should_BecomeMarkable_OnceTheUtcDateReachesItsAirDate()
+    {
+        SetupSeries(Ep(2, 1, 2, "2026-10-02"));
+
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(EpisodeWatchOutcome.NotAired);
+
+        _time.Now = new DateTimeOffset(2026, 10, 2, 0, 0, 1, TimeSpan.Zero);
+
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(EpisodeWatchOutcome.MarkedWatched);
     }
 }

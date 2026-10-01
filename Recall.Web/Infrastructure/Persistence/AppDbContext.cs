@@ -49,128 +49,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         return base.SaveChanges();
     }
 
+    /// <summary>
+    /// Stamps every tracked <see cref="IHasAuditTimestamps"/> entity. An entity
+    /// opts in by implementing the interface — there is no list to keep in sync here.
+    /// </summary>
     private void ApplyAuditTimestamps()
     {
         var now = DateTime.UtcNow;
 
-        foreach (var entry in ChangeTracker.Entries<AppUserEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<TrackedSeriesEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<TrackedMovieEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<EpisodeWatchEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<UserLikeEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<UserMovieWatchEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<UserRatingEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<NotificationEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<EmailEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedUtc = now;
-                entry.Entity.UpdatedUtc = now;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedUtc = now;
-            }
-        }
-
-        foreach (var entry in ChangeTracker.Entries<LoginTokenEntity>())
+        foreach (var entry in ChangeTracker.Entries<IHasAuditTimestamps>())
         {
             if (entry.State == EntityState.Added)
             {

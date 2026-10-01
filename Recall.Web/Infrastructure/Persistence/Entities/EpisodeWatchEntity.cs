@@ -1,6 +1,6 @@
 namespace Recall.Web.Infrastructure.Persistence.Entities;
 
-public sealed class EpisodeWatchEntity
+public sealed class EpisodeWatchEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

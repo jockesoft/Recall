@@ -5,7 +5,7 @@ namespace Recall.Web.Infrastructure.Persistence.Entities;
 /// <see cref="TrackedSeriesEntity"/>. A movie leaves the watchlist when it is
 /// marked watched (<see cref="UserMovieWatchEntity"/>); it is never both.
 /// </summary>
-public sealed class TrackedMovieEntity
+public sealed class TrackedMovieEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

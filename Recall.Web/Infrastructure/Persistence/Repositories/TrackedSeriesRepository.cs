@@ -56,23 +56,26 @@ public sealed class TrackedSeriesRepository(
             .ToListAsync(cancellationToken);
     }
 
-    public async Task AddAsync(TrackedSeries trackedSeries, CancellationToken cancellationToken = default)
+    public async Task<bool> AddAsync(TrackedSeries trackedSeries, CancellationToken cancellationToken = default)
     {
-        dbContext.TrackedSeries.Add(trackedSeries.ToEntity());
+        var entity = trackedSeries.ToEntity();
+        dbContext.TrackedSeries.Add(entity);
 
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
+            return true;
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation)
         {
+            // Not an error for the caller: the end state is the one they asked for.
+            dbContext.Entry(entity).State = EntityState.Detached;
             logger.LogInformation(
-                ex,
                 "Tracked series already exists for user {UserId}, tvdb {TvdbId}.",
                 trackedSeries.UserId,
                 trackedSeries.TvdbId);
 
-            throw new InvalidOperationException("This series is already in your library.", ex);
+            return false;
         }
     }
 

@@ -76,6 +76,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
+        // The clock every air-date check reads (AirDate.Today); tests substitute a fixed one.
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<ITrackedSeriesRepository, TrackedSeriesRepository>();
         services.AddScoped<IEpisodeWatchRepository, EpisodeWatchRepository>();
@@ -138,7 +140,7 @@ public static class ServiceCollectionExtensions
     /// <see cref="IPasswordlessAuthService"/>, backed by the in-memory
     /// <see cref="ILoginAbuseGuard"/> (per-address/site-wide volumetric caps) and
     /// the Cloudflare Turnstile CAPTCHA verifier used on the login page. Cookie
-    /// authentication itself is wired up separately in <c>Program.cs</c>.
+    /// authentication itself is wired up separately, in <c>AddCookieAuthentication</c>.
     /// </summary>
     public static IServiceCollection AddPasswordlessAuth(this IServiceCollection services, IConfiguration configuration)
     {

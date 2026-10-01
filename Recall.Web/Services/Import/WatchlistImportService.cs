@@ -152,9 +152,9 @@ public sealed class WatchlistImportService(
 
     private async Task ProcessSeriesAsync(WatchlistImportItem item, RemoteIdMatch match, CancellationToken cancellationToken)
     {
-        var existing = await trackedSeriesRepository.GetByUserAndTvdbIdAsync(item.UserId, match.TvdbId, cancellationToken);
+        var added = false;
 
-        if (existing is null)
+        if (await trackedSeriesRepository.GetByUserAndTvdbIdAsync(item.UserId, match.TvdbId, cancellationToken) is null)
         {
             var details = await theTvDbService.GetSeriesByIdAsync(match.TvdbId, cancellationToken);
             if (details is null)
@@ -165,16 +165,10 @@ public sealed class WatchlistImportService(
                 return;
             }
 
-            try
-            {
-                await trackedSeriesRepository.AddAsync(
-                    TrackedSeriesMappings.FromTvDbDetails(item.UserId, details), cancellationToken);
-            }
-            catch (InvalidOperationException)
-            {
-                // Added concurrently (e.g. the user tracked it manually) between our check and now.
-                existing = await trackedSeriesRepository.GetByUserAndTvdbIdAsync(item.UserId, match.TvdbId, cancellationToken);
-            }
+            // False when it was added concurrently (e.g. the user tracked it
+            // manually) between our check and now — reported as already there.
+            added = await trackedSeriesRepository.AddAsync(
+                TrackedSeriesMappings.FromTvDbDetails(item.UserId, details), cancellationToken);
         }
 
         if (item.YourRating is { } rating)
@@ -185,9 +179,9 @@ public sealed class WatchlistImportService(
 
         await importRepository.MarkItemResultAsync(
             item.Id,
-            existing is null ? WatchlistImportItemStatus.Imported : WatchlistImportItemStatus.AlreadyInLibrary,
+            added ? WatchlistImportItemStatus.Imported : WatchlistImportItemStatus.AlreadyInLibrary,
             match.TvdbId,
-            existing is null ? "Added to your library." : "Already in your library.",
+            added ? "Added to your library." : "Already in your library.",
             cancellationToken);
     }
 

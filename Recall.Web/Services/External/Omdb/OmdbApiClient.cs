@@ -16,13 +16,17 @@ public sealed class OmdbApiClient(
     private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
     private readonly OmdbOptions _options = options.Value;
 
-    public Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, CancellationToken cancellationToken = default) =>
-        FetchAsync(imdbId, type: null, cancellationToken);
+    public Task<OmdbSeries?> GetSeriesAsync(string imdbId, CancellationToken cancellationToken = default) =>
+        FetchAsync<OmdbSeries>(imdbId, type: null, cancellationToken);
 
-    public Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, string type, CancellationToken cancellationToken = default) =>
-        FetchAsync(imdbId, type, cancellationToken);
+    public Task<OmdbMovie?> GetMovieAsync(string imdbId, CancellationToken cancellationToken = default) =>
+        FetchAsync<OmdbMovie>(imdbId, "movie", cancellationToken);
 
-    private async Task<OmdbSeries?> FetchAsync(string imdbId, string? type, CancellationToken cancellationToken)
+    public Task<OmdbEpisode?> GetEpisodeAsync(string imdbId, CancellationToken cancellationToken = default) =>
+        FetchAsync<OmdbEpisode>(imdbId, "episode", cancellationToken);
+
+    private async Task<T?> FetchAsync<T>(string imdbId, string? type, CancellationToken cancellationToken)
+        where T : OmdbTitle
     {
         if (string.IsNullOrWhiteSpace(imdbId))
             throw new ArgumentException("IMDb id is required.", nameof(imdbId));
@@ -43,10 +47,10 @@ public sealed class OmdbApiClient(
 
         var payload = await response.Content.ReadAsStringAsync(cancellationToken);
 
-        OmdbSeries? result;
+        T? result;
         try
         {
-            result = JsonSerializer.Deserialize<OmdbSeries>(payload, JsonOptions);
+            result = JsonSerializer.Deserialize<T>(payload, JsonOptions);
         }
         catch (JsonException ex)
         {

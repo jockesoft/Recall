@@ -8,16 +8,16 @@ namespace Recall.Web.Services.External.Omdb;
 /// </summary>
 public interface IOmdbApiClient
 {
-    /// <summary>
-    /// Looks up a title by IMDb id (<c>?i=tt…</c>). Returns the parsed record on
-    /// an OMDb "Response":"True", or <c>null</c> when OMDb has nothing for the id
-    /// (its "Response":"False") — network/HTTP failures throw.
-    /// </summary>
-    Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, CancellationToken cancellationToken = default);
+    // Each lookup is by IMDb id (<c>?i=tt…</c>) and returns the parsed record on
+    // an OMDb "Response":"True", or null when OMDb has nothing for the id (its
+    // "Response":"False"). Network/HTTP failures throw.
 
-    /// <summary>
-    /// As above, but adds OMDb's optional <c>&amp;type=</c> filter (e.g. <c>"episode"</c>)
-    /// to the lookup.
-    /// </summary>
-    Task<OmdbSeries?> GetByImdbIdAsync(string imdbId, string type, CancellationToken cancellationToken = default);
+    /// <summary>Looks up a series. No <c>&amp;type=</c> filter is sent, so a mini-series or anything else OMDb files under that id is returned as-is.</summary>
+    Task<OmdbSeries?> GetSeriesAsync(string imdbId, CancellationToken cancellationToken = default);
+
+    /// <summary>Looks up a movie (<c>&amp;type=movie</c>).</summary>
+    Task<OmdbMovie?> GetMovieAsync(string imdbId, CancellationToken cancellationToken = default);
+
+    /// <summary>Looks up a single episode (<c>&amp;type=episode</c>).</summary>
+    Task<OmdbEpisode?> GetEpisodeAsync(string imdbId, CancellationToken cancellationToken = default);
 }

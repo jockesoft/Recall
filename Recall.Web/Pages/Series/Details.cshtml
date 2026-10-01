@@ -394,7 +394,7 @@
                 @if (Model.IsAuthenticated && filteredEpisodes.Count > 0)
                 {
                     var seasonHasMarkable = filteredEpisodes.Any(e =>
-                        !Model.WatchedEpisodeIds.Contains(e.Id) && !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(e.Aired));
+                        !Model.WatchedEpisodeIds.Contains(e.Id) && !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(e.Aired, Model.Today));
                     var seasonWatchedCount = filteredEpisodes.Count(e => Model.WatchedEpisodeIds.Contains(e.Id));
 
                     <div class="d-flex flex-wrap gap-2">
@@ -431,7 +431,7 @@
                     @foreach (var ep in filteredEpisodes)
                     {
                         var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
-                        var hasAired = !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(ep.Aired);
+                        var hasAired = !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(ep.Aired, Model.Today);
                         <div class="list-group-item @(isWatched ? "is-watched" : "")">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>

@@ -308,7 +308,7 @@ public class ExternalHttpResilienceTests
             () => Json(OmdbJson));
         await using var services = BuildServices(handler);
 
-        var result = await services.GetRequiredService<IOmdbApiClient>().GetByImdbIdAsync("tt0000001");
+        var result = await services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
 
         result!.Title.Should().Be("Example");
         handler.DataAttempts.Should().Be(2);
@@ -320,7 +320,7 @@ public class ExternalHttpResilienceTests
         var handler = new ScriptedHandler(() => Status(HttpStatusCode.ServiceUnavailable));
         await using var services = BuildServices(handler);
 
-        var act = () => services.GetRequiredService<IOmdbApiClient>().GetByImdbIdAsync("tt0000001");
+        var act = () => services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
 
         await act.Should().ThrowAsync<HttpRequestException>();
         handler.DataAttempts.Should().Be(2);
@@ -336,7 +336,7 @@ public class ExternalHttpResilienceTests
             var handler = new ScriptedHandler(() => Status(HttpStatusCode.TooManyRequests, retryAfter));
             await using var services = BuildServices(handler);
 
-            var act = () => services.GetRequiredService<IOmdbApiClient>().GetByImdbIdAsync("tt0000001");
+            var act = () => services.GetRequiredService<IOmdbApiClient>().GetSeriesAsync("tt0000001");
 
             await act.Should().ThrowAsync<HttpRequestException>();
             handler.DataAttempts.Should().Be(1);

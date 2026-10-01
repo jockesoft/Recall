@@ -8,6 +8,7 @@
 using Quartz;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.WatchTracking;
 using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Notifications.Models;
 
@@ -15,7 +16,7 @@ namespace Recall.Web.Infrastructure.Timers;
 
 /// <summary>
 /// Raises "a new episode aired" notifications. Scheduled every six hours in
-/// <c>Program.cs</c>. Each run walks every series at least one user tracks,
+/// <c>AddScheduledJobs</c>. Each run walks every series at least one user tracks,
 /// reads its (layered-cached) aggregate, and for each episode that aired within
 /// <see cref="Lookback"/> notifies every tracking user who hasn't already marked
 /// that episode watched. All of a series' new episodes for one user collapse
@@ -30,6 +31,7 @@ public sealed class NewEpisodeNotificationTimer(
     IEpisodeWatchRepository episodeWatchRepository,
     ITheTvDbService theTvDbService,
     INotificationService notificationService,
+    TimeProvider timeProvider,
     ILogger<NewEpisodeNotificationTimer> logger) : IJob
 {
     /// <summary>How far back an air date can be and still trigger a notification.</summary>
@@ -40,7 +42,7 @@ public sealed class NewEpisodeNotificationTimer(
 
     public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var today = AirDate.Today(timeProvider);
         var earliestAired = today.AddDays(-(int)Lookback.TotalDays);
 
         var seriesIds = await trackedSeriesRepository.GetDistinctTrackedTvdbIdsAsync(cancellationToken);

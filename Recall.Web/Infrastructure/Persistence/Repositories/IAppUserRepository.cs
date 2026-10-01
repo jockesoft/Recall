@@ -4,6 +4,9 @@ namespace Recall.Web.Infrastructure.Persistence.Repositories;
 
 public interface IAppUserRepository
 {
+    /// <summary>How many accounts exist, and how many of them are admins. For the admin dashboard.</summary>
+    Task<UserCounts> GetCountsAsync(CancellationToken cancellationToken = default);
+
     Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<AppUserEntity?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
@@ -47,3 +50,7 @@ public enum UsernameUpdateResult
     /// <summary>No user row exists for the supplied id.</summary>
     UserNotFound
 }
+
+/// <param name="Total">Every row in <c>app_user</c> — every account that has ever signed in.</param>
+/// <param name="Admins">How many of those have the Admin role.</param>
+public sealed record UserCounts(int Total, int Admins);

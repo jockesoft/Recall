@@ -84,7 +84,8 @@ public class EpisodeDetailsOmdbTests
         _omdbApiClient.Object,
         _snapshotStore.Object,
         _budget.Object,
-        Options.Create(new OmdbOptions { ApiKey = "configured" }))
+        Options.Create(new OmdbOptions { ApiKey = "configured" }),
+        TimeProvider.System)
     {
         // So an unexpected exception surfaces as a failed assertion on the
         // result rather than a NullReferenceException in the error-toast path.
@@ -96,7 +97,7 @@ public class EpisodeDetailsOmdbTests
         _omdbApiClient.VerifyNoOtherCalls();
         _budget.Verify(x => x.TryAcquire(), Times.Never, "an anonymous request must not spend the shared daily budget either");
         _snapshotStore.Verify(
-            x => x.UpsertAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<OmdbSeries?>(), It.IsAny<CancellationToken>()),
+            x => x.UpsertAsync(It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<OmdbEpisode?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -116,7 +117,7 @@ public class EpisodeDetailsOmdbTests
     [Test]
     public async Task Anonymous_Should_SeeTheCachedRating_EvenWhenItIsDueARefresh_WithoutCallingOmdb()
     {
-        var cached = new OmdbSeries { Title = "Pilot", ImdbRating = "8.4", Response = "True" };
+        var cached = new OmdbEpisode { Title = "Pilot", ImdbRating = "8.4", Response = "True" };
         _snapshotStore
             .Setup(x => x.GetAsync(EpisodeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(cached);
@@ -135,9 +136,9 @@ public class EpisodeDetailsOmdbTests
     public async Task SignedIn_Should_StillFetchFromOmdb_WhenTheEpisodeHasNeverBeenLookedUp()
     {
         SignIn();
-        var live = new OmdbSeries { Title = "Pilot", ImdbRating = "8.4", Response = "True" };
+        var live = new OmdbEpisode { Title = "Pilot", ImdbRating = "8.4", Response = "True" };
         _omdbApiClient
-            .Setup(x => x.GetByImdbIdAsync(ImdbId, "episode", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetEpisodeAsync(ImdbId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(live);
         var sut = CreateSut();
 

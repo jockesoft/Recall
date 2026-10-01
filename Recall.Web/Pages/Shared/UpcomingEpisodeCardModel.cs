@@ -73,7 +73,10 @@ public sealed class UpcomingEpisodeCardModel
                 ? null
                 : EpisodeName.Trim();
 
+    /// <summary>The page's "today" (UTC), passed in so the card doesn't read a clock of its own.</summary>
+    public required DateOnly Today { get; init; }
+
     /// <summary>Whole days from today until the episode airs (never negative).</summary>
     public int DaysUntilAired =>
-        Math.Max(0, AiredDate.DayNumber - Recall.Web.Services.WatchTracking.AirDate.Today.DayNumber);
+        Math.Max(0, AiredDate.DayNumber - Today.DayNumber);
 }

@@ -60,7 +60,7 @@ public sealed class MovieOmdbSnapshotStoreTests
     [Test]
     public async Task Upsert_ThenGet_RoundTripsTheRecord()
     {
-        var data = new OmdbSeries
+        var data = new OmdbMovie
         {
             Title = "Oppenheimer",
             Year = "2023",
@@ -87,8 +87,8 @@ public sealed class MovieOmdbSnapshotStoreTests
     [Test]
     public async Task Upsert_Overwrites_ExistingRow()
     {
-        await NewStore().UpsertAsync(600, "tt1", new OmdbSeries { Title = "First", Response = "True" }, CancellationToken.None);
-        await NewStore().UpsertAsync(600, "tt1", new OmdbSeries { Title = "Second", Response = "True" }, CancellationToken.None);
+        await NewStore().UpsertAsync(600, "tt1", new OmdbMovie { Title = "First", Response = "True" }, CancellationToken.None);
+        await NewStore().UpsertAsync(600, "tt1", new OmdbMovie { Title = "Second", Response = "True" }, CancellationToken.None);
 
         (await NewStore().GetAsync(600))!.Title.Should().Be("Second");
     }
@@ -113,9 +113,9 @@ public sealed class MovieOmdbSnapshotStoreTests
 
         var store = NewStore();
         // movie 2: fresh (should be excluded)
-        await store.UpsertAsync(2, "tt2", new OmdbSeries { Title = "Fresh", Response = "True" }, CancellationToken.None);
+        await store.UpsertAsync(2, "tt2", new OmdbMovie { Title = "Fresh", Response = "True" }, CancellationToken.None);
         // movie 3: stale (should be included)
-        await store.UpsertAsync(3, "tt3", new OmdbSeries { Title = "Stale", Response = "True" }, CancellationToken.None);
+        await store.UpsertAsync(3, "tt3", new OmdbMovie { Title = "Stale", Response = "True" }, CancellationToken.None);
         await using (var db = new AppDbContext(_dbOptions))
         {
             var stale = await db.CachedMoviesOmdb.SingleAsync(x => x.TvdbId == 3);

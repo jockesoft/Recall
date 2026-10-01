@@ -12,7 +12,7 @@ public sealed class MovieOmdbSnapshotStore(
 {
     private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
 
-    public async Task<OmdbSeries?> GetAsync(int tvdbId, CancellationToken cancellationToken = default)
+    public async Task<OmdbMovie?> GetAsync(int tvdbId, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
@@ -25,7 +25,7 @@ public sealed class MovieOmdbSnapshotStore(
 
         try
         {
-            return JsonSerializer.Deserialize<OmdbSeries>(row.Payload, JsonOptions);
+            return JsonSerializer.Deserialize<OmdbMovie>(row.Payload, JsonOptions);
         }
         catch (JsonException ex)
         {
@@ -35,7 +35,7 @@ public sealed class MovieOmdbSnapshotStore(
     }
 
     public async Task UpsertAsync(
-        int tvdbId, string? imdbId, OmdbSeries? data, CancellationToken cancellationToken = default)
+        int tvdbId, string? imdbId, OmdbMovie? data, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 

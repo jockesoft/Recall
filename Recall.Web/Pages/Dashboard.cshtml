@@ -10,7 +10,7 @@
 
     string DayGroup(DateOnly aired)
     {
-        var today = Recall.Web.Services.WatchTracking.AirDate.Today;
+        var today = Model.Today;
         var days = aired.DayNumber - today.DayNumber;
         return days switch
         {
@@ -64,7 +64,7 @@
 }
 
 <div class="tvdb-shell">
-    <div class="tvdb-eyebrow mb-1">Your channel &middot; @DateTime.Today.ToString("dddd, MMMM d")</div>
+    <div class="tvdb-eyebrow mb-1">Your channel &middot; @Model.Today.ToString("dddd, MMMM d")</div>
 
     @if (!hasLibrary)
     {
@@ -140,6 +140,7 @@
                                      EpisodeName = row.SingleName,
                                      ImageUrl = row.ImageUrl,
                                      AiredDate = row.AiredDate,
+                                     Today = Model.Today,
                                      IsPremiere = row.IsPremiere,
                                      IsFinale = row.IsFinale,
                                      EpisodeCount = row.Count,

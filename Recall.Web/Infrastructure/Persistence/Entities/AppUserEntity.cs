@@ -1,6 +1,6 @@
 namespace Recall.Web.Infrastructure.Persistence.Entities;
 
-public sealed class AppUserEntity
+public sealed class AppUserEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

@@ -12,7 +12,7 @@ public enum LikeTargetType
 /// A user's "heart" on a series, a single episode, or a movie. One row per
 /// (user, target type, target id); the row's presence is the like.
 /// </summary>
-public sealed class UserLikeEntity
+public sealed class UserLikeEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

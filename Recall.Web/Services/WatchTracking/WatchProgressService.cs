@@ -6,10 +6,11 @@ namespace Recall.Web.Services.WatchTracking;
 public sealed class WatchProgressService(
     ITheTvDbService theTvDbService,
     IEpisodeWatchRepository episodeWatchRepository,
+    TimeProvider timeProvider,
     ILogger<WatchProgressService> logger)
     : IWatchProgressService
 {
-    private static DateOnly Today => AirDate.Today;
+    private DateOnly Today => AirDate.Today(timeProvider);
 
     public SeriesWatchProgress BuildProgress(
         int seriesTvdbId,
@@ -101,7 +102,7 @@ public sealed class WatchProgressService(
             return new MarkWatchedThroughResult(EpisodeFound: false, MarkedCount: 0);
         }
 
-        if (AirDate.IsInFuture(target.Aired))
+        if (AirDate.IsInFuture(target.Aired, Today))
             return new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 0, HasAired: false);
 
         // Season 0 (specials) sorts first, so "everything earlier" can include a
@@ -122,8 +123,9 @@ public sealed class WatchProgressService(
         if (season.Count == 0)
             return new SeasonWatchResult(SeasonFound: false, WatchedBatch.Empty);
 
+        var today = Today;
         var idsToMark = season
-            .Where(e => !AirDate.IsInFuture(e.Aired))
+            .Where(e => !AirDate.IsInFuture(e.Aired, today))
             .Select(e => e.Id)
             .ToList();
 
@@ -182,7 +184,7 @@ public sealed class WatchProgressService(
             return EpisodeWatchOutcome.EpisodeNotInSeries;
         }
 
-        if (AirDate.IsInFuture(lookup.Aired))
+        if (AirDate.IsInFuture(lookup.Aired, Today))
             return EpisodeWatchOutcome.NotAired;
 
         await episodeWatchRepository.MarkWatchedAsync(userId, seriesTvdbId, episodeTvdbId, cancellationToken);
@@ -232,6 +234,9 @@ public sealed class WatchProgressService(
         return (true, aired);
     }
 
-    private static IReadOnlyList<WatchableEpisode> WithoutUnaired(IReadOnlyList<WatchableEpisode> ordered) =>
-        ordered.Where(e => !AirDate.IsInFuture(e.Aired)).ToList();
+    private IReadOnlyList<WatchableEpisode> WithoutUnaired(IReadOnlyList<WatchableEpisode> ordered)
+    {
+        var today = Today;
+        return ordered.Where(e => !AirDate.IsInFuture(e.Aired, today)).ToList();
+    }
 }

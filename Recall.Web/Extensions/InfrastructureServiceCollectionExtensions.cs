@@ -12,6 +12,8 @@ using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Infrastructure.Caching;
 using Recall.Web.Infrastructure.Hosting;
 using Recall.Web.Infrastructure.Persistence;
+using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Infrastructure.Retention;
 using Recall.Web.Infrastructure.Timers;
 using Serilog;
 
@@ -25,8 +27,7 @@ namespace Recall.Web.Extensions;
 public static class InfrastructureServiceCollectionExtensions
 {
     /// <summary>
-    /// The distributed cache (<see cref="IDistributedCacheJson"/>) plus the raw
-    /// <see cref="StackExchange.Redis.IConnectionMultiplexer"/> used for locking.
+    /// The Redis-backed distributed cache, wrapped as <see cref="IDistributedCacheJson"/>.
     /// </summary>
     public static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
     {
@@ -46,10 +47,6 @@ public static class InfrastructureServiceCollectionExtensions
             options.Configuration = redisConnection;
             options.InstanceName = "tvdb:"; // optional prefix
         });
-
-        // Separate from IDistributedCache: used directly for distributed locking.
-        services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
-            StackExchange.Redis.ConnectionMultiplexer.Connect(redisConnection));
 
         services.AddSingleton<IDistributedCacheJson, DistributedCacheJson>();
 
@@ -146,25 +143,6 @@ public static class InfrastructureServiceCollectionExtensions
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 #endif
             });
-
-        return services;
-    }
-
-    public static IServiceCollection AddAppSession(this IServiceCollection services)
-    {
-        services.AddSession(options =>
-        {
-#if DEBUG
-            options.Cookie.Name = "Recall.Dev.App.Session";
-#else
-            options.Cookie.Name = "Recall.App.Session";
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-            options.Cookie.SameSite = SameSiteMode.Strict;
-            options.Cookie.HttpOnly = true;
-#endif
-            options.Cookie.IsEssential = true;
-            options.IdleTimeout = TimeSpan.FromHours(12);
-        });
 
         return services;
     }
@@ -308,10 +286,16 @@ public static class InfrastructureServiceCollectionExtensions
 
     /// <summary>
     /// Registers the Quartz.NET jobs that keep TVDB/OMDb data fresh, drain the mail
-    /// queue, and raise new-episode notifications, plus the hosted service that runs them.
+    /// and import queues, raise new-episode notifications and prune old rows, plus
+    /// the hosted service that runs them.
     /// </summary>
-    public static IServiceCollection AddScheduledJobs(this IServiceCollection services)
+    public static IServiceCollection AddScheduledJobs(this IServiceCollection services, IConfiguration configuration)
     {
+        // PruneOldDataTimer's settings and dependencies.
+        services.Configure<RetentionOptions>(configuration.GetSection(RetentionOptions.SectionName));
+        services.AddScoped<IDataRetentionRepository, DataRetentionRepository>();
+        services.TryAddSingleton(TimeProvider.System);
+
         services.AddQuartz(q =>
         {
             q.ScheduleJob<UpdateTvDbInfoTimer>(trigger => trigger
@@ -355,6 +339,12 @@ public static class InfrastructureServiceCollectionExtensions
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(50))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())
                 .WithDescription("Drain the IMDb watchlist import queue at a steady pace, a few rows per minute."));
+
+            q.ScheduleJob<PruneOldDataTimer>(trigger => trigger
+                .WithIdentity("PruneOldDataTimer-trigger")
+                .StartAt(DateTimeOffset.UtcNow.AddSeconds(90))
+                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(24)).RepeatForever())
+                .WithDescription("Delete settled login tokens, finished emails, read notifications, the notified-episode ledger and completed imports once they pass their retention period."));
         });
 
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

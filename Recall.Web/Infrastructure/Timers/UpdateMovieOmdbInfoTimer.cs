@@ -80,7 +80,7 @@ public sealed class UpdateMovieOmdbInfoTimer(
                     break;
                 }
 
-                var data = await omdbApiClient.GetByImdbIdAsync(imdbId, "movie", cancellationToken);
+                var data = await omdbApiClient.GetMovieAsync(imdbId, cancellationToken);
                 await movieOmdbSnapshotStore.UpsertAsync(tvdbId, imdbId, data, cancellationToken);
 
                 if (data is not null)

@@ -15,7 +15,7 @@ public sealed class CachedMovieOmdbEntity
 
     public string? Name { get; set; }
 
-    /// <summary>Serialized <c>OmdbSeries</c> (jsonb); null when there was nothing to store.</summary>
+    /// <summary>Serialized <c>OmdbMovie</c> (jsonb); null when there was nothing to store.</summary>
     public string? Payload { get; set; }
 
     public DateTime RetrievedUtc { get; set; }

@@ -1,14 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
 using Recall.Web.Infrastructure.Authentication;
-using Recall.Web.Infrastructure.Persistence;
-using Recall.Web.Infrastructure.Persistence.Entities;
+using Recall.Web.Infrastructure.Persistence.Repositories;
 
 namespace Recall.Web.Pages.Admin;
 
 [Authorize(Roles = Roles.Admin)]
-public sealed class IndexModel(AppDbContext dbContext) : PageModel
+public sealed class IndexModel(IAppUserRepository userRepository) : PageModel
 {
     /// <summary>Total rows in <c>app_user</c> — every account that has ever signed in.</summary>
     public int RegisteredUserCount { get; private set; }
@@ -18,7 +16,9 @@ public sealed class IndexModel(AppDbContext dbContext) : PageModel
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        RegisteredUserCount = await dbContext.AppUsers.CountAsync(cancellationToken);
-        AdminCount = await dbContext.AppUsers.CountAsync(u => u.Role == UserRole.Admin, cancellationToken);
+        var counts = await userRepository.GetCountsAsync(cancellationToken);
+
+        RegisteredUserCount = counts.Total;
+        AdminCount = counts.Admins;
     }
 }

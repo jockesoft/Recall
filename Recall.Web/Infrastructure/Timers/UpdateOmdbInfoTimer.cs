@@ -15,7 +15,7 @@ using Recall.Web.Services.External.Omdb;
 namespace Recall.Web.Infrastructure.Timers;
 
 /// <summary>
-/// Enriches cached series with OMDb data. Scheduled hourly in <c>Program.cs</c>.
+/// Enriches cached series with OMDb data. Scheduled hourly in <c>AddScheduledJobs</c>.
 /// Each run takes up to <see cref="MaxRequestsPerRun"/> series whose OMDb
 /// snapshot is missing or older than <see cref="MinRefreshAge"/>, looks each one
 /// up by its IMDb id, and stores the result. A series with no IMDb id (or that
@@ -94,7 +94,7 @@ public sealed class UpdateOmdbInfoTimer(
                     break;
                 }
 
-                var data = await omdbApiClient.GetByImdbIdAsync(imdbId, cancellationToken);
+                var data = await omdbApiClient.GetSeriesAsync(imdbId, cancellationToken);
                 await omdbSnapshotStore.UpsertAsync(tvdbId, imdbId, data, cancellationToken);
 
                 if (data is not null)

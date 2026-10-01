@@ -22,14 +22,12 @@ builder.Host.UseSerilog((context, services, configuration) =>
 
 // Add services to the container.
 builder.Services.AddRazorPages();
-builder.Services.AddControllers().AddViewLocalization();
 builder.Services.AddAntiforgery();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddTrustedForwardedHeaders(builder.Configuration);
 
 builder.Services.AddCookieAuthentication();
-builder.Services.AddAppSession();
 builder.Services.AddAuthorization();
 
 builder.Services.AddRedisCache(builder.Configuration);
@@ -56,7 +54,7 @@ builder.Services.AddRateLimiting();
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 
-builder.Services.AddScheduledJobs();
+builder.Services.AddScheduledJobs(builder.Configuration);
 
 var app = builder.Build();
 
@@ -95,7 +93,6 @@ app.UseHttpsRedirection();
 app.UseStaticFiles(); // important for runtime-created files
 app.UseRouting();
 
-app.UseSession();
 app.UseAuthentication();
 
 #if DEBUG
@@ -114,10 +111,6 @@ app.UseAuthorization();
 // the process during a transient DB outage.
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.MapStaticAssets();
 app.MapRazorPages()

@@ -28,9 +28,13 @@ public sealed class DetailsModel(
     ILikeRepository likeRepository,
     IRatingRepository ratingRepository,
     IOmdbSnapshotStore omdbSnapshotStore,
+    TimeProvider timeProvider,
     ILogger<DetailsModel> logger)
     : PageModel
 {
+    /// <summary>Today's date in UTC, for the view's "has this episode aired" checks.</summary>
+    public DateOnly Today => AirDate.Today(timeProvider);
+
     public TvSeriesDetails? Series { get; private set; }
     public SeriesAggregate? Aggregate { get; private set; }
 
@@ -76,21 +80,12 @@ public sealed class DetailsModel(
 
     public async Task<IActionResult> OnPostToggleLibraryAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to manage your library.");
-            return RedirectToPage(new { id, season = Season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "manage your library");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-            
             await AddToPersonalLibraryAsync(userId, id, onlyAdd: false, cancellationToken);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already in your library", StringComparison.OrdinalIgnoreCase))
-        {
-            this.SetInfoToast("Series is already in your library.");
         }
         catch (Exception ex)
         {
@@ -103,15 +98,11 @@ public sealed class DetailsModel(
 
     public async Task<IActionResult> OnPostToggleSeriesLikeAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to like a series.");
-            return RedirectToPage(new { id, season = Season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "like a series");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             await likeRepository.ToggleAsync(userId, LikeTargetType.Series, id, id, cancellationToken);
         }
         catch (Exception ex)
@@ -128,18 +119,14 @@ public sealed class DetailsModel(
         [FromForm] int value,
         CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to rate a series.");
-            return RedirectToPage(new { id, season = Season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "rate a series");
 
         if (value is < 1 or > 10)
             return RedirectToPage(new { id, season = Season });
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             await ratingRepository.RateAsync(userId, RatingTargetType.Series, id, id, value, cancellationToken);
             this.SetSuccessToast("Rating saved.");
         }
@@ -154,15 +141,11 @@ public sealed class DetailsModel(
 
     public async Task<IActionResult> OnPostClearSeriesRatingAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to rate a series.");
-            return RedirectToPage(new { id, season = Season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "rate a series");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Series, id, cancellationToken);
             this.SetInfoToast("Rating removed.");
         }
@@ -187,13 +170,11 @@ public sealed class DetailsModel(
         if (episodeId <= 0)
             return BadRequest();
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        if (!currentUserService.TryGetUserId(out var userId))
             return Unauthorized();
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var priorUnwatchedCount = await watchProgressService.GetPriorUnwatchedCountAsync(userId, id, episodeId, cancellationToken);
 
             return new JsonResult(new { priorUnwatchedCount });
@@ -214,16 +195,11 @@ public sealed class DetailsModel(
         if (episodeId <= 0)
             return RedirectToPage(new { id, season = Season });
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to track watched episodes.");
-            return RedirectToPage(new { id, season = Season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "track watched episodes");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             switch (await watchProgressService.ToggleEpisodeWatchedAsync(userId, id, episodeId, cancellationToken))
             {
                 case EpisodeWatchOutcome.MarkedUnwatched:
@@ -263,16 +239,11 @@ public sealed class DetailsModel(
         if (episodeId <= 0)
             return RedirectToPage(new { id, season = Season });
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to track watched episodes.");
-            return RedirectToPage(new { id, season = Season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "track watched episodes");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var result = await watchProgressService.MarkWatchedThroughAsync(userId, id, episodeId, cancellationToken);
 
             if (!result.EpisodeFound)
@@ -313,16 +284,11 @@ public sealed class DetailsModel(
         if (Season is not { } season)
             return RedirectToPage(new { id });
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to track watched episodes.");
-            return RedirectToPage(new { id, season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "track watched episodes");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var result = await watchProgressService.MarkSeasonWatchedAsync(userId, id, season, cancellationToken);
 
             if (!result.SeasonFound)
@@ -360,16 +326,11 @@ public sealed class DetailsModel(
         if (Season is not { } season)
             return RedirectToPage(new { id });
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to track watched episodes.");
-            return RedirectToPage(new { id, season });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "track watched episodes");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var removed = await watchProgressService.MarkSeasonUnwatchedAsync(userId, id, season, cancellationToken);
 
             this.SetInfoToast(removed == 1
@@ -404,7 +365,7 @@ public sealed class DetailsModel(
                 ? LocalRedirect(returnUrl)
                 : RedirectToPage(new { id, season = Season });
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+        if (!currentUserService.TryGetUserId(out var userId))
         {
             this.SetErrorToast("You need to be signed in to track watched episodes.");
             return Back();
@@ -415,8 +376,6 @@ public sealed class DetailsModel(
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             var removed = await watchProgressService.UndoWatchedBatchAsync(
                 userId, id, new DateTime(stamp, DateTimeKind.Utc), cancellationToken);
 
@@ -434,6 +393,16 @@ public sealed class DetailsModel(
         }
 
         return Back();
+    }
+
+    /// <summary>
+    /// What every POST handler here returns to an anonymous caller: the page is
+    /// public, so <c>[Authorize]</c> can't guard its handlers.
+    /// </summary>
+    private IActionResult SignInRequired(int id, string toDoWhat)
+    {
+        this.SetErrorToast($"You need to be signed in to {toDoWhat}.");
+        return RedirectToPage(new { id, season = Season });
     }
 
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
@@ -472,10 +441,8 @@ public sealed class DetailsModel(
             RecallRatingAverage = ratingSummary.Average;
             RecallRatingCount = ratingSummary.Count;
 
-            if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
+            if (!currentUserService.TryGetUserId(out var userId))
                 return Page();
-
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
             IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
             IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Series, id, cancellationToken);
@@ -523,8 +490,11 @@ public sealed class DetailsModel(
                 if (series is null) return;
 
                 var tracked = TrackedSeriesMappings.FromTvDbDetails(userId, series);
-                await trackedSeriesRepository.AddAsync(tracked, cancellationToken);
-                this.SetSuccessToast("Series saved to your library.");
+
+                if (await trackedSeriesRepository.AddAsync(tracked, cancellationToken))
+                    this.SetSuccessToast("Series saved to your library.");
+                else
+                    this.SetInfoToast("Series is already in your library.");
             }
             else
             {
@@ -534,10 +504,6 @@ public sealed class DetailsModel(
                     this.SetInfoToast("Series removed from your library.");
                 }
             }
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already in your library", StringComparison.OrdinalIgnoreCase))
-        {
-            this.SetInfoToast("Series is already in your library.");
         }
         catch (Exception ex)
         {

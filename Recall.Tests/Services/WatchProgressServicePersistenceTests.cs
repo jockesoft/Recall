@@ -146,6 +146,7 @@ public sealed class WatchProgressServicePersistenceTests
         new(
             _tvDbService.Object,
             new EpisodeWatchRepository(dbContext, NullLogger<EpisodeWatchRepository>.Instance),
+            TimeProvider.System,
             NullLogger<WatchProgressService>.Instance);
 
     private async Task<List<(int SeriesTvdbId, int EpisodeTvdbId)>> StoredWatchesAsync()

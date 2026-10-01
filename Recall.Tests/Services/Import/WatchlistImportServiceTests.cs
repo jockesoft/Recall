@@ -190,6 +190,10 @@ public sealed class WatchlistImportServiceTests
             .Setup(x => x.GetSeriesByIdAsync(42, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TvSeriesDetails(42, "A Series", "a-series", "Overview", "img.jpg", "2020-01-01", 8.5, "Ended"));
 
+        _trackedSeriesRepository
+            .Setup(x => x.AddAsync(It.IsAny<TrackedSeries>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
         await _sut.ProcessNextBatchAsync(10);
 
         _trackedSeriesRepository.Verify(x => x.AddAsync(
@@ -198,6 +202,33 @@ public sealed class WatchlistImportServiceTests
             x.RateAsync(UserId, RatingTargetType.Series, 42, 42, 7, It.IsAny<CancellationToken>()), Times.Once);
         _importRepository.Verify(x => x.MarkItemResultAsync(
             item.Id, WatchlistImportItemStatus.Imported, 42, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ProcessNextBatchAsync_Should_ReportAlreadyInLibrary_WhenTheSeriesWasAddedConcurrently()
+    {
+        var item = Item(yourRating: null);
+        SetUpBatch(item);
+
+        _theTvDbService
+            .Setup(x => x.ResolveByRemoteIdAsync(item.ImdbId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RemoteIdMatch(42, "A Series", IsMovie: false));
+        _trackedSeriesRepository
+            .Setup(x => x.GetByUserAndTvdbIdAsync(UserId, 42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TrackedSeries?)null);
+        _theTvDbService
+            .Setup(x => x.GetSeriesByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TvSeriesDetails(42, "A Series", "a-series", "Overview", "img.jpg", "2020-01-01", 8.5, "Ended"));
+
+        // The repository reports "already there" as a result, not an exception.
+        _trackedSeriesRepository
+            .Setup(x => x.AddAsync(It.IsAny<TrackedSeries>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        await _sut.ProcessNextBatchAsync(10);
+
+        _importRepository.Verify(x => x.MarkItemResultAsync(
+            item.Id, WatchlistImportItemStatus.AlreadyInLibrary, 42, "Already in your library.", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

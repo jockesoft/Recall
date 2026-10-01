@@ -14,11 +14,12 @@
         ?? "Recall.nu is a free TV show tracker: follow the shows you watch, get notified "
         + "when new episodes air, and build a list of favorites.";
 
-    // Almost every page requires sign-in, so an anonymous crawler is redirected to
-    // /Account/Login before it ever sees the content behind them. Default to
-    // noindex and let the handful of genuinely public pages (Login, Privacy) opt
-    // back in via ViewData["Robots"], rather than remembering to lock down every
-    // new authenticated page as it's added.
+    // Default to noindex and let the public pages opt in via ViewData["Robots"]:
+    // the landing page, Login, Privacy, and the Series/Episodes/Movies Details
+    // pages (which are open to anonymous visitors and listed in the sitemap).
+    // Everything else requires sign-in, so a crawler would only be redirected to
+    // /Account/Login — and a new signed-in page is safe without anyone having to
+    // remember to lock it down.
     var robotsDirective = ViewData["Robots"] as string ?? "noindex, nofollow";
 
     var requestPath = Context.Request.Path.Value ?? "/";
@@ -58,7 +59,6 @@
     <meta name="twitter:image" content="@ogImageUrl" />
 
     <link href="~/favicon.png" rel="icon" type="image/png" />
-    <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
     <link rel="stylesheet" href="~/css/tvdb-theme.css" asp-append-version="true"/>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
@@ -190,7 +190,6 @@
 
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-<script src="~/js/site.js" asp-append-version="true"></script>
 
 @await RenderSectionAsync("Scripts", required: false)
 
@@ -205,7 +204,7 @@
     </button>
 </div>
 <script>
-    // Inline (not in site.js) so it runs before paint: a returning visitor who
+    // Inline (not in an external script) so it runs before paint: a returning visitor who
     // already dismissed this never sees it flash on screen.
     (function () {
         "use strict";

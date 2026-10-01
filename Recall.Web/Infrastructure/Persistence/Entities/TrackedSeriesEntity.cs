@@ -1,6 +1,6 @@
 namespace Recall.Web.Infrastructure.Persistence.Entities;
 
-public sealed class TrackedSeriesEntity
+public sealed class TrackedSeriesEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

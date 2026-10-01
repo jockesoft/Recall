@@ -5,7 +5,7 @@ namespace Recall.Web.Infrastructure.Timers;
 
 /// <summary>
 /// Drains the watchlist import queue at a steady pace. Scheduled every minute in
-/// <c>Program.cs</c>; <see cref="MaxItemsPerRun"/> caps how many TheTVDB
+/// <c>AddScheduledJobs</c>; <see cref="MaxItemsPerRun"/> caps how many TheTVDB
 /// remote-id lookups happen per tick so a 600-row import can't burst the API —
 /// it just takes ~40 minutes instead. Items are claimed oldest-first across
 /// every user's job, so one large import doesn't starve another's.

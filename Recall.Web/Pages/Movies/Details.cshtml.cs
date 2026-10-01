@@ -32,7 +32,7 @@ public sealed class DetailsModel(
     public MovieAggregate? Movie { get; private set; }
 
     /// <summary>OMDb enrichment for this movie, when the background job has stored it.</summary>
-    public OmdbSeries? Omdb { get; private set; }
+    public OmdbMovie? Omdb { get; private set; }
 
     public bool IsAuthenticated => currentUserService.IsAuthenticated;
 
@@ -73,7 +73,7 @@ public sealed class DetailsModel(
             RecallRatingAverage = ratingSummary.Average;
             RecallRatingCount = ratingSummary.Count;
 
-            if (currentUserService.IsAuthenticated && currentUserService.UserId is { } userId)
+            if (currentUserService.TryGetUserId(out var userId))
             {
                 IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Movie, id, cancellationToken);
                 WatchedOnUtc = await movieWatchRepository.GetWatchedUtcAsync(userId, id, cancellationToken);
@@ -99,15 +99,11 @@ public sealed class DetailsModel(
 
     public async Task<IActionResult> OnPostToggleMovieLikeAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to like a movie.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "like a movie");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             await likeRepository.ToggleAsync(userId, LikeTargetType.Movie, id, id, cancellationToken);
         }
         catch (Exception ex)
@@ -121,15 +117,11 @@ public sealed class DetailsModel(
 
     public async Task<IActionResult> OnPostToggleMovieWatchedAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to track watched movies.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "track watched movies");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             // Through the service, not the repository: marking watched also
             // takes the movie off the watchlist.
             var isNowWatched = await movieTrackingService.ToggleWatchedAsync(userId, id, cancellationToken);
@@ -153,16 +145,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to use your watchlist.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "use your watchlist");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
             if (await movieTrackingService.RemoveFromWatchlistAsync(userId, id, cancellationToken))
             {
                 this.SetInfoToast("Removed from your watchlist.");
@@ -197,18 +184,14 @@ public sealed class DetailsModel(
         [FromForm] int value,
         CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to rate a movie.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "rate a movie");
 
         if (value is < 1 or > 10)
             return RedirectToPage(new { id });
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             await ratingRepository.RateAsync(userId, RatingTargetType.Movie, id, id, value, cancellationToken);
             this.SetSuccessToast("Rating saved.");
         }
@@ -223,15 +206,11 @@ public sealed class DetailsModel(
 
     public async Task<IActionResult> OnPostClearMovieRatingAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to rate a movie.");
-            return RedirectToPage(new { id });
-        }
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "rate a movie");
 
         try
         {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
             await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Movie, id, cancellationToken);
             this.SetInfoToast("Rating removed.");
         }
@@ -241,6 +220,16 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update your rating right now.");
         }
 
+        return RedirectToPage(new { id });
+    }
+
+    /// <summary>
+    /// What every POST handler here returns to an anonymous caller: the page is
+    /// public, so <c>[Authorize]</c> can't guard its handlers.
+    /// </summary>
+    private IActionResult SignInRequired(int id, string toDoWhat)
+    {
+        this.SetErrorToast($"You need to be signed in to {toDoWhat}.");
         return RedirectToPage(new { id });
     }
 }

@@ -5,7 +5,7 @@ namespace Recall.Web.Infrastructure.Persistence.Entities;
 /// presence is the watched flag. Unlike <see cref="EpisodeWatchEntity"/>, there's
 /// no parent-series id to denormalize — a movie has no grouping concept.
 /// </summary>
-public sealed class UserMovieWatchEntity
+public sealed class UserMovieWatchEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

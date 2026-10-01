@@ -14,7 +14,7 @@ public enum NotificationType
 /// deep-link target can be built without a second lookup — mirrors
 /// <see cref="UserLikeEntity"/>.
 /// </summary>
-public sealed class NotificationEntity
+public sealed class NotificationEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 

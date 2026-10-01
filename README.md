@@ -64,10 +64,9 @@ The app accepts `X-Forwarded-*` from loopback and the private address ranges, wh
 host reaches the container, so nothing needs configuring for this.
 
 
-Take database dump from postgres container
+Take database dump from postgres container (run from the folder the dump should be saved in)
 
 ```
-cd Sync/Development/Receptus/DB_Backup/
 docker exec -t PostgreSQL_recall pg_dump -U postgres -d recall_db > dump.sql
 docker exec -t PostgreSQL_recall pg_dump -U postgres -d recall_db | gzip > dump.sql.gz
 ```

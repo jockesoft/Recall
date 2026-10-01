@@ -12,7 +12,7 @@ namespace Recall.Web.Infrastructure.Timers;
 
 /// <summary>
 /// Drains the outbound mail queue. Scheduled once a minute in
-/// <c>Program.cs</c>; each run hands off to
+/// <c>AddScheduledJobs</c>; each run hands off to
 /// <see cref="MailService.SendPendingEmailsAsync"/>, which sends at most one
 /// batch and bumps the retry count on any message that fails.
 /// <see cref="DisallowConcurrentExecutionAttribute"/> keeps a slow SMTP round

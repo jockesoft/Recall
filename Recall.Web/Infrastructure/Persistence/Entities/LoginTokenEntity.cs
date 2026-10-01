@@ -5,7 +5,7 @@ namespace Recall.Web.Infrastructure.Persistence.Entities;
 /// ever emailed to the user — this row stores its SHA-256 hash, so a leak of the
 /// table can't be turned into a login.
 /// </summary>
-public sealed class LoginTokenEntity
+public sealed class LoginTokenEntity : IHasAuditTimestamps
 {
     public Guid Id { get; set; }
 
