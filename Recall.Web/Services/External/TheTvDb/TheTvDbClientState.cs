@@ -71,6 +71,7 @@ public sealed class TheTvDbClientState(IOptions<TheTvDbOptions> options, ILogger
                 Pin = string.IsNullOrWhiteSpace(_options.Pin) ? null : _options.Pin
             };
 
+            TheTvDbRequestMeter.Record();
             using var response = await httpClient.PostAsJsonAsync("login", login, JsonOptions, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {

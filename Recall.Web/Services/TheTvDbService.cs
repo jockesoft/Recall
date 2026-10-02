@@ -71,11 +71,10 @@ public sealed class TheTvDbService(
         var aggregate = await GetLayeredAsync<SeriesAggregate>(
             AggregateCacheKey(seriesId, Language),
             ct => store.GetSeriesAggregateAsync(seriesId, Language, ct),
-            async ct =>
-            {
-                var fresh = await apiClient.GetSeriesAggregateByIdAsync(seriesId, Language, ct);
-                return fresh is null ? null : await EnrichEpisodesAsync(fresh, ct);
-            },
+            // Episode names and overviews are already in English: the client
+            // reads them from TheTVDB's translated episode list, a fixed few
+            // requests per series however many episodes it has.
+            ct => apiClient.GetSeriesAggregateByIdAsync(seriesId, Language, ct),
             aggregate => store.SaveSeriesAggregateAsync(aggregate, Language, cancellationToken),
             AggregateTtl,
             cancellationToken);
@@ -115,7 +114,7 @@ public sealed class TheTvDbService(
             return false;
         }
 
-        fresh = (await EnrichEpisodesAsync(fresh, cancellationToken)).WithNormalizedImages();
+        fresh = fresh.WithNormalizedImages();
 
         await store.UpsertSeriesAggregateAsync(fresh, Language, cancellationToken);
         await cache.SetAsync(AggregateCacheKey(seriesId, Language), fresh, AggregateTtl(fresh), cancellationToken);
@@ -126,62 +125,6 @@ public sealed class TheTvDbService(
 
         return true;
     }
-
-    /// <summary>
-    /// Fills in each episode's English name/overview. The <c>/series/{id}/extended</c>
-    /// fetch behind the aggregate returns episode names/overviews in the show's
-    /// original language, so this used to mean one <c>episodes/{id}/translations/eng</c>
-    /// call per episode, every time the aggregate was built — for a 100-episode
-    /// show, 100 extra requests. Most of those episodes are already sitting in
-    /// <c>cached_episode_extended</c> (itself independently kept fresh), already
-    /// translated the same way, so reuse that first and only fall back to a live
-    /// translation call for episodes we don't have cached yet.
-    /// </summary>
-    private async Task<SeriesAggregate> EnrichEpisodesAsync(SeriesAggregate aggregate, CancellationToken cancellationToken)
-    {
-        if (aggregate.Episodes.Count == 0)
-            return aggregate;
-
-        var cachedById = await store.GetEpisodesExtendedAsync(
-            aggregate.Episodes.Select(e => e.Id).ToArray(), cancellationToken);
-
-        var enriched = await Task.WhenAll(
-            aggregate.Episodes.Select(ep => EnrichEpisodeAsync(ep, cachedById, cancellationToken)));
-
-        return aggregate with { Episodes = enriched };
-    }
-
-    private async Task<EpisodeSummary> EnrichEpisodeAsync(
-        EpisodeSummary episode,
-        IReadOnlyDictionary<int, Episode> cachedById,
-        CancellationToken cancellationToken)
-    {
-        if (cachedById.TryGetValue(episode.Id, out var cached))
-            return WithTranslation(episode, cached.Name, cached.Overview);
-
-        var translation = await apiClient.GetEpisodeTranslationByLanguageAsync(episode.Id, Language, cancellationToken)
-            .AsOptionalAsync(
-                logger, LogLevel.Debug,
-                "Could not load English translation for episode {EpisodeId}.",
-                episode.Id);
-
-        return WithTranslation(episode, translation?.Name, translation?.Overview);
-    }
-
-    private static EpisodeSummary WithTranslation(EpisodeSummary episode, string? name, string? overview) =>
-        new()
-        {
-            Id = episode.Id,
-            SeasonNumber = episode.SeasonNumber,
-            EpisodeNumber = episode.EpisodeNumber,
-            Name = !string.IsNullOrWhiteSpace(name) ? name! : episode.Name,
-            Overview = !string.IsNullOrWhiteSpace(overview) ? overview : episode.Overview,
-            Image = episode.Image,
-            Aired = episode.Aired,
-            RuntimeMinutes = episode.RuntimeMinutes,
-            IsMovie = episode.IsMovie,
-            FinaleType = episode.FinaleType
-        };
 
     /// <summary>
     /// The aggregate sometimes has a per-episode still before the dedicated

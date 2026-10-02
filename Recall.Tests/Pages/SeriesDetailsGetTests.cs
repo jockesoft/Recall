@@ -212,6 +212,44 @@ public sealed class SeriesDetailsGetTests
     }
 
     [Test]
+    public async Task Header_Should_SayNothingAiredYet_ForASeriesInTheLibrary_NeverStarted_WithNoAiredRegularEpisode()
+    {
+        // Announced: its first episode airs next week.
+        SeriesExists(Ep(11, 1, 1, Today.AddDays(7)));
+        SignedIn(tracked: true);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        var header = _sut.BuildHeader([]);
+
+        header.Primary.Should().BeNull("there is nothing to mark watched");
+        header.State!.Text.Should().Be("In your library · nothing aired yet");
+    }
+
+    [Test]
+    public async Task Header_Should_SayNothingAiredYet_WhenOnlySpecialsHaveAired_EvenIfOneWasWatched()
+    {
+        // A special does not start a series, and is never the next episode.
+        SeriesExists(Ep(1, 0, 1), Ep(11, 1, 1, Today.AddDays(7)));
+        SignedIn(tracked: true, watched: [1]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+
+        _sut.BuildHeader([]).State!.Text.Should().Be("In your library · nothing aired yet");
+    }
+
+    [Test]
+    public async Task Header_Should_SayNothingAiredYet_ForATrackedSeriesWithNoEpisodesAtAll()
+    {
+        _tvDb.Setup(x => x.GetSeriesAggregateByIdAsync(SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesAggregate { TvdbId = SeriesId, Name = "Show", Episodes = [], RemoteIds = [] });
+        SignedIn(tracked: true);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+
+        _sut.BuildHeader([]).State!.Text.Should().Be("In your library · nothing aired yet");
+    }
+
+    [Test]
     public async Task Header_Should_OfferAddToLibrary_ForASeriesNotInTheLibrary()
     {
         SeriesExists();

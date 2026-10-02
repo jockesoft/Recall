@@ -17,7 +17,7 @@
 # The instances run with the import job switched off (Jobs:Disabled), so rows
 # left waiting for a screenshot are never looked up on TheTVDB, and with the
 # series refresh job off: the clones' series were cached before genres were
-# kept, and the job would start re-fetching them ten seconds after each start. They apply
+# kept, and the job would re-fetch them if a run happened to cross the full hour. They apply
 # pending migrations to the clones at startup (the clones are copies of
 # recall_db, which may be a migration behind the code; recall_db itself is not
 # touched). The weekly digest is switched on so its Profile switch, Dashboard

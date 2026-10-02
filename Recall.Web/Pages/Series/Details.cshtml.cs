@@ -137,9 +137,16 @@ public sealed class DetailsModel(
         }
         else
         {
-            state = WatchProgress is { HasEpisodes: true }
-                ? new TitleState("Up to date", Icons.Success)
-                : new TitleState("In your library", Icons.Success);
+            // No aired regular episode is left. "Up to date" is for a series
+            // the user has started; one never started has simply had nothing
+            // to watch yet (announced, or only specials so far), which is also
+            // why the Library keeps it under Watching (SeriesLibraryStateRule).
+            state = WatchProgress switch
+            {
+                { HasStarted: true } => new TitleState("Up to date", Icons.Success),
+                not null => new TitleState("In your library · nothing aired yet", Icons.Success),
+                _ => new TitleState("In your library", Icons.Success)
+            };
         }
 
         return new TitleHeaderModel

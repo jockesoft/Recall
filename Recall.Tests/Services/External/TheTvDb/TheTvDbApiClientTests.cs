@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
+using Recall.Tests.TestSupport;
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
@@ -279,6 +280,9 @@ public class TheTvDbApiClientTests
             if (path.Contains("/translations/", StringComparison.Ordinal))
                 return JsonResponse(HttpStatusCode.InternalServerError, """{"status":"failure","message":"Server error"}""");
 
+            if (path.Contains("/episodes/default/eng", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data":{"id":42,"episodes":[]},"links":{"next":null}}""");
+
             if (path.Contains("/extended", StringComparison.Ordinal))
                 return JsonResponse(HttpStatusCode.OK, """
                     {
@@ -326,6 +330,10 @@ public class TheTvDbApiClientTests
                       "data": { "id": 7, "name": "Stuck", "episodes": [], "seasons": [{ "number": 1 }] }
                     }
                     """);
+
+            // The translated list is not available either, so the per-season listing is the last resort.
+            if (path.Contains("/episodes/default/eng", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.InternalServerError, """{"status":"failure","message":"Server error"}""");
 
             if (path.Contains("/episodes/default", StringComparison.Ordinal))
             {
@@ -447,6 +455,208 @@ public class TheTvDbApiClientTests
         var result = await sut.GetMovieAggregateByIdAsync(999999999);
 
         result.Should().BeNull();
+    }
+
+    // ---- what a series costs: a fixed few requests, never one per episode ----------
+
+    private const string Login = """{"status":"success","data":{"token":"test-token"}}""";
+
+    /// <summary>A TheTVDB that knows one series; <paramref name="translatedPage"/> answers the translated episode list by page number.</summary>
+    private static StubHttpMessageHandler SeriesApi(string extended, Func<int, HttpResponseMessage> translatedPage) =>
+        new(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+
+            if (path.EndsWith("/login", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, Login);
+            if (path.EndsWith("/series/334824/translations/eng", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, """{"status":"success","data":{"name":"Dark","overview":"A missing child."}}""");
+            if (path.EndsWith("/series/334824/extended", StringComparison.Ordinal))
+                return JsonResponse(HttpStatusCode.OK, extended);
+            if (path.EndsWith("/series/334824/episodes/default/eng", StringComparison.Ordinal))
+                return translatedPage(int.Parse(System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query)["page"]!));
+
+            // Anything else, an episode's own endpoints included, is a request the series fetch must not make.
+            throw new InvalidOperationException($"Unexpected request: {request.RequestUri}");
+        });
+
+    private static IEnumerable<string> PathsOf(StubHttpMessageHandler api) =>
+        api.Requests.Select(r => r.Uri!.PathAndQuery.Replace("/v4/", ""));
+
+    private const string DarkExtended = """
+        {
+          "status":"success",
+          "data": {
+            "id": 334824, "name": "Dark", "overview": "Nach dem Verschwinden eines Kindes.", "averageRuntime": 56,
+            "genres": [{ "id": 1, "name": "Drama" }],
+            "seasons": [{ "id": 1, "number": 0 }, { "id": 2, "number": 1 }],
+            "episodes": [
+              { "id": 10, "seasonNumber": 1, "number": 1, "name": "Geheimnisse", "overview": "Ein Junge verschwindet.",
+                "aired": "2017-12-01", "runtime": 51, "image": "/banners/episodes/10.jpg", "isMovie": 0, "finaleType": null },
+              { "id": 11, "seasonNumber": 1, "number": 2, "name": "Lügen", "overview": "Die Polizei ist ratlos.",
+                "aired": "2017-12-01", "runtime": 44, "image": null, "isMovie": 0, "finaleType": "season" },
+              { "id": 12, "seasonNumber": 1, "number": 3, "name": "Gestern und Heute", "overview": "Es ist 1986.",
+                "aired": "2017-12-01", "runtime": 45, "isMovie": 0 },
+              { "id": 5, "seasonNumber": 0, "number": 1, "name": "Hinter den Kulissen", "overview": null,
+                "aired": "2018-01-01", "runtime": 20, "isMovie": 1 }
+            ]
+          }
+        }
+        """;
+
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_TranslateEpisodesFromTheEpisodeList_InThreeRequests()
+    {
+        // The translated list: English for 10; a name but no overview for 11; nothing at all for 12; 5 is missing from it.
+        var api = SeriesApi(DarkExtended, _ => JsonResponse(HttpStatusCode.OK, """
+            {
+              "status":"success",
+              "data": { "id": 334824, "name": "Dark", "episodes": [
+                { "id": 10, "seasonNumber": 1, "number": 1, "name": "Secrets", "overview": "A boy disappears." },
+                { "id": 11, "seasonNumber": 1, "number": 2, "name": "Lies", "overview": null },
+                { "id": 12, "seasonNumber": 1, "number": 3, "name": null, "overview": "" }
+              ] },
+              "links": { "prev": null, "self": "page=0", "next": null, "total_items": 3, "page_size": 500 }
+            }
+            """));
+
+        var aggregate = await CreateSut(api).GetSeriesAggregateByIdAsync(334824);
+
+        PathsOf(api).Should().BeEquivalentTo(
+        [
+            "login",
+            "series/334824/extended?meta=episodes&short=false",
+            "series/334824/translations/eng",
+            "series/334824/episodes/default/eng?page=0"
+        ]);
+
+        // Every field the cached aggregate had before, with the same fallbacks
+        // the per-episode translation gave: a missing translation keeps the original.
+        aggregate!.Name.Should().Be("Dark");
+        aggregate.Overview.Should().Be("A missing child.");
+        aggregate.AverageRuntimeMinutes.Should().Be(56);
+        aggregate.Genres.Should().Equal("Drama");
+        aggregate.Seasons.Select(s => s.Number).Should().Equal(0, 1);
+
+        var byId = aggregate.Episodes.ToDictionary(e => e.Id);
+        byId.Keys.Should().BeEquivalentTo([10, 11, 12, 5]);
+
+        byId[10].Should().BeEquivalentTo(new Recall.Web.Domain.TheTvDb.EpisodeSummary
+        {
+            Id = 10, SeasonNumber = 1, EpisodeNumber = 1, Name = "Secrets", Overview = "A boy disappears.",
+            Aired = new DateOnly(2017, 12, 1), RuntimeMinutes = 51,
+            Image = "https://artworks.thetvdb.com/banners/episodes/10.jpg", IsMovie = false, FinaleType = null
+        });
+        byId[11].Should().BeEquivalentTo(new Recall.Web.Domain.TheTvDb.EpisodeSummary
+        {
+            Id = 11, SeasonNumber = 1, EpisodeNumber = 2, Name = "Lies", Overview = "Die Polizei ist ratlos.",
+            Aired = new DateOnly(2017, 12, 1), RuntimeMinutes = 44, Image = null, IsMovie = false, FinaleType = "season"
+        });
+        byId[12].Name.Should().Be("Gestern und Heute", "a blank translation keeps the original name");
+        byId[12].Overview.Should().Be("Es ist 1986.");
+        byId[5].Name.Should().Be("Hinter den Kulissen", "an episode the translated list lacks keeps the original");
+        byId[5].IsMovie.Should().BeTrue();
+        byId[5].SeasonNumber.Should().Be(0);
+    }
+
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_CostTheSame_HoweverManyEpisodes_OnePagePerFiveHundred()
+    {
+        static string Episodes(int from, int count) => string.Join(",", Enumerable.Range(from, count).Select(n =>
+            "{\"id\":" + n + ",\"seasonNumber\":1,\"number\":" + n + ",\"name\":\"Episode " + n + "\"}"));
+
+        var extended = "{\"status\":\"success\",\"data\":{\"id\":334824,\"name\":\"Long\",\"episodes\":["
+                       + Episodes(1, 600).Replace("Episode", "Folge") + "]}}";
+
+        var api = SeriesApi(extended, page => JsonResponse(HttpStatusCode.OK,
+            "{\"status\":\"success\",\"data\":{\"id\":334824,\"episodes\":["
+            + (page == 0 ? Episodes(1, 500) : Episodes(501, 100))
+            + "]},\"links\":{\"next\":" + (page == 0 ? "\"page=1\"" : "null") + "}}"));
+
+        var aggregate = await CreateSut(api).GetSeriesAggregateByIdAsync(334824);
+
+        aggregate!.Episodes.Should().HaveCount(600);
+        aggregate.Episodes.Should().OnlyContain(e => e.Name.StartsWith("Episode "), "all six hundred are translated");
+
+        PathsOf(api).Should().BeEquivalentTo(
+        [
+            "login",
+            "series/334824/extended?meta=episodes&short=false",
+            "series/334824/translations/eng",
+            "series/334824/episodes/default/eng?page=0",
+            "series/334824/episodes/default/eng?page=1"
+        ], "600 episodes cost two pages, not 600 translation requests");
+        PathsOf(api).Should().NotContain(path => path.StartsWith("episodes/"), "no request per episode, ever");
+    }
+
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_KeepOriginalEpisodeNames_WhenTheTranslatedListFails_WithoutAskingPerEpisode()
+    {
+        var api = SeriesApi(DarkExtended, _ => JsonResponse(HttpStatusCode.InternalServerError, """{"status":"failure"}"""));
+
+        var aggregate = await CreateSut(api).GetSeriesAggregateByIdAsync(334824);
+
+        aggregate!.Episodes.Single(e => e.Id == 10).Name.Should().Be("Geheimnisse");
+        api.Requests.Should().HaveCount(4, "login, the record, the series translation and the one failed list request");
+        PathsOf(api).Should().NotContain(path => path.StartsWith("episodes/"));
+    }
+
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_UseTheTranslatedList_WhenTheExtendedRecordHasNoEpisodes()
+    {
+        var api = SeriesApi(
+            """{"status":"success","data":{"id":334824,"name":"Dark","seasons":[{"id":2,"number":1}],"episodes":[]}}""",
+            _ => JsonResponse(HttpStatusCode.OK, """
+                {"status":"success","data":{"id":334824,"episodes":[
+                  {"id":10,"seasonNumber":1,"number":1,"name":"Secrets","aired":"2017-12-01","runtime":51}
+                ]},"links":{"next":null}}
+                """));
+
+        var aggregate = await CreateSut(api).GetSeriesAggregateByIdAsync(334824);
+
+        aggregate!.Episodes.Should().ContainSingle().Which.Name.Should().Be("Secrets");
+        aggregate.Episodes[0].RuntimeMinutes.Should().Be(51);
+        api.Requests.Should().HaveCount(4, "the per-season listing is not needed: the translated list has the episodes");
+    }
+
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_StopPagingTheTranslatedList_WhenNextNeverBecomesNull()
+    {
+        var api = SeriesApi(DarkExtended, page => JsonResponse(HttpStatusCode.OK,
+            "{\"status\":\"success\",\"data\":{\"id\":334824,\"episodes\":[{\"id\":" + (1000 + page)
+            + ",\"seasonNumber\":9,\"number\":" + page + "}]},\"links\":{\"next\":\"always-more\"}}"));
+
+        var aggregate = await CreateSut(api).GetSeriesAggregateByIdAsync(334824);
+
+        aggregate!.Episodes.Should().HaveCount(4, "the episodes are the extended record's");
+        PathsOf(api).Count(path => path.Contains("/episodes/default/eng")).Should().Be(20, "the safety cap");
+    }
+
+    [Test]
+    public async Task TheRequestMeter_Should_CountEveryRequestInsideIt_LoginIncluded_AndNothingOutside()
+    {
+        var api = SeriesApi(DarkExtended, _ => JsonResponse(HttpStatusCode.OK,
+            """{"status":"success","data":{"id":334824,"episodes":[]},"links":{"next":null}}"""));
+        var sut = CreateSut(api);
+
+        int inner;
+        using (var outer = TheTvDbRequestMeter.Start())
+        {
+            using (var meter = TheTvDbRequestMeter.Start())
+            {
+                await sut.GetSeriesAggregateByIdAsync(334824);
+                inner = meter.Count;
+            }
+
+            await sut.GetSeriesAggregateByIdAsync(334824);   // the token is cached now: three requests
+
+            inner.Should().Be(4, "login, extended, translation, the episode list");
+            outer.Count.Should().Be(7, "an inner meter's requests count in the outer one too");
+        }
+
+        using var after = TheTvDbRequestMeter.Start();
+        after.Count.Should().Be(0);
+        api.Requests.Should().HaveCount(7);
     }
 
     private static TheTvDbApiClient CreateSut(HttpMessageHandler handler)

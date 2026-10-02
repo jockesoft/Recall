@@ -21,10 +21,6 @@ public interface ITvdbSnapshotStore
 
     Task<Episode?> GetEpisodeExtendedAsync(int episodeTvdbId, CancellationToken cancellationToken = default);
 
-    /// <summary>Batched lookup of cached episode snapshots by id. Missing/corrupt ids are simply absent from the result.</summary>
-    Task<IReadOnlyDictionary<int, Episode>> GetEpisodesExtendedAsync(
-        IReadOnlyCollection<int> episodeTvdbIds, CancellationToken cancellationToken = default);
-
     Task SaveEpisodeExtendedAsync(Episode episode, CancellationToken cancellationToken = default);
 
     /// <summary>

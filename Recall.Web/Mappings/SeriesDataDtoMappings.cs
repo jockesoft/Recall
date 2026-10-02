@@ -38,14 +38,14 @@ public static class SeriesDataDtoMappings
     public static SeriesAggregate ToAggregate(
         this SeriesDataDto dto,
         SeriesTranslationDataDto? translation = null,
-        IReadOnlyList<EpisodeDto>? fallbackEpisodes = null)
+        IReadOnlyList<EpisodeDto>? episodes = null)
     {
         var translatedName = translation?.Name?.Trim();
         var translatedOverview = translation?.Overview?.Trim();
 
-        var episodesSource = (dto.Episodes is { Count: > 0 })
-            ? dto.Episodes
-            : (fallbackEpisodes?.ToList() ?? []);
+        // The caller's list when it gives one (the API client passes the
+        // episodes with their translated names); otherwise the record's own.
+        IReadOnlyList<EpisodeDto> episodesSource = episodes ?? dto.Episodes ?? [];
 
         var characters = (dto.Characters is { Count: > 0 })
             ? dto.Characters

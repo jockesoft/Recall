@@ -8,6 +8,7 @@
 using Quartz;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
+using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -75,11 +76,34 @@ public class UpdateTvDbInfoTimer(
 
     public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        await RefreshStaleAggregatesAsync(cancellationToken);
-        await RefreshStaleEpisodesAsync(cancellationToken);
+        // What the run cost TheTVDB, logged every time so the number can be
+        // watched in production. A series refresh is a fixed few requests
+        // whatever its episode count (see TheTvDbApiClient); an episode refresh
+        // is two. A total far above 3 x series + 2 x episodes means a
+        // per-episode request has crept back into the series refresh.
+        using var run = TheTvDbRequestMeter.Start();
+
+        int series, seriesRequests;
+        using (var meter = TheTvDbRequestMeter.Start())
+        {
+            series = await RefreshStaleAggregatesAsync(cancellationToken);
+            seriesRequests = meter.Count;
+        }
+
+        int episodes, episodeRequests;
+        using (var meter = TheTvDbRequestMeter.Start())
+        {
+            episodes = await RefreshStaleEpisodesAsync(cancellationToken);
+            episodeRequests = meter.Count;
+        }
+
+        logger.LogInformation(
+            "UpdateTvDbInfoTimer: {Requests} TheTVDB request(s) this run: {SeriesRequests} for {Series} series, {EpisodeRequests} for {Episodes} cached episode(s).",
+            run.Count, seriesRequests, series, episodeRequests, episodes);
     }
 
-    private async Task RefreshStaleAggregatesAsync(CancellationToken cancellationToken)
+    /// <returns>How many series the run tried to refresh.</returns>
+    private async Task<int> RefreshStaleAggregatesAsync(CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         var staleBeforeUtc = now - MinRefreshAge;
@@ -90,7 +114,7 @@ public class UpdateTvDbInfoTimer(
         if (candidates.Count == 0)
         {
             logger.LogInformation("UpdateTvDbInfoTimer: no series are due for a refresh.");
-            return;
+            return 0;
         }
 
         logger.LogInformation(
@@ -117,9 +141,12 @@ public class UpdateTvDbInfoTimer(
 
         logger.LogInformation(
             "UpdateTvDbInfoTimer: refreshed {Refreshed}/{Total} series.", refreshed, candidates.Count);
+
+        return candidates.Count;
     }
 
-    private async Task RefreshStaleEpisodesAsync(CancellationToken cancellationToken)
+    /// <returns>How many cached episodes the run tried to refresh.</returns>
+    private async Task<int> RefreshStaleEpisodesAsync(CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         var staleBeforeUtc = now - EpisodeMaxAge;
@@ -134,7 +161,7 @@ public class UpdateTvDbInfoTimer(
         if (candidates.Count == 0)
         {
             logger.LogInformation("UpdateTvDbInfoTimer: no cached episodes are due for a refresh.");
-            return;
+            return 0;
         }
 
         logger.LogInformation(
@@ -161,5 +188,7 @@ public class UpdateTvDbInfoTimer(
 
         logger.LogInformation(
             "UpdateTvDbInfoTimer: refreshed {Refreshed}/{Total} episodes.", refreshed, candidates.Count);
+
+        return candidates.Count;
     }
 }

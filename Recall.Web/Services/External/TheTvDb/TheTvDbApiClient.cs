@@ -77,12 +77,30 @@ public sealed class TheTvDbApiClient(
         return FetchSeriesAggregateAsync(seriesId, language, cancellationToken);
     }
 
+    /// <summary>
+    /// A series aggregate costs a fixed, small number of requests whatever the
+    /// number of episodes: the extended record, the series translation, and the
+    /// translated episode list (one request per 500 episodes). <b>Nothing here,
+    /// or in anything that refreshes a series, may make a request per
+    /// episode</b>: one long-running series used to cost hundreds of requests
+    /// on every refresh that way.
+    /// </summary>
     private async Task<SeriesAggregate?> FetchSeriesAggregateAsync(
         int seriesId,
         string language,
         CancellationToken cancellationToken)
     {
         var seriesDtoTask = GetSeriesByIdExtendedAsync(seriesId, cancellationToken);
+
+        // The extended record has every episode, but named and described in the
+        // series' original language. The translated list has the same episodes
+        // in the wanted language. Best-effort, like the series translation:
+        // without it the episodes keep their original names.
+        var translatedEpisodesTask = GetSeriesEpisodesTranslatedAsync(seriesId, language, cancellationToken)
+            .AsOptionalAsync(
+                logger, LogLevel.Warning,
+                "Translated episode list failed for series {SeriesId}, language {Language}. Episodes keep their original names.",
+                seriesId, language);
 
         // Translation is best-effort — its failure shouldn't cost us the series data.
         var translationDto = await GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken)
@@ -91,21 +109,96 @@ public sealed class TheTvDbApiClient(
                 "Translation fetch failed for series {SeriesId}, language {Language}. Falling back to untranslated data.",
                 seriesId, language);
 
+        var translatedEpisodes = await translatedEpisodesTask ?? [];
         var seriesDto = await seriesDtoTask; // let a genuine series-fetch failure propagate
 
         if (seriesDto is null)
             return null;
 
-        IReadOnlyList<EpisodeDto>? fallbackEpisodes = seriesDto.Episodes;
-        if (fallbackEpisodes is null || fallbackEpisodes.Count == 0)
+        IReadOnlyList<EpisodeDto> episodes = seriesDto.Episodes ?? [];
+        if (episodes.Count == 0)
         {
-            fallbackEpisodes = await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
+            // The extended record came without episodes: the translated list is
+            // the same episodes, already paid for. Only without that too is the
+            // per-season listing fetched (a few requests per season, never per episode).
+            episodes = translatedEpisodes.Count > 0
+                ? translatedEpisodes
+                : await LoadEpisodesFromSeasonsAsync(seriesDto, cancellationToken);
         }
 
-        // Episode names/overviews come back in the series' original language here —
-        // TheTvDbService enriches them with English translations afterward, reusing
-        // whatever it already has cached per-episode instead of always re-fetching.
-        return seriesDto.ToAggregate(translationDto, fallbackEpisodes);
+        return seriesDto.ToAggregate(translationDto, WithTranslations(episodes, translatedEpisodes));
+    }
+
+    /// <summary>
+    /// Gives each episode the name and overview of its translated counterpart.
+    /// An episode the translated list lacks, or a blank translated field, keeps
+    /// what the extended record said; every other field is the extended record's.
+    /// </summary>
+    private static List<EpisodeDto> WithTranslations(
+        IReadOnlyList<EpisodeDto> episodes, IReadOnlyList<EpisodeDto> translated)
+    {
+        var translatedById = new Dictionary<int, EpisodeDto>();
+        foreach (var episode in translated)
+        {
+            if (episode.Id is { } id)
+                translatedById.TryAdd(id, episode);
+        }
+
+        return episodes
+            .Select(episode =>
+                episode.Id is { } id && translatedById.TryGetValue(id, out var match)
+                    ? episode with
+                    {
+                        Name = string.IsNullOrWhiteSpace(match.Name) ? episode.Name : match.Name,
+                        Overview = string.IsNullOrWhiteSpace(match.Overview) ? episode.Overview : match.Overview
+                    }
+                    : episode)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Every episode of a series (aired order) with its name and overview in
+    /// <paramref name="language"/>: <c>series/{id}/episodes/default/{lang}</c>,
+    /// 500 episodes per page. The other fields are the same as in the extended
+    /// record. An episode with no translation comes back with those two blank.
+    /// </summary>
+    private async Task<IReadOnlyList<EpisodeDto>?> GetSeriesEpisodesTranslatedAsync(
+        int seriesId,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        // 500 a page: twenty pages is ten thousand episodes. Reaching the cap
+        // means the paging links are stuck, not that there is more to fetch.
+        const int maxPages = 20;
+
+        var result = new List<EpisodeDto>();
+
+        for (var page = 0; page < maxPages; page++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var current = page;
+            var envelope = await SendAsync<TheTvDbEnvelopeDto<SeriesDataDto>>(
+                () => new HttpRequestMessage(
+                    HttpMethod.Get,
+                    $"series/{seriesId}/episodes/default/{Uri.EscapeDataString(language)}?page={current}"),
+                cancellationToken);
+
+            var pageEpisodes = envelope.Data?.Episodes ?? [];
+            if (pageEpisodes.Count == 0)
+                return result;
+
+            result.AddRange(pageEpisodes);
+
+            if (envelope.Links?.Next is null)
+                return result;
+        }
+
+        logger.LogWarning(
+            "Stopped paging translated episodes for series {SeriesId} after {MaxPages} pages; TheTVDB's paging links may be stuck.",
+            seriesId, maxPages);
+
+        return result;
     }
 
     /// <summary>
@@ -187,7 +280,8 @@ public sealed class TheTvDbApiClient(
 
             result.AddRange(pageEpisodes);
 
-            var hasNext = envelope.Data?.Links?.Next is not null;
+            // TheTVDB sends the links beside "data"; older code looked inside it.
+            var hasNext = (envelope.Links ?? envelope.Data?.Links)?.Next is not null;
             if (!hasNext)
                 break;
 
@@ -269,7 +363,10 @@ public sealed class TheTvDbApiClient(
         return envelope.Data;
     }
 
-    public async Task<EpisodeTranslationDataDto?> GetEpisodeTranslationByLanguageAsync(
+    // Private on purpose: the one caller is the single-episode fetch below
+    // (Episode Details and the capped episode refresh). A series is translated
+    // from its episode list, never episode by episode.
+    private async Task<EpisodeTranslationDataDto?> GetEpisodeTranslationByLanguageAsync(
         int episodeId,
         string language,
         CancellationToken cancellationToken = default)
@@ -379,6 +476,7 @@ public sealed class TheTvDbApiClient(
         using var request = requestFactory();
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+        TheTvDbRequestMeter.Record();
         var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized && allowReauth)

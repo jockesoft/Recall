@@ -1,4 +1,8 @@
+using AwesomeAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Recall.Tests.TestSupport;
+using Recall.Web.Services.External.TheTvDb;
 using Moq;
 using Quartz;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
@@ -50,6 +54,46 @@ public class MetadataRefreshTimerTests
     private UpdateMovieInfoTimer MovieJob() => new(_store.Object, _tvDb.Object, NullLogger<UpdateMovieInfoTimer>.Instance);
 
     // ---- UpdateTvDbInfoTimer -----------------------------------------------------
+
+    [Test]
+    public async Task SeriesJob_Should_LogHowManyTheTvDbRequestsTheRunMade_AtInformationLevel()
+    {
+        // Three requests per series and two per episode: what the real client sends.
+        SetUpSeriesCandidates(1, 2);
+        SetUpEpisodeCandidates(11, 12, 13);
+        _tvDb.Setup(x => x.RefreshSeriesAggregateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                for (var i = 0; i < 3; i++) TheTvDbRequestMeter.Record();
+                return true;
+            });
+        _tvDb.Setup(x => x.RefreshEpisodeDetailsByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                for (var i = 0; i < 2; i++) TheTvDbRequestMeter.Record();
+                return true;
+            });
+        var log = new RecordingLogger<UpdateTvDbInfoTimer>();
+
+        // A request made outside the job, while it happens to run, is not its cost.
+        TheTvDbRequestMeter.Record();
+        await new UpdateTvDbInfoTimer(_store.Object, _tvDb.Object, log).Execute(Mock.Of<IJobExecutionContext>());
+
+        log.Entries.Should().ContainSingle(e => e.Level == LogLevel.Information && e.Message.Contains("this run"))
+            .Which.Message.Should().Be(
+                "UpdateTvDbInfoTimer: 12 TheTVDB request(s) this run: 6 for 2 series, 6 for 3 cached episode(s).");
+    }
+
+    [Test]
+    public async Task SeriesJob_Should_LogZeroRequests_WhenNothingIsDue()
+    {
+        var log = new RecordingLogger<UpdateTvDbInfoTimer>();
+
+        await new UpdateTvDbInfoTimer(_store.Object, _tvDb.Object, log).Execute(Mock.Of<IJobExecutionContext>());
+
+        log.Entries.Should().Contain(e => e.Level == LogLevel.Information
+            && e.Message == "UpdateTvDbInfoTimer: 0 TheTVDB request(s) this run: 0 for 0 series, 0 for 0 cached episode(s).");
+    }
 
     [Test]
     public async Task SeriesJob_Should_AskForAtMostTenSeries_AndTwentyFiveEpisodes_WithTheRightAgeCutoffs()

@@ -356,9 +356,6 @@ public class TheTvDbServiceTests
         _apiClient
             .Setup(a => a.GetSeriesAggregateByIdAsync(20, "eng", It.IsAny<CancellationToken>()))
             .ReturnsAsync(fresh);
-        _store
-            .Setup(s => s.GetEpisodesExtendedAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<int, Episode>());
 
         var patchedEpisode = new Episode { Id = 2001, Name = "Ep", Image = "https://example.com/still.jpg" };
         _store
@@ -378,72 +375,57 @@ public class TheTvDbServiceTests
     }
 
     [Test]
-    public async Task RefreshSeriesAggregateByIdAsync_ReusesCachedEpisodeTranslation_InsteadOfCallingApi()
+    public async Task RefreshSeriesAggregateByIdAsync_Should_StoreWhatTheClientReturned_WithNoPerEpisodeRequests()
     {
+        // The client's aggregate already has English episode names (from
+        // TheTVDB's translated episode list). The refresh must store it as it
+        // is: one call for the series, and none per episode, however many it has.
         var fresh = new SeriesAggregate
         {
             TvdbId = 21,
             Name = "Show",
-            Episodes = [new EpisodeSummary { Id = 3001, Name = "Original Language Title", Overview = "Original overview." }]
+            Episodes = Enumerable.Range(1, 300)
+                .Select(n => new EpisodeSummary { Id = 3000 + n, SeasonNumber = 1, EpisodeNumber = n, Name = $"Episode {n}", Overview = $"Overview {n}" })
+                .ToArray()
         };
         _apiClient
             .Setup(a => a.GetSeriesAggregateByIdAsync(21, "eng", It.IsAny<CancellationToken>()))
             .ReturnsAsync(fresh);
         _store
-            .Setup(s => s.GetEpisodesExtendedAsync(It.Is<IReadOnlyCollection<int>>(ids => ids.Contains(3001)), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<int, Episode>
-            {
-                [3001] = new Episode { Id = 3001, Name = "Cached English Title", Overview = "Cached English overview." }
-            });
-        _store
             .Setup(s => s.BackfillEpisodeImagesFromAggregateAsync(It.IsAny<SeriesAggregate>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<Episode>());
 
-        await _sut.RefreshSeriesAggregateByIdAsync(21);
+        (await _sut.RefreshSeriesAggregateByIdAsync(21)).Should().BeTrue();
 
-        _apiClient.Verify(
-            a => a.GetEpisodeTranslationByLanguageAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        _apiClient.Verify(a => a.GetSeriesAggregateByIdAsync(21, "eng", It.IsAny<CancellationToken>()), Times.Once);
+        _apiClient.VerifyNoOtherCalls();
         _store.Verify(
             s => s.UpsertSeriesAggregateAsync(
-                It.Is<SeriesAggregate>(a => a.Episodes[0].Name == "Cached English Title" && a.Episodes[0].Overview == "Cached English overview."),
+                It.Is<SeriesAggregate>(a => a.Episodes.Count == 300
+                                            && a.Episodes[0].Name == "Episode 1"
+                                            && a.Episodes[299].Overview == "Overview 300"),
                 "eng",
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Test]
-    public async Task RefreshSeriesAggregateByIdAsync_FallsBackToTranslationApi_ForEpisodesNotCachedLocally()
+    public async Task GetSeriesAggregateByIdAsync_Should_MakeNoPerEpisodeRequests_WhenItFetchesAnUncachedSeries()
     {
         var fresh = new SeriesAggregate
         {
             TvdbId = 22,
             Name = "Show",
-            Episodes = [new EpisodeSummary { Id = 4001, Name = "Original Language Title", Overview = "Original overview." }]
+            Episodes = [new EpisodeSummary { Id = 4001, Name = "Translated By The Client" }, new EpisodeSummary { Id = 4002, Name = "So Is This" }]
         };
         _apiClient
             .Setup(a => a.GetSeriesAggregateByIdAsync(22, "eng", It.IsAny<CancellationToken>()))
             .ReturnsAsync(fresh);
-        _store
-            .Setup(s => s.GetEpisodesExtendedAsync(It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<int, Episode>());
-        _apiClient
-            .Setup(a => a.GetEpisodeTranslationByLanguageAsync(4001, "eng", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new EpisodeTranslationDataDto { Name = "Live Translated Title", Overview = "Live translated overview." });
-        _store
-            .Setup(s => s.BackfillEpisodeImagesFromAggregateAsync(It.IsAny<SeriesAggregate>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<Episode>());
 
-        await _sut.RefreshSeriesAggregateByIdAsync(22);
+        var result = await _sut.GetSeriesAggregateByIdAsync(22);
 
-        _apiClient.Verify(
-            a => a.GetEpisodeTranslationByLanguageAsync(4001, "eng", It.IsAny<CancellationToken>()),
-            Times.Once);
-        _store.Verify(
-            s => s.UpsertSeriesAggregateAsync(
-                It.Is<SeriesAggregate>(a => a.Episodes[0].Name == "Live Translated Title"),
-                "eng",
-                It.IsAny<CancellationToken>()),
-            Times.Once);
+        result!.Episodes.Select(e => e.Name).Should().Equal("Translated By The Client", "So Is This");
+        _apiClient.Verify(a => a.GetSeriesAggregateByIdAsync(22, "eng", It.IsAny<CancellationToken>()), Times.Once);
+        _apiClient.VerifyNoOtherCalls();
     }
 }
