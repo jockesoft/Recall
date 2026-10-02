@@ -131,10 +131,10 @@ public static class InfrastructureServiceCollectionExtensions
                 options.LoginPath = "/Account/Login";
                 options.LogoutPath = "/Account/Logout";
                 options.AccessDeniedPath = "/Account/Login";
-                options.ExpireTimeSpan = TimeSpan.FromDays(30);
+                options.ExpireTimeSpan = TimeSpan.FromDays(SignInCookieDays);
                 options.SlidingExpiration = true;
                 options.EventsType = typeof(RecallCookieEvents);
-                options.Cookie.Name = "Recall.Auth";
+                options.Cookie.Name = SignInCookieName;
                 options.Cookie.HttpOnly = true;
                 // Lax (not Strict) so the cookie survives the top-level GET navigation
                 // from the emailed sign-in link.
@@ -186,6 +186,42 @@ public static class InfrastructureServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>The sign-in cookie. The Privacy page names it, so the two cannot drift apart.</summary>
+    public const string SignInCookieName = "Recall.Auth";
+
+    /// <summary>How long the sign-in cookie lasts without a visit (it is renewed on use).</summary>
+    public const int SignInCookieDays = 30;
+
+    /// <summary>Name of the per-IP policy on requests for a sign-in link; see <see cref="LoginEmailPartition"/>.</summary>
+    public const string LoginEmailPolicy = "login-email";
+
+    /// <summary>How many sign-in links one client IP may ask for per <see cref="LoginEmailWindow"/>.</summary>
+    public const int LoginEmailPermits = 8;
+
+    public static readonly TimeSpan LoginEmailWindow = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Limits requests for a sign-in link, which are the POSTs to the sign-in
+    /// page: <see cref="LoginEmailPermits"/> per <see cref="LoginEmailWindow"/>
+    /// per client IP. Loading the page (a GET) is never counted, so reloading
+    /// it, or following a few links to it, cannot lock anyone out; only asking
+    /// for links can.
+    /// </summary>
+    public static RateLimitPartition<string> LoginEmailPartition(HttpContext httpContext)
+    {
+        if (!HttpMethods.IsPost(httpContext.Request.Method))
+            return RateLimitPartition.GetNoLimiter("page-load");
+
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter($"post:{clientIp}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = LoginEmailPermits,
+            Window = LoginEmailWindow,
+            QueueLimit = 0
+        });
+    }
+
     /// <summary>Name of the per-IP policy on the public Details pages; see <see cref="PublicDetailsPartition"/>.</summary>
     public const string PublicDetailsPolicy = "public-details";
 
@@ -195,9 +231,9 @@ public static class InfrastructureServiceCollectionExtensions
     /// <summary>
     /// The app's rate-limit policies:
     /// <list type="bullet">
-    /// <item><c>login-email</c> — throttles the sign-in form per client IP so it can't be
-    /// scripted to spray login emails. Applied via <c>[EnableRateLimiting("login-email")]</c>
-    /// on LoginModel, with a site-wide backstop on the same endpoint.</item>
+    /// <item><see cref="LoginEmailPolicy"/> — throttles requests for a sign-in link (POSTs
+    /// only) per client IP so the form can't be scripted to spray login emails. Applied via
+    /// <c>[EnableRateLimiting]</c> on LoginModel, with a site-wide backstop on the same endpoint.</item>
     /// <item><see cref="PublicDetailsPolicy"/> — bounds what an anonymous client can make the
     /// app fetch from TheTVDB through the public Series/Episodes/Movies Details pages.</item>
     /// </list>
@@ -212,17 +248,7 @@ public static class InfrastructureServiceCollectionExtensions
 
             options.AddPolicy(PublicDetailsPolicy, PublicDetailsPartition);
 
-            options.AddPolicy("login-email", httpContext =>
-            {
-                var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-
-                return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 8,
-                    Window = TimeSpan.FromMinutes(5),
-                    QueueLimit = 0
-                });
-            });
+            options.AddPolicy(LoginEmailPolicy, LoginEmailPartition);
 
             // Site-wide backstop on the same endpoint: bounds total sign-in POSTs
             // regardless of how many distinct IPs they come from (a botnet spread

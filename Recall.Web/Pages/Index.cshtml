@@ -1,61 +1,126 @@
 @page
 @model IndexModel
 @{
-    ViewData["Title"] = "Track TV Shows & Get Episode Alerts";
-    ViewData["Description"] = "Recall.nu is a free TV show tracker. Track every series you " +
-        "watch, get notified the moment a new episode airs, and build your list of favorites " +
-        "— no password needed.";
+    ViewData["Title"] = "Track TV Series & Movies, Get Episode Alerts";
+    ViewData["Description"] = "Recall.nu is a free tracker for TV series and movies. Keep track of " +
+        "what you watch, get notified the moment a new episode airs, and import your IMDb " +
+        "ratings and watchlist — no password needed.";
     ViewData["Robots"] = "index, follow";
 }
 
 <div class="tvdb-shell">
-    <div class="tvdb-hero">
-        <div class="tvdb-slate--inline mb-3">
-            <span class="tvdb-dot is-ok" aria-hidden="true"></span> FREE &middot; NO PASSWORD NEEDED
+    <section class="tvdb-landing-hero">
+        <div class="tvdb-landing-hero__text">
+            <div class="tvdb-slate--inline mb-3">
+                <span class="tvdb-dot is-ok" aria-hidden="true"></span> FREE &middot; NO PASSWORD NEEDED
+            </div>
+            <h1 class="tvdb-landing-hero__title">Never miss the next episode.</h1>
+            <p class="tvdb-landing-hero__lead">
+                Recall keeps track of the series and movies you watch, and tells you the day a new episode airs.
+            </p>
+            <a asp-page="/Account/Login" class="btn btn-primary btn-lg">
+                Get started <i class="@Icons.Next ms-1" aria-hidden="true"></i>
+            </a>
         </div>
-        <h1 class="mb-3">Never miss the next episode.</h1>
-        <p class="tvdb-prose text-muted mb-4">
-            Track every show you watch, know the moment a new episode airs, and pick up right
-            where you left off. Sign in with just your email — no password, no setup.
-        </p>
-        <a asp-page="/Account/Login" class="btn btn-primary btn-lg px-4">
-            <i class="@Icons.Send me-1" aria-hidden="true"></i> Get started — it's free
-        </a>
-    </div>
 
-    <div class="row mt-4 g-4">
-        <div class="col-md-4 text-center">
-            <i class="@Icons.Track tvdb-icon--xl mb-3" aria-hidden="true"></i>
-            <h2 class="tvdb-feature-title">Track everything you watch</h2>
-            <p class="tvdb-prose text-muted">
-                Build a library of every series you follow, and see at a glance what's new.
-            </p>
-        </div>
-        <div class="col-md-4 text-center">
-            <i class="@Icons.BellFilled tvdb-icon--xl mb-3" aria-hidden="true"></i>
-            <h2 class="tvdb-feature-title">Get notified on air day</h2>
-            <p class="tvdb-prose text-muted">
-                We check for new episodes automatically and let you know the moment one airs.
-            </p>
-        </div>
-        <div class="col-md-4 text-center">
-            <i class="@Icons.Favorites tvdb-icon--xl mb-3" aria-hidden="true"></i>
-            <h2 class="tvdb-feature-title">Save your favorites</h2>
-            <p class="tvdb-prose text-muted">
-                Like shows and episodes to build up a running list of favorites over time.
-            </p>
-        </div>
-    </div>
+        @* A picture of the product, built from the app's own components as static
+           markup: nothing in it is a link or a button, and the whole block is
+           hidden from assistive technology. The artwork is abstract on purpose:
+           TheTVDB's images are licensed for display with its metadata, not for
+           marketing, so no real poster or still is used here. *@
+        <div class="tvdb-landing-preview" aria-hidden="true">
+            <div class="tvdb-landing-preview__label">Catch up</div>
+            <div class="tvdb-catchup-card">
+                <div class="tvdb-catchup-media tvdb-art tvdb-art--teal">
+                    <div class="tvdb-catchup-caption">
+                        <span class="tvdb-catchup-show">Harbour Road</span>
+                        <span class="tvdb-catchup-slate">S02 &bull; E05</span>
+                        <span class="tvdb-catchup-ep">The Long Way Round</span>
+                    </div>
+                    <span class="tvdb-catchup-check"><span class="tvdb-watch-badge"><i class="@Icons.Check"></i></span></span>
+                </div>
+            </div>
 
-    <div class="row mt-5 justify-content-center text-center">
-        <div class="col-lg-7">
-            <h2 class="mb-3">How it works</h2>
-            <ol class="tvdb-prose text-muted text-start mx-auto mb-4 tvdb-steps">
-                <li class="mb-2">Enter your email — no account or password to set up.</li>
-                <li class="mb-2">Add the shows you're currently watching.</li>
-                <li>Recall keeps track of what's aired and tells you when there's something new.</li>
-            </ol>
-            <a asp-page="/Account/Login" class="btn btn-outline-primary">Sign in</a>
+            <div class="tvdb-landing-preview__split">
+                <div>
+                    <div class="tvdb-landing-preview__label">Upcoming</div>
+                    <div class="tvdb-landing-preview__rows">
+                        <div class="tvdb-upcoming-card is-current">
+                            <span class="tvdb-thumb tvdb-art tvdb-art--amber"></span>
+                            <div class="tvdb-upcoming-body">
+                                <span class="tvdb-upcoming-series">Night Shift</span>
+                                <div class="tvdb-upcoming-episode"><span class="tvdb-slate--inline">S04 &bull; E01</span></div>
+                                <div class="tvdb-upcoming-tags"><span class="tvdb-badge tvdb-badge--ok">Premiere</span></div>
+                            </div>
+                            <div class="tvdb-upcoming-when">
+                                <span class="tvdb-upcoming-date">Sunday</span>
+                                <span class="tvdb-upcoming-sep">&middot;</span>
+                                <span class="tvdb-upcoming-countdown">in 2 days</span>
+                            </div>
+                        </div>
+                        <div class="tvdb-upcoming-card">
+                            <span class="tvdb-thumb tvdb-art tvdb-art--rose"></span>
+                            <div class="tvdb-upcoming-body">
+                                <span class="tvdb-upcoming-series">The Cartographers</span>
+                                <div class="tvdb-upcoming-episode">
+                                    <span class="tvdb-slate--inline">S01 &bull; E07</span>
+                                    <span class="tvdb-upcoming-epname">North of Here</span>
+                                </div>
+                            </div>
+                            <div class="tvdb-upcoming-when">
+                                <span class="tvdb-upcoming-date">Friday</span>
+                                <span class="tvdb-upcoming-sep">&middot;</span>
+                                <span class="tvdb-upcoming-countdown">in 7 days</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tvdb-landing-preview__poster">
+                    <div class="tvdb-landing-preview__label">Watching</div>
+                    <div class="tvdb-series-card">
+                        <span class="tvdb-series-poster tvdb-art tvdb-art--green">
+                            <span class="tvdb-series-progress"><span class="tvdb-series-progress-fill tvdb-landing-preview__progress"></span></span>
+                        </span>
+                        <span class="tvdb-series-title">Harbour Road</span>
+                        <span class="tvdb-series-progress-text">4 of 10 &middot; S02</span>
+                        <span class="tvdb-series-year">Series &middot; 2024</span>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
+    </section>
+
+    <section class="tvdb-landing-features" aria-label="What Recall does">
+        <div class="tvdb-feature">
+            <span class="tvdb-feature__icon"><i class="@Icons.Track" aria-hidden="true"></i></span>
+            <h2 class="tvdb-feature__title">Track series and movies</h2>
+            <p class="tvdb-feature__text">
+                Mark episodes and movies as you watch them. Your library always knows what comes next.
+            </p>
+        </div>
+        <div class="tvdb-feature">
+            <span class="tvdb-feature__icon"><i class="@Icons.Bell" aria-hidden="true"></i></span>
+            <h2 class="tvdb-feature__title">Get notified on air day</h2>
+            <p class="tvdb-feature__text">
+                Recall checks for new episodes of the series you follow and tells you when one is out.
+            </p>
+        </div>
+        <div class="tvdb-feature">
+            <span class="tvdb-feature__icon"><i class="@Icons.Upload" aria-hidden="true"></i></span>
+            <h2 class="tvdb-feature__title">Import from IMDb</h2>
+            <p class="tvdb-feature__text">
+                Bring your IMDb ratings and watchlist with you, so you don't start from an empty library.
+            </p>
+        </div>
+    </section>
+
+    <section class="tvdb-landing-steps">
+        <h2 class="mb-3">How it works</h2>
+        <ol class="tvdb-steps">
+            <li>Enter your email. We send you a sign-in link; there is no password to set up.</li>
+            <li>Add the series you follow and the movies you want to watch.</li>
+            <li>Recall keeps track of what has aired and tells you when there is something new.</li>
+        </ol>
+    </section>
 </div>

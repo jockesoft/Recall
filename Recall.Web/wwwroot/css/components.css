@@ -254,6 +254,14 @@
     font-size: var(--tvdb-text-sm);
 }
 
+/* A form's buttons: one row, the action that saves on the right. */
+.tvdb-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--tvdb-space-2);
+    margin-top: var(--tvdb-space-5);
+}
+
 /* ---- Table --------------------------------------------------------------------- */
 
 .table {
@@ -1147,6 +1155,28 @@ dl.row dd a.tvdb-inline-edit {
 @media (min-width: 576px) { .tvdb-series-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 768px) { .tvdb-series-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (min-width: 992px) { .tvdb-series-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+/* On a phone, a section of posters as one row that scrolls sideways, sized so
+   the next poster peeks in at the edge (the cast row's pattern). From 576px it
+   is the ordinary grid. */
+@media (max-width: 575.98px) {
+    .tvdb-series-grid--row-on-phone {
+        display: flex;
+        gap: var(--tvdb-space-3);
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        margin-inline: calc(-1 * var(--tvdb-shell-pad));
+        padding-inline: var(--tvdb-shell-pad);
+        scroll-padding-inline: var(--tvdb-shell-pad);
+        /* Room for the cards' hover lift and focus ring inside the scroller. */
+        padding-block: var(--tvdb-space-1);
+    }
+
+    .tvdb-series-grid--row-on-phone > .tvdb-series-card-wrap {
+        flex: 0 0 calc((100% - 2 * var(--tvdb-space-3)) / 2.4);
+        scroll-snap-align: start;
+    }
+}
 
 /* In the narrow panel there is room for four. */
 .tvdb-shell--narrow .tvdb-series-grid {

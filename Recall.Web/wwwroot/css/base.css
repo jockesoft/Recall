@@ -683,6 +683,8 @@ main:focus {
 
 /* ---- Cookie notice ---------------------------------------------------------------- */
 
+/* A compact bar: one or two lines of text with the button beside it, at
+   every width. On a phone it stays well under a sixth of the screen. */
 .cookie-notice {
     position: fixed;
     left: 0;
@@ -690,23 +692,22 @@ main:focus {
     bottom: 0;
     z-index: 1040;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: var(--tvdb-space-3) var(--tvdb-space-5);
-    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    gap: var(--tvdb-space-3);
+    padding: var(--tvdb-space-2) var(--tvdb-space-4);
     background: var(--tvdb-ink-2);
     border-top: 1px solid var(--tvdb-line);
-    box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.25);
+    box-shadow: var(--tvdb-shadow-md);
 }
 
 .cookie-notice__text {
+    min-width: 0;
     margin: 0;
-    max-width: 56rem;
     font-size: var(--tvdb-text-sm);
-    line-height: 1.5;
+    line-height: var(--tvdb-leading-snug);
 }
 
 .cookie-notice__button {
-    flex-shrink: 0;
+    flex: none;
 }

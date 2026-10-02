@@ -83,21 +83,21 @@
         @* One compact row, on phones too. Each stat links to the place that explains it. *@
         <ul class="tvdb-stat-row list-unstyled mb-4">
             <li>
-                <a asp-page="/Library" class="tvdb-stat-link">
-                    <span class="tvdb-stat-link__value">@Model.TrackedSeriesCount</span>
-                    <span class="tvdb-stat-link__label">Tracked series</span>
+                <a asp-page="/Library" class="tvdb-stat-item">
+                    <span class="tvdb-stat-item__value">@Model.TrackedSeriesCount</span>
+                    <span class="tvdb-stat-item__label">Tracked series</span>
                 </a>
             </li>
             <li>
-                <a href="#upcoming" class="tvdb-stat-link">
-                    <span class="tvdb-stat-link__value">@Model.UpcomingThisWeekCount</span>
-                    <span class="tvdb-stat-link__label">Airing this week</span>
+                <a href="#upcoming" class="tvdb-stat-item">
+                    <span class="tvdb-stat-item__value">@Model.UpcomingThisWeekCount</span>
+                    <span class="tvdb-stat-item__label">Airing this week</span>
                 </a>
             </li>
             <li>
-                <a asp-page="/Library" asp-fragment="watching" class="tvdb-stat-link">
-                    <span class="tvdb-stat-link__value">@Model.UnwatchedCount</span>
-                    <span class="tvdb-stat-link__label">Unwatched episodes</span>
+                <a asp-page="/Library" asp-fragment="watching" class="tvdb-stat-item">
+                    <span class="tvdb-stat-item__value">@Model.UnwatchedCount</span>
+                    <span class="tvdb-stat-item__label">Unwatched episodes</span>
                 </a>
             </li>
         </ul>

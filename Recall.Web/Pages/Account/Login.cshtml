@@ -9,34 +9,29 @@
 }
 
 <div class="tvdb-shell tvdb-shell--narrow">
-    <h1 class="mb-3">Sign in to Recall.nu</h1>
-
     @if (Model.LinkSent)
     {
-        <div class="alert alert-success" role="alert">
-            If <strong>@Model.Email</strong> has an account, a sign-in link is on its way.
-            Open the email and click the link to finish signing in. The link expires shortly
-            and can only be used once.
+        <div class="tvdb-empty-state">
+            <span class="tvdb-empty-state__icon"><i class="@Icons.Mail" aria-hidden="true"></i></span>
+            <h1 class="tvdb-empty-state__title">Check your inbox</h1>
+            <p class="tvdb-empty-state__text">
+                A sign-in link is on its way to <strong class="tvdb-break-anywhere">@Model.Email</strong>.
+            </p>
+            <p class="tvdb-meta mb-0">
+                The link expires in @Model.LinkLifetimeMinutes minute@(Model.LinkLifetimeMinutes == 1 ? "" : "s") and works once.
+                Nothing after a few minutes? Check your spam folder.
+            </p>
+            <div class="tvdb-empty-state__actions">
+                <a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl">Use a different email</a>
+            </div>
         </div>
-        <a class="btn btn-link px-0" asp-page="/Account/Login">Use a different email</a>
     }
     else
     {
-        <p class="tvdb-prose text-muted">
-            No account yet? No separate sign-up required — enter your email below and
-            we'll send you a secure sign-in link. If it's your first time, an account is
-            created for you automatically. Completely free, and all you need is a valid
-            email address — no password to remember.
-        </p>
+        <h1 class="mb-2">Sign in</h1>
+        <p class="tvdb-prose text-muted mb-4">We'll email you a sign-in link. No password needed.</p>
 
-        <ul class="list-unstyled tvdb-prose text-muted mb-4">
-            <li class="mb-1"><i class="@Icons.Track tvdb-icon--fw me-2" aria-hidden="true"></i>Track every show you're watching in one place</li>
-            <li class="mb-1"><i class="@Icons.Bell tvdb-icon--fw me-2" aria-hidden="true"></i>Get notified the moment a new episode airs</li>
-            <li class="mb-1"><i class="@Icons.Like tvdb-icon--fw me-2" aria-hidden="true"></i>Like shows and build up your list of favorites</li>
-            <li class="mb-1"><i class="@Icons.Secure tvdb-icon--fw me-2" aria-hidden="true"></i>No password to manage — just a secure link sent to your inbox</li>
-        </ul>
-
-        <form method="post">
+        <form method="post" class="mb-5">
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="FormRenderedAtUtc" />
 
@@ -65,6 +60,12 @@
                 <i class="@Icons.Send me-1" aria-hidden="true"></i> Send sign-in link
             </button>
         </form>
+
+        <ul class="tvdb-benefits list-unstyled" aria-label="What you get">
+            <li><i class="@Icons.Track" aria-hidden="true"></i><span>Track the series and movies you watch in one place.</span></li>
+            <li><i class="@Icons.Bell" aria-hidden="true"></i><span>Get notified the day a new episode airs.</span></li>
+            <li><i class="@Icons.Secure" aria-hidden="true"></i><span>Free, and new here is fine: your first link creates the account.</span></li>
+        </ul>
     }
 </div>
 

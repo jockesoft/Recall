@@ -5,17 +5,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Services.Authentication;
 
 namespace Recall.Web.Pages.Account;
 
 [AllowAnonymous]
-[EnableRateLimiting("login-email")]
+[EnableRateLimiting(InfrastructureServiceCollectionExtensions.LoginEmailPolicy)]
 public sealed class LoginModel(
     IPasswordlessAuthService authService,
     ITurnstileVerifier turnstileVerifier,
     IOptions<TurnstileOptions> turnstileOptions,
+    IOptions<LoginTokenOptions> loginOptions,
     ILogger<LoginModel> logger) : PageModel
 {
     /// <summary>Real users take more than this to type an email and submit. Bots that
@@ -23,9 +25,9 @@ public sealed class LoginModel(
     private static readonly TimeSpan MinimumHumanSubmitDelay = TimeSpan.FromSeconds(2);
 
     [BindProperty]
-    [Required]
-    [EmailAddress]
-    [StringLength(320)]
+    [Required(ErrorMessage = "Enter your email address.")]
+    [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+    [StringLength(320, ErrorMessage = "Enter a valid email address.")]
     public string Email { get; set; } = string.Empty;
 
     /// <summary>
@@ -56,6 +58,9 @@ public sealed class LoginModel(
 
     /// <summary>True once a link has been sent, so the view shows the "check your inbox" state.</summary>
     public bool LinkSent { get; private set; }
+
+    /// <summary>How long an emailed link works, from configuration, so the page tells the truth about it.</summary>
+    public int LinkLifetimeMinutes => loginOptions.Value.TokenLifetimeMinutes;
 
     public void OnGet()
     {

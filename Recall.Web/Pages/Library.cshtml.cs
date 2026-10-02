@@ -32,6 +32,22 @@ public sealed record LibraryCardItem(
     string? Caption,
     string? ProgressText = null);
 
+/// <summary>The Library's four sections, in the order the page shows them.</summary>
+public enum LibrarySection
+{
+    Watching,
+    ToWatch,
+    UpToDate,
+    Watched
+}
+
+/// <summary>
+/// One section of the Library with what is in it. <paramref name="Slug"/> is its
+/// name in a URL: the anchor on the full page (<c>/Library#watching</c>) and
+/// the value of <c>?section=</c> for the view that shows only this section.
+/// </summary>
+public sealed record LibrarySectionView(LibrarySection Section, string Slug, string Title, IReadOnlyList<LibraryCardItem> Items);
+
 [Authorize]
 public sealed class LibraryModel(
     ICurrentUserService currentUserService,
@@ -57,6 +73,33 @@ public sealed class LibraryModel(
     public IReadOnlyList<LibraryCardItem> Watched { get; private set; } = [];
 
     public bool IsEmpty => Watching.Count == 0 && ToWatch.Count == 0 && UpToDate.Count == 0 && Watched.Count == 0;
+
+    /// <summary>
+    /// <c>/Library?section=watched</c> shows one section on its own, with its
+    /// own heading and a link back: where a phone's "See all N" goes, since
+    /// the full page shows that section there as a single scrolling row.
+    /// Anything that is not a section's slug gives the full library.
+    /// </summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Section { get; set; }
+
+    /// <summary>The four sections in page order, empty ones included.</summary>
+    public IReadOnlyList<LibrarySectionView> Sections =>
+    [
+        new(LibrarySection.Watching, "watching", "Watching", Watching),
+        new(LibrarySection.ToWatch, "to-watch", "To Watch", ToWatch),
+        new(LibrarySection.UpToDate, "up-to-date", "Up to Date", UpToDate),
+        new(LibrarySection.Watched, "watched", "Watched", Watched)
+    ];
+
+    /// <summary>The section asked for with <see cref="Section"/>; null for the full library.</summary>
+    public LibrarySectionView? SelectedSection =>
+        string.IsNullOrWhiteSpace(Section)
+            ? null
+            : Sections.FirstOrDefault(s => string.Equals(s.Slug, Section.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Route values that bring a POST back to the view it came from.</summary>
+    private object? BackToView => SelectedSection is { } selected ? new { section = selected.Slug } : null;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -216,7 +259,7 @@ public sealed class LibraryModel(
         if (currentUserService.UserId is not { } userId)
         {
             this.SetErrorToast("You need to be signed in to like a series.");
-            return RedirectToPage();
+            return RedirectToPage(BackToView);
         }
 
         try
@@ -229,7 +272,7 @@ public sealed class LibraryModel(
             this.SetErrorToast("Could not update your like right now.");
         }
 
-        return RedirectToPage();
+        return RedirectToPage(BackToView);
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(Guid id, CancellationToken cancellationToken)
@@ -245,7 +288,7 @@ public sealed class LibraryModel(
             var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
             await trackedSeriesRepository.RemoveAsync(userId, id, cancellationToken);
-            return RedirectToPage();
+            return RedirectToPage(BackToView);
         }
         catch (Exception ex)
         {

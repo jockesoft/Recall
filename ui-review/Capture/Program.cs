@@ -39,12 +39,13 @@ List<Shot> shots =
     new("search", "show-more", Site.SignedIn, "/Search?Query=dark",
         Prepare: async page =>
         {
-            // The rest of the results are on the page, hidden; the button reveals them and goes away.
+            // The rest of the results are on the page, hidden; each press reveals the next twenty.
             await page.Locator("#showMoreResults").ClickAsync();
-            await page.Locator("#showMoreResults").WaitForAsync(new() { State = WaitForSelectorState.Detached });
+            await page.Locator("#searchResults > li:not([hidden])").Nth(39).WaitForAsync();
         }),
     new("search", "no-results", Site.SignedIn, "/Search?Query=zzqqxxzzqq"),
     new("library", "populated", Site.SignedIn, "/Library"),
+    new("library", "section-watched", Site.SignedIn, "/Library?section=watched"),
     new("series-details", "watching", Site.SignedIn, $"/Series/Details/{Watching}"),
     new("series-details", "up-to-date", Site.SignedIn, $"/Series/Details/{UpToDate}"),
     new("series-details", "all-watched", Site.SignedIn, $"/Series/Details/{AllWatched}"),
@@ -119,6 +120,16 @@ List<Shot> shots =
     new("favorites", "populated", Site.SignedIn, "/Account/Favorites"),
     new("notifications", "populated", Site.SignedIn, "/Account/Notifications"),
     new("import-watchlist", "completed", Site.SignedIn, "/Account/ImportWatchlist"),
+    new("import-watchlist", "in-progress", Site.SignedIn, "/Account/ImportWatchlist",
+        Prepare: async page =>
+        {
+            // An import with rows still waiting only exists for this shot:
+            // left in place, the import job would work through it.
+            await RunReviewScriptAsync(options, "import-progress", "on");
+            await page.ReloadAsync();
+            await page.Locator(".tvdb-import-progress").WaitForAsync();
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "import-progress", "off")),
     new("admin", "default", Site.SignedIn, "/Admin"),
     new("privacy", "signed-in", Site.SignedIn, "/Privacy"),
     new("error", "signed-in", Site.SignedIn, "/Error"),
@@ -408,6 +419,25 @@ static async Task OpenFirstEpisodeAsync(IPage page)
     await SettleAsync(page);
 }
 
+// Changes the review clone through ../review.sh, which knows the database.
+static async Task RunReviewScriptAsync(Options options, params string[] arguments)
+{
+    if (options.ReviewScript is null)
+        throw new InvalidOperationException("This shot needs --review-script (review.sh capture passes it).");
+
+    var start = new System.Diagnostics.ProcessStartInfo("bash") { RedirectStandardError = true };
+    start.ArgumentList.Add(options.ReviewScript);
+    foreach (var argument in arguments)
+        start.ArgumentList.Add(argument);
+
+    using var process = System.Diagnostics.Process.Start(start)!;
+    var error = await process.StandardError.ReadToEndAsync();
+    await process.WaitForExitAsync();
+
+    if (process.ExitCode != 0)
+        throw new InvalidOperationException($"review.sh {string.Join(' ', arguments)} failed: {error}");
+}
+
 // On a phone the navigation is collapsed behind the toggler.
 static async Task OpenMobileMenuAsync(IPage page)
 {
@@ -467,6 +497,7 @@ class Options
     public string OutputDirectory { get; private set; } = "screenshots";
     public string? Only { get; private set; }
     public bool Install { get; private set; }
+    public string? ReviewScript { get; private set; }
 
     public string BaseUrl(Site site) => site switch
     {
@@ -488,6 +519,7 @@ class Options
                 case "--out": options.OutputDirectory = args[++i]; break;
                 case "--only": options.Only = args[++i]; break;
                 case "--install": options.Install = true; break;
+                case "--review-script": options.ReviewScript = args[++i]; break;
                 default: throw new ArgumentException($"Unknown argument: {args[i]}");
             }
         }

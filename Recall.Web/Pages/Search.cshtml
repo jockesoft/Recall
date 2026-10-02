@@ -10,21 +10,20 @@
 <div class="tvdb-shell">
     <h1 class="mb-3">Search</h1>
 
-    <form method="get" class="row g-2 mb-4">
-        <div class="col-md-8">
-            <label asp-for="Query" class="form-label"></label>
+    <form method="get" class="tvdb-search-form mb-4">
+        <label asp-for="Query" class="form-label"></label>
+        @* The field takes the width; the button keeps its own. *@
+        <div class="tvdb-search-form__row">
             <input asp-for="Query" class="form-control" placeholder="e.g. Dark, Oppenheimer..." aria-describedby="@(Model.HasSearched ? null : "searchHint")" />
-            <span asp-validation-for="Query" class="text-danger"></span>
-            @if (!Model.HasSearched)
-            {
-                <div id="searchHint" class="form-text">Search TheTVDB for any series or movie.</div>
-            }
-        </div>
-        <div class="col-md-4 d-flex align-items-start tvdb-search-submit">
-            <button type="submit" class="btn btn-primary w-100">
+            <button type="submit" class="btn btn-primary">
                 <i class="@Icons.Search me-1" aria-hidden="true"></i> Search
             </button>
         </div>
+        <span asp-validation-for="Query" class="text-danger"></span>
+        @if (!Model.HasSearched)
+        {
+            <div id="searchHint" class="form-text">Search TheTVDB for any series or movie.</div>
+        }
     </form>
 
     @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
@@ -103,8 +102,9 @@
         @if (hiddenCount > 0)
         {
             <div class="tvdb-show-more">
-                <button type="button" class="btn btn-outline-dark" id="showMoreResults" aria-controls="searchResults">
-                    Show <span class="tvdb-mono">@hiddenCount</span> more
+                <button type="button" class="btn btn-outline-dark" id="showMoreResults" aria-controls="searchResults"
+                        data-page-size="@SearchModel.InitialResultCount">
+                    Show <span class="tvdb-mono" id="showMoreCount">@Math.Min(hiddenCount, SearchModel.InitialResultCount)</span> more
                 </button>
             </div>
         }
@@ -116,18 +116,29 @@
     @if (hiddenCount > 0)
     {
         <script>
-            // The rest of the results are already on the page: reveal them and
-            // put focus on the first new one, so keyboard users carry on from there.
+            // The rest of the results are already on the page: reveal the next
+            // batch and put focus on its first result, so keyboard users carry
+            // on from there. The button goes away with the last batch.
             (function () {
                 var button = document.getElementById('showMoreResults');
-                if (!button) return;
+                var count = document.getElementById('showMoreCount');
+                if (!button || !count) return;
+
+                var pageSize = parseInt(button.dataset.pageSize, 10) || 20;
 
                 button.addEventListener('click', function () {
-                    var hidden = document.querySelectorAll('#searchResults > li[hidden]');
-                    hidden.forEach(function (item) { item.hidden = false; });
-                    button.parentElement.remove();
+                    var hidden = Array.prototype.slice.call(document.querySelectorAll('#searchResults > li[hidden]'));
+                    var batch = hidden.slice(0, pageSize);
+                    batch.forEach(function (item) { item.hidden = false; });
 
-                    var first = hidden.length > 0 ? hidden[0].querySelector('a') : null;
+                    var left = hidden.length - batch.length;
+                    if (left > 0) {
+                        count.textContent = Math.min(left, pageSize);
+                    } else {
+                        button.parentElement.remove();
+                    }
+
+                    var first = batch.length > 0 ? batch[0].querySelector('a') : null;
                     if (first) first.focus();
                 });
             })();

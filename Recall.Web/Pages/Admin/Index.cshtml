@@ -5,23 +5,24 @@
 }
 
 <div class="tvdb-shell tvdb-shell--narrow">
-    <div class="tvdb-eyebrow mb-1"><i class="@Icons.AdminPanel me-1" aria-hidden="true"></i> Admin</div>
-    <h1 class="mb-2">Site overview</h1>
+    <h1 class="mb-2">Admin</h1>
     <p class="tvdb-prose text-muted mb-4">
-        An overview of Recall.nu. Roles are managed directly in the database — every new
+        Who has an account on Recall.nu. Roles are changed directly in the database; every new
         account starts as <strong>User</strong>.
     </p>
 
-    <div class="tvdb-stat-grid">
-        <div class="tvdb-stat">
-            <span class="tvdb-stat__label"><i class="@Icons.Users" aria-hidden="true"></i> Registered users</span>
-            <span class="tvdb-stat__value">@Model.RegisteredUserCount.ToString("N0")</span>
-            <span class="tvdb-stat__hint">accounts that have signed in at least once</span>
-        </div>
-        <div class="tvdb-stat">
-            <span class="tvdb-stat__label"><i class="@Icons.Administrator" aria-hidden="true"></i> Admins</span>
-            <span class="tvdb-stat__value">@Model.AdminCount.ToString("N0")</span>
-            <span class="tvdb-stat__hint">users with dashboard access</span>
-        </div>
-    </div>
+    <ul class="tvdb-stat-row list-unstyled mb-0">
+        <li>
+            <div class="tvdb-stat-item">
+                <span class="tvdb-stat-item__value">@Model.RegisteredUserCount.ToString("N0")</span>
+                <span class="tvdb-stat-item__label">Registered @(Model.RegisteredUserCount == 1 ? "user" : "users")</span>
+            </div>
+        </li>
+        <li>
+            <div class="tvdb-stat-item">
+                <span class="tvdb-stat-item__value">@Model.AdminCount.ToString("N0")</span>
+                <span class="tvdb-stat-item__label">@(Model.AdminCount == 1 ? "Admin" : "Admins")</span>
+            </div>
+        </li>
+    </ul>
 </div>

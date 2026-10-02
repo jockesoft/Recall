@@ -148,6 +148,40 @@ public sealed class PipelineTests
     }
 
     [Test]
+    public async Task ReloadingTheSignInPage_Should_NeverBeRateLimited()
+    {
+        // Well past the eight link requests the policy allows per five minutes.
+        for (var i = 0; i < 30; i++)
+        {
+            var response = await _client.GetAsync("/Account/Login");
+            response.StatusCode.Should().Be(HttpStatusCode.OK, "page loads are not requests for a link (load {0})", i + 1);
+        }
+    }
+
+    [Test]
+    public async Task SignInPage_Should_PutTheFormFirst_AndUseItsOwnValidationWords()
+    {
+        var html = await (await _client.GetAsync("/Account/Login")).Content.ReadAsStringAsync();
+
+        html.Should().Contain("No password needed.");
+        html.Should().Contain("data-val-email=\"Enter a valid email address.\"");
+        html.IndexOf("<form", StringComparison.Ordinal).Should().BeLessThan(
+            html.IndexOf("tvdb-benefits", StringComparison.Ordinal), "the form comes before the list of benefits");
+    }
+
+    [Test]
+    public async Task PrivacyPage_Should_NameWhatIsStoredInTheBrowser_AndTheRetentionPeriods()
+    {
+        var html = await (await _client.GetAsync("/Privacy")).Content.ReadAsStringAsync();
+
+        html.Should().Contain("Recall.Auth");
+        html.Should().Contain(".AspNetCore.Antiforgery");
+        html.Should().Contain("recall.cookie-notice-dismissed");
+        html.Should().Contain("deleted 7 days after they expired or were used");
+        html.Should().Contain("artworks.thetvdb.com");
+    }
+
+    [Test]
     public async Task ErrorPage_Should_Apologise_WithoutDevelopmentText()
     {
         var response = await _client.GetAsync("/Error");

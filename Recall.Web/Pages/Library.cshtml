@@ -3,17 +3,24 @@
 @using Recall.Web.Pages.Shared
 @model Recall.Web.Pages.LibraryModel
 @{
-    ViewData["Title"] = "My Library";
+    var selected = Model.SelectedSection;
+    ViewData["Title"] = selected is null ? "My Library" : $"{selected.Title} - My Library";
 
-    var allItems = Model.Watching.Concat(Model.ToWatch).Concat(Model.UpToDate).Concat(Model.Watched);
-    var hasSeries = allItems.Any(i => i.Type == SearchResultType.Series);
-    var hasMovies = allItems.Any(i => i.Type == SearchResultType.Movie);
-    var showFilters = hasSeries && hasMovies;
+    // The All / Series / Movies filter is only offered when there is something to tell apart.
+    var shownItems = selected is null ? Model.Sections.SelectMany(s => s.Items) : selected.Items;
+    var showFilters = shownItems.Any(i => i.Type == SearchResultType.Series)
+                      && shownItems.Any(i => i.Type == SearchResultType.Movie);
+
+    // A like posted from the one-section view comes back to it.
+    IDictionary<string, string> likeFields = selected is null
+        ? new Dictionary<string, string>()
+        : new Dictionary<string, string> { ["Section"] = selected.Slug };
 }
 
 @functions {
-    static SeriesCardModel ToCardModel(LibraryCardItem item) => new()
+    static SeriesCardModel ToCardModel(LibraryCardItem item, IDictionary<string, string> likeFields) => new()
     {
+        LikeHiddenFields = likeFields,
         TvdbId = item.TvdbId,
         Name = item.Name,
         ImageUrl = item.ImageUrl,
@@ -30,92 +37,109 @@
 }
 
 <div class="tvdb-shell">
-    @* The heading and the one action share a line; the filter is its own line below. *@
-    <div class="tvdb-page-head">
-        <h1 class="mb-0">My Library</h1>
-        @if (!Model.IsEmpty)
+    @if (selected is not null)
+    {
+        @* One section on its own: where "See all N" on a phone leads. *@
+        <a asp-page="/Library" asp-fragment="@selected.Slug" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Back to library</a>
+
+        <h1 class="mb-4">@selected.Title <span class="tvdb-count">@selected.Items.Count</span></h1>
+
+        @if (showFilters)
         {
-            <a asp-page="/Search" class="btn btn-primary">
-                <i class="@Icons.Search me-1" aria-hidden="true"></i>Find series or movies
-            </a>
+            <div class="tvdb-filter-row">
+                <partial name="_TypeFilterBar" model="showFilters" />
+            </div>
         }
-    </div>
 
-    @if (showFilters)
-    {
-        <div class="tvdb-filter-row">
-            <partial name="_TypeFilterBar" model="showFilters" />
-        </div>
-    }
+        @if (selected.Items.Count == 0)
+        {
+            <partial name="_EmptyState" model="@(new EmptyStateModel
+                     {
+                         Icon = Icons.EmptyLibrary,
+                         Heading = "Nothing here right now",
+                         Text = $"Nothing in your library is under \u201C{selected.Title}\u201D at the moment.",
+                         ActionText = "Back to your library",
+                         ActionPage = "/Library"
+                     })" />
+        }
+        else
+        {
+            <div data-library-section>
+                <div class="tvdb-series-grid">
+                    @foreach (var item in selected.Items)
+                    {
+                        <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
+                    }
+                </div>
+            </div>
 
-    @if (Model.IsEmpty)
-    {
-        <partial name="_EmptyState" model="@(new EmptyStateModel
-                 {
-                     Icon = Icons.EmptyLibrary,
-                     Heading = "Your library is empty",
-                     Text = "Save a series or add a movie to your watchlist and it shows up here, sorted by what you still have to watch.",
-                     ActionText = "Find series or movies",
-                     ActionPage = "/Search"
-                 })" />
+            <p id="tvdb-library-empty-filter" class="tvdb-meta" role="status" hidden>
+                Nothing matches this filter.
+            </p>
+        }
     }
     else
     {
-        @if (Model.Watching.Count > 0)
+        @* The heading and the one action share a line; the filter is its own line below. *@
+        <div class="tvdb-page-head">
+            <h1 class="mb-0">My Library</h1>
+            @if (!Model.IsEmpty)
+            {
+                <a asp-page="/Search" class="btn btn-primary">
+                    <i class="@Icons.Search me-1" aria-hidden="true"></i>Find series or movies
+                </a>
+            }
+        </div>
+
+        @if (showFilters)
         {
-            <div class="tvdb-library-section" id="watching" data-library-section>
-                <h2 class="tvdb-section-title">Watching <span class="tvdb-count">@Model.Watching.Count</span></h2>
-                <div class="tvdb-series-grid mb-4">
-                    @foreach (var item in Model.Watching)
-                    {
-                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
-                    }
-                </div>
+            <div class="tvdb-filter-row">
+                <partial name="_TypeFilterBar" model="showFilters" />
             </div>
         }
 
-        @if (Model.ToWatch.Count > 0)
+        @if (Model.IsEmpty)
         {
-            <div class="tvdb-library-section" data-library-section>
-                <h2 class="tvdb-section-title">To Watch <span class="tvdb-count">@Model.ToWatch.Count</span></h2>
-                <div class="tvdb-series-grid mb-4">
-                    @foreach (var item in Model.ToWatch)
-                    {
-                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
-                    }
-                </div>
-            </div>
+            <partial name="_EmptyState" model="@(new EmptyStateModel
+                     {
+                         Icon = Icons.EmptyLibrary,
+                         Heading = "Your library is empty",
+                         Text = "Save a series or add a movie to your watchlist and it shows up here, sorted by what you still have to watch.",
+                         ActionText = "Find series or movies",
+                         ActionPage = "/Search"
+                     })" />
         }
-
-        @if (Model.UpToDate.Count > 0)
+        else
         {
-            <div class="tvdb-library-section" data-library-section>
-                <h2 class="tvdb-section-title">Up to Date <span class="tvdb-count">@Model.UpToDate.Count</span></h2>
-                <div class="tvdb-series-grid mb-4">
-                    @foreach (var item in Model.UpToDate)
-                    {
-                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
-                    }
-                </div>
-            </div>
-        }
+            @foreach (var part in Model.Sections.Where(s => s.Items.Count > 0))
+            {
+                // Watching is what the page is for: always the full grid. On a
+                // phone the other three are one scrolling row each, with a link
+                // to the section on its own; from 576px they are grids too.
+                var isRow = part.Section != LibrarySection.Watching;
 
-        @if (Model.Watched.Count > 0)
-        {
-            <div class="tvdb-library-section" data-library-section>
-                <h2 class="tvdb-section-title">Watched <span class="tvdb-count">@Model.Watched.Count</span></h2>
-                <div class="tvdb-series-grid mb-4">
-                    @foreach (var item in Model.Watched)
-                    {
-                        <partial name="_SeriesCard" model="@ToCardModel(item)" />
-                    }
-                </div>
-            </div>
-        }
+                <section class="tvdb-library-section" id="@part.Slug" data-library-section>
+                    <div class="tvdb-section-head">
+                        <h2 class="mb-0">@part.Title <span class="tvdb-count">@part.Items.Count</span></h2>
+                        @if (isRow)
+                        {
+                            <a asp-page="/Library" asp-route-section="@part.Slug" class="tvdb-section-head__link d-sm-none"
+                               aria-label="See all @part.Items.Count in @part.Title">See all @part.Items.Count <i class="@Icons.Forward" aria-hidden="true"></i></a>
+                        }
+                    </div>
+                    <div class="tvdb-series-grid @(isRow ? "tvdb-series-grid--row-on-phone" : null) mb-4">
+                        @foreach (var item in part.Items)
+                        {
+                            <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
+                        }
+                    </div>
+                </section>
+            }
 
-        <p id="tvdb-library-empty-filter" class="tvdb-meta" role="status" hidden>
-            Nothing matches this filter.
-        </p>
+            <p id="tvdb-library-empty-filter" class="tvdb-meta" role="status" hidden>
+                Nothing matches this filter.
+            </p>
+        }
     }
 </div>
 

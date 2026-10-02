@@ -2,43 +2,101 @@
 @model PrivacyModel
 @{
     ViewData["Title"] = "Privacy Policy";
-    ViewData["Description"] = "How Recall.nu handles your data: what we collect, the cookies "
-        + "we use, and how passwordless email sign-in works.";
+    ViewData["Description"] = "How Recall.nu handles your data: what we store, the cookies "
+        + "we use, how long things are kept, and how passwordless email sign-in works.";
     ViewData["Robots"] = "index, follow";
 }
 <div class="tvdb-shell tvdb-shell--narrow">
     <h1 class="mb-3">@ViewData["Title"]</h1>
 
     <p class="tvdb-prose">
-        Recall.nu is a TV and movie tracker. We collect the minimum needed to run your
-        account — your email address and the shows, episodes and likes you add — and
-        don't sell or share it with third parties.
+        Recall.nu is a tracker for TV series and movies. We store what is needed to run your
+        account: your email address, your username, and the series, movies, watched episodes,
+        likes and ratings you add. We don't sell this or use it for advertising, and the site
+        has no analytics or tracking scripts.
     </p>
 
-    <h2 id="cookies" class="mt-4">Cookies</h2>
+    <h2 id="cookies" class="mt-4">Cookies and browser storage</h2>
     <p class="tvdb-prose">
-        The site uses only cookies that are technically necessary for it to work — for
-        example, keeping you signed in and protecting forms against abuse. No cookies are
-        used for tracking, analytics or advertising, and we don't share any information
-        with third parties for those purposes.
+        Everything the site stores in your browser is there to make it work. None of it is
+        used for tracking, analytics or advertising.
     </p>
+    <ul class="tvdb-prose tvdb-privacy-list">
+        <li>
+            <strong>Sign-in cookie</strong> (<code>@Model.SignInCookieName</code>): keeps you signed in. Set when you
+            sign in, renewed as you use the site, and gone after @Model.SignInCookieDays days without a visit or
+            when you sign out.
+        </li>
+        <li>
+            <strong>Form protection cookie</strong> (<code>.AspNetCore.Antiforgery</code>): proves that a form was
+            sent from this site and not from somewhere else. Set on pages with a form, and removed
+            when you close the browser.
+        </li>
+        <li>
+            <strong>Message cookie</strong> (<code>.AspNetCore.Mvc.CookieTempDataProvider</code>): carries a
+            confirmation such as "Marked as watched" from one page to the next. It exists for a
+            moment and is removed as soon as the message has been shown.
+        </li>
+        <li>
+            <strong>Cookie notice flag</strong> (<code>@PrivacyModel.CookieNoticeStorageKey</code>, in your browser's
+            local storage): remembers that you closed the cookie notice. It stays until you clear
+            the site's data and is never sent to us.
+        </li>
+    </ul>
+
+    <h2 class="mt-4">What is loaded from elsewhere</h2>
     <p class="tvdb-prose">
-        Because every cookie we set is necessary for the site's core functions, there's
-        nothing to opt out of — no cookie preferences to manage.
+        Fonts, icons, styles and scripts are served from Recall.nu itself. Two things are not:
     </p>
+    <ul class="tvdb-prose tvdb-privacy-list">
+        <li>
+            <strong>Posters and stills</strong> are loaded by your browser from TheTVDB's image servers
+            (<code>artworks.thetvdb.com</code>), which therefore see your IP address, as any website you visit does.
+        </li>
+        <li>
+            <strong>The sign-in page</strong> may load Cloudflare Turnstile to tell people from bots. When it
+            does, your browser talks to Cloudflare, which may set its own cookies for that check.
+        </li>
+    </ul>
 
     <h2 class="mt-4">Sign-in</h2>
     <p class="tvdb-prose">
-        Recall uses passwordless, email-based sign-in — there's no password to store.
-        Sign-in requests are protected against automated abuse using Cloudflare Turnstile
-        and volumetric rate limits.
+        There are no passwords. You enter your email address and we send you a link that works
+        once and expires after @Model.SignInLinkMinutes minutes. Once the email has gone out we keep only
+        a fingerprint (hash) of the link, not the link itself. Requests for links are rate limited to stop abuse.
     </p>
+
+    <h2 class="mt-4">How long things are kept</h2>
+    <p class="tvdb-prose">
+        Your library, watch history, likes and ratings are kept for as long as your account
+        exists. The rest is cleaned up automatically once a day:
+    </p>
+    <ul class="tvdb-prose tvdb-privacy-list">
+        <li>Sign-in links: @PrivacyModel.After(Model.Retention.LoginTokenDays, "they expired or were used").</li>
+        <li>
+            Emails we sent you: the text is erased as soon as the message is delivered; the record that it
+            was sent is @PrivacyModel.After(Model.Retention.EmailDays, "sending").
+        </li>
+        <li>
+            Notifications: @PrivacyModel.After(Model.Retention.ReadNotificationDays, "you read them"). Unread
+            notifications are kept.
+        </li>
+        <li>
+            The record of which new episodes you have already been told about:
+            @PrivacyModel.After(Model.Retention.NotifiedEpisodeDays, "it was made").
+        </li>
+        <li>IMDb imports and their rows: @PrivacyModel.After(Model.Retention.ImportJobDays, "the import finished").</li>
+    </ul>
 
     <h2 class="mt-4">Logs</h2>
     <p class="tvdb-prose">
-        The web server may temporarily log standard information such as IP address and
-        browser type for operational and security purposes. Logs aren't used to profile
-        individual visitors.
+        The server keeps technical logs for operation and security. They can contain IP
+        addresses, for example when a rate limit is hit. Logs are not used to profile
+        visitors.
+        @if (Model.LogRetentionDays is { } logDays)
+        {
+            <text>Log files are deleted after @logDays days.</text>
+        }
     </p>
 
     <h2 class="mt-4">Contact &amp; support</h2>

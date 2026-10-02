@@ -32,6 +32,7 @@ public static class Icons
     public const string Unsupported = "ph ph-prohibit";
     public const string Upload = "ph ph-upload-simple";
     public const string SignOut = "ph ph-sign-out";
+    public const string Mail = "ph ph-envelope-simple";
 
     // Navigation
     public const string Back = "ph ph-arrow-left";
@@ -53,7 +54,6 @@ public static class Icons
     // People and roles
     public const string Member = "ph ph-user";
     public const string Administrator = "ph ph-shield-star";
-    public const string Users = "ph ph-users";
     public const string AdminPanel = "ph ph-gauge";
 
     // Marketing and empty states

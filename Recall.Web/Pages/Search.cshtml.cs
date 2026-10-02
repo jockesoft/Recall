@@ -19,7 +19,7 @@ public sealed class SearchModel(
     ILogger<SearchModel> logger)
     : PageModel
 {
-    /// <summary>Results shown before "Show more"; the rest are on the page, hidden.</summary>
+    /// <summary>Results shown at first, and how many each press of "Show more" adds; the rest are on the page, hidden.</summary>
     public const int InitialResultCount = 20;
 
     [BindProperty(SupportsGet = true)]

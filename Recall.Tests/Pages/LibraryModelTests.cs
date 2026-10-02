@@ -146,6 +146,55 @@ public class LibraryModelTests
         _sut.Watched[0].ReleasedEpisodes.Should().Be(1, "the special is not in the count either");
     }
 
+    // ---- one section on its own (?section=) ---------------------------------------
+
+    [Test]
+    public async Task Section_Should_SelectOneSection_ByItsSlug()
+    {
+        SetUpSeries(
+            Series(1, "Behind", "Continuing", Ep(10, 1, Today.AddDays(-20))),
+            Series(3, "Finished", "Ended", Ep(30, 1, Today.AddDays(-400))));
+        SetUpWatched(30);
+        _sut.Section = "Watched";
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        var selected = _sut.SelectedSection!;
+        selected.Section.Should().Be(LibrarySection.Watched);
+        selected.Title.Should().Be("Watched");
+        selected.Items.Select(i => i.Name).Should().Equal("Finished");
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("everything")]
+    public async Task Section_Should_GiveTheFullLibrary_ForAnythingThatIsNotASection(string? section)
+    {
+        SetUpSeries(Series(1, "Behind", "Continuing", Ep(10, 1, Today.AddDays(-20))));
+        _sut.Section = section;
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.SelectedSection.Should().BeNull();
+        _sut.Sections.Select(s => s.Slug).Should().Equal("watching", "to-watch", "up-to-date", "watched");
+    }
+
+    [Test]
+    public async Task ALikeFromTheSectionView_Should_ComeBackToIt()
+    {
+        _sut.Section = "up-to-date";
+
+        var fromSection = await _sut.OnPostToggleSeriesLikeAsync(1, CancellationToken.None);
+
+        fromSection.Should().BeOfType<RedirectToPageResult>()
+            .Which.RouteValues.Should().Contain("section", "up-to-date");
+
+        _sut.Section = null;
+        var fromLibrary = await _sut.OnPostToggleSeriesLikeAsync(1, CancellationToken.None);
+
+        fromLibrary.Should().BeOfType<RedirectToPageResult>().Which.RouteValues.Should().BeNull();
+    }
+
     [Test]
     public async Task OnGet_Should_OrderEachSectionByName_IgnoringCase()
     {

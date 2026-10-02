@@ -5,6 +5,7 @@
 #   ./review.sh setup      clone recall_db twice, fetch extra titles, seed (seed.sql)
 #   ./review.sh start      start three app instances on the clones
 #   ./review.sh capture    run the Playwright capture (Capture/), writes screenshots/
+#   ./review.sh import-progress on|off   add or remove an import that is still running (used by the capture)
 #   ./review.sh stop       stop the app instances
 #   ./review.sh teardown   stop, drop the clones, clear the Redis database used
 #   ./review.sh all        setup, start, capture, teardown
@@ -125,8 +126,8 @@ start() {
   # Signed out: DevAuthMiddleware only stands aside in the "Test" environment,
   # and outside Development the static files (fingerprinted CSS and JS) are
   # only served from published output. So this instance runs a Debug publish.
-  # Starting it fresh also resets the sign-in page's rate limit (8 requests per
-  # 5 minutes per IP), which one capture run uses up exactly.
+  # Starting it fresh also resets the limit on requests for a sign-in link
+  # (8 POSTs per 5 minutes per IP; page loads are not counted).
   dotnet publish "$ROOT/Recall.Web" -c Debug -o "$RUN/publish" --nologo -v quiet
   start_app anonymous "$ANONYMOUS_URL" "$SEEDED_DB" Test "$RUN/publish"
 }
@@ -134,7 +135,7 @@ start() {
 capture() {
   dotnet run --project "$ROOT/ui-review/Capture" -- \
     --signed-in "$SIGNED_IN_URL" --empty "$EMPTY_URL" --anonymous "$ANONYMOUS_URL" \
-    --out "$ROOT/ui-review/screenshots" "$@"
+    --out "$ROOT/ui-review/screenshots" --review-script "$ROOT/ui-review/review.sh" "$@"
 }
 
 teardown() {
@@ -153,12 +154,26 @@ teardown() {
   fi
 }
 
+# An import that is still running, put in place for one screenshot and taken
+# away again (the capture calls this; see import-in-progress.sql for why it is
+# not part of the seed).
+import_progress() { # on|off
+  local job="cccccccc-0000-4000-8000-000000000001"
+  psql_db "$SEEDED_DB" -c "
+    DELETE FROM watchlist_import_item WHERE job_id = '$job';
+    DELETE FROM watchlist_import_job WHERE id = '$job';"
+  if [ "${1:-}" = "on" ]; then
+    psql_db "$SEEDED_DB" < "$ROOT/ui-review/import-in-progress.sql"
+  fi
+}
+
 case "${1:-}" in
   setup) setup ;;
+  import-progress) import_progress "${2:-off}" ;;
   start) start ;;
   capture) shift; capture "$@" ;;
   stop) stop_apps ;;
   teardown) teardown ;;
   all) setup; start; capture; teardown ;;
-  *) sed -n '2,16p' "$0"; exit 1 ;;
+  *) sed -n '2,17p' "$0"; exit 1 ;;
 esac
