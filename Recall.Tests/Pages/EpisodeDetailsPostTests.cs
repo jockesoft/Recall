@@ -266,6 +266,41 @@ public class EpisodeDetailsPostTests
     }
 
     [Test]
+    public async Task ToggleWatched_Should_SayFinished_WhenTheMarkFinishedTheSeries()
+    {
+        SignIn();
+        EpisodeBelongsTo(SeriesId);
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(
+                EpisodeWatchOutcome.MarkedWatched, new SeriesCaughtUp(SeriesId, "Chernobyl", Finished: true, UserHasRated: true)));
+
+        await _sut.OnPostToggleWatchedAsync(EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be("You've finished Chernobyl.");
+        _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpFinished);
+        _sut.TempData.ContainsKey(PageModelToastExtensions.RateSeriesKey).Should().BeFalse("the series is already rated");
+    }
+
+    [Test]
+    public async Task MarkWatchedThrough_Should_AddUpToDateToTheCount_AndKeepTheUndo()
+    {
+        SignIn();
+        EpisodeBelongsTo(SeriesId);
+        _progress
+            .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(
+                EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp),
+                CaughtUp: new SeriesCaughtUp(SeriesId, "Silo", Finished: false)));
+
+        await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be(
+            "Marked 3 episodes as watched. You're up to date with Silo. We'll let you know when a new episode airs.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be(SeriesId.ToString());
+    }
+
+    [Test]
     public async Task MarkWatchedThrough_Should_ReportTheCount_AndOfferAnUndoForTheParentSeries()
     {
         SignIn();

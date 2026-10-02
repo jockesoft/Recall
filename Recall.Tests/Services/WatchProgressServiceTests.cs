@@ -15,12 +15,14 @@ public class WatchProgressServiceTests
 {
     private Mock<ITheTvDbService> _tvDbService = null!;
     private Mock<IEpisodeWatchRepository> _watchRepository = null!;
+    private Mock<IRatingRepository> _ratings = null!;
     private FixedTimeProvider _time = null!;
     private WatchProgressService _sut = null!;
 
     private WatchProgressService CreateSut(TimeProvider timeProvider) => new(
         _tvDbService.Object,
         _watchRepository.Object,
+        _ratings.Object,
         timeProvider,
         NullLogger<WatchProgressService>.Instance);
 
@@ -29,6 +31,7 @@ public class WatchProgressServiceTests
     {
         _tvDbService = new Mock<ITheTvDbService>();
         _watchRepository = new Mock<IEpisodeWatchRepository>();
+        _ratings = new Mock<IRatingRepository>();
         _time = new FixedTimeProvider(new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero));
         _sut = CreateSut(_time);
     }
@@ -260,7 +263,7 @@ public class WatchProgressServiceTests
 
         var outcome = await _sut.MarkEpisodeWatchedAsync(userId, SeriesId, episodeTvdbId: 1);
 
-        outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
         _watchRepository.Verify(
             x => x.MarkWatchedAsync(userId, SeriesId, 1, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -339,7 +342,7 @@ public class WatchProgressServiceTests
 
         var outcome = await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 7001);
 
-        outcome.Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
         VerifyNothingWritten();
     }
 
@@ -353,7 +356,7 @@ public class WatchProgressServiceTests
 
         var outcome = await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 999);
 
-        outcome.Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
         VerifyNothingWritten();
     }
 
@@ -366,7 +369,7 @@ public class WatchProgressServiceTests
 
         var outcome = await _sut.MarkEpisodeWatchedAsync(userId, SeriesId, episodeTvdbId: 5);
 
-        outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
         _watchRepository.Verify(
             x => x.MarkWatchedAsync(userId, SeriesId, 5, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -377,8 +380,8 @@ public class WatchProgressServiceTests
         SetupSeries(Ep(1, 1, 1, Future));
         SetupEpisodeDetails(episodeId: 5, seriesId: SeriesId, aired: Future);
 
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Should().Be(EpisodeWatchOutcome.NotAired);
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 5)).Should().Be(EpisodeWatchOutcome.NotAired);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 5)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
         VerifyNothingWritten();
     }
 
@@ -389,7 +392,7 @@ public class WatchProgressServiceTests
 
         var outcome = await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 1);
 
-        outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
     }
 
     [Test]
@@ -400,7 +403,7 @@ public class WatchProgressServiceTests
 
         var outcome = await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 99);
 
-        outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
     }
 
     [Test]
@@ -411,7 +414,7 @@ public class WatchProgressServiceTests
 
         var outcome = await _sut.ToggleEpisodeWatchedAsync(userId, SeriesId, episodeTvdbId: 1);
 
-        outcome.Should().Be(EpisodeWatchOutcome.MarkedUnwatched);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.MarkedUnwatched);
         _watchRepository.Verify(x => x.MarkUnwatchedAsync(userId, 1, It.IsAny<CancellationToken>()), Times.Once);
         _tvDbService.VerifyNoOtherCalls();
     }
@@ -422,8 +425,8 @@ public class WatchProgressServiceTests
         SetupSeries(Ep(1, 1, 1, Past));
         SetupEpisodeDetails(episodeId: 7001, seriesId: 700, aired: Past);
 
-        (await _sut.ToggleEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Should().Be(EpisodeWatchOutcome.MarkedWatched);
-        (await _sut.ToggleEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 7001)).Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
+        (await _sut.ToggleEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        (await _sut.ToggleEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 7001)).Outcome.Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
 
         _watchRepository.Verify(
             x => x.MarkWatchedAsync(It.IsAny<Guid>(), SeriesId, 7001, It.IsAny<CancellationToken>()), Times.Never);
@@ -499,8 +502,8 @@ public class WatchProgressServiceTests
             Ep(2, 1, 2, "2026-10-02"));
         SetupWatched();
 
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Should().Be(EpisodeWatchOutcome.MarkedWatched);
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(EpisodeWatchOutcome.NotAired);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
 
         var progress = await _sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId);
         progress.ReleasedCount.Should().Be(1);
@@ -523,8 +526,7 @@ public class WatchProgressServiceTests
             var zone = TimeZoneInfo.CreateCustomTimeZone($"test{offsetHours}", TimeSpan.FromHours(offsetHours), "test", "test");
             var sut = CreateSut(new FixedTimeProvider(lateEvening, zone));
 
-            (await sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(
-                EpisodeWatchOutcome.NotAired, $"with the machine at UTC{offsetHours:+0;-0}");
+            (await sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired, $"with the machine at UTC{offsetHours:+0;-0}");
             (await sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId)).ReleasedCount.Should().Be(1);
         }
     }
@@ -534,10 +536,10 @@ public class WatchProgressServiceTests
     {
         SetupSeries(Ep(2, 1, 2, "2026-10-02"));
 
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(EpisodeWatchOutcome.NotAired);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
 
         _time.Now = new DateTimeOffset(2026, 10, 2, 0, 0, 1, TimeSpan.Zero);
 
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
     }
 }

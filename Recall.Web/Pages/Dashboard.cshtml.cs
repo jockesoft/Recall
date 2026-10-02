@@ -292,7 +292,9 @@ public sealed class DashboardModel(
                         await DescribeMarkedAsync(seriesId, episodeId, cancellationToken),
                         seriesId,
                         batch,
-                        undoSingle: true);
+                        undoSingle: true,
+                        caughtUp: result.CaughtUp,
+                        today: Today);
                     break;
                 case EpisodeWatchOutcome.EpisodeNotInSeries:
                     this.SetErrorToast("That episode doesn't belong to this series.");

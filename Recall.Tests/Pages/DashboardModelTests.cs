@@ -583,6 +583,25 @@ public class DashboardModelTests
     private static readonly DateTime BatchStamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 
     [Test]
+    public async Task MarkWatched_Should_AddTheCaughtUpSentence_ToTheSameToast_AndKeepTheUndo()
+    {
+        SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Chernobyl", Episodes = [Ep(11, 1, 5, Today.AddDays(-7))] });
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp),
+                new SeriesCaughtUp(1, "Chernobyl", Finished: true, UserHasRated: false)));
+
+        await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
+
+        _sut.SuccessToast().Should().Be("Marked Chernobyl S01E05 as watched. You've finished Chernobyl.");
+        _sut.InfoToast().Should().BeNull("one toast per action");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpFinished);
+        _sut.TempData[PageModelToastExtensions.RateSeriesKey].Should().Be("1");
+    }
+
+    [Test]
     public async Task MarkWatched_Should_GoThroughTheProgressService_AndOfferAnUndo()
     {
         SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Show", Episodes = [Ep(11, 2, 6, Today.AddDays(-7))] });

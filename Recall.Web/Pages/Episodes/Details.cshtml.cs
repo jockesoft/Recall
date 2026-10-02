@@ -225,13 +225,14 @@ public sealed class DetailsModel(
                 return RedirectToPage(new { id });
             }
 
-            switch (await watchProgressService.ToggleEpisodeWatchedAsync(userId, episode.SeriesId.Value, id, cancellationToken))
+            var toggled = await watchProgressService.ToggleEpisodeWatchedAsync(userId, episode.SeriesId.Value, id, cancellationToken);
+            switch (toggled.Outcome)
             {
                 case EpisodeWatchOutcome.MarkedUnwatched:
                     this.SetInfoToast("Episode marked as not watched.");
                     break;
                 case EpisodeWatchOutcome.MarkedWatched:
-                    this.SetSuccessToast("Episode marked as watched.");
+                    this.SetWatchedToast("Episode marked as watched.", toggled.CaughtUp, Today);
                     break;
                 case EpisodeWatchOutcome.NotAired:
                     this.SetErrorToast("You can't mark an episode as watched before it has aired.");
@@ -296,7 +297,9 @@ public sealed class DetailsModel(
                         ? $"Marked {result.MarkedCount} episodes as watched."
                         : "Episode marked as watched.",
                     seriesId,
-                    result.Batch);
+                    result.Batch,
+                    caughtUp: result.CaughtUp,
+                    today: Today);
             }
         }
         catch (Exception ex)

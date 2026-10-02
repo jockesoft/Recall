@@ -7,6 +7,7 @@ namespace Recall.Web.Services.WatchTracking;
 public sealed class WatchProgressService(
     ITheTvDbService theTvDbService,
     IEpisodeWatchRepository episodeWatchRepository,
+    IRatingRepository ratingRepository,
     TimeProvider timeProvider,
     ILogger<WatchProgressService> logger)
     : IWatchProgressService
@@ -109,13 +110,16 @@ public sealed class WatchProgressService(
         // "Everything earlier" can include an episode that hasn't aired yet (a
         // listed but unaired special, a gap in the schedule) — leave those out.
         var idsToMark = WatchProgressCalculator.IdsThrough(WithoutUnaired(ordered), episodeTvdbId);
+        var before = await BeforeMarkAsync(userId, seriesTvdbId, cancellationToken);
 
         // The episode that was clicked is a Single watch; the earlier ones
         // marked along with it are Bulk (their date is today's catch-up).
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, idsToMark, WatchSource.Bulk, clickedEpisodeTvdbId: episodeTvdbId, cancellationToken);
 
-        return new MarkWatchedThroughResult(EpisodeFound: true, idsToMark.Count, Batch: batch);
+        return new MarkWatchedThroughResult(
+            EpisodeFound: true, idsToMark.Count, Batch: batch,
+            CaughtUp: await CaughtUpByAsync(before, idsToMark, cancellationToken));
     }
 
     public async Task<SeasonWatchResult> MarkSeasonWatchedAsync(
@@ -134,11 +138,13 @@ public sealed class WatchProgressService(
             .Select(e => e.Id)
             .ToList();
 
+        var before = await BeforeMarkAsync(userId, seriesTvdbId, cancellationToken);
+
         // All Bulk, even a season with one episode left: nobody pointed at an episode.
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, idsToMark, WatchSource.Bulk, cancellationToken: cancellationToken);
 
-        return new SeasonWatchResult(SeasonFound: true, batch);
+        return new SeasonWatchResult(SeasonFound: true, batch, await CaughtUpByAsync(before, idsToMark, cancellationToken));
     }
 
     public async Task<int> MarkSeasonUnwatchedAsync(
@@ -176,7 +182,7 @@ public sealed class WatchProgressService(
             : aggregate.Episodes.Where(e => e.SeasonNumber == seasonNumber).ToList();
     }
 
-    public async Task<EpisodeWatchOutcome> MarkEpisodeWatchedAsync(
+    public async Task<EpisodeWatchResult> MarkEpisodeWatchedAsync(
         Guid userId,
         int seriesTvdbId,
         int episodeTvdbId,
@@ -185,8 +191,12 @@ public sealed class WatchProgressService(
         if (await RefusalAsync(seriesTvdbId, episodeTvdbId, cancellationToken) is { } refusal)
             return refusal;
 
+        var before = await BeforeMarkAsync(userId, seriesTvdbId, cancellationToken);
         await episodeWatchRepository.MarkWatchedAsync(userId, seriesTvdbId, episodeTvdbId, cancellationToken);
-        return EpisodeWatchOutcome.MarkedWatched;
+
+        return new EpisodeWatchResult(
+            EpisodeWatchOutcome.MarkedWatched,
+            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken));
     }
 
     public async Task<UndoableEpisodeWatch> MarkEpisodeWatchedUndoablyAsync(
@@ -198,10 +208,95 @@ public sealed class WatchProgressService(
         if (await RefusalAsync(seriesTvdbId, episodeTvdbId, cancellationToken) is { } refusal)
             return new UndoableEpisodeWatch(refusal);
 
+        var before = await BeforeMarkAsync(userId, seriesTvdbId, cancellationToken);
+
         // A range of one: it gets the batch timestamp the undo looks for.
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, [episodeTvdbId], WatchSource.Single, cancellationToken: cancellationToken);
-        return new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, batch);
+        return new UndoableEpisodeWatch(
+            EpisodeWatchOutcome.MarkedWatched, batch,
+            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken));
+    }
+
+    // ---- "You're up to date" -------------------------------------------------------
+
+    /// <summary>Where the user stood in a series just before a mark: the series, and what they had watched of it.</summary>
+    private sealed record BeforeMark(Guid UserId, Domain.TheTvDb.SeriesAggregate Series, IReadOnlySet<int> WatchedIds);
+
+    /// <summary>
+    /// The state before a mark, kept only when it matters: the series has aired
+    /// regular episodes the user has not watched. Null when it is already up to
+    /// date (or nothing has aired), so a mark there can never "catch up". The
+    /// toast is a nicety: if this fails the mark still goes ahead.
+    /// </summary>
+    private async Task<BeforeMark?> BeforeMarkAsync(Guid userId, int seriesTvdbId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var series = await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
+            if (series is null)
+                return null;
+
+            var watched = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesTvdbId, cancellationToken);
+            var progress = WatchProgressCalculator.Build(seriesTvdbId, series.ToWatchableEpisodes(), watched, Today);
+
+            return progress.IsUpToDate ? null : new BeforeMark(userId, series, watched);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not read the state of series {SeriesId} before a mark; no caught-up message.", seriesTvdbId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether marking <paramref name="markedIds"/> took the series from having
+    /// unwatched aired regular episodes to having none, judged by the rule the
+    /// Library's sections use (<see cref="SeriesLibraryStateRule"/>). Specials
+    /// never count either way, so marking one changes nothing here; marking
+    /// the last regular episode does, in whatever order the others were marked.
+    /// </summary>
+    private async Task<SeriesCaughtUp?> CaughtUpByAsync(
+        BeforeMark? before, IReadOnlyCollection<int> markedIds, CancellationToken cancellationToken)
+    {
+        if (before is null || markedIds.Count == 0)
+            return null;
+
+        try
+        {
+            var series = before.Series;
+            var today = Today;
+
+            var watchedAfter = new HashSet<int>(before.WatchedIds);
+            watchedAfter.UnionWith(markedIds);
+
+            var after = WatchProgressCalculator.Build(series.TvdbId, series.ToWatchableEpisodes(), watchedAfter, today);
+            var state = SeriesLibraryStateRule.Of(series, after);
+
+            if (state == SeriesLibraryState.Watching)
+                return null;
+
+            if (state == SeriesLibraryState.Finished)
+            {
+                var rating = await ratingRepository.GetRatingAsync(
+                    before.UserId, RatingTargetType.Series, series.TvdbId, cancellationToken);
+
+                return new SeriesCaughtUp(series.TvdbId, series.Name, Finished: true, UserHasRated: rating is not null);
+            }
+
+            // Up to date with a series that continues: when is the next one?
+            var next = after.OrderedEpisodes
+                .Where(e => !e.IsSpecial && e.Aired is { } aired && aired > today)
+                .OrderBy(e => e.Aired)
+                .FirstOrDefault();
+
+            return new SeriesCaughtUp(series.TvdbId, series.Name, Finished: false, NextEpisode: next);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not tell whether series {SeriesId} is now caught up; no caught-up message.", before.Series.TvdbId);
+            return null;
+        }
     }
 
     /// <summary>
@@ -225,7 +320,7 @@ public sealed class WatchProgressService(
         return AirDate.IsInFuture(lookup.Aired, Today) ? EpisodeWatchOutcome.NotAired : null;
     }
 
-    public async Task<EpisodeWatchOutcome> ToggleEpisodeWatchedAsync(
+    public async Task<EpisodeWatchResult> ToggleEpisodeWatchedAsync(
         Guid userId,
         int seriesTvdbId,
         int episodeTvdbId,

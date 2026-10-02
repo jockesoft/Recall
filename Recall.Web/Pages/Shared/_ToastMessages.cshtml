@@ -9,15 +9,33 @@
     var offerUndo = !string.IsNullOrWhiteSpace(success)
                     && int.TryParse(undoSeriesId, out _)
                     && long.TryParse(undoStamp, out _);
+
+    // Set by the watched toasts when the mark brought the user up to date with
+    // a series, or finished it: a different icon, and "Rate it" for a finished
+    // series the user has not rated.
+    var caughtUpKind = TempData[Recall.Web.Extensions.PageModelToastExtensions.CaughtUpKindKey] as string;
+    var rateSeriesId = TempData[Recall.Web.Extensions.PageModelToastExtensions.RateSeriesKey] as string;
+    var offerRating = !string.IsNullOrWhiteSpace(success) && int.TryParse(rateSeriesId, out _);
+    var successIcon = caughtUpKind switch
+    {
+        Recall.Web.Extensions.PageModelToastExtensions.CaughtUpFinished => Icons.Finished + " tvdb-toast-icon--finished",
+        Recall.Web.Extensions.PageModelToastExtensions.CaughtUpUpToDate => Icons.UpToDate,
+        _ => Icons.Success
+    };
 }
 
 <div class="tvdb-toast-stack">
     @if (!string.IsNullOrWhiteSpace(success))
     {
-        @* A toast offering an undo stays until dismissed (data-toast-persist skips the auto-close below). *@
-        <div class="alert alert-success fade show" role="alert" data-toast-persist="@(offerUndo ? "true" : null)">
-            <i class="@Icons.Success tvdb-toast-icon" aria-hidden="true"></i>
+        @* A toast offering an action stays until dismissed (data-toast-persist skips the auto-close below). *@
+        <div class="alert alert-success fade show" role="alert" data-toast-persist="@(offerUndo || offerRating ? "true" : null)"
+             data-toast-kind="@caughtUpKind">
+            <i class="@successIcon tvdb-toast-icon" aria-hidden="true"></i>
             <span class="tvdb-toast-text">@success</span>
+            @if (offerRating)
+            {
+                <a asp-page="/Series/Details" asp-route-id="@rateSeriesId" asp-fragment="rating" class="tvdb-toast-action">Rate it</a>
+            }
             @if (offerUndo)
             {
                 <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undoSeriesId" class="d-inline-flex">

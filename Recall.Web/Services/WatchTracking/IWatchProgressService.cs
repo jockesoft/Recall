@@ -60,7 +60,7 @@ public interface IWatchProgressService
     /// <paramref name="seriesTvdbId"/> and must not have a future air date.
     /// Never returns <see cref="EpisodeWatchOutcome.MarkedUnwatched"/>.
     /// </summary>
-    Task<EpisodeWatchOutcome> MarkEpisodeWatchedAsync(
+    Task<EpisodeWatchResult> MarkEpisodeWatchedAsync(
         Guid userId,
         int seriesTvdbId,
         int episodeTvdbId,
@@ -84,7 +84,7 @@ public interface IWatchProgressService
     /// only ever removes the user's own row); watching goes through
     /// <see cref="MarkEpisodeWatchedAsync"/>.
     /// </summary>
-    Task<EpisodeWatchOutcome> ToggleEpisodeWatchedAsync(
+    Task<EpisodeWatchResult> ToggleEpisodeWatchedAsync(
         Guid userId,
         int seriesTvdbId,
         int episodeTvdbId,
@@ -123,19 +123,31 @@ public interface IWatchProgressService
 /// <param name="MarkedCount">Episodes covered (the target plus earlier aired ones); 0 when nothing was written.</param>
 /// <param name="HasAired">False when the target episode's air date is still in the future.</param>
 /// <param name="Batch">What was actually inserted, for an undo; null when nothing was written.</param>
+/// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
 public sealed record MarkWatchedThroughResult(
     bool EpisodeFound,
     int MarkedCount,
     bool HasAired = true,
-    WatchedBatch? Batch = null);
+    WatchedBatch? Batch = null,
+    SeriesCaughtUp? CaughtUp = null);
 
 /// <param name="SeasonFound">False when the series has no episodes in that season.</param>
 /// <param name="Batch">What was actually inserted; <see cref="WatchedBatch.InsertedCount"/> is 0 when the season was already fully marked.</param>
-public sealed record SeasonWatchResult(bool SeasonFound, WatchedBatch Batch);
+/// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
+public sealed record SeasonWatchResult(bool SeasonFound, WatchedBatch Batch, SeriesCaughtUp? CaughtUp = null);
 
 /// <param name="Outcome">What happened; a refusal wrote nothing.</param>
 /// <param name="Batch">What was inserted, for an undo; null on a refusal.</param>
-public sealed record UndoableEpisodeWatch(EpisodeWatchOutcome Outcome, WatchedBatch? Batch = null);
+/// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
+public sealed record UndoableEpisodeWatch(EpisodeWatchOutcome Outcome, WatchedBatch? Batch = null, SeriesCaughtUp? CaughtUp = null);
+
+/// <summary>What a single mark or toggle did.</summary>
+/// <param name="Outcome">What happened; a refusal wrote nothing.</param>
+/// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it. Never on an unmark.</param>
+public sealed record EpisodeWatchResult(EpisodeWatchOutcome Outcome, SeriesCaughtUp? CaughtUp = null)
+{
+    public static implicit operator EpisodeWatchResult(EpisodeWatchOutcome outcome) => new(outcome);
+}
 
 public enum EpisodeWatchOutcome
 {

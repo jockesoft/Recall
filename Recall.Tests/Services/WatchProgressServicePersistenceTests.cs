@@ -80,10 +80,10 @@ public sealed class WatchProgressServicePersistenceTests
         await using var dbContext = new AppDbContext(_dbOptions);
         var sut = CreateSut(dbContext);
 
-        (await sut.ToggleEpisodeWatchedAsync(_userId, SeriesId, 1)).Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        (await sut.ToggleEpisodeWatchedAsync(_userId, SeriesId, 1)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
         (await StoredWatchesAsync()).Should().BeEquivalentTo([(SeriesId, 1)]);
 
-        (await sut.ToggleEpisodeWatchedAsync(_userId, SeriesId, 1)).Should().Be(EpisodeWatchOutcome.MarkedUnwatched);
+        (await sut.ToggleEpisodeWatchedAsync(_userId, SeriesId, 1)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedUnwatched);
         (await StoredWatchesAsync()).Should().BeEmpty();
     }
 
@@ -95,7 +95,7 @@ public sealed class WatchProgressServicePersistenceTests
 
         var outcome = await sut.MarkEpisodeWatchedAsync(_userId, SeriesId, 7001);
 
-        outcome.Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
+        outcome.Outcome.Should().Be(EpisodeWatchOutcome.EpisodeNotInSeries);
         (await StoredWatchesAsync()).Should().BeEmpty();
     }
 
@@ -146,6 +146,7 @@ public sealed class WatchProgressServicePersistenceTests
         new(
             _tvDbService.Object,
             new EpisodeWatchRepository(dbContext, NullLogger<EpisodeWatchRepository>.Instance),
+            new RatingRepository(dbContext, NullLogger<RatingRepository>.Instance),
             TimeProvider.System,
             NullLogger<WatchProgressService>.Instance);
 

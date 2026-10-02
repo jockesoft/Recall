@@ -1,6 +1,7 @@
 @model Recall.Web.Pages.Shared.RatingWidgetModel
 
-<div class="tvdb-rating-picker" role="group" aria-label="Rate this @Model.TargetNoun from 1 to 10">
+@* id="rating": where the "Rate it" link of the finished-series toast lands. One widget per page. *@
+<div class="tvdb-rating-picker" id="rating" role="group" aria-label="Rate this @Model.TargetNoun from 1 to 10">
     <span class="tvdb-rating-picker-label">Your rating</span>
 
     <div class="tvdb-rating-picker-row">

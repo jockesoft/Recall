@@ -142,6 +142,13 @@ List<Shot> shots =
             await page.Locator(".tvdb-disclosure > summary").ClickAsync();
             await page.Locator(".tvdb-stats-table").ScrollIntoViewIfNeededAsync();
         }),
+    // The caught-up toasts. Each shot unmarks the last watched episode and marks it again with the
+    // header's button, so the series ends up as it was (the "finished" toast with Undo and "Rate it"
+    // is the season mark on an unrated series: series-details_toast-success-undo above).
+    new("series-details", "toast-finished", Site.SignedIn, $"/Series/Details/{AllWatched}", ViewportOnly: true,
+        Prepare: RewatchLastEpisodeAsync),
+    new("series-details", "toast-up-to-date", Site.SignedIn, $"/Series/Details/{UpToDate}", ViewportOnly: true,
+        Prepare: RewatchLastEpisodeAsync),
     new("favorites", "populated", Site.SignedIn, "/Account/Favorites"),
     new("notifications", "populated", Site.SignedIn, "/Account/Notifications"),
     new("import-watchlist", "completed", Site.SignedIn, "/Account/ImportWatchlist"),
@@ -461,6 +468,31 @@ static async Task MarkSeasonWatchedAsync(IPage page)
 {
     await page.Locator("#seasonMenuButton").ClickAsync();
     await page.GetByRole(AriaRole.Button, new() { Name = "Mark season watched" }).ClickAsync();
+}
+
+// Unmarks the last watched episode of the season shown, then marks it again with the header's
+// "Mark SxxEyy watched" button: the mark that brings the series back to up to date (or finished).
+static async Task RewatchLastEpisodeAsync(IPage page)
+{
+    // A series that is up to date opens on its latest season, which may hold only episodes still
+    // to air: step back through the seasons to the last one with something watched.
+    var watched = page.Locator("button.tvdb-watch-dot--on");
+    if (await watched.CountAsync() == 0)
+    {
+        var seasonLinks = await page.Locator("a[href*='season=']").EvaluateAllAsync<string[]>(
+            "links => [...new Set(links.map(a => a.getAttribute('href')))]");
+        foreach (var href in seasonLinks.OrderByDescending(h => int.Parse(System.Text.RegularExpressions.Regex.Match(h, @"season=(\d+)").Groups[1].Value)))
+        {
+            await page.GotoAsync(new Uri(new Uri(page.Url), href).ToString());
+            if (await watched.CountAsync() > 0)
+                break;
+        }
+    }
+
+    await watched.Last.ClickAsync();
+    await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
+    await page.Locator(".tvdb-title button.btn-primary").ClickAsync();
+    await page.Locator(".tvdb-toast-stack .alert-success[data-toast-kind]").WaitForAsync();
 }
 
 static async Task OpenFirstEpisodeAsync(IPage page)

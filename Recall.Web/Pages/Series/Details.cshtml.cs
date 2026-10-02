@@ -305,7 +305,8 @@ public sealed class DetailsModel(
 
         try
         {
-            switch (await watchProgressService.ToggleEpisodeWatchedAsync(userId, id, episodeId, cancellationToken))
+            var toggled = await watchProgressService.ToggleEpisodeWatchedAsync(userId, id, episodeId, cancellationToken);
+            switch (toggled.Outcome)
             {
                 case EpisodeWatchOutcome.MarkedUnwatched:
                     this.SetInfoToast("Episode marked as not watched.");
@@ -313,7 +314,7 @@ public sealed class DetailsModel(
                 case EpisodeWatchOutcome.MarkedWatched:
                     // Make sure the series is in the users library, otherwise why track progress
                     await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
-                    this.SetSuccessToast("Episode marked as watched.");
+                    this.SetWatchedToast("Episode marked as watched.", toggled.CaughtUp, Today);
                     break;
                 case EpisodeWatchOutcome.NotAired:
                     this.SetErrorToast("You can't mark an episode as watched before it has aired.");
@@ -371,7 +372,9 @@ public sealed class DetailsModel(
                         ? $"Marked {result.MarkedCount} episodes as watched."
                         : "Episode marked as watched.",
                     id,
-                    result.Batch);
+                    result.Batch,
+                    caughtUp: result.CaughtUp,
+                    today: Today);
             }
         }
         catch (Exception ex)
@@ -413,7 +416,9 @@ public sealed class DetailsModel(
                         ? "Marked 1 episode as watched."
                         : $"Marked {result.Batch.InsertedCount} episodes as watched.",
                     id,
-                    result.Batch);
+                    result.Batch,
+                    caughtUp: result.CaughtUp,
+                    today: Today);
             }
         }
         catch (Exception ex)

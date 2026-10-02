@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Extensions;
 
@@ -15,6 +16,13 @@ public static class PageModelToastExtensions
     public const string UndoWatchedSeriesKey = "Toast.UndoWatched.SeriesId";
     public const string UndoWatchedStampKey = "Toast.UndoWatched.Stamp";
 
+    // Set when the success toast is the "you're up to date" / "you've finished"
+    // one: which of the two (its icon), and the series to offer "Rate it" for.
+    public const string CaughtUpKindKey = "Toast.CaughtUp.Kind";
+    public const string RateSeriesKey = "Toast.CaughtUp.RateSeriesId";
+    public const string CaughtUpFinished = "Finished";
+    public const string CaughtUpUpToDate = "UpToDate";
+
     extension(PageModel pageModel)
     {
         public void SetSuccessToast(string message)
@@ -27,16 +35,46 @@ public static class PageModelToastExtensions
             => pageModel.TempData[InfoKey] = message;
 
         /// <summary>
+        /// Success toast for marking one episode watched. When the mark brought
+        /// the user up to date with the series, or finished it
+        /// (<paramref name="caughtUp"/>, from <c>IWatchProgressService</c>), the
+        /// toast says that instead: one toast per action, never two.
+        /// </summary>
+        public void SetWatchedToast(string message, SeriesCaughtUp? caughtUp, DateOnly today)
+        {
+            pageModel.TempData[SuccessKey] = caughtUp?.Sentence(today) ?? message;
+            pageModel.MarkCaughtUp(caughtUp);
+        }
+
+        /// <summary>Which caught-up toast this is, for its icon and its "Rate it" link. Nothing when the mark did not catch up.</summary>
+        private void MarkCaughtUp(SeriesCaughtUp? caughtUp)
+        {
+            if (caughtUp is null)
+                return;
+
+            pageModel.TempData[CaughtUpKindKey] = caughtUp.Finished ? CaughtUpFinished : CaughtUpUpToDate;
+
+            if (caughtUp.OfferRating)
+                pageModel.TempData[RateSeriesKey] = caughtUp.SeriesTvdbId.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
         /// Success toast for a "mark watched" that also offers to undo it.
         /// By default the undo is only offered when the batch wrote more than
         /// one row — on a series page a single episode is undone by clicking
         /// its tick again. Pass <paramref name="undoSingle"/> where the episode
         /// leaves the page once marked (a Dashboard catch-up card), so there is
-        /// no tick left to click.
+        /// no tick left to click. When the mark caught the user up
+        /// (<paramref name="caughtUp"/>), that sentence is added to the same
+        /// toast, after what was marked: "Marked 8 episodes as watched. You've
+        /// finished Chernobyl." The Undo stays.
         /// </summary>
-        public void SetSuccessToastWithWatchedUndo(string message, int seriesTvdbId, WatchedBatch? batch, bool undoSingle = false)
+        public void SetSuccessToastWithWatchedUndo(
+            string message, int seriesTvdbId, WatchedBatch? batch, bool undoSingle = false,
+            SeriesCaughtUp? caughtUp = null, DateOnly today = default)
         {
-            pageModel.TempData[SuccessKey] = message;
+            pageModel.TempData[SuccessKey] = caughtUp is null ? message : $"{message} {caughtUp.Sentence(today)}";
+            pageModel.MarkCaughtUp(caughtUp);
 
             if (batch is null || batch.InsertedCount < (undoSingle ? 1 : 2))
                 return;

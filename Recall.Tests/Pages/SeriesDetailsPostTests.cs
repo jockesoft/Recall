@@ -363,6 +363,78 @@ public class SeriesDetailsPostTests
 
     // ---- bulk marks and undo -----------------------------------------------------
 
+    // ---- "You're up to date" / "You've finished": one toast, on every way of marking ----
+
+    private static readonly SeriesCaughtUp Finished = new(SeriesId, "Chernobyl", Finished: true, UserHasRated: false);
+    private static readonly SeriesCaughtUp UpToDate = new(SeriesId, "Silo", Finished: false);
+
+    [Test]
+    public async Task ToggleEpisodeWatched_Should_SayFinished_InsteadOfEpisodeMarked_AndOfferRateIt()
+    {
+        // Also the header's "Mark S01E05 watched" button: it posts to the same handler.
+        SignIn();
+        AlreadyInLibrary();
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, Finished));
+
+        await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be("You've finished Chernobyl.");
+        _sut.InfoToast().Should().BeNull("never two toasts for one action");
+        _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpFinished);
+        _sut.TempData[PageModelToastExtensions.RateSeriesKey].Should().Be(SeriesId.ToString());
+    }
+
+    [Test]
+    public async Task ToggleEpisodeWatched_Should_SayUpToDate_ForASeriesThatContinues()
+    {
+        SignIn();
+        AlreadyInLibrary();
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, UpToDate));
+
+        await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be("You're up to date with Silo. We'll let you know when a new episode airs.");
+        _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpUpToDate);
+        _sut.TempData.ContainsKey(PageModelToastExtensions.RateSeriesKey).Should().BeFalse();
+    }
+
+    [Test]
+    public async Task MarkWatchedThrough_Should_AddFinishedToTheCount_AndKeepTheUndo()
+    {
+        SignIn();
+        AlreadyInLibrary();
+        _progress
+            .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 8, Batch: new WatchedBatch(8, BatchStamp), CaughtUp: Finished));
+
+        await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be("Marked 8 episodes as watched. You've finished Chernobyl.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.RateSeriesKey].Should().Be(SeriesId.ToString());
+    }
+
+    [Test]
+    public async Task MarkSeasonWatched_Should_AddUpToDateToTheCount_AndKeepTheUndo()
+    {
+        SignIn();
+        AlreadyInLibrary();
+        _progress
+            .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchStamp), UpToDate));
+
+        await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
+
+        _sut.SuccessToast().Should().Be(
+            "Marked 7 episodes as watched. You're up to date with Silo. We'll let you know when a new episode airs.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpUpToDate);
+    }
+
     [Test]
     public async Task MarkWatchedThrough_Should_ReportTheCount_AndOfferAnUndo()
     {

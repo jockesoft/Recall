@@ -2039,6 +2039,8 @@ dl.row dd a.tvdb-inline-edit {
 
 .tvdb-toast-stack .alert-success { border-left-color: var(--tvdb-ok); }
 .tvdb-toast-stack .alert-success .tvdb-toast-icon { color: var(--tvdb-ok); }
+/* "You've finished ..." gets the trophy in amber. */
+.tvdb-toast-stack .alert-success .tvdb-toast-icon--finished { color: var(--tvdb-signal); }
 .tvdb-toast-stack .alert-danger { border-left-color: var(--tvdb-danger); }
 .tvdb-toast-stack .alert-danger .tvdb-toast-icon { color: var(--tvdb-danger-on-ink); }
 .tvdb-toast-stack .alert-info { border-left-color: var(--tvdb-info); }
@@ -2055,6 +2057,7 @@ dl.row dd a.tvdb-inline-edit {
     color: var(--tvdb-signal);
     font-size: var(--tvdb-text-sm);
     font-weight: 600;
+    text-decoration: none;   /* it is a link in the "Rate it" toast */
     cursor: pointer;
     transition: background var(--tvdb-ease), color var(--tvdb-ease);
 }
@@ -2074,6 +2077,21 @@ dl.row dd a.tvdb-inline-edit {
     .tvdb-toast-stack {
         left: var(--tvdb-space-4);
         width: auto;
+    }
+
+    /* A caught-up toast with actions ("Rate it", "Undo") says more than fits
+       beside them on a phone: the sentence gets the first line to itself and
+       the actions go under it. */
+    .tvdb-toast-stack .alert[data-toast-kind][data-toast-persist] {
+        flex-wrap: wrap;
+    }
+
+    .tvdb-toast-stack .alert[data-toast-kind][data-toast-persist] .tvdb-toast-text {
+        flex-basis: calc(100% - 3rem);
+    }
+
+    .tvdb-toast-stack .alert[data-toast-kind][data-toast-persist] .tvdb-close {
+        margin-left: auto;
     }
 }
 
