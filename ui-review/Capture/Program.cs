@@ -133,6 +133,15 @@ List<Shot> shots =
         }),
     // In the seeded clone the dev user is the only administrator: the page explains instead of offering the form.
     new("delete-account", "only-admin", Site.SignedIn, "/Account/Delete"),
+    // A year of dated watches from the seed, with the dev user's own bulk-marked history under the footnote.
+    new("stats", "populated", Site.SignedIn, "/Account/Stats"),
+    new("stats", "table-open", Site.SignedIn, "/Account/Stats", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // The same figures as a table, behind the native disclosure.
+            await page.Locator(".tvdb-disclosure > summary").ClickAsync();
+            await page.Locator(".tvdb-stats-table").ScrollIntoViewIfNeededAsync();
+        }),
     new("favorites", "populated", Site.SignedIn, "/Account/Favorites"),
     new("notifications", "populated", Site.SignedIn, "/Account/Notifications"),
     new("import-watchlist", "completed", Site.SignedIn, "/Account/ImportWatchlist"),
@@ -198,6 +207,18 @@ List<Shot> shots =
             await page.Locator("#Confirmation").FillAsync("dev@example.com");
             await page.Locator("#deleteAccountSubmit:not([disabled])").WaitForAsync();
         }),
+    new("stats", "empty", Site.Empty, "/Account/Stats"),
+    new("stats", "sparse", Site.Empty, "/Account/Stats",
+        Prepare: async page =>
+        {
+            // Only bulk-marked and imported history: totals and top lists, and
+            // an explanation where the chart would be. It exists for this shot
+            // only, so the other shots of this instance still find nothing.
+            await RunReviewScriptAsync(options, "stats-sparse", "on");
+            await page.ReloadAsync();
+            await page.Locator("#statsTotals").WaitForAsync();
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "stats-sparse", "off")),
     new("favorites", "empty", Site.Empty, "/Account/Favorites"),
     new("notifications", "empty", Site.Empty, "/Account/Notifications"),
     new("profile", "empty", Site.Empty, "/Account/Profile"),

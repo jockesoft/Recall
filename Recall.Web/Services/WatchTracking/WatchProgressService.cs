@@ -1,4 +1,5 @@
 using System.Globalization;
+using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 
 namespace Recall.Web.Services.WatchTracking;
@@ -108,7 +109,11 @@ public sealed class WatchProgressService(
         // "Everything earlier" can include an episode that hasn't aired yet (a
         // listed but unaired special, a gap in the schedule) — leave those out.
         var idsToMark = WatchProgressCalculator.IdsThrough(WithoutUnaired(ordered), episodeTvdbId);
-        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
+
+        // The episode that was clicked is a Single watch; the earlier ones
+        // marked along with it are Bulk (their date is today's catch-up).
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
+            userId, seriesTvdbId, idsToMark, WatchSource.Bulk, clickedEpisodeTvdbId: episodeTvdbId, cancellationToken);
 
         return new MarkWatchedThroughResult(EpisodeFound: true, idsToMark.Count, Batch: batch);
     }
@@ -129,7 +134,9 @@ public sealed class WatchProgressService(
             .Select(e => e.Id)
             .ToList();
 
-        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
+        // All Bulk, even a season with one episode left: nobody pointed at an episode.
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
+            userId, seriesTvdbId, idsToMark, WatchSource.Bulk, cancellationToken: cancellationToken);
 
         return new SeasonWatchResult(SeasonFound: true, batch);
     }
@@ -192,7 +199,8 @@ public sealed class WatchProgressService(
             return new UndoableEpisodeWatch(refusal);
 
         // A range of one: it gets the batch timestamp the undo looks for.
-        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, [episodeTvdbId], cancellationToken);
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
+            userId, seriesTvdbId, [episodeTvdbId], WatchSource.Single, cancellationToken: cancellationToken);
         return new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, batch);
     }
 

@@ -60,6 +60,7 @@ public static class Icons
     // Marketing and empty states
     public const string Track = "ph ph-list-checks";
     public const string Favorites = "ph-fill ph-heart";
+    public const string Stats = "ph ph-chart-bar";
     public const string Secure = "ph ph-shield-check";
     public const string NoSchedule = "ph ph-broadcast";
     public const string EmptyLibrary = "ph ph-books";

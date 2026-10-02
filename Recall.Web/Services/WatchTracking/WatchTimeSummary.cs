@@ -1,12 +1,25 @@
 namespace Recall.Web.Services.WatchTracking;
 
 /// <summary>
-/// Total time a user has spent on watched episodes, summed from episode
-/// runtimes (falling back to a series' average runtime when an episode has none).
+/// Total time a user has spent on what they have watched: episodes (their own
+/// runtime, else the series' average) and movies. Computed by
+/// <c>StatsBuilder</c>; this type only puts the total into words.
 /// </summary>
-public sealed record WatchTimeSummary(int TotalMinutes, int EpisodeCount)
+public sealed record WatchTimeSummary(int TotalMinutes, int EpisodeCount, int MovieCount = 0)
 {
     public static WatchTimeSummary Empty { get; } = new(0, 0);
+
+    /// <summary>"815 episodes and 3 movies", "1 episode", "2 movies"; a kind at zero is left out.</summary>
+    public string Across
+    {
+        get
+        {
+            var parts = new List<string>(2);
+            if (EpisodeCount > 0) parts.Add($"{EpisodeCount} episode{(EpisodeCount == 1 ? "" : "s")}");
+            if (MovieCount > 0) parts.Add($"{MovieCount} movie{(MovieCount == 1 ? "" : "s")}");
+            return string.Join(" and ", parts);
+        }
+    }
 
     public bool HasData => TotalMinutes > 0;
 

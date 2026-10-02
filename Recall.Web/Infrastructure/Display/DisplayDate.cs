@@ -52,6 +52,12 @@ public static class DisplayDate
             : value;
     }
 
+    /// <summary>A calendar month in full: "October 2026".</summary>
+    public static string Month(DateOnly month) => month.ToString("MMMM yyyy", English);
+
+    /// <summary>A calendar month as a chart label: "Oct".</summary>
+    public static string MonthShort(DateOnly month) => month.ToString("MMM", English);
+
     /// <summary>A time of day: "8:00 PM".</summary>
     public static string Time(TimeOnly time) => time.ToString("h:mm tt", English);
 

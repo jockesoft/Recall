@@ -43,10 +43,26 @@ public sealed class MovieWatchRepositoryTests
         await using var dbContext = new AppDbContext(_dbOptions);
         var sut = new MovieWatchRepository(dbContext, NullLogger<MovieWatchRepository>.Instance);
 
-        var result = await sut.ToggleAsync(userId, movieTvdbId: 287533);
+        var result = await sut.ToggleAsync(userId, movieTvdbId: 287533, WatchSource.Single);
 
         result.Should().BeTrue();
         (await sut.GetWatchedUtcAsync(userId, 287533)).Should().NotBeNull();
+    }
+
+    [TestCase(WatchSource.Single)]
+    [TestCase(WatchSource.Import)]
+    public async Task ToggleAsync_Should_RecordTheSourceItWasGiven(WatchSource source)
+    {
+        var userId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var sut = new MovieWatchRepository(dbContext, NullLogger<MovieWatchRepository>.Instance);
+
+        await sut.ToggleAsync(userId, movieTvdbId: 287533, source);
+
+        (await sut.GetWatchedMoviesAsync(userId)).Should().ContainSingle()
+            .Which.Source.Should().Be(source);
     }
 
     [Test]
@@ -58,9 +74,9 @@ public sealed class MovieWatchRepositoryTests
         await using var dbContext = new AppDbContext(_dbOptions);
         var sut = new MovieWatchRepository(dbContext, NullLogger<MovieWatchRepository>.Instance);
 
-        (await sut.ToggleAsync(userId, movieTvdbId: 287533)).Should().BeTrue();
+        (await sut.ToggleAsync(userId, movieTvdbId: 287533, WatchSource.Single)).Should().BeTrue();
 
-        var result = await sut.ToggleAsync(userId, movieTvdbId: 287533);
+        var result = await sut.ToggleAsync(userId, movieTvdbId: 287533, WatchSource.Single);
 
         result.Should().BeFalse();
         (await sut.GetWatchedUtcAsync(userId, 287533)).Should().BeNull();
@@ -87,13 +103,13 @@ public sealed class MovieWatchRepositoryTests
         await using var dbContext = new AppDbContext(_dbOptions);
         var sut = new MovieWatchRepository(dbContext, NullLogger<MovieWatchRepository>.Instance);
 
-        await sut.ToggleAsync(userId, movieTvdbId: 1);
-        await sut.ToggleAsync(userId, movieTvdbId: 2);
+        await sut.ToggleAsync(userId, movieTvdbId: 1, WatchSource.Single);
+        await sut.ToggleAsync(userId, movieTvdbId: 2, WatchSource.Single);
 
         (await sut.GetWatchedUtcAsync(userId, 1)).Should().NotBeNull();
         (await sut.GetWatchedUtcAsync(userId, 2)).Should().NotBeNull();
 
-        await sut.ToggleAsync(userId, movieTvdbId: 1);
+        await sut.ToggleAsync(userId, movieTvdbId: 1, WatchSource.Single);
 
         (await sut.GetWatchedUtcAsync(userId, 1)).Should().BeNull();
         (await sut.GetWatchedUtcAsync(userId, 2)).Should().NotBeNull();
@@ -110,9 +126,9 @@ public sealed class MovieWatchRepositoryTests
         await using var dbContext = new AppDbContext(_dbOptions);
         var sut = new MovieWatchRepository(dbContext, NullLogger<MovieWatchRepository>.Instance);
 
-        await sut.ToggleAsync(userId, movieTvdbId: 1);
-        await sut.ToggleAsync(userId, movieTvdbId: 2);
-        await sut.ToggleAsync(otherUserId, movieTvdbId: 3);
+        await sut.ToggleAsync(userId, movieTvdbId: 1, WatchSource.Single);
+        await sut.ToggleAsync(userId, movieTvdbId: 2, WatchSource.Single);
+        await sut.ToggleAsync(otherUserId, movieTvdbId: 3, WatchSource.Single);
 
         var watched = await sut.GetWatchedMoviesAsync(userId);
 

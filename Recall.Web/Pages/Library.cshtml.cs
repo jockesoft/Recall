@@ -205,9 +205,6 @@ public sealed class LibraryModel(
         {
             var progress = watchProgressService.BuildProgress(aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedEpisodeIds);
 
-            // TheTVDB's own status text — "Ended" means no more episodes are coming.
-            var hasEnded = aggregate.Status?.Name?.Equals("Ended", StringComparison.OrdinalIgnoreCase) == true;
-
             var item = new LibraryCardItem(
                 SearchResultType.Series,
                 aggregate.TvdbId,
@@ -219,19 +216,24 @@ public sealed class LibraryModel(
                 likedSeriesIds.Contains(aggregate.TvdbId),
                 Caption: null);
 
-            // Up to date is about regular episodes only: unwatched specials
-            // never keep a series under Watching (see WatchProgressCalculator).
-            if (!progress.IsUpToDate)
+            // The section comes from the rule Stats also counts "series finished" by.
+            switch (SeriesLibraryStateRule.Of(aggregate, progress))
             {
-                watching.Add(item with { ProgressText = progress.CurrentSeason?.Label });
+                case SeriesLibraryState.Watching:
+                    watching.Add(item with { ProgressText = progress.CurrentSeason?.Label });
 
-                if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
-                    recentPremieres.Add(aggregate.TvdbId);
+                    if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
+                        recentPremieres.Add(aggregate.TvdbId);
+                    break;
+
+                case SeriesLibraryState.UpToDate:
+                    upToDate.Add(item);
+                    break;
+
+                default:
+                    watched.Add(item);
+                    break;
             }
-            else if (!hasEnded)
-                upToDate.Add(item);
-            else
-                watched.Add(item);
         }
     }
 

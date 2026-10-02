@@ -1,3 +1,5 @@
+using Recall.Web.Infrastructure.Persistence.Entities;
+
 namespace Recall.Web.Services.WatchTracking;
 
 /// <summary>
@@ -34,7 +36,9 @@ public interface IMovieTrackingService
     /// Makes sure the movie is marked watched (and off the watchlist) without
     /// ever un-marking it. Returns <c>true</c> when it was already watched.
     /// </summary>
-    Task<bool> MarkWatchedAsync(Guid userId, int movieTvdbId, CancellationToken cancellationToken = default);
+    /// <param name="source">What a newly written watch is recorded as (the importer passes Import).</param>
+    Task<bool> MarkWatchedAsync(
+        Guid userId, int movieTvdbId, WatchSource source, CancellationToken cancellationToken = default);
 }
 
 public enum MovieWatchlistOutcome

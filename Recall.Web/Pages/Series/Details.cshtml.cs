@@ -96,9 +96,14 @@ public sealed class DetailsModel(
     /// the library the one primary button is the next episode to watch, or a
     /// quiet "Up to date"; for any other series it is "Add to library".
     /// </summary>
-    public TitleHeaderModel BuildHeader(IReadOnlyList<string> genres, string? returnUrl = null)
+    /// <param name="omdbGenres">
+    /// OMDb's genres, shown only while the series has none of TheTVDB's (a row
+    /// cached before series carried them, see <see cref="SeriesAggregate.Genres"/>).
+    /// </param>
+    public TitleHeaderModel BuildHeader(IReadOnlyList<string> omdbGenres, string? returnUrl = null)
     {
         var series = Aggregate!;
+        var genres = series.Genres.Count > 0 ? series.Genres : omdbGenres;
         var seasonField = new Dictionary<string, string> { ["Season"] = Season?.ToString() ?? string.Empty };
 
         TitleAction? primary = null;

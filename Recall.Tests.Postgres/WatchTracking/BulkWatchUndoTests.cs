@@ -149,7 +149,7 @@ public sealed class BulkWatchUndoTests : PostgresFixture
     private async Task<WatchedBatch> MarkRangeAsync(Guid user, int seriesId, int[] episodes)
     {
         await using var db = NewContext();
-        return await Repository(db).MarkWatchedRangeAsync(user, seriesId, episodes);
+        return await Repository(db).MarkWatchedRangeAsync(user, seriesId, episodes, WatchSource.Bulk);
     }
 
     private async Task<int> UndoAsync(Guid user, int seriesId, DateTime stamp)

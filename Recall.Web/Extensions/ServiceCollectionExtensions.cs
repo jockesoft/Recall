@@ -18,6 +18,7 @@ using Recall.Web.Services.Health;
 using Recall.Web.Services.Import;
 using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Sitemap;
+using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Extensions;
@@ -123,7 +124,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IWatchProgressService, WatchProgressService>();
         // When a series in the queue counts as "haven't watched in a while" (ContinueWatchingOrder.Arrange).
         services.AddOptions<LibraryOptions>().BindConfiguration(LibraryOptions.SectionName);
-        services.AddScoped<IWatchTimeService, WatchTimeService>();
+        services.AddScoped<IStatsService, StatsService>();
         services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
         services.AddScoped<ISitemapService, SitemapService>();

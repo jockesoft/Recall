@@ -68,7 +68,9 @@ public sealed class SeriesDetailsGetTests
         new() { Id = id, SeasonNumber = season, EpisodeNumber = number, Name = $"S{season}E{number}", Aired = aired ?? Past };
 
     /// <summary>Two specials and two seasons of two episodes; everything has aired unless a test says otherwise.</summary>
-    private void SeriesExists(params EpisodeSummary[] episodes)
+    private void SeriesExists(params EpisodeSummary[] episodes) => SeriesExists([], episodes);
+
+    private void SeriesExists(string[] genres, params EpisodeSummary[] episodes)
     {
         if (episodes.Length == 0)
             episodes = [Ep(1, 0, 1), Ep(2, 0, 2), Ep(11, 1, 1), Ep(12, 1, 2), Ep(21, 2, 1), Ep(22, 2, 2)];
@@ -79,6 +81,7 @@ public sealed class SeriesDetailsGetTests
                 TvdbId = SeriesId,
                 Name = "Show",
                 Status = new SeriesStatus { Name = "Continuing", KeepUpdated = true },
+                Genres = genres,
                 Seasons = episodes.Select(e => e.SeasonNumber).Distinct()
                     .Select((n, i) => new SeasonSummary { Id = i + 1, Number = n }).ToList(),
                 Episodes = episodes,
@@ -232,7 +235,30 @@ public sealed class SeriesDetailsGetTests
         header.IsAuthenticated.Should().BeFalse();
         header.ReturnUrl.Should().Be("/Series/Details/42");
         header.Summary.Should().Be("Continuing · 2 seasons");
+        // The series has no TheTVDB genres yet (a row cached before they were
+        // kept), so the chips fall back to OMDb's.
         header.Genres.Should().Equal("Drama");
+    }
+
+    [Test]
+    public async Task Header_Should_ShowTheTvDbGenres_AndIgnoreOmdbs_WhenTheSeriesHasThem()
+    {
+        SeriesExists(genres: ["Science Fiction", "Thriller"]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        var header = _sut.BuildHeader(["Sci-Fi", "Mystery"]);
+
+        header.Genres.Should().Equal("Science Fiction", "Thriller");
+    }
+
+    [Test]
+    public async Task Header_Should_HaveNoGenres_WhenNeitherSourceHasAny()
+    {
+        SeriesExists();
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+
+        _sut.BuildHeader([]).Genres.Should().BeEmpty();
     }
 
     [Test]

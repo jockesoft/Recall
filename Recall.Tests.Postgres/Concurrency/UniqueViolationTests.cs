@@ -52,7 +52,7 @@ public sealed class UniqueViolationTests : PostgresFixture
         await using var db = NewContext(race);
         var repository = new MovieWatchRepository(db, NullLogger<MovieWatchRepository>.Instance);
 
-        var watched = await repository.ToggleAsync(user, movieId);
+        var watched = await repository.ToggleAsync(user, movieId, WatchSource.Single);
 
         race.Fired.Should().BeTrue();
         watched.Should().BeTrue();

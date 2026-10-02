@@ -203,5 +203,37 @@ WHERE user_id = :dev AND series_tvdb_id = 417223;   -- Baby Reindeer
 UPDATE tracked_series SET created_utc = now() - interval '120 days'
 WHERE user_id = :dev AND tvdb_id = 370112;          -- Mare of Easttown, nothing watched
 
+-- ---- Stats: a year of watching ----------------------------------------------
+-- The Stats page charts only watches whose date can be trusted: source Single,
+-- or Unknown, which is what a row seeded above gets. (The dev user's own
+-- history was marked in bulk; the migration has already labelled it Bulk, so
+-- it is in the totals and under the chart's footnote, not on the chart.)
+-- Five series that are finished or up to date, so none of them is in the
+-- Continue watching queue and no order changes, are spread over the past year:
+-- one episode every few days, as marking each episode after watching leaves them.
+
+WITH plan(series, start_days_ago, step_days) AS (VALUES
+        (74205,  330, 3),    -- Band of Brothers
+        (360893, 285, 2),    -- Chernobyl
+        (371980, 250, 4),    -- Severance
+        (417648, 110, 5),    -- The Penguin
+        (452467, 55,  2)),   -- Adolescence
+     numbered AS (
+        SELECT w.id, p.start_days_ago, p.step_days,
+               row_number() OVER (PARTITION BY w.series_tvdb_id ORDER BY w.watched_utc, w.id) AS n
+        FROM episode_watch w
+        JOIN plan p ON p.series = w.series_tvdb_id
+        WHERE w.user_id = :dev)
+UPDATE episode_watch w
+SET source = 'Single',
+    watched_utc = date_trunc('day', now()) + interval '20 hours'
+                  - greatest(x.start_days_ago - (x.n - 1) * x.step_days, 1) * interval '1 day'
+FROM numbered x
+WHERE x.id = w.id;
+
+-- The seeded import above says it marked Dune: Part Two watched.
+UPDATE user_movie_watch SET source = 'Import'
+WHERE user_id = :dev AND movie_tvdb_id = 290272;
+
 DROP FUNCTION ui_track(int);
 DROP FUNCTION ui_watch(int, int);

@@ -119,7 +119,8 @@ public sealed class WatchlistImportService(
             await ratingRepository.RateAsync(
                 item.UserId, RatingTargetType.Movie, match.TvdbId, match.TvdbId, rating, cancellationToken);
 
-            var alreadyWatched = await movieTrackingService.MarkWatchedAsync(item.UserId, match.TvdbId, cancellationToken);
+            var alreadyWatched = await movieTrackingService.MarkWatchedAsync(
+                item.UserId, match.TvdbId, WatchSource.Import, cancellationToken);
 
             await importRepository.MarkItemResultAsync(
                 item.Id,

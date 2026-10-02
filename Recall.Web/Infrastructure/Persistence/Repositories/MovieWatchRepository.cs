@@ -18,7 +18,7 @@ public sealed class MovieWatchRepository(
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<bool> ToggleAsync(Guid userId, int movieTvdbId, CancellationToken cancellationToken = default)
+    public async Task<bool> ToggleAsync(Guid userId, int movieTvdbId, WatchSource source, CancellationToken cancellationToken = default)
     {
         var existing = await dbContext.UserMovieWatches
             .FirstOrDefaultAsync(x => x.UserId == userId && x.MovieTvdbId == movieTvdbId, cancellationToken);
@@ -35,7 +35,8 @@ public sealed class MovieWatchRepository(
             Id = Guid.NewGuid(),
             UserId = userId,
             MovieTvdbId = movieTvdbId,
-            WatchedUtc = DateTime.UtcNow
+            WatchedUtc = DateTime.UtcNow,
+            Source = source
         };
         dbContext.UserMovieWatches.Add(entity);
 
@@ -64,7 +65,7 @@ public sealed class MovieWatchRepository(
             .AsNoTracking()
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.WatchedUtc)
-            .Select(x => new MovieWatch(x.MovieTvdbId, x.WatchedUtc))
+            .Select(x => new MovieWatch(x.MovieTvdbId, x.WatchedUtc, x.Source))
             .ToListAsync(cancellationToken);
     }
 }

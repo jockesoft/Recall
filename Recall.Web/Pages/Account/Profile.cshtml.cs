@@ -10,6 +10,7 @@ using Recall.Web.Services;
 using Recall.Web.Services.Digest;
 using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Favorites.Models;
+using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages.Account;
@@ -17,7 +18,7 @@ namespace Recall.Web.Pages.Account;
 [Authorize]
 public sealed class ProfileModel(
     ICurrentUserService currentUser,
-    IWatchTimeService watchTimeService,
+    IStatsService statsService,
     IFavoritesService favoritesService,
     ILikeRepository likeRepository,
     IWatchlistImportRepository importRepository,
@@ -56,6 +57,10 @@ public sealed class ProfileModel(
         _ => ("Member", string.Empty, Icons.Member)
     };
 
+    /// <summary>
+    /// Total watch time, episodes and movies: the same total the Stats page
+    /// shows (both come from <see cref="IStatsService"/>), and the link to it.
+    /// </summary>
     public WatchTimeSummary WatchTime { get; private set; } = WatchTimeSummary.Empty;
 
     public IReadOnlyList<FavoriteTitle> FavoriteTitles { get; private set; } = Array.Empty<FavoriteTitle>();
@@ -109,7 +114,7 @@ public sealed class ProfileModel(
 
         try
         {
-            WatchTime = await watchTimeService.GetTotalWatchTimeAsync(userId, cancellationToken);
+            WatchTime = (await statsService.GetAsync(userId, cancellationToken)).Totals.WatchTime;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

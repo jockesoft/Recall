@@ -53,6 +53,14 @@ public interface ITheTvDbService
     Task<MovieAggregate?> GetMovieAggregateByIdAsync(int movieId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The movie aggregate from the caches only (Redis, then the Postgres
+    /// snapshot); never from TheTVDB. Null when it is in neither, which is the
+    /// case for an imported movie nobody has opened yet. For pages that must
+    /// cost no API request per view, such as Stats.
+    /// </summary>
+    Task<MovieAggregate?> GetCachedMovieAggregateAsync(int movieId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Bypasses the read tiers: fetches the movie aggregate straight from
     /// TheTVDB and overwrites both the local snapshot and the Redis entry.
     /// Returns <c>false</c> when the API has nothing for the id.

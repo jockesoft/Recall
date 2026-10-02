@@ -74,6 +74,12 @@ public static class SeriesDataDtoMappings
                 .Cast<string>()
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
+            Genres = (dto.Genres ?? [])
+                .Select(g => g.Name?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
             Seasons = BuildDistinctSeasonSummaries(dto, episodesSource),
             Episodes = BuildEpisodeSummaries(episodesSource),
             Characters = BuildCharacters(characters),

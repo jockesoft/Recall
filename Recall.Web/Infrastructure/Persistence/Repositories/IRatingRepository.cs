@@ -34,6 +34,15 @@ public interface IRatingRepository
         int targetTvdbId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// How many titles the user has given each rating, keyed by the rating
+    /// (1–10) and counting series, episodes and movies together; a value nobody
+    /// used is absent. One grouped query, for the Stats page.
+    /// </summary>
+    Task<IReadOnlyDictionary<int, int>> GetValueCountsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>The community aggregate — average and count — of everyone's rating of a target.</summary>
     Task<RatingSummary> GetSummaryAsync(
         RatingTargetType targetType,

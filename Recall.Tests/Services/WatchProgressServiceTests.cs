@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
@@ -71,12 +72,23 @@ public class WatchProgressServiceTests
         }
     }
 
+    // What the last MarkWatchedRangeAsync call was told about the rows' source.
+    private WatchSource? _markedSource;
+    private int? _markedClickedEpisode;
+
     private IReadOnlyList<int> CaptureMarkedRange()
     {
         var marked = new List<int>();
         _watchRepository
-            .Setup(x => x.MarkWatchedRangeAsync(It.IsAny<Guid>(), SeriesId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, int, IEnumerable<int>, CancellationToken>((_, _, ids, _) => marked.AddRange(ids))
+            .Setup(x => x.MarkWatchedRangeAsync(
+                It.IsAny<Guid>(), SeriesId, It.IsAny<IEnumerable<int>>(),
+                It.IsAny<WatchSource>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, int, IEnumerable<int>, WatchSource, int?, CancellationToken>((_, _, ids, source, clicked, _) =>
+            {
+                marked.AddRange(ids);
+                _markedSource = source;
+                _markedClickedEpisode = clicked;
+            })
             .ReturnsAsync(() => new WatchedBatch(marked.Count, BatchStamp));
         return marked;
     }
@@ -87,7 +99,9 @@ public class WatchProgressServiceTests
             x => x.MarkWatchedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _watchRepository.Verify(
-            x => x.MarkWatchedRangeAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()),
+            x => x.MarkWatchedRangeAsync(
+                It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<IEnumerable<int>>(),
+                It.IsAny<WatchSource>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -262,6 +276,45 @@ public class WatchProgressServiceTests
         result.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
         marked.Should().Equal([2], "only the episode itself, never the earlier ones");
         result.Batch.Should().Be(new WatchedBatch(1, BatchStamp));
+    }
+
+    [Test]
+    public async Task MarkEpisodeWatchedUndoablyAsync_Should_RecordASingleWatch()
+    {
+        // The Dashboard's one-tap mark: one episode, watched now.
+        SetupSeries(Ep(1, 1, 1, Past), Ep(2, 1, 2, Past));
+        CaptureMarkedRange();
+
+        await _sut.MarkEpisodeWatchedUndoablyAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 2);
+
+        _markedSource.Should().Be(WatchSource.Single);
+    }
+
+    [Test]
+    public async Task MarkWatchedThroughAsync_Should_RecordTheEarlierEpisodesAsBulk_AndNameTheClickedOne()
+    {
+        // "Mark this and earlier": the repository records the clicked episode
+        // as Single and the rest with the source given here.
+        SetupSeries(Ep(1, 1, 1, Past), Ep(2, 1, 2, Past), Ep(3, 1, 3, Past));
+        var marked = CaptureMarkedRange();
+
+        await _sut.MarkWatchedThroughAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 3);
+
+        marked.Should().Equal(1, 2, 3);
+        _markedSource.Should().Be(WatchSource.Bulk);
+        _markedClickedEpisode.Should().Be(3);
+    }
+
+    [Test]
+    public async Task MarkSeasonWatchedAsync_Should_RecordEveryEpisodeAsBulk()
+    {
+        SetupSeries(Ep(1, 1, 1, Past), Ep(2, 1, 2, Past));
+        CaptureMarkedRange();
+
+        await _sut.MarkSeasonWatchedAsync(Guid.NewGuid(), SeriesId, seasonNumber: 1);
+
+        _markedSource.Should().Be(WatchSource.Bulk);
+        _markedClickedEpisode.Should().BeNull("nobody pointed at one episode, so none of them is a Single watch");
     }
 
     [Test]

@@ -23,6 +23,16 @@ public sealed class WatchTimeSummaryTests
         new WatchTimeSummary(totalMinutes, EpisodeCount: 1).Readable.Should().Be(expected);
     }
 
+    [TestCase(815, 3, "815 episodes and 3 movies")]
+    [TestCase(1, 1, "1 episode and 1 movie")]
+    [TestCase(12, 0, "12 episodes")]
+    [TestCase(0, 2, "2 movies")]
+    [TestCase(0, 0, "")]
+    public void Across_Should_NameWhatWasWatched_LeavingOutAKindAtZero(int episodes, int movies, string expected)
+    {
+        new WatchTimeSummary(100, episodes, movies).Across.Should().Be(expected);
+    }
+
     [Test]
     public void HasData_IsFalse_WhenZero()
     {

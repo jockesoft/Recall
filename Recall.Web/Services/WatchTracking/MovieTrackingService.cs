@@ -1,3 +1,4 @@
+using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 
 namespace Recall.Web.Services.WatchTracking;
@@ -43,7 +44,7 @@ public sealed class MovieTrackingService(
 
     public async Task<bool> ToggleWatchedAsync(Guid userId, int movieTvdbId, CancellationToken cancellationToken = default)
     {
-        var isNowWatched = await movieWatchRepository.ToggleAsync(userId, movieTvdbId, cancellationToken);
+        var isNowWatched = await movieWatchRepository.ToggleAsync(userId, movieTvdbId, WatchSource.Single, cancellationToken);
 
         if (isNowWatched)
             await trackedMovieRepository.RemoveAsync(userId, movieTvdbId, cancellationToken);
@@ -51,13 +52,14 @@ public sealed class MovieTrackingService(
         return isNowWatched;
     }
 
-    public async Task<bool> MarkWatchedAsync(Guid userId, int movieTvdbId, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkWatchedAsync(
+        Guid userId, int movieTvdbId, WatchSource source, CancellationToken cancellationToken = default)
     {
         var alreadyWatched =
             await movieWatchRepository.GetWatchedUtcAsync(userId, movieTvdbId, cancellationToken) is not null;
 
         if (!alreadyWatched)
-            await movieWatchRepository.ToggleAsync(userId, movieTvdbId, cancellationToken);
+            await movieWatchRepository.ToggleAsync(userId, movieTvdbId, source, cancellationToken);
 
         // Also when it was already watched: heals a row left on the watchlist by
         // anything that marked the movie watched without going through here.

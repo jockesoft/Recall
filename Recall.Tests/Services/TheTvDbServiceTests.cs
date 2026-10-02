@@ -289,6 +289,32 @@ public class TheTvDbServiceTests
     }
 
     [Test]
+    public async Task GetCachedMovieAggregateAsync_Should_NeverCallTheApi_AndReturnNothing_WhenNeitherCacheHasIt()
+    {
+        var result = await _sut.GetCachedMovieAggregateAsync(77);
+
+        result.Should().BeNull("a movie that is not cached counts without a runtime; it costs no TheTVDB request");
+        _apiClient.VerifyNoOtherCalls();
+        _store.Verify(
+            x => x.SaveMovieAggregateAsync(It.IsAny<MovieAggregate>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task GetCachedMovieAggregateAsync_Should_ReadTheSnapshot_WhenRedisMisses_WithoutTheApi()
+    {
+        _store
+            .Setup(x => x.GetMovieAggregateAsync(77, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MovieAggregate { TvdbId = 77, Name = "From The Snapshot", RuntimeMinutes = 120 });
+
+        var result = await _sut.GetCachedMovieAggregateAsync(77);
+
+        result!.Name.Should().Be("From The Snapshot");
+        result.RuntimeMinutes.Should().Be(120);
+        _apiClient.VerifyNoOtherCalls();
+    }
+
+    [Test]
     public async Task GetSeriesAggregateByIdAsync_Should_FetchFromApi_AndPersist_WhenCacheAndStoreMiss()
     {
         var fresh = new SeriesAggregate { TvdbId = 9, Name = "Fresh Show" };

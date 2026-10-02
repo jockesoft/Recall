@@ -129,6 +129,9 @@
                         <li class="nav-item d-sm-none">
                             <a class="nav-link" asp-page="/Account/Favorites" aria-current="@CurrentIf("/Account/Favorites")">Favorites</a>
                         </li>
+                        <li class="nav-item d-sm-none">
+                            <a class="nav-link" asp-page="/Account/Stats" aria-current="@CurrentIf("/Account/Stats")">Stats</a>
+                        </li>
                         <partial name="_NotificationBell" />
                         @if (CurrentUser.IsAdmin)
                         {
@@ -156,6 +159,7 @@
                                 </li>
                                 <li><a class="dropdown-item" asp-page="/Account/Profile" aria-current="@CurrentIf("/Account/Profile")">Profile</a></li>
                                 <li><a class="dropdown-item" asp-page="/Account/Favorites" aria-current="@CurrentIf("/Account/Favorites")">Favorites</a></li>
+                                <li><a class="dropdown-item" asp-page="/Account/Stats" aria-current="@CurrentIf("/Account/Stats")">Stats</a></li>
                                 <li><a class="dropdown-item" asp-page="/Account/Notifications" aria-current="@CurrentIf("/Account/Notifications")">Notifications</a></li>
                                 @if (CurrentUser.IsAdmin)
                                 {

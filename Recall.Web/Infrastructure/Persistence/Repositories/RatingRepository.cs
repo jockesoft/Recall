@@ -98,6 +98,22 @@ public sealed class RatingRepository(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<int, int>> GetValueCountsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        // GROUP BY value over one user's rows, found through the indexes that
+        // lead with user_id; see StatsQueryTests for the plan.
+        var rows = await dbContext.UserRatings
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .GroupBy(x => x.Value)
+            .Select(g => new { Value = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(r => r.Value, r => r.Count);
+    }
+
     public async Task<RatingSummary> GetSummaryAsync(
         RatingTargetType targetType,
         int targetTvdbId,

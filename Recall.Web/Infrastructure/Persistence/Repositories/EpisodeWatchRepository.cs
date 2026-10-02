@@ -46,7 +46,8 @@ public sealed class EpisodeWatchRepository(
             UserId = userId,
             SeriesTvdbId = seriesTvdbId,
             EpisodeTvdbId = episodeTvdbId,
-            WatchedUtc = DateTime.UtcNow
+            WatchedUtc = DateTime.UtcNow,
+            Source = WatchSource.Single
         };
         dbContext.EpisodeWatches.Add(entity);
 
@@ -155,6 +156,8 @@ public sealed class EpisodeWatchRepository(
         Guid userId,
         int seriesTvdbId,
         IEnumerable<int> episodeTvdbIds,
+        WatchSource source,
+        int? clickedEpisodeTvdbId = null,
         CancellationToken cancellationToken = default)
     {
         var ids = episodeTvdbIds as ICollection<int> ?? episodeTvdbIds.ToList();
@@ -183,7 +186,10 @@ public sealed class EpisodeWatchRepository(
                 UserId = userId,
                 SeriesTvdbId = seriesTvdbId,
                 EpisodeTvdbId = id,
-                WatchedUtc = batchWatchedUtc
+                WatchedUtc = batchWatchedUtc,
+                // The episode the user pointed at was (as far as anyone can
+                // tell) watched now; the ones swept in with it were not.
+                Source = id == clickedEpisodeTvdbId ? WatchSource.Single : source
             })
             .ToList();
 
@@ -207,6 +213,19 @@ public sealed class EpisodeWatchRepository(
                         && x.SeriesTvdbId == seriesTvdbId
                         && x.WatchedUtc == batchWatchedUtc)
             .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<EpisodeWatchRecord>> GetWatchesAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        // Every row of one user, found through the (user_id, …) indexes; see
+        // StatsQueryTests for the plan.
+        return await dbContext.EpisodeWatches
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => new EpisodeWatchRecord(x.SeriesTvdbId, x.EpisodeTvdbId, x.WatchedUtc, x.Source))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<int> MarkUnwatchedRangeAsync(

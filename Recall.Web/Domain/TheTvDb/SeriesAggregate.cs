@@ -32,6 +32,12 @@ public record SeriesAggregate
     public SeriesStatus? Status { get; init; }
 
     public IReadOnlyList<string> Aliases { get; init; } = [];
+
+    /// <summary>
+    /// TheTVDB's genres, the same vocabulary movies use. Empty on a row cached
+    /// before 2026-10-02 until it is next refreshed.
+    /// </summary>
+    public IReadOnlyList<string> Genres { get; init; } = [];
     public IReadOnlyList<SeasonSummary> Seasons { get; init; } = [];
     public IReadOnlyList<EpisodeSummary> Episodes { get; init; } = [];
     public IReadOnlyList<Character> Characters { get; init; } = [];

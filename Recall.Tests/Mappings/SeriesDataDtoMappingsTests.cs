@@ -32,6 +32,31 @@ public class SeriesDataDtoMappingsTests
     }
 
     [Test]
+    public void ToAggregate_Should_MapGenres_TrimmedAndDeduplicated()
+    {
+        var dto = new SeriesDataDto
+        {
+            Id = 1,
+            Name = "Show",
+            Genres =
+            [
+                new GenreDto { Id = 1, Name = "Drama" },
+                new GenreDto { Id = 2, Name = " Thriller " },
+                new GenreDto { Id = 3, Name = "drama" },
+                new GenreDto { Id = 4, Name = " " }
+            ]
+        };
+
+        dto.ToAggregate().Genres.Should().Equal("Drama", "Thriller");
+    }
+
+    [Test]
+    public void ToAggregate_Should_HaveNoGenres_WhenTheTvDbSendsNone()
+    {
+        new SeriesDataDto { Id = 1, Name = "Show" }.ToAggregate().Genres.Should().BeEmpty();
+    }
+
+    [Test]
     public void ToAggregate_Should_PickTheBestScoredBackground_AsItsThumbnail()
     {
         var dto = new SeriesDataDto

@@ -81,14 +81,14 @@ public sealed class WatchlistImportServiceTests
         SetUpBatch(item);
         SetUpMovieMatch(item, 555);
         _movieTrackingService
-            .Setup(x => x.MarkWatchedAsync(UserId, 555, It.IsAny<CancellationToken>()))
+            .Setup(x => x.MarkWatchedAsync(UserId, 555, WatchSource.Import, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         await _sut.ProcessNextBatchAsync(10);
 
         _ratingRepository.Verify(x =>
             x.RateAsync(UserId, RatingTargetType.Movie, 555, 555, 8, It.IsAny<CancellationToken>()), Times.Once);
-        _movieTrackingService.Verify(x => x.MarkWatchedAsync(UserId, 555, It.IsAny<CancellationToken>()), Times.Once);
+        _movieTrackingService.Verify(x => x.MarkWatchedAsync(UserId, 555, WatchSource.Import, It.IsAny<CancellationToken>()), Times.Once);
         _importRepository.Verify(x => x.MarkItemResultAsync(
             item.Id, WatchlistImportItemStatus.Imported, 555, "Marked watched and rated 8/10.", It.IsAny<CancellationToken>()), Times.Once);
         _importRepository.Verify(x => x.RecalculateJobProgressAsync(item.JobId, It.IsAny<CancellationToken>()), Times.Once);
@@ -101,7 +101,7 @@ public sealed class WatchlistImportServiceTests
         SetUpBatch(item);
         SetUpMovieMatch(item, 555);
         _movieTrackingService
-            .Setup(x => x.MarkWatchedAsync(UserId, 555, It.IsAny<CancellationToken>()))
+            .Setup(x => x.MarkWatchedAsync(UserId, 555, WatchSource.Import, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         await _sut.ProcessNextBatchAsync(10);
@@ -130,7 +130,7 @@ public sealed class WatchlistImportServiceTests
         VerifyNeverRated();
         _movieTrackingService.Verify(x => x.AddToWatchlistAsync(UserId, 777, "A Movie", It.IsAny<CancellationToken>()), Times.Once);
         _movieTrackingService.Verify(
-            x => x.MarkWatchedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+            x => x.MarkWatchedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<WatchSource>(), It.IsAny<CancellationToken>()), Times.Never);
         _likeRepository.VerifyNoOtherCalls();
         _importRepository.Verify(x => x.MarkItemResultAsync(
             item.Id, WatchlistImportItemStatus.Imported, 777, "Added to your watchlist.", It.IsAny<CancellationToken>()), Times.Once);

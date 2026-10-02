@@ -1138,6 +1138,7 @@ dl.row dd a.tvdb-inline-edit {
 .tvdb-episode__title,
 .tvdb-result__title,
 .tvdb-import-row__title,
+.tvdb-bar-list__name,
 .tvdb-notification__title {
     font-family: var(--tvdb-font-ui);
     font-size: var(--tvdb-text-md);

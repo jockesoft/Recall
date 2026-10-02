@@ -11,6 +11,7 @@ using Recall.Web.Services;
 using Recall.Web.Services.Digest;
 using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Favorites.Models;
+using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Tests.Pages;
@@ -22,7 +23,7 @@ public class ProfileModelTests
 
     private Mock<IWatchlistImportRepository> _imports = null!;
     private Mock<IFavoritesService> _favorites = null!;
-    private Mock<IWatchTimeService> _watchTime = null!;
+    private Mock<IStatsService> _stats = null!;
     private Mock<IAppUserRepository> _users = null!;
     private DigestOptions _digestOptions = null!;
     private ProfileModel _sut = null!;
@@ -41,14 +42,14 @@ public class ProfileModelTests
         _favorites
             .Setup(x => x.GetLikedTitlesAsync(UserId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<FavoriteTitle>());
-        _watchTime = new Mock<IWatchTimeService>();
-        _watchTime
-            .Setup(x => x.GetTotalWatchTimeAsync(UserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new WatchTimeSummary(60 * 24 * 33, 400));
+        _stats = new Mock<IStatsService>();
+        _stats
+            .Setup(x => x.GetAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UserStats.Empty with { Totals = new StatsTotals(60 * 24 * 33, Episodes: 400, Movies: 3, SeriesFinished: 2) });
 
         _sut = new ProfileModel(
             currentUser.Object,
-            _watchTime.Object,
+            _stats.Object,
             _favorites.Object,
             Mock.Of<ILikeRepository>(),
             _imports.Object,
@@ -70,7 +71,9 @@ public class ProfileModelTests
     {
         await _sut.OnGetAsync(CancellationToken.None);
 
+        // The total is the Stats page's own (episodes and movies), put into words.
         _sut.WatchTime.Readable.Should().Be("1 month, 3 days");
+        _sut.WatchTime.Across.Should().Be("400 episodes and 3 movies");
         _favorites.Verify(x => x.GetLikedTitlesAsync(UserId, ProfileModel.FavoritesPreviewCount, It.IsAny<CancellationToken>()), Times.Once);
     }
 

@@ -1,3 +1,5 @@
+using Recall.Web.Infrastructure.Persistence.Entities;
+
 namespace Recall.Web.Infrastructure.Persistence.Repositories;
 
 public interface IEpisodeWatchRepository
@@ -9,6 +11,7 @@ public interface IEpisodeWatchRepository
         IEnumerable<int> seriesTvdbIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Marks one episode watched, recorded as <see cref="WatchSource.Single"/>.</summary>
     Task MarkWatchedAsync(
         Guid userId,
         int seriesTvdbId,
@@ -62,10 +65,26 @@ public interface IEpisodeWatchRepository
     /// "mark season watched". Every row it inserts carries the same
     /// <c>WatchedUtc</c>, returned in the batch so the caller can offer an undo.
     /// </summary>
+    /// <param name="source">What the inserted rows are recorded as.</param>
+    /// <param name="clickedEpisodeTvdbId">
+    /// The one episode the user pointed at, if any: it is recorded as
+    /// <see cref="WatchSource.Single"/> whatever <paramref name="source"/> says
+    /// ("mark this and earlier": this one is Single, the earlier ones Bulk).
+    /// </param>
     Task<WatchedBatch> MarkWatchedRangeAsync(
         Guid userId,
         int seriesTvdbId,
         IEnumerable<int> episodeTvdbIds,
+        WatchSource source,
+        int? clickedEpisodeTvdbId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every episode watch of the user, in no particular order: what the Stats
+    /// page is computed from. One query.
+    /// </summary>
+    Task<IReadOnlyList<EpisodeWatchRecord>> GetWatchesAsync(
+        Guid userId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -86,6 +105,9 @@ public interface IEpisodeWatchRepository
         IEnumerable<int> episodeTvdbIds,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>One episode watch, flattened for read use.</summary>
+public sealed record EpisodeWatchRecord(int SeriesTvdbId, int EpisodeTvdbId, DateTime WatchedUtc, WatchSource Source);
 
 /// <param name="InsertedCount">Rows actually written (already-watched episodes are skipped).</param>
 /// <param name="WatchedUtc">The timestamp shared by every inserted row; identifies the batch for an undo.</param>

@@ -991,6 +991,29 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     color: var(--tvdb-text-muted);
 }
 
+/* The figure is a link to Stats. */
+a.tvdb-profile-stat {
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+
+a.tvdb-profile-stat:hover,
+a.tvdb-profile-stat:focus-visible {
+    border-color: var(--tvdb-ink-line-strong);
+    color: var(--tvdb-text);
+}
+
+.tvdb-profile-stat__more {
+    font-size: var(--tvdb-text-sm);
+    font-weight: 500;
+    color: var(--tvdb-signal-text);
+}
+
+a.tvdb-profile-stat:hover .tvdb-profile-stat__more,
+a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
+    text-decoration: underline;
+}
+
 @media (max-width: 575.98px) {
     .tvdb-profile-stat {
         flex-basis: 100%;
@@ -1196,4 +1219,196 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 .tvdb-import-row > .tvdb-badge {
     flex: none;
     white-space: nowrap;
+}
+
+/* ---- Stats ------------------------------------------------------------------------------------
+   Charts drawn by the server as lists: no script, no images. A bar's length is
+   --tvdb-bar, a percentage set inline on the element. That is the data, not a
+   design value, and the only inline style the page has. Every chart's text is
+   in the list itself; the bars are aria-hidden. */
+
+/* Four figures: two by two on a phone (the row of three is the Dashboard's). */
+.tvdb-stat-row--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Twelve months as columns, oldest on the left. */
+.tvdb-month-chart {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--tvdb-space-1);
+    margin: 0 0 var(--tvdb-space-3);
+    padding: var(--tvdb-space-3) var(--tvdb-space-2) var(--tvdb-space-2);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+}
+
+.tvdb-month-chart__col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+    min-width: 0;
+}
+
+/* The bar grows from the bottom; the tallest month leaves room for its value above it. */
+.tvdb-month-chart__plot {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 9rem;
+}
+
+.tvdb-month-chart__value {
+    display: none;
+    margin-bottom: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-xs);
+    line-height: var(--tvdb-leading-tight);
+    text-align: center;
+    white-space: nowrap;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-month-chart__bar {
+    display: block;
+    height: calc(var(--tvdb-bar, 0%) * 0.85);
+    min-height: 2px;
+    background: var(--tvdb-signal);
+    border-radius: var(--tvdb-radius-sm) var(--tvdb-radius-sm) 0 0;
+}
+
+/* A month with nothing in it keeps a baseline, so the row of twelve reads as a row. */
+.tvdb-month-chart__bar.is-empty {
+    background: var(--tvdb-ink-line-strong);
+    border-radius: 0;
+}
+
+.tvdb-month-chart__label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: var(--tvdb-text-xs);
+    line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-text-muted);
+}
+
+/* A phone has room for one letter per month ("O") and a short year; wider screens for "Oct" and "2026". */
+.tvdb-month-chart__wide {
+    display: none;
+}
+
+.tvdb-month-chart__year {
+    font-size: var(--tvdb-text-xs);
+}
+
+@media (min-width: 576px) {
+    .tvdb-month-chart {
+        gap: var(--tvdb-space-2);
+        padding: var(--tvdb-space-4) var(--tvdb-space-3) var(--tvdb-space-3);
+    }
+
+    .tvdb-month-chart__plot {
+        height: 11rem;
+    }
+
+    .tvdb-month-chart__value {
+        display: block;
+    }
+
+    .tvdb-month-chart__wide {
+        display: inline;
+    }
+
+    .tvdb-month-chart__narrow {
+        display: none;
+    }
+}
+
+/* The same figures as a table, behind a native disclosure. */
+.tvdb-disclosure > summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    font-size: var(--tvdb-text-sm);
+    font-weight: 500;
+    color: var(--tvdb-signal-text);
+    cursor: pointer;
+}
+
+.tvdb-stats-table {
+    max-width: 34rem;
+    margin: var(--tvdb-space-2) 0 0;
+}
+
+/* A ranked list with a bar under each row: most watched series, genres. */
+.tvdb-bar-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-3);
+    max-width: 44rem;
+    margin: 0 0 var(--tvdb-space-3);
+}
+
+.tvdb-bar-list__row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+}
+
+.tvdb-bar-list__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    column-gap: var(--tvdb-space-3);
+}
+
+.tvdb-bar-list__name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tvdb-bar-list__value {
+    font-size: var(--tvdb-text-sm);
+    white-space: nowrap;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-bar-list__track {
+    display: block;
+    height: var(--tvdb-space-2);
+    overflow: hidden;
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-pill);
+}
+
+.tvdb-bar-list__fill {
+    display: block;
+    width: var(--tvdb-bar, 0%);
+    height: 100%;
+    background: var(--tvdb-signal);
+}
+
+/* Ratings: the rating, its bar and how many, on one line each. */
+.tvdb-bar-list--ratings {
+    gap: var(--tvdb-space-2);
+    max-width: 30rem;
+}
+
+.tvdb-bar-list--ratings .tvdb-bar-list__row {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr) 2.5rem;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-bar-list__key {
+    font-size: var(--tvdb-text-sm);
+    text-align: right;
+}
+
+.tvdb-bar-list__tally {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
 }

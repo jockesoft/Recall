@@ -157,10 +157,22 @@ public sealed class MovieTrackingServiceTests
     {
         await _sut.AddToWatchlistAsync(_userId, MovieId);
 
-        (await _sut.MarkWatchedAsync(_userId, MovieId)).Should().BeFalse("it was not watched before this call");
-        (await _sut.MarkWatchedAsync(_userId, MovieId)).Should().BeTrue("a second call must report it, not toggle it back");
+        (await _sut.MarkWatchedAsync(_userId, MovieId, WatchSource.Import)).Should().BeFalse("it was not watched before this call");
+        (await _sut.MarkWatchedAsync(_userId, MovieId, WatchSource.Import)).Should().BeTrue("a second call must report it, not toggle it back");
 
         (await StateAsync()).Should().Be((false, true));
+    }
+
+    [Test]
+    public async Task ToggleWatchedAsync_Should_RecordASingleWatch_AndMarkWatchedAsyncTheSourceItIsGiven()
+    {
+        await _sut.ToggleWatchedAsync(_userId, MovieId);
+        await _sut.MarkWatchedAsync(_userId, MovieId + 1, WatchSource.Import);
+
+        var sources = await _dbContext.UserMovieWatches.AsNoTracking()
+            .ToDictionaryAsync(x => x.MovieTvdbId, x => x.Source);
+        sources[MovieId].Should().Be(WatchSource.Single, "the user pressed 'Mark as watched'");
+        sources[MovieId + 1].Should().Be(WatchSource.Import);
     }
 
     [Test]

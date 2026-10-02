@@ -225,6 +225,22 @@ public sealed class TheTvDbService(
         return aggregate?.WithNormalizedImages();
     }
 
+    public async Task<MovieAggregate?> GetCachedMovieAggregateAsync(
+        int movieId,
+        CancellationToken cancellationToken = default)
+    {
+        // As GetCachedSeriesAggregateAsync: the two cache tiers and no API.
+        var aggregate = await GetLayeredAsync<MovieAggregate>(
+            MovieAggregateCacheKey(movieId, Language),
+            ct => store.GetMovieAggregateAsync(movieId, Language, ct),
+            _ => Task.FromResult<MovieAggregate?>(null),
+            _ => Task.CompletedTask,
+            MovieAggregateTtl,
+            cancellationToken);
+
+        return aggregate?.WithNormalizedImages();
+    }
+
     public async Task<bool> RefreshMovieAggregateByIdAsync(
         int movieId,
         CancellationToken cancellationToken = default)

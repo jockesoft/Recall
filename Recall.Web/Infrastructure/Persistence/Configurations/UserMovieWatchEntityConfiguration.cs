@@ -35,6 +35,15 @@ public sealed class UserMovieWatchEntityConfiguration : IEntityTypeConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        // Rows that existed before the column did are Unknown (the default);
+        // the migration that added it then sorts out the bulk marks and imports.
+        builder.Property(x => x.Source)
+            .HasColumnName("source")
+            .HasMaxLength(16)
+            .HasConversion<string>()
+            .HasDefaultValue(WatchSource.Unknown)
+            .IsRequired();
+
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")

@@ -1,6 +1,4 @@
-using System.Data.Common;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 
@@ -100,21 +98,4 @@ public sealed class ContinueWatchingQueryTests : PostgresFixture
              INSERT INTO episode_watch (id, user_id, series_tvdb_id, episode_tvdb_id, watched_utc, created_utc, updated_utc)
              VALUES (gen_random_uuid(), '{userId}', {seriesId}, {NextId()}, '{watchedUtc}', now(), now())
              """);
-
-    /// <summary>Records the SQL EF sends, with the name of its (single) parameter.</summary>
-    private sealed class CommandCapture : DbCommandInterceptor
-    {
-        public List<(string Sql, string ParameterName)> Commands { get; } = [];
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default)
-        {
-            var name = command.Parameters.Count == 1 ? command.Parameters[0].ParameterName : string.Empty;
-            Commands.Add((command.CommandText, name.StartsWith('@') ? name : "@" + name));
-            return ValueTask.FromResult(result);
-        }
-    }
 }

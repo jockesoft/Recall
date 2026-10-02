@@ -6,6 +6,7 @@
 #   ./review.sh start      start three app instances on the clones
 #   ./review.sh capture    run the Playwright capture (Capture/), writes screenshots/
 #   ./review.sh import-progress on|off   add or remove an import that is still running (used by the capture)
+#   ./review.sh stats-sparse on|off      give the empty clone's user a bulk-marked and imported history only, or take it away (used by the capture)
 #   ./review.sh stop       stop the app instances
 #   ./review.sh teardown   stop, drop the clones, clear the Redis database used
 #   ./review.sh all        setup, start, capture, teardown
@@ -188,13 +189,27 @@ import_progress() { # on|off
   fi
 }
 
+# A history that was only ever marked in bulk or imported, for the Stats page's
+# sparse state: put in the empty clone for one screenshot and taken away again,
+# so the other empty-state shots still find a user with nothing.
+stats_sparse() { # on|off
+  psql_db "$EMPTY_DB" -c "
+    DELETE FROM episode_watch WHERE user_id = '11111111-1111-1111-1111-111111111111';
+    DELETE FROM user_movie_watch WHERE user_id = '11111111-1111-1111-1111-111111111111';
+    DELETE FROM tracked_series WHERE user_id = '11111111-1111-1111-1111-111111111111';"
+  if [ "${1:-}" = "on" ]; then
+    psql_db "$EMPTY_DB" < "$ROOT/ui-review/stats-sparse.sql"
+  fi
+}
+
 case "${1:-}" in
   setup) setup ;;
   import-progress) import_progress "${2:-off}" ;;
+  stats-sparse) stats_sparse "${2:-off}" ;;
   start) start ;;
   capture) shift; capture "$@" ;;
   stop) stop_apps ;;
   teardown) teardown ;;
   all) setup; start; capture; teardown ;;
-  *) sed -n '2,20p' "$0"; exit 1 ;;
+  *) sed -n '2,21p' "$0"; exit 1 ;;
 esac
