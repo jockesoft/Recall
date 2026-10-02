@@ -1,0 +1,96 @@
+@model Recall.Web.Pages.Shared.TitleHeaderModel
+@* Renders three siblings that are grid items of the page's .tvdb-title: the
+   poster, the heading block and the action block. The page adds its own
+   .tvdb-title__details after them (see pages.css for the layout). *@
+
+<div class="tvdb-title__poster tvdb-media @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+    @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+    {
+        <img src="@Model.ImageUrl" alt="Poster for @Model.Name" />
+    }
+</div>
+
+<div class="tvdb-title__head">
+    <h1 class="mb-2">@Model.Name</h1>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Summary))
+    {
+        <p class="tvdb-title__summary">@Model.Summary</p>
+    }
+
+    @if (Model.Genres.Count > 0)
+    {
+        <div class="tvdb-genre-list">
+            @foreach (var genre in Model.Genres)
+            {
+                <span class="tvdb-badge tvdb-badge--neutral">@genre</span>
+            }
+        </div>
+    }
+</div>
+
+<div class="tvdb-title__actions">
+    @if (!Model.IsAuthenticated)
+    {
+        <div class="tvdb-signin-card">
+            <p class="mb-0">Sign in to track this @Model.Noun.</p>
+            <a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl" class="btn btn-primary btn-sm">
+                <i class="@Icons.SignIn me-1" aria-hidden="true"></i> Sign in
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="tvdb-action-row">
+            @if (Model.Primary is { } primary)
+            {
+                <form method="post" asp-page-handler="@primary.Handler" asp-route-id="@primary.RouteId">
+                    @foreach (var field in primary.HiddenFields)
+                    {
+                        <input type="hidden" name="@field.Key" value="@field.Value" />
+                    }
+                    <button type="submit" class="btn @(primary.IsOn ? "btn-watch--on" : "btn-primary")"
+                            aria-pressed="@(primary.IsOn ? "true" : null)">
+                        @if (primary.Icon is not null)
+                        {
+                            <i class="@primary.Icon me-1" aria-hidden="true"></i>
+                        }
+                        @primary.Label
+                    </button>
+                </form>
+            }
+
+            @if (Model.State is { } state)
+            {
+                <span class="tvdb-title-state"><i class="@state.Icon" aria-hidden="true"></i> @state.Text</span>
+            }
+
+            @foreach (var action in Model.Secondary)
+            {
+                <form method="post" asp-page-handler="@action.Handler" asp-route-id="@action.RouteId">
+                    @foreach (var field in action.HiddenFields)
+                    {
+                        <input type="hidden" name="@field.Key" value="@field.Value" />
+                    }
+                    <button type="submit" class="btn btn-outline-dark">
+                        @if (action.Icon is not null)
+                        {
+                            <i class="@action.Icon me-1" aria-hidden="true"></i>
+                        }
+                        @action.Label
+                    </button>
+                </form>
+            }
+
+            @if (Model.Like is not null)
+            {
+                <partial name="_LikeToggle" model="Model.Like" />
+            }
+        </div>
+
+        @if (Model.Rating is not null)
+        {
+            <partial name="_RatingWidget" model="Model.Rating" />
+        }
+    }
+</div>

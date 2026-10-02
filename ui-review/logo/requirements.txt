@@ -1,0 +1,4 @@
+# For ui-review/logo/make_logo.py and render.sh
+fonttools==4.60.2
+brotli==1.2.0
+pillow==11.3.0

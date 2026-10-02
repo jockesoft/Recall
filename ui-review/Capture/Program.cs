@@ -51,7 +51,7 @@ List<Shot> shots =
     new("series-details", "toast-success-undo", Site.SignedIn, $"/Series/Details/{NotStarted}", ViewportOnly: true,
         Prepare: async page =>
         {
-            await page.GetByRole(AriaRole.Button, new() { Name = "Mark season watched" }).ClickAsync();
+            await MarkSeasonWatchedAsync(page);
             await page.Locator(".tvdb-toast-stack .alert-success").WaitForAsync();
         },
         // Undo, so the series is back to "nothing watched" for the next shot.
@@ -64,9 +64,22 @@ List<Shot> shots =
         Prepare: async page =>
         {
             // Mark and undo, which also leaves the series as it was.
-            await page.GetByRole(AriaRole.Button, new() { Name = "Mark season watched" }).ClickAsync();
+            await MarkSeasonWatchedAsync(page);
             await page.Locator(".tvdb-toast-stack").GetByRole(AriaRole.Button, new() { Name = "Undo" }).ClickAsync();
             await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
+        }),
+    new("series-details", "season-menu", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await page.Locator("#seasonMenuButton").ScrollIntoViewIfNeededAsync();
+            await page.Locator("#seasonMenuButton").ClickAsync();
+            await page.Locator(".dropdown-menu.show").WaitForAsync();
+        }),
+    new("series-details", "remove-confirm", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await page.GetByRole(AriaRole.Button, new() { Name = "Remove from library" }).ClickAsync();
+            await page.Locator("#removeFromLibraryModal.show").WaitForAsync();
         }),
     new("episode-details", "watched", Site.SignedIn, $"/Series/Details/{AllWatched}",
         Prepare: async page =>
@@ -354,6 +367,13 @@ static async Task MeasureAsync(IPage page, ShotResult result)
             v.Nodes.Take(5).Select(n => n.Html.Length > 200 ? n.Html[..200] + "…" : n.Html).ToList(),
             v.Nodes.Take(3).Select(n => n.Any.Concat(n.All).Concat(n.None).FirstOrDefault()?.Message ?? "").ToList()))
         .ToList();
+}
+
+// "Mark season watched" lives in the season's "⋯" menu.
+static async Task MarkSeasonWatchedAsync(IPage page)
+{
+    await page.Locator("#seasonMenuButton").ClickAsync();
+    await page.GetByRole(AriaRole.Button, new() { Name = "Mark season watched" }).ClickAsync();
 }
 
 static async Task OpenFirstEpisodeAsync(IPage page)

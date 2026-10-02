@@ -23,6 +23,12 @@ public static class Icons
     public const string Search = "ph ph-magnifying-glass";
     public const string NotAiredYet = "ph ph-clock";
     public const string Award = "ph ph-medal";
+    public const string Add = "ph ph-plus";
+    public const string Watchlist = "ph ph-bookmark-simple";
+    public const string OnWatchlist = "ph-fill ph-bookmark-simple";
+    public const string More = "ph ph-dots-three";
+    public const string SignIn = "ph ph-sign-in";
+    public const string NoImage = "ph ph-image";
 
     // Navigation
     public const string Back = "ph ph-arrow-left";

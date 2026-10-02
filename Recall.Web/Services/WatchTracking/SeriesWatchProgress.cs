@@ -8,14 +8,15 @@ public sealed class SeriesWatchProgress
 {
     public required int SeriesTvdbId { get; init; }
 
-    /// <summary>Non-movie episodes in season/episode order.</summary>
+    /// <summary>Non-movie episodes in watch order: numbered seasons, then specials.</summary>
     public required IReadOnlyList<WatchableEpisode> OrderedEpisodes { get; init; }
 
     public required IReadOnlySet<int> WatchedEpisodeIds { get; init; }
 
     /// <summary>
-    /// Earliest released episode (season/episode order) the user has not marked
-    /// watched. Null when the user is caught up on everything that has aired.
+    /// Earliest released episode (watch order) the user has not marked watched:
+    /// a regular episode while any is left, a special only when specials are
+    /// all that remain. Null when the user is caught up on everything that has aired.
     /// </summary>
     public WatchableEpisode? NextUnwatchedEpisode { get; init; }
 

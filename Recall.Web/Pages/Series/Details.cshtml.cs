@@ -8,6 +8,8 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
+using Recall.Web.Pages.Shared;
+using Recall.Web.Infrastructure.Display;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
@@ -74,6 +76,97 @@ public sealed class DetailsModel(
     /// date). Null when not signed in.
     /// </summary>
     public SeriesWatchProgress? WatchProgress { get; private set; }
+
+    /// <summary>The series' seasons in the order the picker shows them: numbered seasons, then the specials.</summary>
+    public IReadOnlyList<int> SeasonNumbers { get; private set; } = [];
+
+    /// <summary>
+    /// The season whose episodes are listed: the one asked for in the URL, or
+    /// <see cref="WatchProgressCalculator.DefaultSeason"/> (for a visitor who
+    /// is not signed in, that is the first season).
+    /// </summary>
+    public int? SelectedSeason { get; private set; }
+
+    public IReadOnlyList<CastPerson> Cast { get; private set; } = [];
+
+    public IReadOnlyList<CastPerson> Crew { get; private set; } = [];
+
+    /// <summary>
+    /// The top of the page (see <c>_TitleHeader.cshtml</c>). For a series in
+    /// the library the one primary button is the next episode to watch, or a
+    /// quiet "Up to date"; for any other series it is "Add to library".
+    /// </summary>
+    public TitleHeaderModel BuildHeader(IReadOnlyList<string> genres, string? returnUrl = null)
+    {
+        var series = Aggregate!;
+        var seasonField = new Dictionary<string, string> { ["Season"] = Season?.ToString() ?? string.Empty };
+
+        TitleAction? primary = null;
+        TitleState? state = null;
+
+        if (!IsTrackedByCurrentUser)
+        {
+            primary = new TitleAction
+            {
+                Label = "Add to library",
+                Handler = "ToggleLibrary",
+                RouteId = series.TvdbId,
+                HiddenFields = seasonField,
+                Icon = Icons.Add
+            };
+        }
+        else if (WatchProgress is { HasEpisodes: true, NextUnwatchedEpisode: { } next })
+        {
+            primary = new TitleAction
+            {
+                Label = $"Mark {next.SlateCode()} watched",
+                Handler = "ToggleEpisodeWatched",
+                RouteId = series.TvdbId,
+                HiddenFields =
+                {
+                    ["episodeId"] = next.Id.ToString(),
+                    ["Season"] = next.SeasonNumber?.ToString() ?? string.Empty
+                },
+                Icon = Icons.Check
+            };
+        }
+        else
+        {
+            state = WatchProgress is { HasEpisodes: true }
+                ? new TitleState("Up to date", Icons.Success)
+                : new TitleState("In your library", Icons.Success);
+        }
+
+        return new TitleHeaderModel
+        {
+            Name = series.Name,
+            ImageUrl = series.ImageUrl,
+            Genres = genres,
+            Summary = TitleSummary.ForSeries(series),
+            Noun = "series",
+            IsAuthenticated = IsAuthenticated,
+            ReturnUrl = returnUrl,
+            Primary = primary,
+            State = state,
+            Like = new LikeToggleModel
+            {
+                Handler = "ToggleSeriesLike",
+                RouteId = series.TvdbId,
+                HiddenFields = seasonField,
+                IsLiked = IsLikedByCurrentUser,
+                TargetNoun = "series"
+            },
+            Rating = new RatingWidgetModel
+            {
+                RateHandler = "RateSeries",
+                ClearHandler = "ClearSeriesRating",
+                RouteId = series.TvdbId,
+                HiddenFields = seasonField,
+                CurrentValue = CurrentUserRating,
+                TargetNoun = "series"
+            }
+        };
+    }
 
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
         => await LoadPageAsync(id, cancellationToken);
@@ -441,8 +534,23 @@ public sealed class DetailsModel(
             RecallRatingAverage = ratingSummary.Average;
             RecallRatingCount = ratingSummary.Count;
 
+            (Cast, Crew) = CastBuilder.Build(Aggregate.Characters);
+
+            SeasonNumbers = Aggregate.Seasons
+                .Select(s => s.Number)
+                .Where(n => n.HasValue)
+                .Select(n => n!.Value)
+                .Distinct()
+                .OrderBy(n => EpisodeOrderingExtensions.SeasonRank(n))
+                .ThenBy(n => n)
+                .ToList();
+
             if (!currentUserService.TryGetUserId(out var userId))
+            {
+                // Nothing is watched for a visitor, so the default is the first season.
+                SelectSeason(watchProgressService.BuildProgress(id, Aggregate.ToWatchableEpisodes(), new HashSet<int>()));
                 return Page();
+            }
 
             IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
             IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Series, id, cancellationToken);
@@ -452,27 +560,50 @@ public sealed class DetailsModel(
 
             // Reuse the aggregate already loaded above — no extra TheTVDB call.
             WatchProgress = watchProgressService.BuildProgress(id, Aggregate.ToWatchableEpisodes(), WatchedEpisodeIds);
+            SelectSeason(WatchProgress);
             return Page();
         }
         catch (TheTvDbApiException ex)
         {
             logger.LogWarning(ex, "TheTVDB API error while loading details for id {SeriesId}.", id);
-            this.SetErrorToast("Could not fetch series details from TheTVDB right now.");
-            return Page();
+            return LoadFailed(StatusCodes.Status503ServiceUnavailable);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected error while loading details for id {SeriesId}.", id);
-            this.SetErrorToast("An unexpected error occurred.");
-            return Page();
+            return LoadFailed(StatusCodes.Status500InternalServerError);
         }
     }
 
-    public string GetSeasonName(int season)
+    /// <summary>
+    /// The page renders its own "couldn't load" state (the view checks for a
+    /// null <see cref="Series"/>), with a status code that says so.
+    /// </summary>
+    private IActionResult LoadFailed(int statusCode)
     {
-        if (season == 0) return "SP";
-        else return "S" + season.ToString("D2");
+        Series = null;
+        Aggregate = null;
+        Response.StatusCode = statusCode;
+        return Page();
     }
+
+    private void SelectSeason(SeriesWatchProgress progress)
+    {
+        var fallback = WatchProgressCalculator.DefaultSeason(progress)
+                       ?? (SeasonNumbers.Count > 0 ? SeasonNumbers[0] : (int?)null);
+
+        SelectedSeason = Season is { } asked && SeasonNumbers.Contains(asked)
+            ? asked
+            : fallback is { } season && SeasonNumbers.Contains(season)
+                ? season
+                : SeasonNumbers.Count > 0 ? SeasonNumbers[0] : Season;
+    }
+
+    /// <summary>Short label for a season chip: "S01", or "Specials" for season 0.</summary>
+    public string GetSeasonName(int season) => season == 0 ? "Specials" : "S" + season.ToString("D2");
+
+    /// <summary>Spoken-length name: "Season 1", or "Specials".</summary>
+    public string GetSeasonTitle(int season) => season == 0 ? "Specials" : $"Season {season}";
 
     private async Task AddToPersonalLibraryAsync(
         Guid userId,

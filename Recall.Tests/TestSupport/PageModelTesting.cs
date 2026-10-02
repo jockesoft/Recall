@@ -17,6 +17,13 @@ public static class PageModelTesting
         return page;
     }
 
+    /// <summary>Gives the page a request and response, for handlers that set a status code or read a header.</summary>
+    public static T WithHttpContext<T>(this T page) where T : PageModel
+    {
+        page.PageContext = new PageContext { HttpContext = new DefaultHttpContext() };
+        return page;
+    }
+
     public static string? SuccessToast(this PageModel page) => page.TempData["Toast.Success"] as string;
 
     public static string? ErrorToast(this PageModel page) => page.TempData["Toast.Error"] as string;

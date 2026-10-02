@@ -7,10 +7,14 @@ namespace Recall.Web.Services.WatchTracking;
 /// </summary>
 public static class WatchProgressCalculator
 {
-    /// <summary>Season/episode order, with a stable id tie-break.</summary>
+    /// <summary>
+    /// Watch order: numbered seasons in season/episode order, then the specials
+    /// (season 0), with a stable id tie-break. Because specials come last, the
+    /// next episode to watch is a special only when nothing else is left.
+    /// </summary>
     public static IReadOnlyList<WatchableEpisode> Order(IEnumerable<WatchableEpisode> episodes) =>
         episodes
-            .OrderBySeasonAndEpisode(e => e.SeasonNumber, e => e.EpisodeNumber, e => e.Id)
+            .OrderByWatchOrder(e => e.SeasonNumber, e => e.EpisodeNumber, e => e.Id)
             .ToList();
 
     public static SeriesWatchProgress Build(
@@ -34,30 +38,79 @@ public static class WatchProgressCalculator
         };
     }
 
-    /// <summary>Unwatched episodes strictly before <paramref name="episodeTvdbId"/> in order.</summary>
+    /// <summary>
+    /// The season a series page opens on: the season of the next episode to
+    /// watch; when the viewer is caught up, the latest numbered season (where
+    /// anything new will appear); the specials only when there is nothing else.
+    /// Null when there are no episodes.
+    /// </summary>
+    public static int? DefaultSeason(SeriesWatchProgress progress)
+    {
+        if (progress.NextUnwatchedEpisode?.SeasonNumber is { } next)
+            return next;
+
+        var seasons = progress.OrderedEpisodes
+            .Select(e => e.SeasonNumber)
+            .Where(n => n.HasValue)
+            .Select(n => n!.Value)
+            .Distinct()
+            .ToList();
+
+        if (seasons.Count == 0)
+            return null;
+
+        return seasons.Where(n => n != 0).DefaultIfEmpty(0).Max();
+    }
+
+    /// <summary>
+    /// Unwatched episodes that come before <paramref name="episodeTvdbId"/>. A
+    /// special is never "before" a regular episode and a regular episode is
+    /// never "before" a special: see <see cref="SameKind"/>.
+    /// </summary>
     public static int CountPriorUnwatched(
         IReadOnlyList<WatchableEpisode> orderedEpisodes,
         IReadOnlySet<int> watchedEpisodeIds,
         int episodeTvdbId)
     {
-        var index = IndexOf(orderedEpisodes, episodeTvdbId);
+        var scope = SameKind(orderedEpisodes, episodeTvdbId);
+        var index = IndexOf(scope, episodeTvdbId);
         return index <= 0
             ? 0
-            : orderedEpisodes.Take(index).Count(e => !watchedEpisodeIds.Contains(e.Id));
+            : scope.Take(index).Count(e => !watchedEpisodeIds.Contains(e.Id));
     }
 
     /// <summary>
     /// Episode ids from the first episode through <paramref name="episodeTvdbId"/>
-    /// (inclusive). If the id isn't in the list, returns just that id.
+    /// (inclusive), within the same kind (see <see cref="SameKind"/>). If the id
+    /// isn't in the list, returns just that id.
     /// </summary>
     public static IReadOnlyList<int> IdsThrough(
         IReadOnlyList<WatchableEpisode> orderedEpisodes,
         int episodeTvdbId)
     {
-        var index = IndexOf(orderedEpisodes, episodeTvdbId);
+        var scope = SameKind(orderedEpisodes, episodeTvdbId);
+        var index = IndexOf(scope, episodeTvdbId);
         return index < 0
             ? [episodeTvdbId]
-            : orderedEpisodes.Take(index + 1).Select(e => e.Id).ToList();
+            : scope.Take(index + 1).Select(e => e.Id).ToList();
+    }
+
+    /// <summary>
+    /// The episodes "earlier" is judged among: the specials when the episode is
+    /// a special, everything except the specials otherwise. So catching up to
+    /// S02E03 never marks a making-of, and marking a special never marks the
+    /// whole series.
+    /// </summary>
+    private static IReadOnlyList<WatchableEpisode> SameKind(
+        IReadOnlyList<WatchableEpisode> orderedEpisodes,
+        int episodeTvdbId)
+    {
+        var target = orderedEpisodes.FirstOrDefault(e => e.Id == episodeTvdbId);
+        if (target is null)
+            return orderedEpisodes;
+
+        var isSpecial = target.SeasonNumber == 0;
+        return orderedEpisodes.Where(e => (e.SeasonNumber == 0) == isSpecial).ToList();
     }
 
     private static int IndexOf(IReadOnlyList<WatchableEpisode> episodes, int episodeTvdbId)

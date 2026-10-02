@@ -105,8 +105,8 @@ public sealed class WatchProgressService(
         if (AirDate.IsInFuture(target.Aired, Today))
             return new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 0, HasAired: false);
 
-        // Season 0 (specials) sorts first, so "everything earlier" can include a
-        // special that hasn't aired yet — leave those out.
+        // "Everything earlier" can include an episode that hasn't aired yet (a
+        // listed but unaired special, a gap in the schedule) — leave those out.
         var idsToMark = WatchProgressCalculator.IdsThrough(WithoutUnaired(ordered), episodeTvdbId);
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, idsToMark, cancellationToken);
 

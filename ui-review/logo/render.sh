@@ -2,13 +2,14 @@
 # Rebuilds every logo file: the SVGs (make_logo.py) and the raster files that
 # are rendered from them with headless Chromium.
 #
-#   ./ui-review/logo/render.sh [play|check|bookmark]      default: play
+#   ./ui-review/logo/render.sh [play|check|bookmark]      default: bookmark
 #
 # Writes Recall.Web/wwwroot/{favicon.svg,favicon.ico,apple-touch-icon.png},
 # wwwroot/images/{logo.svg,logo-light.svg,logo-mark.svg,og-image.png} and
 # ui-review/screenshots/logo-options.png.
 #
-# Needs: python3 with fonttools, brotli and pillow (PYTHON=... to pick one),
+# Needs: python3 with the packages in requirements.txt (PYTHON=... to pick one;
+#   python3 -m venv .venv && .venv/bin/pip install -r ui-review/logo/requirements.txt),
 # and the Chromium that Playwright downloaded (CHROMIUM=... to pick another).
 set -euo pipefail
 
@@ -17,7 +18,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 WWW="$ROOT/Recall.Web/wwwroot"
 PYTHON="${PYTHON:-python3}"
 CHROMIUM="${CHROMIUM:-$(ls -d "$HOME"/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-*/chrome-headless-shell 2>/dev/null | tail -1)}"
-VARIANT="${1:-play}"
+VARIANT="${1:-bookmark}"
 TMP="$(mktemp -d)"
 
 "$PYTHON" "$HERE/make_logo.py" --variant "$VARIANT"
@@ -39,7 +40,7 @@ for size in 16 32; do shot "$TMP/favicon-$size.png" "$size" "$size" "$(svg_page 
 shot "$WWW/apple-touch-icon.png" 180 180 "$(svg_page "$HERE/touch-icon.svg")"
 shot "$WWW/images/og-image.png" 1200 630 "file://$HERE/og.html"
 mkdir -p "$ROOT/ui-review/screenshots"
-shot "$ROOT/ui-review/screenshots/logo-options.png" 1280 440 "file://$HERE/sheet.html" 2
+shot "$ROOT/ui-review/screenshots/logo-options.png" 1280 560 "file://$HERE/sheet.html" 2
 
 "$PYTHON" - "$TMP" "$WWW/favicon.ico" <<'PY'
 import sys

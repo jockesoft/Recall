@@ -1,0 +1,48 @@
+@model Recall.Web.Pages.Shared.CastListModel
+@* A headed list of people. On a phone it is one horizontally scrolling row; on
+   wider screens a grid that shows two rows until "Show all" is pressed. The
+   button only appears when there is more than two rows' worth (decided in the
+   browser, since it depends on the width). *@
+@if (Model.People.Count > 0)
+{
+    <section class="tvdb-cast" data-cast>
+        <div class="tvdb-cast__head">
+            <h2 class="mb-0">@Model.Heading <span class="tvdb-count">@Model.People.Count</span></h2>
+            <button type="button" class="btn btn-outline-dark btn-sm tvdb-cast__toggle" data-cast-toggle
+                    aria-expanded="false" aria-controls="@Model.Id" hidden>
+                <span data-cast-toggle-label data-more="Show all @Model.People.Count" data-less="Show fewer">Show all @Model.People.Count</span>
+                <i class="@Icons.Expand ms-1" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <ul class="tvdb-cast__list list-unstyled" id="@Model.Id" tabindex="0" aria-label="@Model.Heading">
+            @foreach (var person in Model.People)
+            {
+                <li class="tvdb-person">
+                    @if (!string.IsNullOrWhiteSpace(person.ImageUrl))
+                    {
+                        <img src="@person.ImageUrl" alt="" class="tvdb-person__photo" loading="lazy" />
+                    }
+                    else
+                    {
+                        <span class="tvdb-person__photo tvdb-person__photo--initials" aria-hidden="true">@person.Initials</span>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(person.Url))
+                    {
+                        <a class="tvdb-person__name tvdb-link-plain" href="@person.Url" target="_blank" rel="noopener noreferrer">@person.Name</a>
+                    }
+                    else
+                    {
+                        <span class="tvdb-person__name">@person.Name</span>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(person.Detail))
+                    {
+                        <span class="tvdb-person__detail">@person.Detail</span>
+                    }
+                </li>
+            }
+        </ul>
+    </section>
+}

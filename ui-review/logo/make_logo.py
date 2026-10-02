@@ -11,13 +11,14 @@ Writes, into Recall.Web/wwwroot:
 and into ui-review/logo/:
     variant-<name>.svg      the lockup for each of the three variants
     favicon-<name>.svg      the favicon for each variant
+    mark-<name>.svg         the mark alone for each variant
     touch-icon.svg          the favicon without rounded corners (source of apple-touch-icon.png)
     sheet.html              comparison sheet of the three variants
     og.html                 source of the Open Graph image
 
 The wordmark is Big Shoulders Display 800 converted to paths, so the SVG does
-not depend on the font being loaded. Needs fontTools and brotli
-(pip install fonttools brotli). The PNG and ICO files are rendered from these
+not depend on the font being loaded. Needs the packages in requirements.txt
+(pip install -r ui-review/logo/requirements.txt). The PNG and ICO files are rendered from these
 SVGs by render.sh, next to this file, which runs this script first.
 """
 import argparse
@@ -47,7 +48,8 @@ DETAILS = {
     # Each detail sits in the middle of the screen (centre 32, 36).
     "play": lambda c: f'<path d="M27.5 28.5 L39.5 36 L27.5 43.5 Z" fill="{c}" stroke="{c}" stroke-width="2.5" stroke-linejoin="round"/>',
     "check": lambda c: f'<path d="M22.5 36.5 L29 43 L41.5 30" fill="none" stroke="{c}" stroke-width="{STROKE}" stroke-linecap="round" stroke-linejoin="round"/>',
-    "bookmark": lambda c: f'<path d="M26 27.5 H38 V45 L32 40.5 L26 45 Z" fill="{c}" stroke="{c}" stroke-width="2.5" stroke-linejoin="round"/>',
+    # Fills most of the screen, with a deep notch, so it still reads as a bookmark at 16px.
+    "bookmark": lambda c: f'<path d="M24 24.5 H40 V47.5 L32 40 L24 47.5 Z" fill="{c}" stroke="{c}" stroke-width="2.5" stroke-linejoin="round"/>',
 }
 
 
@@ -118,6 +120,12 @@ def sheet() -> str:
         return f'<h2>{label}</h2><div class="row">{cells}</div>'
 
     names = "".join(f"<div>{i + 1}. {v}</div>" for i, v in enumerate(DETAILS))
+    marks = "".join(
+        f'<div class="icons bar"><img src="mark-{v}.svg" width="16" height="16" alt="">'
+        f'<img src="mark-{v}.svg" width="32" height="32" alt="">'
+        f'<img src="mark-{v}.svg" width="64" height="64" alt=""></div>'
+        for v in DETAILS
+    )
     icons = "".join(
         f'<div class="icons"><img src="favicon-{v}.svg" width="16" height="16" alt="">'
         f'<img src="favicon-{v}.svg" width="32" height="32" alt="">'
@@ -145,6 +153,8 @@ def sheet() -> str:
 <div class="names">{names}</div>
 {row("Desktop navbar, 32px high", 32, 384)}
 {row("Phone navbar, 28px high (390px wide)", 28, 390)}
+<h2>Mark at 16, 32 and 64px</h2>
+<div class="row">{marks}</div>
 <h2>Favicon at 16, 32 and 64px, and at 16px on a light browser tab</h2>
 <div class="row">{icons}</div>
 """
@@ -169,12 +179,13 @@ def og(variant: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--variant", choices=list(DETAILS), default="play")
+    parser.add_argument("--variant", choices=list(DETAILS), default="bookmark")
     variant = parser.parse_args().variant
 
     for v in DETAILS:
         (OUT / f"variant-{v}.svg").write_text(lockup(v, CREAM, CREAM))
         (OUT / f"favicon-{v}.svg").write_text(favicon(v))
+        (OUT / f"mark-{v}.svg").write_text(mark_only(v))
     (OUT / "sheet.html").write_text(sheet())
     (OUT / "og.html").write_text(og(variant))
 

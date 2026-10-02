@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.RateLimiting;
 using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Display;
+using Recall.Web.Pages.Shared;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
@@ -60,6 +62,64 @@ public sealed class DetailsModel(
     /// <summary>How many Recall users have rated this movie.</summary>
     public int RecallRatingCount { get; private set; }
 
+    public IReadOnlyList<CastPerson> Cast { get; private set; } = [];
+
+    public IReadOnlyList<CastPerson> Crew { get; private set; } = [];
+
+    /// <summary>
+    /// The top of the page (see <c>_TitleHeader.cshtml</c>): "Mark as watched"
+    /// is the primary button, the watchlist is secondary, and a movie that is
+    /// already on the watchlist says so quietly (removing it is at the bottom
+    /// of the details).
+    /// </summary>
+    public TitleHeaderModel BuildHeader(string? returnUrl = null)
+    {
+        var movie = Movie!;
+
+        var primary = new TitleAction
+        {
+            Label = WatchedOnUtc is { } watched ? $"Watched {DisplayDate.Format(watched, Today)}" : "Mark as watched",
+            Handler = "ToggleMovieWatched",
+            RouteId = movie.TvdbId,
+            Icon = Icons.Check,
+            IsOn = IsWatchedByCurrentUser
+        };
+
+        // A watched movie can't be on the watchlist, so the choice isn't offered.
+        var canAddToWatchlist = !IsWatchedByCurrentUser && !IsOnWatchlist;
+
+        return new TitleHeaderModel
+        {
+            Name = movie.Name,
+            ImageUrl = movie.ImageUrl,
+            Genres = movie.Genres,
+            Summary = TitleSummary.ForMovie(movie),
+            Noun = "movie",
+            IsAuthenticated = IsAuthenticated,
+            ReturnUrl = returnUrl,
+            Primary = primary,
+            State = IsOnWatchlist ? new TitleState("On your watchlist", Icons.OnWatchlist) : null,
+            Secondary = canAddToWatchlist
+                ? [new TitleAction { Label = "Add to watchlist", Handler = "ToggleWatchlist", RouteId = movie.TvdbId, Icon = Icons.Watchlist }]
+                : [],
+            Like = new LikeToggleModel
+            {
+                Handler = "ToggleMovieLike",
+                RouteId = movie.TvdbId,
+                IsLiked = IsLikedByCurrentUser,
+                TargetNoun = "movie"
+            },
+            Rating = new RatingWidgetModel
+            {
+                RateHandler = "RateMovie",
+                ClearHandler = "ClearMovieRating",
+                RouteId = movie.TvdbId,
+                CurrentValue = CurrentUserRating,
+                TargetNoun = "movie"
+            }
+        };
+    }
+
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (id <= 0) return NotFound();
@@ -77,6 +137,8 @@ public sealed class DetailsModel(
             RecallRatingAverage = ratingSummary.Average;
             RecallRatingCount = ratingSummary.Count;
 
+            (Cast, Crew) = CastBuilder.Build(Movie.Characters);
+
             if (currentUserService.TryGetUserId(out var userId))
             {
                 IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Movie, id, cancellationToken);
@@ -90,15 +152,21 @@ public sealed class DetailsModel(
         catch (TheTvDbApiException ex)
         {
             logger.LogWarning(ex, "TheTVDB API error while loading movie details for id {MovieId}.", id);
-            this.SetErrorToast("Could not fetch movie details from TheTVDB right now.");
-            return Page();
+            return LoadFailed(StatusCodes.Status503ServiceUnavailable);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected error while loading movie details for id {MovieId}.", id);
-            this.SetErrorToast("An unexpected error occurred.");
-            return Page();
+            return LoadFailed(StatusCodes.Status500InternalServerError);
         }
+    }
+
+    /// <summary>The page renders its own "couldn't load" state, with a status code that says so.</summary>
+    private IActionResult LoadFailed(int statusCode)
+    {
+        Movie = null;
+        Response.StatusCode = statusCode;
+        return Page();
     }
 
     public async Task<IActionResult> OnPostToggleMovieLikeAsync([FromRoute] int id, CancellationToken cancellationToken)

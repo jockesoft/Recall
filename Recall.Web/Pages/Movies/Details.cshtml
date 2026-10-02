@@ -8,13 +8,6 @@
             ? null
             : raw.Trim();
 
-    static string FormatRuntime(int minutes)
-    {
-        var hours = minutes / 60;
-        var mins = minutes % 60;
-        return hours > 0 ? $"{hours}h {mins}m" : $"{mins}m";
-    }
-
     static string FormatUsd(decimal value) => "$" + value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
 
     static string Truncate(string text, int maxLength) =>
@@ -28,8 +21,6 @@
         : $"Details and cast for {(movie?.Name ?? "this movie")} on Recall.nu.";
     ViewData["Robots"] = movie is not null ? "index, follow" : "noindex, nofollow";
 
-    var status = movie?.Status;
-    var isReleased = status is { Name: not null } && status.Name.Equals("Released", StringComparison.OrdinalIgnoreCase);
     var imdbId = movie?.RemoteIds
         .FirstOrDefault(r => string.Equals(r.SourceName, "imdb", StringComparison.OrdinalIgnoreCase))?.Id;
 
@@ -48,9 +39,9 @@
     {
         <partial name="_EmptyState" model="@(new EmptyStateModel
                  {
-                     Icon = Icons.NotFound,
-                     Heading = "Movie not found",
-                     Text = "We couldn't find this movie. It may have been removed from TheTVDB, or TheTVDB may not be answering right now.",
+                     Icon = Icons.Problem,
+                     Heading = "This movie couldn't be loaded",
+                     Text = "TheTVDB, where the movie information comes from, isn't answering right now. Please try again in a little while.",
                      HeadingLevel = 1,
                      ActionText = "Search for a movie",
                      ActionPage = "/Search"
@@ -58,133 +49,24 @@
     }
     else
     {
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="tvdb-media @(string.IsNullOrWhiteSpace(movie.ImageUrl) ? "is-empty" : "")">
-                    @if (!string.IsNullOrWhiteSpace(movie.ImageUrl))
-                    {
-                        <img src="@movie.ImageUrl" alt="@movie.Name" />
-                    }
-                    @if (status?.Name is not null)
-                    {
-                        <div class="tvdb-slate">
-                            <span class="tvdb-dot @(isReleased ? "is-ok" : "")" aria-hidden="true"></span>
-                            <span>@status.Name.ToUpperInvariant()</span>
-                        </div>
-                    }
-                </div>
+        var today = Model.Today;
+        var hasProductionFacts = movie.Studios.Count > 0 || movie.Budget.HasValue || movie.BoxOffice.HasValue;
 
-                @if (imdbId is not null)
-                {
-                    <div class="mt-2">
-                        <a class="tvdb-extlink" href="https://www.imdb.com/title/@imdbId" target="_blank" rel="noopener">
-                            <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
-                            <span>View on IMDb</span>
-                            <i class="@Icons.External" aria-hidden="true"></i>
-                        </a>
-                    </div>
-                }
-            </div>
+        <div class="tvdb-title">
+            <partial name="_TitleHeader" model="@Model.BuildHeader(ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
 
-            <div class="col-md-8">
-                <h1 class="mb-2">@movie.Name</h1>
-
-                @if (movie.Genres.Count > 0)
-                {
-                    <div class="tvdb-genre-list mb-3">
-                        @foreach (var genre in movie.Genres)
-                        {
-                            <span class="tvdb-badge tvdb-badge--neutral">@genre</span>
-                        }
-                    </div>
-                }
-
-                @if (Model.IsAuthenticated)
-                {
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                        <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
-                                 {
-                                     Handler = "ToggleMovieWatched",
-                                     RouteId = movie.TvdbId,
-                                     IsWatched = Model.IsWatchedByCurrentUser,
-                                     WatchedLabel = Model.WatchedOnUtc is { } w
-                                         ? $"Watched {DisplayDate.Format(w, Model.Today)}"
-                                         : "Watched"
-                                 })" />
-
-                        @* Want-to-watch. Not offered once the movie is watched — marking it watched takes it off the list. *@
-                        @if (!Model.IsWatchedByCurrentUser)
-                        {
-                            <form method="post" asp-page-handler="ToggleWatchlist" asp-route-id="@movie.TvdbId" class="d-inline">
-                                <button type="submit"
-                                        class="btn @(Model.IsOnWatchlist ? "btn-outline-danger" : "btn-primary")"
-                                        aria-pressed="@(Model.IsOnWatchlist ? "true" : "false")">
-                                    @(Model.IsOnWatchlist ? "Remove from watchlist" : "Add to watchlist")
-                                </button>
-                            </form>
-                        }
-
-                        <partial name="_LikeToggle" model="@(new LikeToggleModel
-                                 {
-                                     Handler = "ToggleMovieLike",
-                                     RouteId = movie.TvdbId,
-                                     IsLiked = Model.IsLikedByCurrentUser,
-                                     TargetNoun = "movie"
-                                 })" />
-                    </div>
-
-                    <div class="mb-3">
-                        <partial name="_RatingWidget" model="@(new Recall.Web.Pages.Shared.RatingWidgetModel
-                                 {
-                                     RateHandler = "RateMovie",
-                                     ClearHandler = "ClearMovieRating",
-                                     RouteId = movie.TvdbId,
-                                     CurrentValue = Model.CurrentUserRating,
-                                     TargetNoun = "movie"
-                                 })" />
-                    </div>
-                }
-
-                <dl class="row">
-                    <dt class="col-sm-3">TVDB Id</dt>
-                    <dd class="col-sm-9">
-                        <a class="tvdb-mono" href="https://www.thetvdb.com/movies/@movie.Slug" target="_blank" rel="noopener">@movie.TvdbId</a>
-                    </dd>
-
+            <div class="tvdb-title__details">
+                <dl class="row tvdb-facts">
                     @if (movie.ReleaseDate.HasValue)
                     {
-                        <dt class="col-sm-3">Release date</dt>
-                        <dd class="col-sm-9">@DisplayDate.Format(movie.ReleaseDate.Value, Model.Today)</dd>
-                    }
-
-                    @if (movie.RuntimeMinutes is > 0)
-                    {
-                        <dt class="col-sm-3">Runtime</dt>
-                        <dd class="col-sm-9">@FormatRuntime(movie.RuntimeMinutes.Value)</dd>
-                    }
-
-                    @if (movie.Studios.Count > 0)
-                    {
-                        <dt class="col-sm-3">Studio</dt>
-                        <dd class="col-sm-9">@string.Join(", ", movie.Studios)</dd>
-                    }
-
-                    @if (movie.Budget.HasValue)
-                    {
-                        <dt class="col-sm-3">Budget</dt>
-                        <dd class="col-sm-9">@FormatUsd(movie.Budget.Value)</dd>
-                    }
-
-                    @if (movie.BoxOffice.HasValue)
-                    {
-                        <dt class="col-sm-3">Box office</dt>
-                        <dd class="col-sm-9">@FormatUsd(movie.BoxOffice.Value)</dd>
+                        <dt class="col-5 col-sm-3">Released</dt>
+                        <dd class="col-7 col-sm-9">@DisplayDate.Format(movie.ReleaseDate.Value, today)</dd>
                     }
 
                     @if (omdbRating is not null)
                     {
-                        <dt class="col-sm-3">IMDb rating</dt>
-                        <dd class="col-sm-9">
+                        <dt class="col-5 col-sm-3">IMDb rating</dt>
+                        <dd class="col-7 col-sm-9">
                             <span class="tvdb-rating">
                                 <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
@@ -198,8 +80,8 @@
 
                     @if (Model.RecallRatingCount > 0)
                     {
-                        <dt class="col-sm-3">Recall rating</dt>
-                        <dd class="col-sm-9">
+                        <dt class="col-5 col-sm-3">Recall rating</dt>
+                        <dd class="col-7 col-sm-9">
                             <span class="tvdb-rating">
                                 <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
@@ -225,99 +107,63 @@
                         </div>
                     </div>
                 }
+
+                @if (hasProductionFacts)
+                {
+                    <dl class="tvdb-facts-quiet">
+                        @if (movie.Studios.Count > 0)
+                        {
+                            <div><dt>Studio</dt><dd>@string.Join(", ", movie.Studios)</dd></div>
+                        }
+                        @if (movie.Budget.HasValue)
+                        {
+                            <div><dt>Budget</dt><dd class="tvdb-mono">@FormatUsd(movie.Budget.Value)</dd></div>
+                        }
+                        @if (movie.BoxOffice.HasValue)
+                        {
+                            <div><dt>Box office</dt><dd class="tvdb-mono">@FormatUsd(movie.BoxOffice.Value)</dd></div>
+                        }
+                    </dl>
+                }
+
+                @if (Model.IsOnWatchlist)
+                {
+                    <button type="button" class="tvdb-quiet-action" data-bs-toggle="modal" data-bs-target="#removeFromWatchlistModal">
+                        Remove from watchlist
+                    </button>
+                }
             </div>
         </div>
 
-        var cast = movie.Characters
-            .Where(c => !string.IsNullOrWhiteSpace(c.PersonName) || !string.IsNullOrWhiteSpace(c.Name))
-            .ToList();
+        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast })" />
+        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew })" />
 
-        if (cast.Count > 0)
+        <p class="tvdb-source-line">
+            <a class="tvdb-metalink" href="https://www.thetvdb.com/movies/@movie.Slug" target="_blank" rel="noopener">TheTVDB <span class="tvdb-mono">@movie.TvdbId</span></a>
+            @if (imdbId is not null)
+            {
+                <a class="tvdb-metalink" href="https://www.imdb.com/title/@imdbId" target="_blank" rel="noopener">IMDb <span class="tvdb-mono">@imdbId</span></a>
+            }
+        </p>
+
+        @if (Model.IsOnWatchlist)
         {
-            <hr class="my-4" />
-            <h2 class="mb-3">Cast &amp; Characters</h2>
-
-            <div class="cast-container" id="castContainer">
-                <div class="row g-3" id="castGrid">
-                    @foreach (var ch in cast)
-                    {
-                        var personDisplay = string.IsNullOrWhiteSpace(ch.PersonName) ? "Unknown person" : ch.PersonName;
-                        var characterDisplay = string.IsNullOrWhiteSpace(ch.Name) ? null : ch.Name;
-                        var imageUrl = !string.IsNullOrWhiteSpace(ch.PersonImageUrl) ? ch.PersonImageUrl : ch.Image;
-                        var hasLink = !string.IsNullOrWhiteSpace(ch.Url);
-
-                        <div class="col-12 col-sm-6 col-lg-4 cast-item">
-                            <div class="tvdb-cast-card">
-                                @if (!string.IsNullOrWhiteSpace(imageUrl))
-                                {
-                                    <img src="@imageUrl" alt="" class="tvdb-cast-card__photo" loading="lazy" />
-                                }
-                                else
-                                {
-                                    <div class="tvdb-cast-card__photo is-empty" aria-hidden="true">
-                                        <i class="@Icons.Member"></i>
-                                    </div>
-                                }
-
-                                <div class="tvdb-cast-card__body">
-                                    <div class="tvdb-cast-card__name">@personDisplay</div>
-
-                                    @if (!string.IsNullOrWhiteSpace(characterDisplay))
-                                    {
-                                        <div class="tvdb-meta text-break">as @characterDisplay</div>
-                                    }
-
-                                    <div class="mt-2 d-flex flex-wrap gap-2">
-                                        @if (ch.IsFeatured)
-                                        {
-                                            <span class="tvdb-badge tvdb-badge--ok">Featured</span>
-                                        }
-
-                                        @if (!string.IsNullOrWhiteSpace(ch.PeopleType))
-                                        {
-                                            <span class="tvdb-badge tvdb-badge--amber">@ch.PeopleType</span>
-                                        }
-                                    </div>
-
-                                    @if (hasLink)
-                                    {
-                                        <div class="mt-2">
-                                            <a href="@ch.Url"
-                                               target="_blank"
-                                               rel="noopener noreferrer"
-                                               class="tvdb-metalink tvdb-meta">View on TheTVDB</a>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-
-                @if (cast.Count > 6)
-                {
-                    <div class="cast-expand-container mt-3">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn"
-                                aria-expanded="false" aria-controls="castGrid" onclick="toggleCast()">
-                            <span id="castToggleLabel" data-more="Show @(cast.Count - 6) more" data-less="Show less">Show @(cast.Count - 6) more</span>
-                            <i class="@Icons.Expand ms-1" id="castToggleIcon" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                }
-            </div>
-
-            <script>
-                function toggleCast() {
-                    const container = document.getElementById('castContainer');
-                    const label = document.getElementById('castToggleLabel');
-                    const expanded = container.classList.toggle('is-expanded');
-                    label.textContent = expanded ? label.dataset.less : label.dataset.more;
-                    document.getElementById('castToggleBtn').setAttribute('aria-expanded', expanded);
-                }
-            </script>
+            <partial name="_ConfirmModal" model="@(new ConfirmModalModel
+                     {
+                         Id = "removeFromWatchlistModal",
+                         Title = "Remove from watchlist?",
+                         Text = $"{movie.Name} leaves your watchlist. You can add it again at any time.",
+                         ConfirmLabel = "Remove",
+                         Handler = "ToggleWatchlist",
+                         RouteId = movie.TvdbId
+                     })" />
         }
     }
 </div>
+
+@section Scripts {
+    <script src="~/js/tvdb-cast.js" asp-append-version="true"></script>
+}
 
 @section Head {
     @if (movie is not null)

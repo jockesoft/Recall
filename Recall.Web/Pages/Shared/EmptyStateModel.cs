@@ -26,6 +26,9 @@ public sealed class EmptyStateModel
     /// <summary>Razor page the button links to, e.g. "/Search".</summary>
     public string? ActionPage { get; init; }
 
+    /// <summary>The <c>id</c> route value for <see cref="ActionPage"/>, when it needs one ("/Series/Details").</summary>
+    public int? ActionRouteId { get; init; }
+
     /// <summary>Smaller padding, for an empty section rather than an empty page.</summary>
     public bool Inline { get; init; }
 }

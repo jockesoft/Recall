@@ -17,9 +17,6 @@
         : $"Details, cast, and ratings for {(Model.Series?.Name ?? "this series")} on Recall.nu.";
     ViewData["Robots"] = Model.Series is not null ? "index, follow" : "noindex, nofollow";
 
-    var status = Model.Aggregate?.Status;
-    var isContinuing = status is { KeepUpdated: true };
-
     var omdbGenres = (OmdbValue(Model.Omdb?.Genre) ?? "")
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     var omdbAwards = OmdbValue(Model.Omdb?.Awards);
@@ -37,9 +34,9 @@
     {
         <partial name="_EmptyState" model="@(new EmptyStateModel
                  {
-                     Icon = Icons.NotFound,
-                     Heading = "Series not found",
-                     Text = "We couldn't find this series. It may have been removed from TheTVDB, or TheTVDB may not be answering right now.",
+                     Icon = Icons.Problem,
+                     Heading = "This series couldn't be loaded",
+                     Text = "TheTVDB, where the series information comes from, isn't answering right now. Please try again in a little while.",
                      HeadingLevel = 1,
                      ActionText = "Search for a series",
                      ActionPage = "/Search"
@@ -47,120 +44,53 @@
     }
     else
     {
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="tvdb-media @(string.IsNullOrWhiteSpace(Model.Series.ImageUrl) ? "is-empty" : "")">
-                    @if (!string.IsNullOrWhiteSpace(Model.Series.ImageUrl))
+        var series = Model.Aggregate;
+        var today = Model.Today;
+        // From the episode list rather than the aggregate's own "next aired" field,
+        // which is only as fresh as the last refresh.
+        var nextAirDate = series.Episodes
+            .Where(e => e.Aired is { } aired && aired >= today)
+            .Select(e => e.Aired)
+            .Min();
+        var hasEnded = series.Status?.KeepUpdated != true && series.LastAired.HasValue;
+
+        <div class="tvdb-title">
+            <partial name="_TitleHeader" model="@Model.BuildHeader(omdbGenres, ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
+
+            <div class="tvdb-title__details">
+                <dl class="row tvdb-facts">
+                    @if (series.FirstAired is { } firstAired)
                     {
-                        <img src="@Model.Series.ImageUrl" alt="@Model.Series.Name" />
+                        <dt class="col-5 col-sm-3">First aired</dt>
+                        <dd class="col-7 col-sm-9">@DisplayDate.Format(firstAired, today)</dd>
                     }
-                    @if (status?.Name is not null)
+
+                    @if (hasEnded)
                     {
-                        <div class="tvdb-slate">
-                            <span class="tvdb-dot @(isContinuing ? "is-ok" : "")" aria-hidden="true"></span>
-                            <span>@status.Name.ToUpperInvariant()</span>
-                        </div>
+                        <dt class="col-5 col-sm-3">Last aired</dt>
+                        <dd class="col-7 col-sm-9">@DisplayDate.Format(series.LastAired!.Value, today)</dd>
                     }
-                </div>
 
-                @if (Model.Series.ImdbId is not null)
-                {
-                    <div class="mt-2">
-                        <a class="tvdb-extlink" href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">
-                            <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
-                            <span>View on IMDb</span>
-                            <i class="@Icons.External" aria-hidden="true"></i>
-                        </a>
-                    </div>
-                }
-            </div>
-
-            <div class="col-md-8">
-                <h1 class="mb-2">@Model.Series.Name</h1>
-
-                @if (omdbGenres.Length > 0)
-                {
-                    <div class="tvdb-genre-list mb-3">
-                        @foreach (var genre in omdbGenres)
-                        {
-                            <span class="tvdb-badge tvdb-badge--neutral">@genre</span>
-                        }
-                    </div>
-                }
-
-                @if (Model.IsAuthenticated)
-                {
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                        <form method="post" asp-page-handler="ToggleLibrary" asp-route-id="@Model.Series.TvdbId" asp-route-season="@Model.Season">
-                            <button type="submit" class="btn @(Model.IsTrackedByCurrentUser ? "btn-outline-danger" : "btn-primary")">
-                                @(Model.IsTrackedByCurrentUser ? "Remove from library" : "Save to library")
-                            </button>
-                        </form>
-
-                        @if (Model.WatchProgress is { HasEpisodes: true } progress)
-                        {
-                            if (progress.IsUpToDate)
-                            {
-                                <button type="button" class="btn btn-outline-secondary" disabled>You are up to date</button>
-                            }
-                            else
-                            {
-                                var next = progress.NextUnwatchedEpisode!;
-                                <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId">
-                                    <input type="hidden" name="episodeId" value="@next.Id" />
-                                    <input type="hidden" name="Season" value="@next.SeasonNumber" />
-                                    <button type="submit" class="btn btn-watch">Mark @next.SlateCode() as watched</button>
-                                </form>
-                            }
-                        }
-
-                        <partial name="_LikeToggle" model="@(new Recall.Web.Pages.Shared.LikeToggleModel
-                                 {
-                                     Handler = "ToggleSeriesLike",
-                                     RouteId = Model.Series.TvdbId,
-                                     HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty },
-                                     IsLiked = Model.IsLikedByCurrentUser,
-                                     TargetNoun = "series"
-                                 })" />
-                    </div>
-
-                    <div class="mb-3">
-                        <partial name="_RatingWidget" model="@(new Recall.Web.Pages.Shared.RatingWidgetModel
-                                 {
-                                     RateHandler = "RateSeries",
-                                     ClearHandler = "ClearSeriesRating",
-                                     RouteId = Model.Series.TvdbId,
-                                     HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty },
-                                     CurrentValue = Model.CurrentUserRating,
-                                     TargetNoun = "series"
-                                 })" />
-                    </div>
-                }
-
-                <dl class="row">
-                    <dt class="col-sm-3">TVDB Id</dt>
-                    <dd class="col-sm-9"><a class="tvdb-mono" href="https://www.thetvdb.com/series/@Model.Series.Slug" target="_blank" rel="noopener">@Model.Series.TvdbId</a></dd>
-
-                    @if (!string.IsNullOrWhiteSpace(Model.Series.FirstAired))
+                    @if (nextAirDate is { } nextAir)
                     {
-                        <dt class="col-sm-3">First aired</dt>
-                        <dd class="col-sm-9">@DisplayDate.Format(Model.Series.FirstAired, Model.Today)</dd>
+                        <dt class="col-5 col-sm-3">Next episode</dt>
+                        <dd class="col-7 col-sm-9">@DisplayDate.Format(nextAir, today)</dd>
                     }
 
                     @if (Model.IsTrackedByCurrentUser)
                     {
-                        <dt class="col-sm-3">Last watched</dt>
-                        <dd class="col-sm-9">
+                        <dt class="col-5 col-sm-3">Last watched</dt>
+                        <dd class="col-7 col-sm-9">
                             @(Model.WatchedDatesByEpisodeId.Count > 0
-                                ? DisplayDate.Format(Model.WatchedDatesByEpisodeId.Values.Max(), Model.Today)
+                                ? DisplayDate.Format(Model.WatchedDatesByEpisodeId.Values.Max(), today)
                                 : "Not started yet")
                         </dd>
                     }
 
                     @if (omdbRating is not null)
                     {
-                        <dt class="col-sm-3">IMDb rating</dt>
-                        <dd class="col-sm-9">
+                        <dt class="col-5 col-sm-3">IMDb rating</dt>
+                        <dd class="col-7 col-sm-9">
                             <span class="tvdb-rating">
                                 <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
@@ -174,8 +104,8 @@
 
                     @if (Model.RecallRatingCount > 0)
                     {
-                        <dt class="col-sm-3">Recall rating</dt>
-                        <dd class="col-sm-9">
+                        <dt class="col-5 col-sm-3">Recall rating</dt>
+                        <dd class="col-7 col-sm-9">
                             <span class="tvdb-rating">
                                 <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
@@ -185,10 +115,10 @@
                     }
                 </dl>
 
-                @if (!string.IsNullOrWhiteSpace(Model.Series.Overview))
+                @if (!string.IsNullOrWhiteSpace(series.Overview))
                 {
                     <h2 class="tvdb-section-title">Overview</h2>
-                    <p class="tvdb-prose">@Model.Series.Overview</p>
+                    <p class="tvdb-prose">@series.Overview</p>
                 }
 
                 @if (omdbAwards is not null)
@@ -201,260 +131,161 @@
                         </div>
                     </div>
                 }
+
+                @if (Model.IsTrackedByCurrentUser)
+                {
+                    <button type="button" class="tvdb-quiet-action" data-bs-toggle="modal" data-bs-target="#removeFromLibraryModal">
+                        Remove from library
+                    </button>
+                }
             </div>
         </div>
-    var cast = Model.Aggregate.Characters
-        .Where(c => !string.IsNullOrWhiteSpace(c.PersonName) || !string.IsNullOrWhiteSpace(c.Name))
-        .OrderBy(c => c.Sort ?? int.MaxValue)
-        .ThenBy(c => c.PersonName ?? c.Name)
-        .ToList();
 
-
-        if (cast.Count > 0)
+        @if (Model.SeasonNumbers.Count > 0 && Model.SelectedSeason is { } selectedSeason)
         {
-            <hr class="my-4" />
-            <h2 class="mb-3">Cast &amp; Characters</h2>
+            var seasonEpisodes = series.Episodes
+                .Where(e => e.SeasonNumber == selectedSeason)
+                .OrderBy(e => e.EpisodeNumber ?? int.MaxValue)
+                .ThenBy(e => e.Id)
+                .ToList();
 
-            <div class="cast-container" id="castContainer">
-                <div class="row g-3" id="castGrid">
-                    @foreach (var ch in cast)
+            // Seasons where every episode is watched get a check on their chip.
+            var fullyWatchedSeasons = Model.SeasonNumbers
+                .Where(n =>
+                {
+                    var episodes = series.Episodes.Where(e => e.SeasonNumber == n).ToList();
+                    return episodes.Count > 0 && episodes.All(e => Model.WatchedEpisodeIds.Contains(e.Id));
+                })
+                .ToHashSet();
+
+            var seasonHasMarkable = seasonEpisodes.Any(e =>
+                !Model.WatchedEpisodeIds.Contains(e.Id) && !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(e.Aired, today));
+            var seasonWatchedCount = seasonEpisodes.Count(e => Model.WatchedEpisodeIds.Contains(e.Id));
+            var showSeasonMenu = Model.IsAuthenticated && (seasonHasMarkable || seasonWatchedCount > 0);
+
+            <section class="tvdb-section" id="episodes" aria-labelledby="episodesHeading">
+                <h2 id="episodesHeading" class="mb-3">Episodes</h2>
+
+                <div class="tvdb-season-bar">
+                    <nav class="tvdb-season-picker" aria-label="Seasons">
+                        @foreach (var seasonNumber in Model.SeasonNumbers)
+                        {
+                            var isSelected = seasonNumber == selectedSeason;
+                            var isFullyWatched = fullyWatchedSeasons.Contains(seasonNumber);
+                            <a asp-page="/Series/Details"
+                               asp-route-id="@series.TvdbId"
+                               asp-route-season="@seasonNumber"
+                               asp-fragment="episodes"
+                               class="tvdb-season-chip @(isSelected ? "is-selected" : "") @(isFullyWatched ? "is-complete" : "")"
+                               aria-current="@(isSelected ? "true" : null)">
+                                @if (isFullyWatched)
+                                {
+                                    <i class="@Icons.Success" aria-hidden="true"></i>
+                                }
+                                @Model.GetSeasonName(seasonNumber)
+                                @if (isFullyWatched)
+                                {
+                                    <span class="visually-hidden">, all watched</span>
+                                }
+                            </a>
+                        }
+                    </nav>
+
+                    @if (showSeasonMenu)
                     {
-                        var personDisplay = string.IsNullOrWhiteSpace(ch.PersonName) ? "Unknown person" : ch.PersonName;
-                        var characterDisplay = string.IsNullOrWhiteSpace(ch.Name) ? null : ch.Name;
-                        var imageUrl = !string.IsNullOrWhiteSpace(ch.PersonImageUrl) ? ch.PersonImageUrl : ch.Image;
-                        var hasLink = !string.IsNullOrWhiteSpace(ch.Url);
-
-                        <div class="col-12 col-sm-6 col-lg-4 cast-item">
-                            <div class="tvdb-cast-card">
-                                @if (!string.IsNullOrWhiteSpace(imageUrl))
+                        <div class="dropdown">
+                            <button type="button" class="tvdb-icon-button" id="seasonMenuButton"
+                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                    aria-label="Actions for @Model.GetSeasonTitle(selectedSeason)" title="Season actions">
+                                <i class="@Icons.More" aria-hidden="true"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="seasonMenuButton">
+                                @if (seasonHasMarkable)
                                 {
-                                    <img src="@imageUrl" alt="" class="tvdb-cast-card__photo" loading="lazy" />
+                                    <li>
+                                        <form method="post" asp-page-handler="MarkSeasonWatched" asp-route-id="@series.TvdbId">
+                                            <input type="hidden" name="Season" value="@selectedSeason" />
+                                            <button type="submit" class="dropdown-item">Mark season watched</button>
+                                        </form>
+                                    </li>
                                 }
-                                else
+                                @if (seasonWatchedCount > 0)
                                 {
-                                    <div class="tvdb-cast-card__photo is-empty" aria-hidden="true">
-                                        <i class="@Icons.Member"></i>
-                                    </div>
+                                    <li>
+                                        <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#unwatchSeasonModal">
+                                            Mark season unwatched&hellip;
+                                        </button>
+                                    </li>
                                 }
-
-                                <div class="tvdb-cast-card__body">
-                                    <div class="tvdb-cast-card__name">@personDisplay</div>
-
-                                    @if (!string.IsNullOrWhiteSpace(characterDisplay))
-                                    {
-                                        <div class="tvdb-meta text-break">as @characterDisplay</div>
-                                    }
-
-                                    <div class="mt-2 d-flex flex-wrap gap-2">
-                                        @if (ch.IsFeatured)
-                                        {
-                                            <span class="tvdb-badge tvdb-badge--ok">Featured</span>
-                                        }
-
-                                        @if (!string.IsNullOrWhiteSpace(ch.PeopleType))
-                                        {
-                                            <span class="tvdb-badge tvdb-badge--amber">@ch.PeopleType</span>
-                                        }
-                                    </div>
-
-                                    @if (hasLink)
-                                    {
-                                        <div class="mt-2">
-                                            <a href="@ch.Url"
-                                               target="_blank"
-                                               rel="noopener noreferrer"
-                                               class="tvdb-metalink tvdb-meta">View on TheTVDB</a>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
+                            </ul>
                         </div>
                     }
                 </div>
 
-                @if (cast.Count > 6)
+                <h3 class="tvdb-eyebrow mb-2">@Model.GetSeasonTitle(selectedSeason) &middot; <span class="tvdb-mono">@seasonEpisodes.Count</span> episode@(seasonEpisodes.Count == 1 ? "" : "s")</h3>
+
+                @if (seasonEpisodes.Count == 0)
                 {
-                    <div class="cast-expand-container mt-3">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn"
-                                aria-expanded="false" aria-controls="castGrid" onclick="toggleCast()">
-                            <span id="castToggleLabel" data-more="Show @(cast.Count - 6) more" data-less="Show less">Show @(cast.Count - 6) more</span>
-                            <i class="@Icons.Expand ms-1" id="castToggleIcon" aria-hidden="true"></i>
-                        </button>
-                    </div>
+                    <p class="tvdb-meta">No episodes found for this season.</p>
                 }
-            </div>
-
-            <script>
-                function toggleCast() {
-                    const container = document.getElementById('castContainer');
-                    const label = document.getElementById('castToggleLabel');
-                    const expanded = container.classList.toggle('is-expanded');
-                    label.textContent = expanded ? label.dataset.less : label.dataset.more;
-                    document.getElementById('castToggleBtn').setAttribute('aria-expanded', expanded);
-                }
-            </script>
-        }
-        
-        var seasonNumbers = Model.Aggregate.Seasons
-            .Select(s => s.Number)
-            .Where(n => n.HasValue)
-            .Select(n => n!.Value)
-            .Distinct()
-            .OrderBy(n => n)
-            .ToList();
-
-        // With no explicit ?season= in the URL, open the tab where the user
-        // currently is in their watch history: the season of their most recently
-        // watched episode (falling back to the next episode they should watch for
-        // a series they haven't started). Only then fall back to the default tab.
-        int? watchPositionSeason = null;
-        if (Model.WatchProgress is { HasEpisodes: true } wp)
-        {
-            var lastWatched = wp.OrderedEpisodes.LastOrDefault(e => wp.WatchedEpisodeIds.Contains(e.Id));
-            watchPositionSeason = lastWatched?.SeasonNumber ?? wp.NextUnwatchedEpisode?.SeasonNumber;
-        }
-
-        // Prefer the first real season over Specials (season 0); only land on
-        // Specials when it's the only season there is.
-        var defaultSeason = seasonNumbers.FirstOrDefault(n => n != 0, seasonNumbers.FirstOrDefault());
-
-        var selectedSeason = Model.Season
-            ?? (watchPositionSeason is { } s && seasonNumbers.Contains(s) ? s : defaultSeason);
-
-        var filteredEpisodes = Model.Aggregate.Episodes
-            .Where(e => e.SeasonNumber == selectedSeason)
-            .OrderBy(e => e.EpisodeNumber ?? int.MaxValue)
-            .ThenBy(e => e.Id)
-            .ToList();
-
-        if (seasonNumbers.Count > 0)
-        {
-            <hr class="my-4"/>
-
-            // Seasons where the user has watched every episode — the tab gets a green check.
-            var fullyWatchedSeasons = seasonNumbers
-                .Where(n =>
+                else
                 {
-                    var seasonEpisodes = Model.Aggregate.Episodes.Where(e => e.SeasonNumber == n).ToList();
-                    return seasonEpisodes.Count > 0
-                           && seasonEpisodes.All(e => Model.WatchedEpisodeIds.Contains(e.Id));
-                })
-                .ToHashSet();
-
-            <h2 class="mb-3">Seasons</h2>
-            <div class="d-flex flex-wrap gap-2 mb-4">
-                @foreach (var seasonNumber in seasonNumbers)
-                {
-                    var isActive = seasonNumber == selectedSeason;
-                    var isFullyWatched = fullyWatchedSeasons.Contains(seasonNumber);
-                    <a asp-page="/Series/Details"
-                       asp-route-id="@Model.Series.TvdbId"
-                       asp-route-season="@seasonNumber"
-                       class="btn @(isActive ? "btn-dark" : "btn-outline-dark") btn-sm rounded-pill px-3"
-                       title="@(isFullyWatched ? "All episodes watched" : null)">
-                        @if (isFullyWatched)
+                    <ul class="list-group tvdb-episode-list">
+                        @foreach (var ep in seasonEpisodes)
                         {
-                            <i class="@Icons.Check tvdb-season-check" aria-hidden="true"></i><span class="visually-hidden">All watched: </span>
-                        }
-                        @Model.GetSeasonName(seasonNumber)
-                    </a>
-                }
-            </div>
+                            var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
+                            var hasAired = !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(ep.Aired, today);
+                            var airedText = ep.Aired.HasValue ? DisplayDate.Format(ep.Aired.Value, today) : null;
 
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h3 class="mb-0 tvdb-eyebrow">Episodes &middot; @Model.GetSeasonName(selectedSeason)</h3>
+                            <li class="list-group-item tvdb-episode @(isWatched ? "is-watched" : "") @(Model.IsAuthenticated ? "has-control" : "")">
+                                <div class="tvdb-episode__title">
+                                    <span class="tvdb-mono">E@(ep.EpisodeNumber?.ToString() ?? "?")</span>
+                                    <a asp-page="/Episodes/Details" asp-route-id="@ep.Id" class="tvdb-link-plain">@ep.Name</a>
+                                </div>
 
-                @if (Model.IsAuthenticated && filteredEpisodes.Count > 0)
-                {
-                    var seasonHasMarkable = filteredEpisodes.Any(e =>
-                        !Model.WatchedEpisodeIds.Contains(e.Id) && !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(e.Aired, Model.Today));
-                    var seasonWatchedCount = filteredEpisodes.Count(e => Model.WatchedEpisodeIds.Contains(e.Id));
-
-                    <div class="d-flex flex-wrap gap-2">
-                        @if (seasonHasMarkable)
-                        {
-                            <form method="post" asp-page-handler="MarkSeasonWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline">
-                                <input type="hidden" name="Season" value="@selectedSeason" />
-                                <button type="submit" class="btn btn-outline-dark btn-sm rounded-pill px-3">
-                                    Mark season watched
-                                </button>
-                            </form>
-                        }
-                        @if (seasonWatchedCount > 0)
-                        {
-                            <form method="post" asp-page-handler="MarkSeasonUnwatched" asp-route-id="@Model.Series.TvdbId" class="d-inline"
-                                  onsubmit="return confirm('Mark @seasonWatchedCount watched episode@(seasonWatchedCount == 1 ? "" : "s") in this season as not watched? The watched dates will be lost.');">
-                                <input type="hidden" name="Season" value="@selectedSeason" />
-                                <button type="submit" class="btn btn-outline-dark btn-sm rounded-pill px-3">
-                                    Mark season unwatched
-                                </button>
-                            </form>
-                        }
-                    </div>
-                }
-            </div>
-
-            @if (filteredEpisodes.Count == 0)
-            {
-                <p class="tvdb-meta">No episodes found for this season.</p>
-            }
-            else
-            {
-                <div class="list-group">
-                    @foreach (var ep in filteredEpisodes)
-                    {
-                        var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
-                        var hasAired = !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(ep.Aired, Model.Today);
-                        <div class="list-group-item tvdb-episode-row @(isWatched ? "is-watched" : "")">
-                            <div class="d-flex justify-content-between align-items-start gap-3">
-                                <div class="tvdb-episode-row__main">
-                                    <div class="tvdb-episode-row__title">
-                                        <span class="tvdb-mono">E@(ep.EpisodeNumber?.ToString() ?? "?")</span>
-                                        <a asp-page="/Episodes/Details" asp-route-id="@ep.Id">@ep.Name</a>
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(ep.Overview))
+                                <div class="tvdb-episode__facts">
+                                    @if (airedText is not null)
                                     {
-                                        <div class="tvdb-meta mt-1">@ep.Overview</div>
+                                        <span>@(hasAired ? "" : "Airs ")@airedText</span>
+                                    }
+                                    @if (ep.RuntimeMinutes.HasValue)
+                                    {
+                                        <span>@ep.RuntimeMinutes min</span>
+                                    }
+                                    @if (isWatched && Model.WatchedDatesByEpisodeId.TryGetValue(ep.Id, out var watchedOn))
+                                    {
+                                        <span class="tvdb-episode__watched">Watched @DisplayDate.Format(watchedOn, today)</span>
                                     }
                                 </div>
 
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="tvdb-episode-row__facts tvdb-meta">
-                                        @if (ep.Aired.HasValue)
-                                        {
-                                            <div>@DisplayDate.Format(ep.Aired.Value, Model.Today)</div>
-                                        }
-                                        @if (ep.RuntimeMinutes.HasValue)
-                                        {
-                                            <div>@ep.RuntimeMinutes min</div>
-                                        }
-                                    </div>
+                                @if (!string.IsNullOrWhiteSpace(ep.Overview))
+                                {
+                                    <p class="tvdb-episode__overview">@ep.Overview</p>
+                                }
 
-                                    @if (Model.IsAuthenticated)
-                                    {
-                                        if (isWatched)
+                                @if (Model.IsAuthenticated)
+                                {
+                                    <div class="tvdb-episode__control">
+                                        @if (isWatched)
                                         {
-                                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline tvdb-watch-form">
+                                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@series.TvdbId" class="tvdb-watch-form">
                                                 <input type="hidden" name="episodeId" value="@ep.Id" />
                                                 <input type="hidden" name="Season" value="@selectedSeason" />
                                                 <button type="submit"
                                                         class="tvdb-watch-dot tvdb-watch-dot--on"
                                                         title="Mark as unwatched"
                                                         aria-pressed="true"
-                                                        aria-label="Watched. Click to mark as unwatched.">
+                                                        aria-label="@ep.Name: watched. Click to mark as unwatched.">
                                                     <i class="@Icons.Check" aria-hidden="true"></i>
                                                 </button>
                                             </form>
                                         }
                                         else if (!hasAired)
                                         {
-                                            <button type="button"
-                                                    class="tvdb-watch-dot"
-                                                    title="Hasn't aired yet"
-                                                    aria-pressed="false"
-                                                    aria-label="Can't mark as watched — episode hasn't aired yet"
-                                                    disabled>
-                                            </button>
+                                            <span class="tvdb-watch-dot tvdb-watch-dot--upcoming" role="img"
+                                                  title="Airs @airedText" aria-label="@ep.Name airs @airedText">
+                                                <i class="@Icons.NotAiredYet" aria-hidden="true"></i>
+                                            </span>
                                         }
                                         else
                                         {
@@ -462,134 +293,171 @@
                                                     class="tvdb-watch-dot"
                                                     title="Mark as watched"
                                                     aria-pressed="false"
-                                                    aria-label="Mark as watched"
+                                                    aria-label="Mark @ep.Name as watched"
                                                     data-episode-id="@ep.Id"
-                                                    data-series-id="@Model.Series.TvdbId"
+                                                    data-series-id="@series.TvdbId"
                                                     data-season="@selectedSeason"
                                                     onclick="handleEpisodeWatchClick(event)">
+                                                <i class="@Icons.Check" aria-hidden="true"></i>
                                             </button>
                                         }
-                                    }
-                                </div>
-                            </div>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
 
-                            @if (isWatched && Model.WatchedDatesByEpisodeId.TryGetValue(ep.Id, out var watchedOn))
-                            {
-                                <div class="tvdb-meta mt-2">
-                                    Watched @DisplayDate.Format(watchedOn, Model.Today)
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
+            @if (seasonWatchedCount > 0)
+            {
+                <partial name="_ConfirmModal" model="@(new ConfirmModalModel
+                         {
+                             Id = "unwatchSeasonModal",
+                             Title = "Mark season unwatched?",
+                             Text = $"This marks {seasonWatchedCount} watched episode{(seasonWatchedCount == 1 ? "" : "s")} in {Model.GetSeasonTitle(selectedSeason)} as not watched. The dates you watched them on will be lost.",
+                             ConfirmLabel = "Mark unwatched",
+                             Handler = "MarkSeasonUnwatched",
+                             RouteId = series.TvdbId,
+                             HiddenFields = { ["Season"] = selectedSeason.ToString() }
+                         })" />
             }
 
             <div class="modal fade" id="seriesCatchUpModal" tabindex="-1" aria-labelledby="seriesCatchUpModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h2 class="modal-title" id="seriesCatchUpModalLabel">Catch up?</h2>
                             <button type="button" class="tvdb-close" data-bs-dismiss="modal" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
                         </div>
-                        <div class="modal-body tvdb-prose">
-                            You have <strong id="priorEpisodeCount">0</strong> earlier unwatched episode<span id="priorEpisodeCountPlural">s</span> in this season.
+                        <div class="modal-body">
+                            You have <strong id="priorEpisodeCount">0</strong> earlier unwatched episode<span id="priorEpisodeCountPlural">s</span>.
                             Mark <span id="priorEpisodeCountText">those</span> as watched too?
                         </div>
                         <div class="modal-footer">
-                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@Model.Series.TvdbId" class="d-inline">
+                            <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@series.TvdbId" class="d-inline">
                                 <input type="hidden" name="episodeId" id="modalEpisodeId" />
                                 <input type="hidden" name="Season" id="modalSeason" />
                                 <button type="submit" class="btn btn-outline-dark">Just this episode</button>
                             </form>
-                            <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@Model.Series.TvdbId" class="d-inline">
+                            <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@series.TvdbId" class="d-inline">
                                 <input type="hidden" name="episodeId" id="modalEpisodeIdThrough" />
                                 <input type="hidden" name="Season" id="modalSeasonThrough" />
-                                <button type="submit" class="btn btn-watch">Mark this &amp; earlier episodes</button>
+                                <button type="submit" class="btn btn-primary">Mark this &amp; earlier episodes</button>
                             </form>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <script>
-                async function handleEpisodeWatchClick(event) {
-                    const button = event.currentTarget;
-                    const episodeId = parseInt(button.dataset.episodeId);
-                    const season = parseInt(button.dataset.season);
+    <script>
+        async function handleEpisodeWatchClick(event) {
+            const button = event.currentTarget;
+            const episodeId = parseInt(button.dataset.episodeId);
+            const season = parseInt(button.dataset.season);
 
-                    try {
-                        const formData = new FormData();
-                        formData.append('episodeId', episodeId);
+            try {
+                const formData = new FormData();
+                formData.append('episodeId', episodeId);
 
-                        const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
-                        if (tokenInput) {
-                            formData.append('__RequestVerificationToken', tokenInput.value);
-                        }
-
-                        const response = await fetch('?handler=CheckPriorEpisodes', {
-                            method: 'POST',
-                            body: formData
-                        });
-
-                        if (!response.ok) {
-                            throw new Error('Failed to check prior episodes');
-                        }
-
-                        const data = await response.json();
-                        const priorCount = data.priorUnwatchedCount || 0;
-
-                        if (priorCount > 0) {
-                            document.getElementById('priorEpisodeCount').textContent = priorCount;
-                            document.getElementById('priorEpisodeCountPlural').textContent = priorCount === 1 ? '' : 's';
-                            document.getElementById('priorEpisodeCountText').textContent = priorCount === 1 ? 'it' : 'those';
-                            document.getElementById('modalEpisodeId').value = episodeId;
-                            document.getElementById('modalSeason').value = season;
-                            document.getElementById('modalEpisodeIdThrough').value = episodeId;
-                            document.getElementById('modalSeasonThrough').value = season;
-
-                            const modal = new bootstrap.Modal(document.getElementById('seriesCatchUpModal'));
-                            modal.show();
-                        } else {
-                            markEpisodeWatched(episodeId, season);
-                        }
-                    } catch {
-                        markEpisodeWatched(episodeId, season);
-                    }
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (tokenInput) {
+                    formData.append('__RequestVerificationToken', tokenInput.value);
                 }
 
-                function markEpisodeWatched(episodeId, season) {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '?handler=ToggleEpisodeWatched';
+                const response = await fetch('?handler=CheckPriorEpisodes', {
+                    method: 'POST',
+                    body: formData
+                });
 
-                    const episodeInput = document.createElement('input');
-                    episodeInput.type = 'hidden';
-                    episodeInput.name = 'episodeId';
-                    episodeInput.value = episodeId;
-
-                    const seasonInput = document.createElement('input');
-                    seasonInput.type = 'hidden';
-                    seasonInput.name = 'Season';
-                    seasonInput.value = season;
-
-                    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
-                    if (tokenInput) {
-                        const tokenCopy = document.createElement('input');
-                        tokenCopy.type = 'hidden';
-                        tokenCopy.name = '__RequestVerificationToken';
-                        tokenCopy.value = tokenInput.value;
-                        form.appendChild(tokenCopy);
-                    }
-
-                    form.appendChild(episodeInput);
-                    form.appendChild(seasonInput);
-                    document.body.appendChild(form);
-                    form.submit();
+                if (!response.ok) {
+                    throw new Error('Failed to check prior episodes');
                 }
-            </script>
+
+                const data = await response.json();
+                const priorCount = data.priorUnwatchedCount || 0;
+
+                if (priorCount > 0) {
+                    document.getElementById('priorEpisodeCount').textContent = priorCount;
+                    document.getElementById('priorEpisodeCountPlural').textContent = priorCount === 1 ? '' : 's';
+                    document.getElementById('priorEpisodeCountText').textContent = priorCount === 1 ? 'it' : 'those';
+                    document.getElementById('modalEpisodeId').value = episodeId;
+                    document.getElementById('modalSeason').value = season;
+                    document.getElementById('modalEpisodeIdThrough').value = episodeId;
+                    document.getElementById('modalSeasonThrough').value = season;
+
+                    const modal = new bootstrap.Modal(document.getElementById('seriesCatchUpModal'));
+                    modal.show();
+                } else {
+                    markEpisodeWatched(episodeId, season);
+                }
+            } catch {
+                markEpisodeWatched(episodeId, season);
+            }
+        }
+
+        function markEpisodeWatched(episodeId, season) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '?handler=ToggleEpisodeWatched';
+
+            const episodeInput = document.createElement('input');
+            episodeInput.type = 'hidden';
+            episodeInput.name = 'episodeId';
+            episodeInput.value = episodeId;
+
+            const seasonInput = document.createElement('input');
+            seasonInput.type = 'hidden';
+            seasonInput.name = 'Season';
+            seasonInput.value = season;
+
+            const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+            if (tokenInput) {
+                const tokenCopy = document.createElement('input');
+                tokenCopy.type = 'hidden';
+                tokenCopy.name = '__RequestVerificationToken';
+                tokenCopy.value = tokenInput.value;
+                form.appendChild(tokenCopy);
+            }
+
+            form.appendChild(episodeInput);
+            form.appendChild(seasonInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
+    </script>
+        }
+
+        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast })" />
+        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew })" />
+
+        <p class="tvdb-source-line">
+            <a class="tvdb-metalink" href="https://www.thetvdb.com/series/@series.Slug" target="_blank" rel="noopener">TheTVDB <span class="tvdb-mono">@series.TvdbId</span></a>
+            @if (Model.Series.ImdbId is not null)
+            {
+                <a class="tvdb-metalink" href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">IMDb <span class="tvdb-mono">@Model.Series.ImdbId</span></a>
+            }
+        </p>
+
+        @if (Model.IsTrackedByCurrentUser)
+        {
+            <partial name="_ConfirmModal" model="@(new ConfirmModalModel
+                     {
+                         Id = "removeFromLibraryModal",
+                         Title = "Remove from library?",
+                         Text = $"{series.Name} leaves your library and you stop getting notifications for it. The episodes you marked watched stay marked.",
+                         ConfirmLabel = "Remove",
+                         Handler = "ToggleLibrary",
+                         RouteId = series.TvdbId,
+                         HiddenFields = { ["Season"] = Model.Season?.ToString() ?? string.Empty }
+                     })" />
         }
     }
 </div>
+
+@section Scripts {
+    <script src="~/js/tvdb-cast.js" asp-append-version="true"></script>
+}
 
 @section Head {
     @if (Model.Series is not null)

@@ -1,0 +1,23 @@
+@model Recall.Web.Pages.Shared.ConfirmModalModel
+
+<div class="modal fade" id="@Model.Id" tabindex="-1" aria-labelledby="@(Model.Id)Label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="@(Model.Id)Label">@Model.Title</h2>
+                <button type="button" class="tvdb-close" data-bs-dismiss="modal" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
+            </div>
+            <div class="modal-body">@Model.Text</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" asp-page-handler="@Model.Handler" asp-route-id="@Model.RouteId">
+                    @foreach (var field in Model.HiddenFields)
+                    {
+                        <input type="hidden" name="@field.Key" value="@field.Value" />
+                    }
+                    <button type="submit" class="btn btn-danger">@Model.ConfirmLabel</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

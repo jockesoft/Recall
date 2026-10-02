@@ -178,18 +178,33 @@ public class WatchProgressServiceTests
     [Test]
     public async Task MarkWatchedThroughAsync_Should_SkipEarlierEpisodesThatHaveNotAired_ButKeepUndatedOnes()
     {
-        // Season 0 sorts first, so both specials count as "earlier" than S01E02.
         SetupSeries(
-            Ep(10, 0, 1, Future),
-            Ep(11, 0, 2, aired: null),
-            Ep(1, 1, 1, Past),
-            Ep(2, 1, 2, Past));
+            Ep(10, 1, 1, Future),
+            Ep(11, 1, 2, aired: null),
+            Ep(1, 1, 3, Past),
+            Ep(2, 1, 4, Past));
         var marked = CaptureMarkedRange();
 
         var result = await _sut.MarkWatchedThroughAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 2);
 
         marked.Should().Equal(11, 1, 2);
         result.MarkedCount.Should().Be(3);
+    }
+
+    [Test]
+    public async Task MarkWatchedThroughAsync_Should_LeaveSpecialsAlone_WhenCatchingUpARegularEpisode()
+    {
+        SetupSeries(
+            Ep(10, 0, 1, Past),
+            Ep(11, 0, 2, Past),
+            Ep(1, 1, 1, Past),
+            Ep(2, 1, 2, Past));
+        var marked = CaptureMarkedRange();
+
+        var result = await _sut.MarkWatchedThroughAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 2);
+
+        marked.Should().Equal(1, 2);
+        result.MarkedCount.Should().Be(2);
     }
 
     [Test]

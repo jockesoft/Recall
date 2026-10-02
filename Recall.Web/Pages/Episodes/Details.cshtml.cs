@@ -420,6 +420,35 @@ public sealed class DetailsModel(
             new(e.Id, e.SeasonNumber, e.EpisodeNumber);
     }
 
+    /// <summary>
+    /// When the episode could not be shown: the series the visitor came from
+    /// (read from the Referer, since without the episode nothing else says
+    /// which series it belongs to), so the page can offer a way back.
+    /// </summary>
+    public int? CameFromSeriesId
+    {
+        get
+        {
+            if (!Uri.TryCreate(Request.Headers.Referer.ToString(), UriKind.Absolute, out var referer)
+                || !string.Equals(referer.Host, Request.Host.Host, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            const string prefix = "/Series/Details/";
+            var path = referer.AbsolutePath;
+            return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                   && int.TryParse(path[prefix.Length..].Trim('/'), out var seriesId)
+                   && seriesId > 0
+                ? seriesId
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// True when the episode is missing because TheTVDB (or something else)
+    /// failed, rather than because there is no such episode.
+    /// </summary>
+    public bool LoadFailed { get; private set; }
+
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
     {
         if (id <= 0) return NotFound();
@@ -475,20 +504,31 @@ public sealed class DetailsModel(
                 }
             }
 
+            // The page renders its own "no such episode" state (with a way back
+            // to the series) rather than the generic 404 page.
+            if (Episode is null)
+                Response.StatusCode = StatusCodes.Status404NotFound;
+
             return Page();
         }
         catch (TheTvDbApiException ex)
         {
-            logger.LogWarning(ex, "TheTVDB API error while loading details for id {SeriesId}.", id);
-            this.SetErrorToast("Could not fetch series details from TheTVDB right now.");
-            return Page();
+            logger.LogWarning(ex, "TheTVDB API error while loading episode {EpisodeId}.", id);
+            return Failed(StatusCodes.Status503ServiceUnavailable);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unexpected error while loading details for id {SeriesId}.", id);
-            this.SetErrorToast("An unexpected error occurred.");
-            return Page();
+            logger.LogError(ex, "Unexpected error while loading episode {EpisodeId}.", id);
+            return Failed(StatusCodes.Status500InternalServerError);
         }
+    }
+
+    private IActionResult Failed(int statusCode)
+    {
+        Episode = null;
+        LoadFailed = true;
+        Response.StatusCode = statusCode;
+        return Page();
     }
 }
 

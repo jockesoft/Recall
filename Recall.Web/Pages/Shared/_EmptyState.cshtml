@@ -9,6 +9,6 @@
     <p class="tvdb-empty-state__text">@Model.Text</p>
     @if (!string.IsNullOrWhiteSpace(Model.ActionText) && !string.IsNullOrWhiteSpace(Model.ActionPage))
     {
-        <a asp-page="@Model.ActionPage" class="btn btn-primary tvdb-empty-state__action">@Model.ActionText</a>
+        <a asp-page="@Model.ActionPage" asp-route-id="@Model.ActionRouteId" class="btn btn-primary tvdb-empty-state__action">@Model.ActionText</a>
     }
 </div>

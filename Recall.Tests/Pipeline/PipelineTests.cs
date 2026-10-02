@@ -46,6 +46,8 @@ public sealed class PipelineTests
         html.Should().Contain("TheTVDB").And.Contain("https://thetvdb.com", "the attribution is in the shared layout");
         html.Should().NotContain("handler=ToggleLibrary", "a signed-out visitor is offered no way to change anything");
         html.Should().NotContain("handler=MarkSeasonWatched");
+        html.Should().Contain("Sign in to track this series", "a visitor gets the sign-in card in place of the action row");
+        html.Should().Contain("/Account/Login?returnUrl=");
     }
 
     [Test]
