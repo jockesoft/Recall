@@ -17,7 +17,9 @@ namespace Recall.Web.Infrastructure.Timers;
 /// carrying TheTVDB's <c>keep_updated</c> flag once older than
 /// <see cref="MinRefreshAge"/>, and every other row once older than
 /// <see cref="SettledMaxAge"/> (an ended show still gets corrections, artwork,
-/// or the occasional revival) —
+/// or the occasional revival), and ahead of both, within the same cap, rows
+/// cached by an older version of the mapping (today: before series carried
+/// TheTVDB's genres), until none are left —
 /// then up to <see cref="MaxEpisodesPerRun"/> <c>cached_episode_extended</c> rows
 /// that are either older than <see cref="EpisodeMaxAge"/>, still titled "TBA" and
 /// older than <see cref="TbaEpisodeMaxAge"/>, or missing their still image despite

@@ -15,7 +15,9 @@
 # keys in user secrets. "start" builds Recall.Web (Debug) first.
 #
 # The instances run with the import job switched off (Jobs:Disabled), so rows
-# left waiting for a screenshot are never looked up on TheTVDB. They apply
+# left waiting for a screenshot are never looked up on TheTVDB, and with the
+# series refresh job off: the clones' series were cached before genres were
+# kept, and the job would start re-fetching them ten seconds after each start. They apply
 # pending migrations to the clones at startup (the clones are copies of
 # recall_db, which may be a migration behind the code; recall_db itself is not
 # touched). The weekly digest is switched on so its Profile switch, Dashboard
@@ -62,6 +64,7 @@ start_app() { # name url database environment [directory]
     Database__MigrateOnStartup=true \
     Jobs__Disabled__0=WatchlistImportTimer \
     Jobs__Disabled__1=WeeklyDigestTimer \
+    Jobs__Disabled__2=UpdateTvDbInfoTimer \
     Digest__Enabled=true \
     Site__BaseUrl="$2" \
     nohup dotnet "$dll" > "$RUN/$1.log" 2>&1 &
@@ -89,6 +92,23 @@ row_counts() { # database
       FROM information_schema.tables WHERE table_schema = 'public') x;"
 }
 
+# Copies recall_db into a new database. The quick way (TEMPLATE) needs nobody
+# else to be connected to recall_db; when someone is (a database client left
+# open, the dev app running), it is copied with pg_dump instead, which only
+# reads. Nobody's session is closed either way.
+clone_source() { # database
+  if psql_db postgres -c "CREATE DATABASE $1 TEMPLATE $SOURCE_DB;" 2> "$RUN/clone-error.txt"; then
+    return
+  fi
+  if ! grep -q "is being accessed by other users" "$RUN/clone-error.txt"; then
+    cat "$RUN/clone-error.txt" >&2; exit 1
+  fi
+  echo "$SOURCE_DB is in use by another session; copying it into $1 with pg_dump instead"
+  psql_db postgres -c "CREATE DATABASE $1;"
+  docker exec -e PGPASSWORD=devpassword "$PG_CONTAINER" pg_dump -U postgres --no-owner "$SOURCE_DB" \
+    | docker exec -i -e PGPASSWORD=devpassword "$PG_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 -q -d "$1" > /dev/null
+}
+
 setup() {
   mkdir -p "$RUN"
   stop_apps   # instances from an earlier run would hold the ports and the clones
@@ -97,7 +117,7 @@ setup() {
 
   for db in "$SEEDED_DB" "$EMPTY_DB"; do
     psql_db postgres -c "DROP DATABASE IF EXISTS $db WITH (FORCE);"
-    psql_db postgres -c "CREATE DATABASE $db TEMPLATE $SOURCE_DB;"
+    clone_source "$db"
     # Nothing is stale, so the hourly refresh jobs make no TheTVDB calls of their own.
     psql_db "$db" -c "
       UPDATE cached_series_aggregate SET retrieved_utc = now();

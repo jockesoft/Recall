@@ -36,6 +36,7 @@ public class DashboardModelTests
     {
         // A fresh instance per test: some tests change the settings.
         _libraryOptions = new LibraryOptions();
+        _addedUtc.Clear();
         _users = new Mock<IAppUserRepository>();
         _digestOptions = new DigestOptions { Enabled = true };
 
@@ -391,6 +392,31 @@ public class DashboardModelTests
         _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal(1);
         _sut.DormantSeriesCount.Should().Be(3, "the link reads \"3 series you haven't watched in a while\"");
         _sut.UnwatchedCount.Should().Be(5, "the stat keeps counting every series: 1 + 2 + 1 + 1 unwatched aired episodes");
+    }
+
+    [Test]
+    public async Task AnEndedSeries_NeverStarted_Should_BeInContinueWatching_LikeAnyOtherNotStarted()
+    {
+        // The Library puts these under Watching (SeriesLibraryStateRule); the
+        // Dashboard lists the same series by their next episode.
+        _addedUtc[1] = DaysAgo(5);
+        _addedUtc[2] = DaysAgo(200);
+        _addedUtc[4] = DaysAgo(200);
+        SetUpSeries(
+            new SeriesAggregate { TvdbId = 1, Name = "Ended, Added This Week", Status = new SeriesStatus { Name = "Ended" }, Episodes = [Ep(10, 1, 1, Today.AddDays(-400))] },
+            new SeriesAggregate { TvdbId = 2, Name = "Ended, Added Long Ago", Status = new SeriesStatus { Name = "Ended" }, Episodes = [Ep(20, 1, 1, Today.AddDays(-400))] },
+            new SeriesAggregate { TvdbId = 3, Name = "Ended, Only The Special Watched", Status = new SeriesStatus { Name = "Ended" }, Episodes = [Ep(30, 0, 1, Today.AddDays(-300)), Ep(31, 1, 1, Today.AddDays(-400))] },
+            new SeriesAggregate { TvdbId = 4, Name = "Announced, Added Long Ago", Status = new SeriesStatus { Name = "Upcoming" }, Episodes = [Ep(40, 1, 1, Today.AddDays(20))] },
+            new SeriesAggregate { TvdbId = 5, Name = "Ended, Fully Watched", Status = new SeriesStatus { Name = "Ended" }, Episodes = [Ep(50, 1, 1, Today.AddDays(-400))] });
+        SetUpWatched(30, 50);
+        SetUpLastWatched((3, 2), (5, 2));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Select(c => (c.SeriesId, c.EpisodeId)).Should().Equal(
+            [(3, 31), (1, 10)],
+            "the special is activity but never the next episode; the series added this week follows; the fully watched one has no card");
+        _sut.DormantSeriesCount.Should().Be(1, "only the series with something to watch that was added long ago; the announced one has nothing to watch yet");
     }
 
     [Test]

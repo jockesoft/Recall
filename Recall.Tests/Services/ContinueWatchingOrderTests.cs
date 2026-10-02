@@ -134,6 +134,21 @@ public sealed class ContinueWatchingOrderTests
     }
 
     [Test]
+    public void ASeriesWithNothingToWatch_Should_NeverBeDormant_AndKeepItsPlaceInTheOrder()
+    {
+        Show[] shows = [new(1, "Added Last Week"), new(2, "Announced, Added Four Months Ago"), new(3, "Added A Year Ago")];
+
+        var list = ContinueWatchingOrder.Arrange(
+            shows, s => s.Id, s => s.Name, new Dictionary<int, DateTime>(),
+            new Dictionary<int, DateTime> { [1] = DaysAgo(7), [2] = DaysAgo(120), [3] = DaysAgo(365) },
+            new HashSet<int>(), Today, new LibraryOptions(),
+            nothingToWatch: new HashSet<int> { 2 });
+
+        list.Active.Select(s => s.Id).Should().Equal([1, 2], "not started, so after anything with activity, newest added first");
+        list.Dormant.Select(s => s.Id).Should().Equal(3);
+    }
+
+    [Test]
     public void ASeriesNeverStarted_Should_BeDormant_OnceItWasAddedLongerAgoThanTheThreshold()
     {
         Show[] shows = [new(1, "Added Last Week"), new(2, "Added Four Months Ago"), new(3, "Added A Year Ago")];

@@ -12,6 +12,9 @@ namespace Recall.Tests.Infrastructure.Persistence;
 [TestFixture]
 public sealed class TvdbSnapshotStoreTests
 {
+    // Rows the current mapping wrote; a seeded row without it counts as cached before genres.
+    private const int Current = Recall.Web.Mappings.SeriesDataDtoMappings.AggregateVersion;
+
     private SqliteConnection _connection = null!;
     private DbContextOptions<AppDbContext> _dbOptions = null!;
 
@@ -252,11 +255,11 @@ public sealed class TvdbSnapshotStoreTests
         await using (var seed = new AppDbContext(_dbOptions))
         {
             seed.CachedSeriesAggregates.AddRange(
-                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Continuing, stale", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddHours(-13) },
-                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "Continuing, fresh", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddHours(-1) },
-                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "Ended, cached two weeks ago", Payload = "{}", KeepUpdated = false, RetrievedUtc = now.AddDays(-14) },
-                new CachedSeriesAggregateEntity { TvdbId = 4, Language = "eng", Name = "Ended, never refreshed", Payload = "{}", KeepUpdated = false, RetrievedUtc = now.AddDays(-40) },
-                new CachedSeriesAggregateEntity { TvdbId = 5, Language = "eng", Name = "Flag unknown, never refreshed", Payload = "{}", KeepUpdated = null, RetrievedUtc = now.AddDays(-60) });
+                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Continuing, stale", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddHours(-13) },
+                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "Continuing, fresh", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddHours(-1) },
+                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "Ended, cached two weeks ago", Payload = "{}", MappingVersion = Current, KeepUpdated = false, RetrievedUtc = now.AddDays(-14) },
+                new CachedSeriesAggregateEntity { TvdbId = 4, Language = "eng", Name = "Ended, never refreshed", Payload = "{}", MappingVersion = Current, KeepUpdated = false, RetrievedUtc = now.AddDays(-40) },
+                new CachedSeriesAggregateEntity { TvdbId = 5, Language = "eng", Name = "Flag unknown, never refreshed", Payload = "{}", MappingVersion = Current, KeepUpdated = null, RetrievedUtc = now.AddDays(-60) });
             await seed.SaveChangesAsync();
         }
 
@@ -276,10 +279,10 @@ public sealed class TvdbSnapshotStoreTests
         {
             seed.AppUsers.Add(new AppUserEntity { Id = userId, Username = "u", Email = "u@test.local" });
             seed.CachedSeriesAggregates.AddRange(
-                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Untracked, oldest", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-9) },
-                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "Untracked", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-8) },
-                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "Tracked, newer", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-1) },
-                new CachedSeriesAggregateEntity { TvdbId = 4, Language = "eng", Name = "Tracked, older", Payload = "{}", KeepUpdated = true, RetrievedUtc = now.AddDays(-2) });
+                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Untracked, oldest", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddDays(-9) },
+                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "Untracked", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddDays(-8) },
+                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "Tracked, newer", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddDays(-1) },
+                new CachedSeriesAggregateEntity { TvdbId = 4, Language = "eng", Name = "Tracked, older", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddDays(-2) });
             await seed.SaveChangesAsync();
 
             // Raw SQL: tracked_series.xmin is a Postgres system column that EF
@@ -299,6 +302,85 @@ public sealed class TvdbSnapshotStoreTests
             staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 3);
 
         due.Select(x => x.TvdbId).Should().Equal(4, 3, 1);
+    }
+
+    [Test]
+    public async Task GetAggregatesNeedingRefresh_PutsRowsWithoutGenresFirst_WhateverTheirAge_WithinTheCap()
+    {
+        // Version 0 is a row cached before series carried TheTVDB's genres.
+        var now = DateTime.UtcNow;
+        var userId = Guid.NewGuid();
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.AppUsers.Add(new AppUserEntity { Id = userId, Username = "u", Email = "u@test.local" });
+            seed.CachedSeriesAggregates.AddRange(
+                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Has genres, very stale, tracked", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddDays(-90) },
+                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "No genres, cached an hour ago", Payload = "{}", MappingVersion = 0, KeepUpdated = true, RetrievedUtc = now.AddHours(-1) },
+                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "No genres, ended, a week old", Payload = "{}", MappingVersion = 0, KeepUpdated = false, RetrievedUtc = now.AddDays(-7) },
+                new CachedSeriesAggregateEntity { TvdbId = 4, Language = "eng", Name = "No genres, tracked, newest", Payload = "{}", MappingVersion = 0, KeepUpdated = false, RetrievedUtc = now.AddMinutes(-5) },
+                new CachedSeriesAggregateEntity { TvdbId = 5, Language = "eng", Name = "Has genres, fresh", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddHours(-1) });
+            await seed.SaveChangesAsync();
+
+            foreach (var tvdbId in new[] { 1, 4 })
+            {
+                await seed.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                     INSERT INTO tracked_series (id, user_id, tvdb_id, name, created_utc, updated_utc, xmin)
+                     VALUES ({Guid.NewGuid()}, {userId}, {tvdbId}, {"Tracked"}, {now}, {now}, 1)
+                     """);
+            }
+        }
+
+        var all = await NewStore().GetAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 10);
+        all.Select(x => x.TvdbId).Should().Equal(
+            [4, 3, 2, 1],
+            "rows without genres first (tracked, then oldest), then the age-based queue; the fresh row with genres is not due");
+
+        var capped = await NewStore().GetAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: now.AddHours(-12), settledStaleBeforeUtc: now.AddDays(-30), limit: 2);
+        capped.Select(x => x.TvdbId).Should().Equal([4, 3], "the cap is the same one; the backfill only goes first");
+    }
+
+    [Test]
+    public async Task GetAggregatesNeedingRefresh_FallsBackToAge_OnceEveryRowHasGenres()
+    {
+        var now = DateTime.UtcNow;
+        var store = NewStore();
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedSeriesAggregates.AddRange(
+                new CachedSeriesAggregateEntity { TvdbId = 1, Language = "eng", Name = "Stale", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddDays(-3) },
+                new CachedSeriesAggregateEntity { TvdbId = 2, Language = "eng", Name = "No genres yet", Payload = "{}", MappingVersion = 0, KeepUpdated = true, RetrievedUtc = now.AddHours(-1) },
+                new CachedSeriesAggregateEntity { TvdbId = 3, Language = "eng", Name = "Staler", Payload = "{}", MappingVersion = Current, KeepUpdated = true, RetrievedUtc = now.AddDays(-5) });
+            await seed.SaveChangesAsync();
+        }
+
+        (await store.GetAggregatesNeedingRefreshAsync(now.AddHours(-12), now.AddDays(-30), limit: 10))
+            .Select(x => x.TvdbId).Should().Equal(2, 3, 1);
+
+        // What the job does with series 2: the refresh rewrites the row with the current mapping.
+        await store.UpsertSeriesAggregateAsync(new SeriesAggregate { TvdbId = 2, Name = "Now with genres", Genres = ["Drama"] }, "eng");
+
+        (await store.GetAggregatesNeedingRefreshAsync(now.AddHours(-12), now.AddDays(-30), limit: 10))
+            .Select(x => x.TvdbId).Should().Equal([3, 1], "nothing is left to backfill, so the queue is oldest first, as before");
+    }
+
+    [Test]
+    public async Task ASeriesWithNoGenresOnTheTvDb_Should_NotBeRefreshedForEver()
+    {
+        // The priority is for rows the current mapping has not written, not
+        // for series that have no genres: once refreshed, such a row is done.
+        var now = DateTime.UtcNow;
+        var store = NewStore();
+        await store.SaveSeriesAggregateAsync(new SeriesAggregate { TvdbId = 1, Name = "Genreless", Genres = [] }, "eng");
+
+        (await store.GetAggregatesNeedingRefreshAsync(now.AddHours(-12), now.AddDays(-30), limit: 10)).Should().BeEmpty();
+
+        await using var read = new AppDbContext(_dbOptions);
+        (await read.CachedSeriesAggregates.SingleAsync()).MappingVersion.Should().Be(Current);
     }
 
     [Test]

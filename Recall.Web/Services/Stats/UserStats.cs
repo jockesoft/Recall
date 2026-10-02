@@ -40,8 +40,8 @@ public sealed record UserStats(
 /// <summary>All-time figures, from every watch row whatever its source.</summary>
 /// <param name="Minutes">Runtime of everything watched; a title with no known length adds nothing.</param>
 /// <param name="SeriesFinished">
-/// Tracked series the Library lists under Watched (ended, nothing aired left
-/// unwatched) of which the user has watched at least one episode.
+/// Tracked series the Library lists under Watched: ended, at least one regular
+/// episode watched, and no aired regular episode left.
 /// </param>
 public sealed record StatsTotals(int Minutes, int Episodes, int Movies, int SeriesFinished)
 {

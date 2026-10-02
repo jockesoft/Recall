@@ -26,7 +26,9 @@ namespace Recall.Web.Services.WatchTracking;
 /// the main list while a regular season of it has premiered within
 /// <see cref="LibraryOptions.PremiereReturnDays"/> days
 /// (<see cref="HasRecentPremiere"/>), placed after the series with real,
-/// recent activity. Watching anything brings a series back by itself.</para>
+/// recent activity. Watching anything brings a series back by itself. A series
+/// with nothing to watch yet (no aired regular episode) is never dormant: there
+/// is nothing the user has left unwatched for a while.</para>
 /// </summary>
 public static class ContinueWatchingOrder
 {
@@ -73,6 +75,12 @@ public static class ContinueWatchingOrder
     /// </summary>
     /// <param name="recentPremieres">Ids of series with a recent season premiere (<see cref="HasRecentPremiere"/>).</param>
     /// <param name="today">The UTC date (<c>AirDate.Today</c>).</param>
+    /// <param name="nothingToWatch">
+    /// Ids of series in the list that have no aired regular episode to watch
+    /// (an announced series, or one with only specials): never dormant. Only
+    /// the Library passes any; the Dashboard and the digest list series by
+    /// their next episode, so such a series is not in their lists at all.
+    /// </param>
     public static ContinueWatchingList<T> Arrange<T>(
         IEnumerable<T> series,
         Func<T, int> seriesId,
@@ -81,7 +89,8 @@ public static class ContinueWatchingOrder
         IReadOnlyDictionary<int, DateTime> addedUtc,
         IReadOnlySet<int> recentPremieres,
         DateOnly today,
-        LibraryOptions options)
+        LibraryOptions options,
+        IReadOnlySet<int>? nothingToWatch = null)
     {
         var withActivity = new List<T>();
         var broughtBack = new List<T>();
@@ -94,7 +103,7 @@ public static class ContinueWatchingOrder
             var hasActivity = lastWatchedUtc.TryGetValue(id, out var watched);
             DateTime? since = hasActivity ? watched : addedUtc.TryGetValue(id, out var added) ? added : null;
 
-            if (IsStale(since, today, options.DormantAfterDays))
+            if (IsStale(since, today, options.DormantAfterDays) && nothingToWatch?.Contains(id) != true)
                 (recentPremieres.Contains(id) ? broughtBack : dormant).Add(item);
             else
                 (hasActivity ? withActivity : notStarted).Add(item);

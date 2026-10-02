@@ -39,8 +39,20 @@ public sealed class SeriesWatchProgress
 
     public bool HasEpisodes => OrderedEpisodes.Count > 0;
 
-    /// <summary>True when no aired regular episode is unwatched, even if specials are.</summary>
+    /// <summary>
+    /// True when no aired regular episode is unwatched, even if specials are.
+    /// Also true for a series with nothing to watch yet, so on its own it does
+    /// not mean the user has seen anything: see <see cref="HasStarted"/>.
+    /// </summary>
     public bool IsUpToDate => NextUnwatchedEpisode is null;
+
+    /// <summary>
+    /// True when the user has watched at least one regular episode. Specials
+    /// do not start a series, and neither does adding it to the library. (Any
+    /// regular episode counts, including one with no air date, which can be
+    /// marked watched but is never in <see cref="ReleasedCount"/>.)
+    /// </summary>
+    public bool HasStarted => OrderedEpisodes.Any(e => !e.IsSpecial && WatchedEpisodeIds.Contains(e.Id));
 }
 
 /// <summary>Aired episodes of one season, and how many of them the user has watched.</summary>

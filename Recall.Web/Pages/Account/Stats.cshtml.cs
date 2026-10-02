@@ -40,19 +40,21 @@ public sealed class StatsModel(
         }
     }
 
-    /// <summary>"1 month, 3 days watched, across 815 episodes and 3 movies."</summary>
-    public string Lead
+    /// <summary>
+    /// The sentence under the heading. The tiles already give the hours and the
+    /// counts, so this adds the one thing they do not: the total as days
+    /// ("That's about 34 days of watching."). Below two days the hours on the
+    /// tile say it all, and there is no sentence.
+    /// </summary>
+    public string? Lead
     {
         get
         {
-            var watchTime = Stats.Totals.WatchTime;
+            var days = Stats.Totals.Minutes / (60.0 * 24);
 
-            if (watchTime.Across.Length == 0)
-                return "Nothing marked as watched yet.";
-
-            return watchTime.TotalMinutes > 0
-                ? $"{watchTime.Readable} watched, across {watchTime.Across}."
-                : $"{Capitalise(watchTime.Across)} watched.";
+            return days < 2
+                ? null
+                : $"That's about {StatsFormat.Number((int)Math.Round(days, MidpointRounding.AwayFromZero))} days of watching.";
         }
     }
 
@@ -134,7 +136,4 @@ public sealed class StatsModel(
         if (movies > 0) parts.Add(StatsFormat.Count(movies, "movie"));
         return string.Join(" and ", parts);
     }
-
-    private static string Capitalise(string text) =>
-        text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 }

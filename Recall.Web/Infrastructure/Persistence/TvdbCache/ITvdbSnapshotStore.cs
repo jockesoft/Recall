@@ -33,8 +33,11 @@ public interface ITvdbSnapshotStore
     /// last retrieved before <paramref name="staleBeforeUtc"/>, and every other
     /// row (flag false or unknown — an ended show, typically) last retrieved
     /// before the much older <paramref name="settledStaleBeforeUtc"/>, so
-    /// nothing is served unchanged forever. Series in someone's library come
-    /// first, then oldest first. Feeds the background refresh job.
+    /// nothing is served unchanged forever. Ahead of both, whatever their age:
+    /// rows written by an older version of the mapping (today, rows without
+    /// TheTVDB genres; see <c>SeriesDataDtoMappings.AggregateVersion</c>).
+    /// Within each group, series in someone's library come first, then oldest
+    /// first. Feeds the background refresh job.
     /// </summary>
     Task<IReadOnlyList<CachedAggregateKey>> GetAggregatesNeedingRefreshAsync(
         DateTime staleBeforeUtc, DateTime settledStaleBeforeUtc, int limit, CancellationToken cancellationToken = default);

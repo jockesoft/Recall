@@ -190,6 +190,33 @@ public sealed class DigestBuilderTests
     // ---- nothing to say, and too much to say --------------------------------------
 
     [Test]
+    public void AnAnnouncedSeries_NeverStarted_Should_StayInComingUp_HoweverLongAgoItWasAdded()
+    {
+        // Under Watching in the Library and never dormant there: nothing has
+        // aired, so there is nothing the user has left unwatched for a while.
+        var content = Build(
+            [Series(1, "Announced", Ep(10, 1, 1, 3))],
+            added: new() { [1] = DaysAgo(200) });
+
+        content.ComingUp.Items.Should().ContainSingle().Which.SeriesName.Should().Be("Announced");
+    }
+
+    [Test]
+    public void ASeriesNeverStarted_WithEpisodesToWatch_Should_FollowTheDormantRule_FromTheDateAdded()
+    {
+        // Ended or not makes no difference here: the queue is "has a next episode".
+        var content = Build(
+            [
+                Series(1, "Added This Week", Ep(10, 1, 1, -30), Ep(11, 1, 2, -1), Ep(12, 1, 3, 2)),
+                Series(2, "Added Long Ago", Ep(20, 1, 1, -30), Ep(21, 1, 2, -1), Ep(22, 1, 3, 2))
+            ],
+            added: new() { [1] = DaysAgo(5), [2] = DaysAgo(200) });
+
+        content.ReadyToWatch.Items.Select(l => l.SeriesName).Should().Equal("Added This Week");
+        content.ComingUp.Items.Select(l => l.SeriesName).Should().Equal("Added This Week");
+    }
+
+    [Test]
     public void TheDigest_Should_BeEmpty_WhenThereIsNothingToSay()
     {
         Build([]).IsEmpty.Should().BeTrue();

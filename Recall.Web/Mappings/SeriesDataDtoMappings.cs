@@ -7,6 +7,19 @@ namespace Recall.Web.Mappings;
 
 public static class SeriesDataDtoMappings
 {
+    /// <summary>
+    /// The version of <see cref="ToAggregate"/>'s output, stored with every
+    /// cached series row (<c>cached_series_aggregate.mapping_version</c>).
+    /// <b>Bump it when the mapping starts keeping a field that already-cached
+    /// rows lack</b>: the hourly refresh job then brings rows below the current
+    /// version up to date first, ahead of its age-based refreshes, instead of
+    /// leaving them for their turn up to 30 days away.
+    /// <list type="bullet">
+    /// <item>1 (2026-10-02): <see cref="SeriesAggregate.Genres"/>.</item>
+    /// </list>
+    /// </summary>
+    public const int AggregateVersion = 1;
+
     // TheTVDB artwork type id of a series' 16:9 background ("fanart").
     private const int SeriesBackgroundArtworkType = 3;
 

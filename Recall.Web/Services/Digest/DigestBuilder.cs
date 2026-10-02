@@ -113,7 +113,10 @@ public static class DigestBuilder
             })
             .ToList();
 
-        // The queue, split the way the Dashboard and the Library split it.
+        // The queue, split the way the Dashboard and the Library split it:
+        // series with a next episode to watch. A series never started with
+        // nothing aired yet is under Watching in the Library too, but it has no
+        // next episode and is never dormant, so its premiere stays in "coming up".
         var queue = series.Where(s => !s.Progress.IsUpToDate).ToList();
         var recentPremieres = queue
             .Where(s => ContinueWatchingOrder.HasRecentPremiere(s.Progress.OrderedEpisodes, today, libraryOptions.PremiereReturnDays))

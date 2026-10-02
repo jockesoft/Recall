@@ -35,6 +35,7 @@ public class LibraryModelTests
     {
         // A fresh instance per test: some tests change the settings.
         _libraryOptions = new LibraryOptions();
+        _addedUtc.Clear();
 
         _currentUser = new Mock<ICurrentUserService>();
         _currentUser.SetupGet(x => x.IsAuthenticated).Returns(true);
@@ -160,6 +161,67 @@ public class LibraryModelTests
         _sut.UpToDate.Select(i => i.Name).Should().Equal("Running");
         _sut.Watched.Select(i => i.Name).Should().Equal("Over");
         _sut.Watched[0].ReleasedEpisodes.Should().Be(1, "the special is not in the count either");
+    }
+
+    [Test]
+    public async Task AnEndedSeries_Should_BeWatched_OnlyWhenItWasStarted_AndEverythingAiredIsWatched()
+    {
+        var special = new EpisodeSummary { Id = 5, SeasonNumber = 0, EpisodeNumber = 1, Name = "Making of", Aired = Today.AddDays(-300) };
+        _addedUtc[1] = DaysAgo(10);
+        _addedUtc[3] = DaysAgo(10);
+        SetUpSeries(
+            Series(1, "Ended, Never Started", "Ended", Ep(10, 1, Today.AddDays(-400)), Ep(11, 2, Today.AddDays(-390))),
+            Series(2, "Ended, Fully Watched", "Ended", Ep(20, 1, Today.AddDays(-400)), Ep(21, 2, Today.AddDays(-390))),
+            Series(3, "Ended, Only The Special Watched", "Ended", special, Ep(30, 1, Today.AddDays(-400))));
+        SetUpWatched(20, 21, 5);
+        SetUpLastWatched((2, 3), (3, 3));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watched.Select(i => i.Name).Should().Equal("Ended, Fully Watched");
+        _sut.UpToDate.Should().BeEmpty();
+        _sut.Watching.Select(i => i.Name).Should().Equal(
+            ["Ended, Only The Special Watched", "Ended, Never Started"],
+            "watching a special is activity, so that series comes first; the other is ordered by when it was added");
+        _sut.Watching[1].ProgressText.Should().Be("0 of 2 · S01");
+    }
+
+    [Test]
+    public async Task AnEndedSeries_NeverStarted_Should_GoDormant_MeasuredFromTheDateItWasAdded()
+    {
+        _addedUtc[1] = DaysAgo(200);
+        _addedUtc[2] = DaysAgo(5);
+        SetUpSeries(
+            Series(1, "Ended, Added Long Ago", "Ended", Ep(10, 1, Today.AddDays(-400))),
+            Series(2, "Ended, Added This Week", "Ended", Ep(20, 1, Today.AddDays(-400))));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Select(i => i.TvdbId).Should().Equal(2);
+        _sut.Dormant.Select(i => i.TvdbId).Should().Equal(1);
+        _sut.Watched.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task ASeriesWithNothingAiredYet_NeverStarted_Should_BeUnderWatching_AndNeverDormant()
+    {
+        // Ended with only a special, and announced but not yet premiered: there
+        // is nothing to have watched, so neither is "Watched" or "Up to date",
+        // and nothing to have left unwatched for a while either.
+        var special = new EpisodeSummary { Id = 5, SeasonNumber = 0, EpisodeNumber = 1, Name = "Pilot film", Aired = Today.AddDays(-300) };
+        _addedUtc[1] = DaysAgo(200);
+        _addedUtc[2] = DaysAgo(150);
+        SetUpSeries(
+            Series(1, "Ended, Only A Special", "Ended", special),
+            Series(2, "Announced", "Upcoming", Ep(20, 1, Today.AddDays(20))));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Select(i => i.Name).Should().Equal(["Announced", "Ended, Only A Special"], "newest added first");
+        _sut.Dormant.Should().BeEmpty("added long ago, but there has been nothing to watch");
+        _sut.Watched.Should().BeEmpty();
+        _sut.UpToDate.Should().BeEmpty();
+        _sut.Watching[0].ProgressText.Should().BeNull();
     }
 
     // ---- one section on its own (?section=) ---------------------------------------

@@ -59,7 +59,7 @@ public sealed class StatsModelTests
     }
 
     [Test]
-    public async Task APopulatedUser_Should_GetALeadInWords_AndAChart()
+    public async Task APopulatedUser_Should_GetTheTotalAsDays_AndAChart()
     {
         Returns(UserStats.Empty with
         {
@@ -69,21 +69,36 @@ public sealed class StatsModelTests
 
         await _sut.OnGetAsync(CancellationToken.None);
 
-        _sut.Lead.Should().Be("1 month, 3 days watched, across 815 episodes and 3 movies.");
+        // The tiles carry the hours and the counts; the sentence adds the days.
+        _sut.Lead.Should().Be("That's about 33 days of watching.");
         _sut.Stats.HasChart.Should().BeTrue();
         _sut.MonthBarPercent(_sut.Stats.Months[^1]).Should().Be(100);
         _sut.MonthBarPercent(_sut.Stats.Months[^2]).Should().Be(50);
         _sut.MonthBarPercent(_sut.Stats.Months[0]).Should().Be(0);
     }
 
-    [Test]
-    public async Task TheLead_Should_NotClaimATime_WhenNothingWatchedHasAKnownLength()
+    [TestCase(814 * 60, "That's about 34 days of watching.")]
+    [TestCase(48 * 60, "That's about 2 days of watching.")]
+    [TestCase(60 * 24 * 1200, "That's about 1,200 days of watching.")]
+    public async Task TheLead_Should_SayTheTotalInDays(int minutes, string expected)
     {
-        Returns(UserStats.Empty with { Totals = new StatsTotals(0, Episodes: 0, Movies: 2, SeriesFinished: 0) });
+        Returns(UserStats.Empty with { Totals = new StatsTotals(minutes, Episodes: 10, Movies: 0, SeriesFinished: 0) });
 
         await _sut.OnGetAsync(CancellationToken.None);
 
-        _sut.Lead.Should().Be("2 movies watched.");
+        _sut.Lead.Should().Be(expected);
+    }
+
+    [TestCase(0)]
+    [TestCase(45)]
+    [TestCase(47 * 60 + 59)]
+    public async Task TheLead_Should_BeLeftOut_BelowTwoDays_WhereTheTileSaysItAll(int minutes)
+    {
+        Returns(UserStats.Empty with { Totals = new StatsTotals(minutes, Episodes: 0, Movies: 2, SeriesFinished: 0) });
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Lead.Should().BeNull();
     }
 
     [Test]

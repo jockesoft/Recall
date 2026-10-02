@@ -5,6 +5,7 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
+using Recall.Web.Mappings;
 
 namespace Recall.Tests.Postgres.Queries;
 
@@ -94,6 +95,41 @@ public sealed class PostgresQueryTests : PostgresFixture
             staleBeforeUtc: Now.AddDays(-1), settledStaleBeforeUtc: Now.AddDays(-30), limit: 10);
 
         keys.Select(k => k.TvdbId).Should().Equal(3, 6, 1, 2);
+    }
+
+    [Test]
+    public async Task SeriesNeedingRefresh_Should_PutRowsWithoutGenresFirst_ThenFallBackToAge()
+    {
+        // Ids of its own: tracked_series rows outlive the test, and the test above uses 1 to 6.
+        var user = await SeedUserAsync();
+        await using (var db = NewContext())
+        {
+            db.CachedSeriesAggregates.AddRange(
+                SeriesAggregate(101, retrievedUtc: Now.AddDays(-9), keepUpdated: true),
+                SeriesAggregate(102, retrievedUtc: Now.AddDays(-40), keepUpdated: false),
+                // Cached before genres were kept (version 0), all of them fresh by age.
+                SeriesAggregate(103, retrievedUtc: Now.AddHours(-2), keepUpdated: true, mappingVersion: 0),
+                SeriesAggregate(104, retrievedUtc: Now.AddHours(-1), keepUpdated: false, mappingVersion: 0),
+                SeriesAggregate(105, retrievedUtc: Now.AddHours(-3), keepUpdated: null, mappingVersion: 0),
+                SeriesAggregate(106, retrievedUtc: Now.AddHours(-1), keepUpdated: true));
+            db.TrackedSeries.Add(new TrackedSeriesEntity { Id = Guid.NewGuid(), UserId = user, TvdbId = 104, Name = "Tracked" });
+            db.TrackedSeries.Add(new TrackedSeriesEntity { Id = Guid.NewGuid(), UserId = user, TvdbId = 101, Name = "Tracked" });
+            await db.SaveChangesAsync();
+        }
+
+        var keys = await TvdbStore().GetAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: Now.AddDays(-1), settledStaleBeforeUtc: Now.AddDays(-30), limit: 10);
+        keys.Select(k => k.TvdbId).Should().Equal(
+            [104, 105, 103, 101, 102],
+            "without genres first (tracked, then oldest), then the stale rows (tracked, then oldest)");
+
+        // Refreshing the three brings them to the current version.
+        foreach (var id in new[] { 103, 104, 105 })
+            await TvdbStore().UpsertSeriesAggregateAsync(new Recall.Web.Domain.TheTvDb.SeriesAggregate { TvdbId = id, Name = $"Series {id}" }, "eng");
+
+        var after = await TvdbStore().GetAggregatesNeedingRefreshAsync(
+            staleBeforeUtc: Now.AddDays(-1), settledStaleBeforeUtc: Now.AddDays(-30), limit: 10);
+        after.Select(k => k.TvdbId).Should().Equal([101, 102], "the job is back to its age-based order");
     }
 
     [Test]
@@ -265,11 +301,12 @@ public sealed class PostgresQueryTests : PostgresFixture
     private TvdbSnapshotStore TvdbStore() => new(NewFactory(), NullLogger<TvdbSnapshotStore>.Instance);
 
     private static CachedSeriesAggregateEntity SeriesAggregate(
-        int id, string language = "eng", DateTime? retrievedUtc = null, bool? keepUpdated = null) =>
+        int id, string language = "eng", DateTime? retrievedUtc = null, bool? keepUpdated = null,
+        int mappingVersion = SeriesDataDtoMappings.AggregateVersion) =>
         new()
         {
             TvdbId = id, Language = language, Name = $"Series {id}", Payload = "{}",
-            KeepUpdated = keepUpdated, RetrievedUtc = retrievedUtc ?? Now
+            KeepUpdated = keepUpdated, RetrievedUtc = retrievedUtc ?? Now, MappingVersion = mappingVersion
         };
 
     private static CachedMovieAggregateEntity MovieAggregate(

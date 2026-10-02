@@ -33,6 +33,15 @@ public static class StatsBuilder
     public const int TopSeriesCount = 5;
     public const int TopGenreCount = 6;
 
+    /// <summary>
+    /// Labels TheTVDB files under genres that say what <i>format</i> a title has,
+    /// not what it is about. They are left out of the genre statistics (a
+    /// mini-series is a crime drama or a war story first), and only there: the
+    /// chips on Series Details still show them. Add others here.
+    /// </summary>
+    public static readonly IReadOnlySet<string> FormatLabels =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Mini-Series" };
+
     public static UserStats Build(StatsInput input, DateOnly today, StatsWindow window)
     {
         var months = Enumerable.Range(0, window.Months)
@@ -172,9 +181,8 @@ public static class StatsBuilder
 
     /// <summary>
     /// Tracked series that are finished by the Library's rule
-    /// (<see cref="SeriesLibraryStateRule"/>) and that the user has watched at
-    /// least one regular episode of: an ended series added to the library and
-    /// never started is under Watched there only for want of a better section.
+    /// (<see cref="SeriesLibraryStateRule"/>): ended, started, and with no aired
+    /// regular episode left. The same series the Library lists under Watched.
     /// </summary>
     private static int CountFinishedSeries(StatsInput input, DateOnly today)
     {
@@ -191,8 +199,7 @@ public static class StatsBuilder
 
             var progress = WatchProgressCalculator.Build(seriesId, series.ToWatchableEpisodes(), watchedIds, today);
 
-            if (progress.WatchedReleasedCount > 0
-                && SeriesLibraryStateRule.Of(series, progress) == SeriesLibraryState.Finished)
+            if (SeriesLibraryStateRule.Of(series, progress) == SeriesLibraryState.Finished)
                 finished++;
         }
 
@@ -202,7 +209,9 @@ public static class StatsBuilder
     /// <summary>
     /// Adds a title's minutes to each of its genres, in full: a two-hour crime
     /// drama is two hours of Crime and two hours of Drama, so the genres do not
-    /// add up to the total. Returns whether the title has any genre.
+    /// add up to the total. <see cref="FormatLabels"/> are skipped. Returns
+    /// whether the title has any genre listed at all (a format label included:
+    /// its genres are loaded, which is what the coverage note is about).
     /// </summary>
     private static bool AddToGenres(Dictionary<string, GenreTally> byGenre, IReadOnlyList<string> genres, long minutes)
     {
@@ -211,6 +220,9 @@ public static class StatsBuilder
         foreach (var genre in genres.Where(g => !string.IsNullOrWhiteSpace(g)).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             any = true;
+            if (FormatLabels.Contains(genre.Trim()))
+                continue;
+
             if (!byGenre.TryGetValue(genre, out var tally))
                 byGenre[genre] = tally = new GenreTally(genre.Trim());
             tally.Minutes += minutes;

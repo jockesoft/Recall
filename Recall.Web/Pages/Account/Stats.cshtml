@@ -41,8 +41,15 @@
     }
     else
     {
-        <h1 class="mb-2">Your stats</h1>
-        <p class="tvdb-meta mb-4" id="statsLead">@Model.Lead</p>
+        @if (Model.Lead is { } lead)
+        {
+            <h1 class="mb-2">Your stats</h1>
+            <p class="tvdb-meta mb-4" id="statsLead">@lead</p>
+        }
+        else
+        {
+            <h1 class="mb-4">Your stats</h1>
+        }
 
         @* ---- Totals: every watch, whatever its source ---- *@
         <ul class="tvdb-stat-row tvdb-stat-row--four list-unstyled tvdb-page-section" id="statsTotals">
@@ -157,111 +164,114 @@
             }
         </section>
 
-        @* ---- Most watched series: every watch ---- *@
-        @if (stats.TopSeries.Count > 0)
-        {
-            var largest = stats.TopSeries.Max(s => s.Minutes);
-            var largestEpisodes = stats.TopSeries.Max(s => s.Episodes);
-            <section class="tvdb-page-section" aria-labelledby="statsSeriesHeading">
-                <h2 id="statsSeriesHeading">Most watched series</h2>
-                <ol class="tvdb-bar-list list-unstyled" id="statsTopSeries">
-                    @foreach (var row in stats.TopSeries)
-                    {
-                        var percent = largest > 0
-                            ? StatsFormat.Percent(row.Minutes, largest)
-                            : StatsFormat.Percent(row.Episodes, largestEpisodes);
-                        <li class="tvdb-bar-list__row">
-                            <span class="tvdb-bar-list__head">
-                                <a asp-page="/Series/Details" asp-route-id="@row.TvdbId" class="tvdb-bar-list__name tvdb-link-plain">@row.Name</a>
-                                <span class="tvdb-bar-list__value tvdb-mono">
-                                    @if (row.Minutes > 0)
-                                    {
-                                        @StatsFormat.Duration(row.Minutes)<text> · </text>
-                                    }
-                                    @StatsFormat.Count(row.Episodes, "episode")
-                                </span>
-                            </span>
-                            <span class="tvdb-bar-list__track" aria-hidden="true">
-                                <span class="tvdb-bar-list__fill" style="--tvdb-bar: @(percent)%"></span>
-                            </span>
-                        </li>
-                    }
-                </ol>
-            </section>
-        }
-
-        @* ---- Genres: every watch; a title counts in full under each of its genres ---- *@
-        @if (stats.TopGenres.Count > 0)
-        {
-            var largest = stats.TopGenres.Max(g => g.Minutes);
-            <section class="tvdb-page-section" aria-labelledby="statsGenresHeading">
-                <h2 id="statsGenresHeading">Genres</h2>
-                <ol class="tvdb-bar-list list-unstyled" id="statsTopGenres">
-                    @foreach (var row in stats.TopGenres)
-                    {
-                        <li class="tvdb-bar-list__row">
-                            <span class="tvdb-bar-list__head">
-                                <span class="tvdb-bar-list__name">@row.Name</span>
-                                <span class="tvdb-bar-list__value tvdb-mono">
-                                    @StatsFormat.Duration(row.Minutes) · @StatsFormat.Count(row.Titles, "title")
-                                </span>
-                            </span>
-                            <span class="tvdb-bar-list__track" aria-hidden="true">
-                                <span class="tvdb-bar-list__fill" style="--tvdb-bar: @(StatsFormat.Percent(row.Minutes, largest))%"></span>
-                            </span>
-                        </li>
-                    }
-                </ol>
-                <p class="tvdb-meta mb-0">
-                    A title counts in full under each of its genres, so these add up to more than your total.
-                    @if (!stats.GenreCoverage.IsComplete)
-                    {
-                        <span id="statsGenreCoverage">
-                            Based on @StatsFormat.Number(stats.GenreCoverage.TitlesWithGenres) of
-                            @StatsFormat.Count(stats.GenreCoverage.Titles, "title"); the rest have no genres loaded yet.
-                        </span>
-                    }
-                </p>
-            </section>
-        }
-
-        @* ---- Ratings ---- *@
-        <section class="tvdb-page-section" aria-labelledby="statsRatingsHeading">
-            <h2 id="statsRatingsHeading">Your ratings</h2>
-
-            @if (stats.Ratings.Count == 0)
+        @* Side by side from 992px: series beside genres, ratings below at one column's width. *@
+        <div class="tvdb-stats-columns tvdb-page-section">
+            @* ---- Most watched series: every watch ---- *@
+            @if (stats.TopSeries.Count > 0)
             {
-                <partial name="_EmptyState" model="@(new EmptyStateModel
-                         {
-                             Icon = Icons.Star,
-                             Heading = "No ratings yet",
-                             Text = "Rate a series, an episode or a movie from 1 to 10 and the spread of your ratings shows up here.",
-                             HeadingLevel = 3,
-                             Inline = true
-                         })" />
+                var largest = stats.TopSeries.Max(s => s.Minutes);
+                var largestEpisodes = stats.TopSeries.Max(s => s.Episodes);
+                <section aria-labelledby="statsSeriesHeading">
+                    <h2 id="statsSeriesHeading">Most watched series</h2>
+                    <ol class="tvdb-bar-list list-unstyled" id="statsTopSeries">
+                        @foreach (var row in stats.TopSeries)
+                        {
+                            var percent = largest > 0
+                                ? StatsFormat.Percent(row.Minutes, largest)
+                                : StatsFormat.Percent(row.Episodes, largestEpisodes);
+                            <li class="tvdb-bar-list__row">
+                                <span class="tvdb-bar-list__head">
+                                    <a asp-page="/Series/Details" asp-route-id="@row.TvdbId" class="tvdb-bar-list__name tvdb-link-plain">@row.Name</a>
+                                    <span class="tvdb-bar-list__value tvdb-mono">
+                                        @if (row.Minutes > 0)
+                                        {
+                                            @StatsFormat.Duration(row.Minutes)<text> · </text>
+                                        }
+                                        @StatsFormat.Count(row.Episodes, "episode")
+                                    </span>
+                                </span>
+                                <span class="tvdb-bar-list__track" aria-hidden="true">
+                                    <span class="tvdb-bar-list__fill" style="--tvdb-bar: @(percent)%"></span>
+                                </span>
+                            </li>
+                        }
+                    </ol>
+                </section>
             }
-            else
+
+            @* ---- Genres: every watch; a title counts in full under each of its genres ---- *@
+            @if (stats.TopGenres.Count > 0)
             {
-                <p class="tvdb-meta" id="statsRatingAverage">
-                    Average <span class="tvdb-mono">@(stats.Ratings.Average?.ToString("0.0", invariant))</span>
-                    across @StatsFormat.Count(stats.Ratings.Count, "rating").
-                </p>
-                <ol class="tvdb-bar-list tvdb-bar-list--ratings list-unstyled" id="statsRatings">
-                    @for (var value = 10; value >= 1; value--)
-                    {
-                        var count = stats.Ratings.CountByValue[value - 1];
-                        <li class="tvdb-bar-list__row">
-                            <span class="visually-hidden">Rated @value: @StatsFormat.Count(count, "title")</span>
-                            <span class="tvdb-bar-list__key tvdb-mono" aria-hidden="true">@value</span>
-                            <span class="tvdb-bar-list__track" aria-hidden="true">
-                                <span class="tvdb-bar-list__fill" style="--tvdb-bar: @(StatsFormat.Percent(count, stats.Ratings.LargestCount))%"></span>
+                var largest = stats.TopGenres.Max(g => g.Minutes);
+                <section aria-labelledby="statsGenresHeading">
+                    <h2 id="statsGenresHeading">Genres</h2>
+                    <ol class="tvdb-bar-list list-unstyled" id="statsTopGenres">
+                        @foreach (var row in stats.TopGenres)
+                        {
+                            <li class="tvdb-bar-list__row">
+                                <span class="tvdb-bar-list__head">
+                                    <span class="tvdb-bar-list__name">@row.Name</span>
+                                    <span class="tvdb-bar-list__value tvdb-mono">
+                                        @StatsFormat.Duration(row.Minutes) · @StatsFormat.Count(row.Titles, "title")
+                                    </span>
+                                </span>
+                                <span class="tvdb-bar-list__track" aria-hidden="true">
+                                    <span class="tvdb-bar-list__fill" style="--tvdb-bar: @(StatsFormat.Percent(row.Minutes, largest))%"></span>
+                                </span>
+                            </li>
+                        }
+                    </ol>
+                    <p class="tvdb-meta mb-0">
+                        A title counts in full under each of its genres, so these add up to more than your total.
+                        @if (!stats.GenreCoverage.IsComplete)
+                        {
+                            <span id="statsGenreCoverage">
+                                Based on @StatsFormat.Number(stats.GenreCoverage.TitlesWithGenres) of
+                                @StatsFormat.Count(stats.GenreCoverage.Titles, "title"); the rest have no genres loaded yet.
                             </span>
-                            <span class="tvdb-bar-list__tally tvdb-mono" aria-hidden="true">@StatsFormat.Number(count)</span>
-                        </li>
-                    }
-                </ol>
+                        }
+                    </p>
+                </section>
             }
-        </section>
+
+            @* ---- Ratings ---- *@
+            <section aria-labelledby="statsRatingsHeading">
+                <h2 id="statsRatingsHeading">Your ratings</h2>
+
+                @if (stats.Ratings.Count == 0)
+                {
+                    <partial name="_EmptyState" model="@(new EmptyStateModel
+                             {
+                                 Icon = Icons.Star,
+                                 Heading = "No ratings yet",
+                                 Text = "Rate a series, an episode or a movie from 1 to 10 and the spread of your ratings shows up here.",
+                                 HeadingLevel = 3,
+                                 Inline = true
+                             })" />
+                }
+                else
+                {
+                    <p class="tvdb-meta" id="statsRatingAverage">
+                        Average <span class="tvdb-mono">@(stats.Ratings.Average?.ToString("0.0", invariant))</span>
+                        across @StatsFormat.Count(stats.Ratings.Count, "rating").
+                    </p>
+                    <ol class="tvdb-bar-list tvdb-bar-list--ratings list-unstyled" id="statsRatings">
+                        @for (var value = 10; value >= 1; value--)
+                        {
+                            var count = stats.Ratings.CountByValue[value - 1];
+                            <li class="tvdb-bar-list__row">
+                                <span class="visually-hidden">Rated @value: @StatsFormat.Count(count, "title")</span>
+                                <span class="tvdb-bar-list__key tvdb-mono" aria-hidden="true">@value</span>
+                                <span class="tvdb-bar-list__track" aria-hidden="true">
+                                    <span class="tvdb-bar-list__fill" style="--tvdb-bar: @(StatsFormat.Percent(count, stats.Ratings.LargestCount))%"></span>
+                                </span>
+                                <span class="tvdb-bar-list__tally tvdb-mono" aria-hidden="true">@StatsFormat.Number(count)</span>
+                            </li>
+                        }
+                    </ol>
+                }
+            </section>
+        </div>
 
         @if (Model.GapsText is { } gaps)
         {

@@ -1340,12 +1340,26 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     margin: var(--tvdb-space-2) 0 0;
 }
 
+/* Most watched series, Genres and Your ratings: one column, and from 992px
+   two, so the ratings sit under the series at one column's width. */
+.tvdb-stats-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--tvdb-space-6);
+}
+
+@media (min-width: 992px) {
+    .tvdb-stats-columns {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: var(--tvdb-space-7);
+    }
+}
+
 /* A ranked list with a bar under each row: most watched series, genres. */
 .tvdb-bar-list {
     display: flex;
     flex-direction: column;
     gap: var(--tvdb-space-3);
-    max-width: 44rem;
     margin: 0 0 var(--tvdb-space-3);
 }
 
@@ -1355,12 +1369,21 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     gap: var(--tvdb-space-1);
 }
 
+/* The label, and its figures on a line of their own under it; from 576px
+   the figures move up beside the label when there is room. */
 .tvdb-bar-list__head {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    column-gap: var(--tvdb-space-3);
+    flex-direction: column;
+}
+
+@media (min-width: 576px) {
+    .tvdb-bar-list__head {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        column-gap: var(--tvdb-space-3);
+    }
 }
 
 .tvdb-bar-list__name {
@@ -1393,7 +1416,6 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
 /* Ratings: the rating, its bar and how many, on one line each. */
 .tvdb-bar-list--ratings {
     gap: var(--tvdb-space-2);
-    max-width: 30rem;
 }
 
 .tvdb-bar-list--ratings .tvdb-bar-list__row {

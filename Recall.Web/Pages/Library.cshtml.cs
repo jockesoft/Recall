@@ -142,8 +142,10 @@ public sealed class LibraryModel(
             var upToDate = new List<LibraryCardItem>();
             var watched = new List<LibraryCardItem>();
             var recentPremieres = new HashSet<int>();
+            var nothingToWatch = new HashSet<int>();
 
-            await ClassifyTrackedSeriesAsync(userId, trackedSeries, likedSeriesIds, watching, upToDate, watched, recentPremieres, cancellationToken);
+            await ClassifyTrackedSeriesAsync(
+                userId, trackedSeries, likedSeriesIds, watching, upToDate, watched, recentPremieres, nothingToWatch, cancellationToken);
             await AddWatchedMoviesAsync(watchedMovies, watched, cancellationToken);
             ToWatch = await BuildWatchlistAsync(watchlistMovies, cancellationToken);
 
@@ -160,7 +162,8 @@ public sealed class LibraryModel(
                 ContinueWatchingOrder.AddedUtc(trackedSeries),
                 recentPremieres,
                 Today,
-                libraryOptions.Value);
+                libraryOptions.Value,
+                nothingToWatch);
 
             Watching = queue.Active;
             Dormant = queue.Dormant;
@@ -185,6 +188,7 @@ public sealed class LibraryModel(
         List<LibraryCardItem> upToDate,
         List<LibraryCardItem> watched,
         HashSet<int> recentPremieres,
+        HashSet<int> nothingToWatch,
         CancellationToken cancellationToken)
     {
         if (trackedSeries.Count == 0)
@@ -221,6 +225,11 @@ public sealed class LibraryModel(
             {
                 case SeriesLibraryState.Watching:
                     watching.Add(item with { ProgressText = progress.CurrentSeason?.Label });
+
+                    // Never started and nothing aired yet: in the list, but
+                    // there is nothing to have "not watched in a while".
+                    if (progress.NextUnwatchedEpisode is null)
+                        nothingToWatch.Add(aggregate.TvdbId);
 
                     if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
                         recentPremieres.Add(aggregate.TvdbId);

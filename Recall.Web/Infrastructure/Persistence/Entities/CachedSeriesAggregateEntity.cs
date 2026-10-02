@@ -18,4 +18,12 @@ public sealed class CachedSeriesAggregateEntity
     public string Payload { get; set; } = string.Empty;
 
     public DateTime RetrievedUtc { get; set; }
+
+    /// <summary>
+    /// Which version of the DTO-to-aggregate mapping wrote <see cref="Payload"/>
+    /// (<c>SeriesDataDtoMappings.AggregateVersion</c> at the time). A row below
+    /// the current version lacks a field newer rows have; the refresh job takes
+    /// those first. 0: written before the column existed, without genres.
+    /// </summary>
+    public int MappingVersion { get; set; }
 }

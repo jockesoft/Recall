@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
+using Recall.Web.Mappings;
 
 namespace Recall.Web.Infrastructure.Persistence.TvdbCache;
 
@@ -51,6 +52,7 @@ public sealed class TvdbSnapshotStore(
             StatusName = aggregate.Status?.Name,
             KeepUpdated = aggregate.Status?.KeepUpdated,
             Payload = JsonSerializer.Serialize(aggregate, JsonOptions),
+            MappingVersion = SeriesDataDtoMappings.AggregateVersion,
             RetrievedUtc = DateTime.UtcNow
         };
 
@@ -143,14 +145,22 @@ public sealed class TvdbSnapshotStore(
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
+        const int currentVersion = SeriesDataDtoMappings.AggregateVersion;
+
         return await dbContext.CachedSeriesAggregates
             .AsNoTracking()
-            .Where(x => (x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
+            .Where(x => x.MappingVersion < currentVersion
+                        || (x.KeepUpdated == true && x.RetrievedUtc < staleBeforeUtc)
                         || (x.KeepUpdated != true && x.RetrievedUtc < settledStaleBeforeUtc))
+            // Rows written by an older mapping (today: without TheTVDB genres)
+            // come first, whatever their age, so a new field reaches the cache
+            // in hours. A refresh brings a row to the current version, so this
+            // group empties and the order below is all that is left.
+            .OrderByDescending(x => x.MappingVersion < currentVersion)
             // A series in someone's library outranks one that was only ever
             // opened once (or by a crawler), so the per-run cap is spent on
             // data users actually see first.
-            .OrderByDescending(x => dbContext.TrackedSeries.Any(t => t.TvdbId == x.TvdbId))
+            .ThenByDescending(x => dbContext.TrackedSeries.Any(t => t.TvdbId == x.TvdbId))
             .ThenBy(x => x.RetrievedUtc)
             .Take(limit)
             .Select(x => new CachedAggregateKey(x.TvdbId, x.Language))
@@ -199,6 +209,7 @@ public sealed class TvdbSnapshotStore(
         row.StatusName = aggregate.Status?.Name;
         row.KeepUpdated = aggregate.Status?.KeepUpdated;
         row.Payload = JsonSerializer.Serialize(aggregate, JsonOptions);
+        row.MappingVersion = SeriesDataDtoMappings.AggregateVersion;
         row.RetrievedUtc = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync(cancellationToken);

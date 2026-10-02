@@ -18,6 +18,7 @@ public sealed class DataMigrationTests
     private const string BeforeMoveImportedLikes = "20261001150244_AddTrackedMovie";
     private const string BeforeWatchSource = "20261002075311_WeeklyDigest";
     private const string WatchSource = "20261002085341_WatchSource";
+    private const string SeriesMappingVersion = "20261002095341_SeriesMappingVersion";
 
     private static readonly DateTime ImportedUtc = new(2026, 9, 14, 8, 30, 0, DateTimeKind.Utc);
 
@@ -452,6 +453,38 @@ public sealed class DataMigrationTests
     private static Task<string?> MovieSourceAsync(MigrationDatabase database, Guid user, int movieId) =>
         database.ScalarAsync<string>(
             "SELECT source FROM user_movie_watch WHERE user_id = $1 AND movie_tvdb_id = $2", user, movieId);
+
+    // ---- SeriesMappingVersion: which cached series were written with genres ----
+
+    [Test]
+    public async Task SeriesMappingVersion_Should_MarkRowsThatAlreadyHaveGenres_AndLeaveTheRestForTheRefreshJob()
+    {
+        await using var database = await MigrationDatabase.CreateAsync();
+        await database.MigrateToAsync(WatchSource);
+
+        await InsertCachedSeriesAsync(database, 1, """{"tvdbId":1,"name":"Cached before genres","episodes":[]}""");
+        await InsertCachedSeriesAsync(database, 2, """{"tvdbId":2,"name":"With genres","genres":["Drama","Crime"],"episodes":[]}""");
+        await InsertCachedSeriesAsync(database, 3, """{"tvdbId":3,"name":"TheTVDB lists none","genres":[],"episodes":[]}""");
+
+        await database.MigrateToAsync(SeriesMappingVersion);
+
+        (await MappingVersionAsync(database, 1)).Should().Be(0, "it has no genres property, so it is refreshed first");
+        (await MappingVersionAsync(database, 2)).Should().Be(1);
+        (await MappingVersionAsync(database, 3)).Should().Be(1, "an empty list is an answer: the series has no genres");
+        (await database.ScalarAsync<string>("SELECT payload ->> 'name' FROM cached_series_aggregate WHERE tvdb_id = 2"))
+            .Should().Be("With genres", "the payload itself is not touched");
+    }
+
+    private static Task InsertCachedSeriesAsync(MigrationDatabase database, int tvdbId, string payload) =>
+        database.ExecuteAsync(
+            """
+            INSERT INTO cached_series_aggregate (tvdb_id, language, name, payload, retrieved_utc)
+            VALUES ($1, 'eng', 'Series', $2::jsonb, now());
+            """,
+            tvdbId, payload);
+
+    private static Task<int> MappingVersionAsync(MigrationDatabase database, int tvdbId) =>
+        database.ScalarAsync<int>("SELECT mapping_version FROM cached_series_aggregate WHERE tvdb_id = $1", tvdbId);
 
     // ---- seeding ----
 

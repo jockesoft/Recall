@@ -388,6 +388,24 @@ public sealed class StatsBuilderTests
         genres[0].Should().Be(new StatsGenreRow("A", 110, 2), "'a' and 'A' are one genre");
     }
 
+    [Test]
+    public void Genres_Should_LeaveOutFormatLabels_SuchAsMiniSeries()
+    {
+        // TheTVDB files "Mini-Series" under genres; it says what a title is, not what it is about.
+        Series(1, "Chernobyl", averageRuntime: 60, genres: ["Mini-Series", "Drama", "History"], episodes: [Ep(11, 1, 1)]);
+        Series(2, "Only A Format", averageRuntime: 60, genres: ["mini-series"], episodes: [Ep(21, 1, 1)]);
+        WatchEpisode(1, 11, Utc(2026, 9, 1));
+        WatchEpisode(2, 21, Utc(2026, 9, 1));
+
+        var stats = Build();
+
+        stats.TopGenres.Select(g => g.Name).Should().Equal("Drama", "History");
+        stats.GenreCoverage.Should().Be(
+            new StatsGenreCoverage(TitlesWithGenres: 2, Titles: 2),
+            "both titles have their genres loaded; the note is about titles that do not");
+        StatsBuilder.FormatLabels.Should().Contain("Mini-Series");
+    }
+
     // ---- series finished ----
 
     [Test]
@@ -418,6 +436,21 @@ public sealed class StatsBuilderTests
         WatchEpisode(1, 11, Utc(2026, 9, 1));
 
         Build().Totals.SeriesFinished.Should().Be(1, "series 2 has nothing watched, so it was not finished by anyone");
+    }
+
+    [Test]
+    public void SeriesFinished_Should_NotCountAnEndedSeries_OfWhichOnlySpecialsWereWatched_OrNothingAired()
+    {
+        // The Library lists none of these under Watched either (the same rule).
+        Series(1, "Only The Special Watched", 60, status: "Ended", episodes: [Ep(10, 0, 1), Ep(11, 1, 1)]);
+        Series(2, "Only A Special Exists", 60, status: "Ended", episodes: [Ep(20, 0, 1)]);
+        Series(3, "Fully Watched", 60, status: "Ended", episodes: [Ep(30, 0, 1), Ep(31, 1, 1)]);
+        _tracked.UnionWith([1, 2, 3]);
+        WatchEpisode(1, 10, Utc(2026, 9, 1));
+        WatchEpisode(2, 20, Utc(2026, 9, 1));
+        WatchEpisode(3, 31, Utc(2026, 9, 1));
+
+        Build().Totals.SeriesFinished.Should().Be(1);
     }
 
     // ---- ratings ----

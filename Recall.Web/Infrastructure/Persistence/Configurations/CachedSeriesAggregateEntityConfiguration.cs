@@ -35,6 +35,11 @@ public sealed class CachedSeriesAggregateEntityConfiguration : IEntityTypeConfig
             .HasColumnType("jsonb")
             .IsRequired();
 
+        builder.Property(x => x.MappingVersion)
+            .HasColumnName("mapping_version")
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property(x => x.RetrievedUtc)
             .HasColumnName("retrieved_utc")
             .HasColumnType("timestamp with time zone")
