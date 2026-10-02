@@ -22,7 +22,8 @@ public sealed class CatchUpCardModel
     public required string EpisodeName { get; init; }
 
     /// <summary>
-    /// Still image for the next episode. Null or blank renders a placeholder.
+    /// A 16:9 image: the next episode's still, or the series' background art.
+    /// Null or blank renders a dark placeholder.
     /// </summary>
     public string? ImageUrl { get; init; }
 

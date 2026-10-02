@@ -27,15 +27,18 @@ public static class PageModelToastExtensions
             => pageModel.TempData[InfoKey] = message;
 
         /// <summary>
-        /// Success toast for a bulk "mark watched" that also offers to undo it.
-        /// The undo is only offered when the batch wrote more than one row —
-        /// a single episode is undone by clicking its tick again.
+        /// Success toast for a "mark watched" that also offers to undo it.
+        /// By default the undo is only offered when the batch wrote more than
+        /// one row — on a series page a single episode is undone by clicking
+        /// its tick again. Pass <paramref name="undoSingle"/> where the episode
+        /// leaves the page once marked (a Dashboard catch-up card), so there is
+        /// no tick left to click.
         /// </summary>
-        public void SetSuccessToastWithWatchedUndo(string message, int seriesTvdbId, WatchedBatch? batch)
+        public void SetSuccessToastWithWatchedUndo(string message, int seriesTvdbId, WatchedBatch? batch, bool undoSingle = false)
         {
             pageModel.TempData[SuccessKey] = message;
 
-            if (batch is not { InsertedCount: > 1 })
+            if (batch is null || batch.InsertedCount < (undoSingle ? 1 : 2))
                 return;
 
             // Strings: the cookie TempData serializer only round-trips a few primitive types.

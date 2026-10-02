@@ -23,9 +23,9 @@ public static class EpisodeOrderingExtensions
     /// <summary>
     /// The order a series is watched in: the numbered seasons first, then the
     /// specials (season 0), then anything without a season. Within that it is
-    /// <see cref="OrderBySeasonAndEpisode{T}"/>. Specials are extras, so they
-    /// never come before the episode a viewer should watch next, and they are
-    /// never "earlier" than a regular episode.
+    /// <see cref="OrderBySeasonAndEpisode{T}"/>. Specials are extras: they are
+    /// listed after everything else and are never "earlier" than a regular
+    /// episode.
     /// </summary>
     public static IOrderedEnumerable<T> OrderByWatchOrder<T>(
         this IEnumerable<T> source,

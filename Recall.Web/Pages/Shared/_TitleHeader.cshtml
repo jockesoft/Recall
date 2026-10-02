@@ -41,7 +41,9 @@
     }
     else
     {
-        <div class="tvdb-action-row">
+        @* A primary button with a second control (a movie's watchlist button, or
+           its "On your watchlist" state) stacks the two full-width on phones. *@
+        <div class="tvdb-action-row @(Model.Primary is not null && (Model.Secondary.Count > 0 || Model.State is not null) ? "tvdb-action-row--stack" : "")">
             @if (Model.Primary is { } primary)
             {
                 <form method="post" asp-page-handler="@primary.Handler" asp-route-id="@primary.RouteId">

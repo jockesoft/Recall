@@ -7,6 +7,21 @@ namespace Recall.Web.Mappings;
 
 public static class SeriesDataDtoMappings
 {
+    // TheTVDB artwork type id of a series' 16:9 background ("fanart").
+    private const int SeriesBackgroundArtworkType = 3;
+
+    /// <summary>
+    /// The best-scored background, as its thumbnail (the full image is 1920
+    /// wide, far more than a card needs) or the full image when there is none.
+    /// </summary>
+    private static string? PickBackground(IReadOnlyList<ArtworkDto>? artworks) =>
+        (artworks ?? [])
+            .Where(a => a.Type == SeriesBackgroundArtworkType)
+            .OrderByDescending(a => a.Score ?? 0)
+            .ThenBy(a => a.Id)
+            .Select(a => !string.IsNullOrWhiteSpace(a.Thumbnail) ? a.Thumbnail : a.Image)
+            .FirstOrDefault(url => !string.IsNullOrWhiteSpace(url));
+
     public static SeriesAggregate ToAggregate(
         this SeriesDataDto dto,
         SeriesTranslationDataDto? translation = null,
@@ -34,6 +49,7 @@ public static class SeriesDataDtoMappings
             Overview = !string.IsNullOrWhiteSpace(translatedOverview) ? translatedOverview : null,
             Slug = dto.Slug,
             ImageUrl = ArtworkUrl.Normalize(dto.Image),
+            BackgroundUrl = ArtworkUrl.Normalize(PickBackground(dto.Artworks)),
             FirstAired = ParseDateOnly(dto.FirstAired),
             LastAired = ParseDateOnly(dto.LastAired),
             NextAired = ParseDateOnly(dto.NextAired),

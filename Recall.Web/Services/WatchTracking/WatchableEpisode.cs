@@ -15,6 +15,12 @@ public sealed record WatchableEpisode(
     /// <summary>True when the episode has an air date on or before <paramref name="date"/>.</summary>
     public bool HasAiredBy(DateOnly date) => Aired is { } aired && aired <= date;
 
+    /// <summary>
+    /// A special (TheTVDB's season 0): listed and markable, but never part of
+    /// watch progress. An episode without a season number is not a special.
+    /// </summary>
+    public bool IsSpecial => SeasonNumber == 0;
+
     /// <summary>"S02E06"-style slate code; missing numbers render as "??".</summary>
     public string SlateCode() => $"S{SeasonNumber?.ToString("D2") ?? "??"}E{EpisodeNumber?.ToString("D2") ?? "??"}";
 }

@@ -1,6 +1,7 @@
-// Cast and crew lists (Pages/Shared/_CastList.cshtml). The list shows two rows
-// until "Show all" is pressed; the button is only offered when there is more
-// than that, which depends on how many cards fit in a row at this width.
+// Cast and crew lists (Pages/Shared/_CastList.cshtml). A list is collapsed
+// until "Show all" is pressed: the cast to one row of cards, the crew to its
+// first few rows. The button is only offered when something is cut off, which
+// depends on how many fit at this width.
 (function () {
     var sections = document.querySelectorAll('[data-cast]');
     if (sections.length === 0) return;
@@ -16,6 +17,13 @@
             // Collapsed, the list clips its extra rows: more content than box means there is more to show.
             var clipped = list.scrollHeight > list.clientHeight + 1;
             toggle.hidden = !expanded && !clipped;
+
+            // People in a cut-off row are not on screen, so keep their links out
+            // of the tab order too. (A sideways-scrolling row cuts nothing off.)
+            var bottom = list.getBoundingClientRect().bottom;
+            Array.prototype.forEach.call(list.children, function (item) {
+                item.inert = !expanded && clipped && item.getBoundingClientRect().top >= bottom - 1;
+            });
         }
 
         toggle.addEventListener('click', function () {

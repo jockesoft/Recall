@@ -21,23 +21,29 @@
         WatchedEpisodes = item.WatchedEpisodes,
         ReleasedEpisodes = item.ReleasedEpisodes,
         Caption = item.Caption,
+        ProgressText = item.ProgressText,
         DetailsPage = item.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
-        BadgeIcon = item.Type == SearchResultType.Movie ? Icons.Movie : Icons.Series,
-        BadgeLabel = item.Type == SearchResultType.Movie ? "Movie" : "Series",
-        BadgeVariant = item.Type == SearchResultType.Movie ? "movie" : "series",
+        IsMovie = item.Type == SearchResultType.Movie,
         ShowLike = item.Type == SearchResultType.Series,
         IsLiked = item.IsLiked
     };
 }
 
 <div class="tvdb-shell">
-    <h1 class="mb-3">My Library</h1>
+    @* The heading and the one action share a line; the filter is its own line below. *@
+    <div class="tvdb-page-head">
+        <h1 class="mb-0">My Library</h1>
+        @if (!Model.IsEmpty)
+        {
+            <a asp-page="/Search" class="btn btn-primary">
+                <i class="@Icons.Search me-1" aria-hidden="true"></i>Find series or movies
+            </a>
+        }
+    </div>
 
-    @if (!Model.IsEmpty)
+    @if (showFilters)
     {
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
-            <a asp-page="/Search" class="btn btn-primary">Find series or movies</a>
-
+        <div class="tvdb-filter-row">
             <partial name="_TypeFilterBar" model="showFilters" />
         </div>
     }
@@ -57,7 +63,7 @@
     {
         @if (Model.Watching.Count > 0)
         {
-            <div class="tvdb-library-section" data-library-section>
+            <div class="tvdb-library-section" id="watching" data-library-section>
                 <h2 class="tvdb-section-title">Watching <span class="tvdb-count">@Model.Watching.Count</span></h2>
                 <div class="tvdb-series-grid mb-4">
                     @foreach (var item in Model.Watching)

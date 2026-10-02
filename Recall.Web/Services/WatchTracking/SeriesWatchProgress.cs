@@ -3,6 +3,8 @@ namespace Recall.Web.Services.WatchTracking;
 /// <summary>
 /// A user's watch position within a single series: the ordered episode list,
 /// which episodes are watched, and the next episode they should watch (if any).
+/// The next episode and every count are about regular episodes only; specials
+/// (season 0) are in <see cref="OrderedEpisodes"/> but never count.
 /// </summary>
 public sealed class SeriesWatchProgress
 {
@@ -14,22 +16,36 @@ public sealed class SeriesWatchProgress
     public required IReadOnlySet<int> WatchedEpisodeIds { get; init; }
 
     /// <summary>
-    /// Earliest released episode (watch order) the user has not marked watched:
-    /// a regular episode while any is left, a special only when specials are
-    /// all that remain. Null when the user is caught up on everything that has aired.
+    /// Earliest released regular episode the user has not marked watched. Never
+    /// a special. Null when every regular episode that has aired is watched.
     /// </summary>
     public WatchableEpisode? NextUnwatchedEpisode { get; init; }
 
-    /// <summary>Count of episodes that have aired as of the build date.</summary>
+    /// <summary>
+    /// Progress through the season of <see cref="NextUnwatchedEpisode"/> ("6 of
+    /// 16 · S05" on a Library card). Null when the user is up to date, or the
+    /// next episode has no season number.
+    /// </summary>
+    public SeasonWatchProgress? CurrentSeason { get; init; }
+
+    /// <summary>Count of regular episodes that have aired as of the build date.</summary>
     public required int ReleasedCount { get; init; }
 
-    /// <summary>Count of aired episodes the user has marked watched.</summary>
+    /// <summary>Count of aired regular episodes the user has marked watched.</summary>
     public required int WatchedReleasedCount { get; init; }
 
-    /// <summary>Count of released episodes not yet marked watched.</summary>
+    /// <summary>Count of released regular episodes not yet marked watched.</summary>
     public int UnwatchedReleasedCount => ReleasedCount - WatchedReleasedCount;
 
     public bool HasEpisodes => OrderedEpisodes.Count > 0;
 
+    /// <summary>True when no aired regular episode is unwatched, even if specials are.</summary>
     public bool IsUpToDate => NextUnwatchedEpisode is null;
+}
+
+/// <summary>Aired episodes of one season, and how many of them the user has watched.</summary>
+public sealed record SeasonWatchProgress(int SeasonNumber, int WatchedCount, int ReleasedCount)
+{
+    /// <summary>"6 of 16 · S05".</summary>
+    public string Label => $"{WatchedCount} of {ReleasedCount} · S{SeasonNumber:D2}";
 }

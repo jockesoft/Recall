@@ -67,6 +67,19 @@ public interface IWatchProgressService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// <see cref="MarkEpisodeWatchedAsync"/> for a one-tap button with no
+    /// confirmation (a Dashboard catch-up card): the same checks, but the watch
+    /// is written as a batch of one, so the result carries what an "Undo" needs
+    /// (<see cref="UndoWatchedBatchAsync"/>). The batch is empty when the
+    /// episode was already watched.
+    /// </summary>
+    Task<UndoableEpisodeWatch> MarkEpisodeWatchedUndoablyAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int episodeTvdbId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Flips an episode's watched state. Un-watching needs no verification (it
     /// only ever removes the user's own row); watching goes through
     /// <see cref="MarkEpisodeWatchedAsync"/>.
@@ -119,6 +132,10 @@ public sealed record MarkWatchedThroughResult(
 /// <param name="SeasonFound">False when the series has no episodes in that season.</param>
 /// <param name="Batch">What was actually inserted; <see cref="WatchedBatch.InsertedCount"/> is 0 when the season was already fully marked.</param>
 public sealed record SeasonWatchResult(bool SeasonFound, WatchedBatch Batch);
+
+/// <param name="Outcome">What happened; a refusal wrote nothing.</param>
+/// <param name="Batch">What was inserted, for an undo; null on a refusal.</param>
+public sealed record UndoableEpisodeWatch(EpisodeWatchOutcome Outcome, WatchedBatch? Batch = null);
 
 public enum EpisodeWatchOutcome
 {

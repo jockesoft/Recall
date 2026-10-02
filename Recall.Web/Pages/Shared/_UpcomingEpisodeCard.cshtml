@@ -18,19 +18,29 @@
         }
     </div>
 
+    @if (Model.ShowDate)
+    {
+        <div class="tvdb-upcoming-when">
+            <span class="tvdb-upcoming-date">@DisplayDate.Format(Model.AiredDate, Model.Today)</span>
+            <span class="tvdb-upcoming-countdown">@Model.Countdown</span>
+        </div>
+    }
+
     <div class="tvdb-upcoming-body">
         <a asp-page="/Series/Details" asp-route-id="@Model.SeriesId" class="tvdb-upcoming-series">@Model.SeriesName</a>
 
-        @if (Model.SlateCode is not null)
+        @if (Model.SlateCode is not null || Model.DisplayEpisodeName is not null)
         {
-            <div class="tvdb-upcoming-slate">
-                <span class="tvdb-slate--inline">@Model.SlateCode</span>
+            <div class="tvdb-upcoming-episode">
+                @if (Model.SlateCode is not null)
+                {
+                    <span class="tvdb-slate--inline">@Model.SlateCode</span>
+                }
+                @if (Model.DisplayEpisodeName is not null)
+                {
+                    <span class="tvdb-upcoming-epname">@Model.DisplayEpisodeName</span>
+                }
             </div>
-        }
-
-        @if (Model.DisplayEpisodeName is not null)
-        {
-            <div class="tvdb-upcoming-epname">@Model.DisplayEpisodeName</div>
         }
 
         @if (Model.IsPremiere || Model.IsFinale || Model.ExtraEpisodeCount > 0)
@@ -50,21 +60,5 @@
                 }
             </div>
         }
-    </div>
-
-    <div class="tvdb-upcoming-aside">
-        <span class="tvdb-upcoming-date">@DisplayDate.Format(Model.AiredDate, Model.Today)</span>
-
-        <span class="tvdb-upcoming-countdown">
-            @if (Model.DaysUntilAired == 0)
-            {
-                <span class="tvdb-upcoming-countdown-label">Today</span>
-            }
-            else
-            {
-                <span class="tvdb-upcoming-countdown-num">@Model.DaysUntilAired</span>
-                <span class="tvdb-upcoming-countdown-label">@(Model.DaysUntilAired == 1 ? "day" : "days")</span>
-            }
-        </span>
     </div>
 </div>

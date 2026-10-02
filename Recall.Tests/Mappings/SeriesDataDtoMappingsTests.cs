@@ -32,6 +32,43 @@ public class SeriesDataDtoMappingsTests
     }
 
     [Test]
+    public void ToAggregate_Should_PickTheBestScoredBackground_AsItsThumbnail()
+    {
+        var dto = new SeriesDataDto
+        {
+            Id = 1,
+            Name = "Show",
+            Artworks =
+            [
+                new ArtworkDto { Id = 1, Type = 2, Score = 900, Image = "/banners/posters/1.jpg" },                       // a poster
+                new ArtworkDto { Id = 2, Type = 3, Score = 10, Image = "/banners/fanart/low.jpg", Thumbnail = "/banners/fanart/low_t.jpg" },
+                new ArtworkDto { Id = 3, Type = 3, Score = 50, Image = "/banners/fanart/best.jpg", Thumbnail = "/banners/fanart/best_t.jpg" },
+            ]
+        };
+
+        dto.ToAggregate().BackgroundUrl.Should().Be($"{ArtworksBaseUrl}/banners/fanart/best_t.jpg");
+    }
+
+    [Test]
+    public void ToAggregate_Should_UseTheFullBackground_WhenItHasNoThumbnail_AndNone_WhenThereIsNoBackground()
+    {
+        var withFull = new SeriesDataDto
+        {
+            Id = 1, Name = "Show",
+            Artworks = [new ArtworkDto { Id = 3, Type = 3, Image = "https://example.test/fanart.jpg", Thumbnail = " " }]
+        };
+        var posterOnly = new SeriesDataDto
+        {
+            Id = 1, Name = "Show",
+            Artworks = [new ArtworkDto { Id = 1, Type = 2, Image = "/banners/posters/1.jpg" }]
+        };
+
+        withFull.ToAggregate().BackgroundUrl.Should().Be("https://example.test/fanart.jpg");
+        posterOnly.ToAggregate().BackgroundUrl.Should().BeNull();
+        new SeriesDataDto { Id = 1, Name = "Show" }.ToAggregate().BackgroundUrl.Should().BeNull();
+    }
+
+    [Test]
     public void ToAggregate_Should_NormalizeSeasonImageUrl()
     {
         var dto = new SeriesDataDto

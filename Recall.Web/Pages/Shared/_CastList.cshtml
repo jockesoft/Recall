@@ -1,11 +1,12 @@
 @model Recall.Web.Pages.Shared.CastListModel
-@* A headed list of people. On a phone it is one horizontally scrolling row; on
-   wider screens a grid that shows two rows until "Show all" is pressed. The
-   button only appears when there is more than two rows' worth (decided in the
-   browser, since it depends on the width). *@
+@* A headed list of people, collapsed until "Show all" is pressed. The cast is
+   portrait cards: one full row on wider screens, one sideways-scrolling row on
+   a phone. The crew (Compact) is a list in columns, showing its first few rows.
+   The button only appears when something is cut off (decided in the browser,
+   since it depends on the width). *@
 @if (Model.People.Count > 0)
 {
-    <section class="tvdb-cast" data-cast>
+    <section class="tvdb-cast @(Model.Compact ? "tvdb-cast--compact" : "")" data-cast>
         <div class="tvdb-cast__head">
             <h2 class="mb-0">@Model.Heading <span class="tvdb-count">@Model.People.Count</span></h2>
             <button type="button" class="btn btn-outline-dark btn-sm tvdb-cast__toggle" data-cast-toggle

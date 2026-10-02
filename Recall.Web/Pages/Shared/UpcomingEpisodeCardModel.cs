@@ -1,12 +1,12 @@
 namespace Recall.Web.Pages.Shared;
 
 /// <summary>
-/// Drives the shared "_UpcomingEpisodeCard" partial — a rounded card for one
+/// Drives the shared "_UpcomingEpisodeCard" partial — a compact card for one
 /// upcoming broadcast: a left accent stripe (green when the viewer is caught up
-/// on the series, amber otherwise), the series poster, series name, the
-/// season/episode code with the episode title below it, the air date (with
-/// weekday) top-right, and a PREMIERE / FINALE badge along the bottom. The whole
-/// card links to the episode. Several episodes of one series on the same date
+/// on the series, amber otherwise), a small poster, the air date with a
+/// countdown under it, then the series name, the season/episode code with the
+/// episode title, and a PREMIERE / FINALE badge. The whole card links to the
+/// episode. Several episodes of one series on the same date
 /// collapse into a single card via <see cref="EpisodeFrom"/>/<see cref="EpisodeTo"/>.
 /// </summary>
 public sealed class UpcomingEpisodeCardModel
@@ -76,7 +76,21 @@ public sealed class UpcomingEpisodeCardModel
     /// <summary>The page's "today" (UTC), passed in so the card doesn't read a clock of its own.</summary>
     public required DateOnly Today { get; init; }
 
+    /// <summary>
+    /// False under a "Today" or "Tomorrow" heading, which already says when:
+    /// the card then shows no date and no countdown.
+    /// </summary>
+    public bool ShowDate { get; init; } = true;
+
     /// <summary>Whole days from today until the episode airs (never negative).</summary>
     public int DaysUntilAired =>
         Math.Max(0, AiredDate.DayNumber - Today.DayNumber);
+
+    /// <summary>"in 3 days"; "today" and "tomorrow" for the first two.</summary>
+    public string Countdown => DaysUntilAired switch
+    {
+        0 => "today",
+        1 => "tomorrow",
+        var days => $"in {days} days"
+    };
 }

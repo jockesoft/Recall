@@ -23,6 +23,14 @@ public sealed class DisplayDateTests
     }
 
     [Test]
+    public void Short_Should_DropTheWeekday_AndKeepTheYearRule()
+    {
+        DisplayDate.Short(new DateOnly(2026, 9, 25), Today).Should().Be("Sep 25");
+        DisplayDate.Short(new DateOnly(1995, 12, 15), Today).Should().Be("Dec 15, 1995");
+        DisplayDate.Short(new DateTime(2026, 9, 25, 23, 59, 0, DateTimeKind.Utc), Today).Should().Be("Sep 25");
+    }
+
+    [Test]
     public void Format_Should_UseTheDatePartOfATimestamp()
     {
         DisplayDate.Format(new DateTime(2026, 9, 4, 23, 59, 0, DateTimeKind.Utc), Today).Should().Be("Fri, Sep 4");

@@ -141,14 +141,17 @@ public sealed class SeriesDetailsGetTests
     }
 
     [Test]
-    public async Task DefaultSeason_Should_BeTheSpecials_OnlyWhenTheyAreAllThatIsLeft()
+    public async Task UnwatchedSpecials_Should_NotKeepASeriesFromBeingUpToDate()
     {
         SeriesExists();
         SignedIn(tracked: true, watched: [11, 12, 21, 22]);
 
         await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        var header = _sut.BuildHeader([]);
 
-        _sut.SelectedSeason.Should().Be(0);
+        header.Primary.Should().BeNull("a special is never offered as the next episode");
+        header.State!.Text.Should().Be("Up to date");
+        _sut.SelectedSeason.Should().Be(2, "the page opens on the latest season, not on the specials");
     }
 
     [Test]

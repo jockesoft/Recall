@@ -175,6 +175,36 @@ public sealed class WatchProgressService(
         int episodeTvdbId,
         CancellationToken cancellationToken = default)
     {
+        if (await RefusalAsync(seriesTvdbId, episodeTvdbId, cancellationToken) is { } refusal)
+            return refusal;
+
+        await episodeWatchRepository.MarkWatchedAsync(userId, seriesTvdbId, episodeTvdbId, cancellationToken);
+        return EpisodeWatchOutcome.MarkedWatched;
+    }
+
+    public async Task<UndoableEpisodeWatch> MarkEpisodeWatchedUndoablyAsync(
+        Guid userId,
+        int seriesTvdbId,
+        int episodeTvdbId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await RefusalAsync(seriesTvdbId, episodeTvdbId, cancellationToken) is { } refusal)
+            return new UndoableEpisodeWatch(refusal);
+
+        // A range of one: it gets the batch timestamp the undo looks for.
+        var batch = await episodeWatchRepository.MarkWatchedRangeAsync(userId, seriesTvdbId, [episodeTvdbId], cancellationToken);
+        return new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, batch);
+    }
+
+    /// <summary>
+    /// Why a watch must not be recorded, or null when it may: the episode has
+    /// to belong to the series it was submitted with, and to have aired.
+    /// </summary>
+    private async Task<EpisodeWatchOutcome?> RefusalAsync(
+        int seriesTvdbId,
+        int episodeTvdbId,
+        CancellationToken cancellationToken)
+    {
         var lookup = await FindEpisodeInSeriesAsync(seriesTvdbId, episodeTvdbId, cancellationToken);
 
         if (!lookup.Found)
@@ -184,11 +214,7 @@ public sealed class WatchProgressService(
             return EpisodeWatchOutcome.EpisodeNotInSeries;
         }
 
-        if (AirDate.IsInFuture(lookup.Aired, Today))
-            return EpisodeWatchOutcome.NotAired;
-
-        await episodeWatchRepository.MarkWatchedAsync(userId, seriesTvdbId, episodeTvdbId, cancellationToken);
-        return EpisodeWatchOutcome.MarkedWatched;
+        return AirDate.IsInFuture(lookup.Aired, Today) ? EpisodeWatchOutcome.NotAired : null;
     }
 
     public async Task<EpisodeWatchOutcome> ToggleEpisodeWatchedAsync(

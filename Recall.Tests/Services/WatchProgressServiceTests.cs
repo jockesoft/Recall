@@ -252,6 +252,33 @@ public class WatchProgressServiceTests
     }
 
     [Test]
+    public async Task MarkEpisodeWatchedUndoablyAsync_Should_WriteABatchOfOne_ThatAnUndoCanFind()
+    {
+        SetupSeries(Ep(1, 1, 1, Past), Ep(2, 1, 2, Past));
+        var marked = CaptureMarkedRange();
+
+        var result = await _sut.MarkEpisodeWatchedUndoablyAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 2);
+
+        result.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        marked.Should().Equal([2], "only the episode itself, never the earlier ones");
+        result.Batch.Should().Be(new WatchedBatch(1, BatchStamp));
+    }
+
+    [Test]
+    public async Task MarkEpisodeWatchedUndoablyAsync_Should_RefuseWhatMarkEpisodeWatchedRefuses()
+    {
+        SetupSeries(Ep(1, 1, 1, Past), Ep(2, 1, 2, Future));
+        SetupEpisodeDetails(episodeId: 7001, seriesId: 700, aired: Past);
+
+        var foreign = await _sut.MarkEpisodeWatchedUndoablyAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 7001);
+        var unaired = await _sut.MarkEpisodeWatchedUndoablyAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 2);
+
+        foreign.Should().Be(new UndoableEpisodeWatch(EpisodeWatchOutcome.EpisodeNotInSeries));
+        unaired.Should().Be(new UndoableEpisodeWatch(EpisodeWatchOutcome.NotAired));
+        VerifyNothingWritten();
+    }
+
+    [Test]
     public async Task MarkEpisodeWatchedAsync_Should_Reject_AnEpisodeThatBelongsToAnotherSeries()
     {
         SetupSeries(Ep(1, 1, 1, Past));

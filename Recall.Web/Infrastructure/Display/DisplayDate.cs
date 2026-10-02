@@ -4,7 +4,9 @@ namespace Recall.Web.Infrastructure.Display;
 
 /// <summary>
 /// The one place dates are turned into text for people. A date in the current
-/// year reads "Sat, Sep 4"; any other year reads "Sep 4, 2026". Relative time
+/// year reads "Sat, Sep 4"; any other year reads "Sep 4, 2026"
+/// (<see cref="Short(DateOnly, DateOnly)"/> drops the weekday where space is
+/// tight). Relative time
 /// ("3h ago") is for notifications only. Machine-readable output (sitemap,
 /// JSON-LD, form values) keeps its own ISO formatting and does not come here.
 /// </summary>
@@ -21,6 +23,19 @@ public static class DisplayDate
     /// <inheritdoc cref="Format(DateOnly, DateOnly)"/>
     public static string Format(DateTime date, DateOnly today) =>
         Format(DateOnly.FromDateTime(date), today);
+
+    /// <summary>
+    /// The same date without the weekday, for a tight spot such as a poster
+    /// card's meta line: "Sep 4" in the current year, "Sep 4, 2025" otherwise.
+    /// </summary>
+    public static string Short(DateOnly date, DateOnly today) =>
+        date.Year == today.Year
+            ? date.ToString("MMM d", English)
+            : date.ToString("MMM d, yyyy", English);
+
+    /// <inheritdoc cref="Short(DateOnly, DateOnly)"/>
+    public static string Short(DateTime date, DateOnly today) =>
+        Short(DateOnly.FromDateTime(date), today);
 
     /// <summary>
     /// Formats a date that arrives as text, as TheTVDB sends them

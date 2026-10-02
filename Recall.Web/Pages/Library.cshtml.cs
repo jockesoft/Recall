@@ -29,7 +29,8 @@ public sealed record LibraryCardItem(
     int WatchedEpisodes,
     int ReleasedEpisodes,
     bool IsLiked,
-    string? Caption);
+    string? Caption,
+    string? ProgressText = null);
 
 [Authorize]
 public sealed class LibraryModel(
@@ -140,8 +141,10 @@ public sealed class LibraryModel(
                 likedSeriesIds.Contains(aggregate.TvdbId),
                 Caption: null);
 
+            // Up to date is about regular episodes only: unwatched specials
+            // never keep a series under Watching (see WatchProgressCalculator).
             if (!progress.IsUpToDate)
-                watching.Add(item);
+                watching.Add(item with { ProgressText = progress.CurrentSeason?.Label });
             else if (!hasEnded)
                 upToDate.Add(item);
             else
@@ -174,7 +177,7 @@ public sealed class LibraryModel(
                 WatchedEpisodes: 0,
                 ReleasedEpisodes: 0,
                 IsLiked: false,
-                Caption: $"Watched {DisplayDate.Format(watchedMovies[i].WatchedUtc, Today)}"));
+                Caption: $"watched {DisplayDate.Short(watchedMovies[i].WatchedUtc, Today)}"));
         }
     }
 
@@ -204,7 +207,7 @@ public sealed class LibraryModel(
                 WatchedEpisodes: 0,
                 ReleasedEpisodes: 0,
                 IsLiked: false,
-                Caption: $"Added {DisplayDate.Format(tracked.AddedUtc, Today)}"))
+                Caption: null))
             .ToList();
     }
 

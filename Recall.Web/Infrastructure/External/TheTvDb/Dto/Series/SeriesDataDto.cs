@@ -8,6 +8,9 @@ public sealed class SeriesDataDto
     [JsonPropertyName("aliases")]
     public List<AliasDto>? Aliases { get; init; }
 
+    [JsonPropertyName("artworks")]
+    public List<ArtworkDto>? Artworks { get; init; }
+
     [JsonPropertyName("averageRuntime")]
     public int? AverageRuntime { get; init; }
 

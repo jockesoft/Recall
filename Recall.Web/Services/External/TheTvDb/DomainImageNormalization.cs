@@ -23,6 +23,7 @@ public static class DomainImageNormalization
         aggregate with
         {
             ImageUrl = ArtworkUrl.Normalize(aggregate.ImageUrl),
+            BackgroundUrl = ArtworkUrl.Normalize(aggregate.BackgroundUrl),
             Seasons = aggregate.Seasons.Select(NormalizeSeason).ToArray(),
             Episodes = aggregate.Episodes.Select(NormalizeEpisodeSummary).ToArray(),
             Characters = aggregate.Characters.Select(NormalizeCharacter).ToArray()

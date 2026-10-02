@@ -123,7 +123,27 @@ public class LibraryModelTests
         behind.ReleasedEpisodes.Should().Be(2);
         behind.ImageUrl.Should().Be("https://img/1.jpg");
 
+        behind.ProgressText.Should().Be("1 of 2 · S01", "a card under Watching says where the viewer is");
+
         _sut.UpToDate[0].ReleasedEpisodes.Should().Be(1, "the episode airing in five days isn't released yet");
+        _sut.UpToDate[0].ProgressText.Should().BeNull();
+    }
+
+    [Test]
+    public async Task OnGet_Should_NotKeepASeriesUnderWatching_ForUnwatchedSpecials()
+    {
+        var special = new EpisodeSummary { Id = 5, SeasonNumber = 0, EpisodeNumber = 1, Name = "Making of", Aired = Today.AddDays(-300) };
+        SetUpSeries(
+            Series(1, "Running", "Continuing", special, Ep(10, 1, Today.AddDays(-20))),
+            Series(2, "Over", "Ended", special, Ep(20, 1, Today.AddDays(-400))));
+        SetUpWatched(10, 20);
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Should().BeEmpty("every regular episode is watched; a special never counts");
+        _sut.UpToDate.Select(i => i.Name).Should().Equal("Running");
+        _sut.Watched.Select(i => i.Name).Should().Equal("Over");
+        _sut.Watched[0].ReleasedEpisodes.Should().Be(1, "the special is not in the count either");
     }
 
     [Test]
@@ -180,11 +200,11 @@ public class LibraryModelTests
         var watched = _sut.Watched.Should().ContainSingle().Subject;
         watched.Type.Should().Be(SearchResultType.Movie);
         watched.Name.Should().Be("Seen It");
-        watched.Caption.Should().Be("Watched Sat, Sep 12", "a date in the current year is shown without the year");
+        watched.Caption.Should().Be("watched Sep 12", "the meta line reads \"Movie · watched Sep 12\"; this year, so no year");
 
         _sut.ToWatch.Select(i => i.TvdbId).Should().Equal([601, 602], "the watchlist keeps its own order, most recently added first");
         _sut.ToWatch[0].Name.Should().Be("Want To See");
-        _sut.ToWatch[0].Caption.Should().Be("Added Thu, Oct 1");
+        _sut.ToWatch[0].Caption.Should().BeNull("a watchlist card's meta line is the type and the release year");
         _sut.ToWatch[1].Name.Should().Be("Stored Name Older", "a movie that can't be loaded still gets a card, from the title stored when it was added");
         _sut.ToWatch[1].ImageUrl.Should().BeNull();
     }

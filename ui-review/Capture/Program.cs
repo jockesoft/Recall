@@ -119,9 +119,27 @@ List<Shot> shots =
     new("nav", "account-menu-open", Site.SignedIn, "/Dashboard", ViewportOnly: true,
         Prepare: async page =>
         {
+            // On a phone the account links are rows of the collapsed menu; the
+            // avatar dropdown only exists on wider screens.
             await OpenMobileMenuAsync(page);
-            await page.Locator("#accountMenu").ClickAsync();
-            await page.Locator(".dropdown-menu.show").WaitForAsync();
+            var avatar = page.Locator("#accountMenu");
+            if (await avatar.IsVisibleAsync())
+            {
+                await avatar.ClickAsync();
+                await page.Locator(".dropdown-menu.show").WaitForAsync();
+            }
+        }),
+    new("dashboard", "catch-up-undo", Site.SignedIn, "/Dashboard", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // One tap on a catch-up card marks the episode watched; the toast offers the undo.
+            await page.Locator(".tvdb-catchup-check button").First.ClickAsync();
+            await page.Locator(".tvdb-toast-action").WaitForAsync();
+        },
+        Cleanup: async page =>
+        {
+            await page.Locator(".tvdb-toast-action").ClickAsync();
+            await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
         }),
 
     // ---- Signed in, nothing tracked: the empty states ------------------------

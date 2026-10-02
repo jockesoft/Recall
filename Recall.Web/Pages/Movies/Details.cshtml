@@ -136,7 +136,7 @@
         </div>
 
         <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast })" />
-        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew })" />
+        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Compact = true })" />
 
         <p class="tvdb-source-line">
             <a class="tvdb-metalink" href="https://www.thetvdb.com/movies/@movie.Slug" target="_blank" rel="noopener">TheTVDB <span class="tvdb-mono">@movie.TvdbId</span></a>

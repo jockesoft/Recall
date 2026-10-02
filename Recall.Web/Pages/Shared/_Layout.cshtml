@@ -110,8 +110,36 @@
                 <ul class="navbar-nav align-items-sm-center">
                     @if (CurrentUser.IsAuthenticated)
                     {
+                        @* Phones: the collapsed menu shows who is signed in (avatar beside
+                           name and email) and the account links as plain rows. The avatar
+                           dropdown below is for wider screens only. *@
+                        <li class="nav-identity d-sm-none">
+                            <img src="~/images/mysteryman.jpg" asp-append-version="true" width="40" height="40"
+                                 class="nav-avatar-img nav-identity__avatar" alt="" />
+                            <span class="nav-identity__text">
+                                <span class="nav-identity__name text-truncate">@(CurrentUser.DisplayName ?? "Signed in")</span>
+                                @if (!string.IsNullOrEmpty(CurrentUser.Email))
+                                {
+                                    <span class="nav-identity__email text-truncate">@CurrentUser.Email</span>
+                                }
+                            </span>
+                        </li>
+                        <li class="nav-item d-sm-none">
+                            <a class="nav-link" asp-page="/Account/Profile" aria-current="@CurrentIf("/Account/Profile")">Profile</a>
+                        </li>
                         <partial name="_NotificationBell" />
-                        <li class="nav-item dropdown">
+                        @if (CurrentUser.IsAdmin)
+                        {
+                            <li class="nav-item d-sm-none">
+                                <a class="nav-link" asp-page="/Admin/Index" aria-current="@CurrentIf("/Admin/Index")">Admin panel</a>
+                            </li>
+                        }
+                        <li class="nav-item d-sm-none">
+                            <form method="post" asp-page="/Account/Logout">
+                                <button type="submit" class="nav-link nav-link-button">Logout</button>
+                            </form>
+                        </li>
+                        <li class="nav-item dropdown d-none d-sm-block">
                             <a class="nav-link nav-avatar dropdown-toggle" href="#" id="accountMenu" role="button"
                                data-bs-toggle="dropdown" aria-expanded="false">
                                 <img src="~/images/mysteryman.jpg" asp-append-version="true" width="32" height="32"

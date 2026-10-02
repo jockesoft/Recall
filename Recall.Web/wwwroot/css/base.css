@@ -310,6 +310,47 @@ main:focus {
     }
 }
 
+/* Phone menu: who is signed in, on one row; the account links follow as rows. */
+.nav-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    margin-top: var(--tvdb-space-2);
+    padding: var(--tvdb-space-3) var(--tvdb-space-1) var(--tvdb-space-2);
+    border-top: 1px solid var(--tvdb-line);
+}
+
+.nav-identity__avatar {
+    flex: none;
+    width: 40px;
+    height: 40px;
+}
+
+.nav-identity__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.nav-identity__name {
+    font-weight: 600;
+    color: var(--tvdb-on-ink);
+}
+
+.nav-identity__email {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-on-ink-muted);
+}
+
+/* A form button that is a menu row (Logout). */
+.navbar .nav-link-button {
+    width: 100%;
+    border: 0;
+    background: none;
+    text-align: left;
+}
+
 /* Avatar and its account menu. */
 .navbar .nav-avatar.nav-link {
     display: inline-flex;

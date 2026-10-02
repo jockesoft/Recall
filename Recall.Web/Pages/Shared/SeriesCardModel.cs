@@ -2,7 +2,8 @@ namespace Recall.Web.Pages.Shared;
 
 /// <summary>
 /// Drives the shared "_SeriesCard" partial — a single poster tile (cover image,
-/// title, year) that links to Series/Details. Drop a set of these inside a
+/// title, optional progress, then a "Series · 2008" meta line) that links to
+/// the title's details page. Drop a set of these inside a
 /// <c>&lt;div class="tvdb-series-grid"&gt;</c> to get a responsive poster grid.
 /// </summary>
 public sealed class SeriesCardModel
@@ -16,8 +17,7 @@ public sealed class SeriesCardModel
     public string? ImageUrl { get; init; }
 
     /// <summary>
-    /// First-aired date. Only the year is shown under the title; null hides the
-    /// year line entirely.
+    /// First-aired (or release) date. Only the year is shown, in the meta line.
     /// </summary>
     public DateOnly? FirstAired { get; init; }
 
@@ -55,20 +55,35 @@ public sealed class SeriesCardModel
     public string DetailsPage { get; init; } = "/Series/Details";
 
     /// <summary>
-    /// Optional small corner icon indicating content type: <c>Icons.Movie</c>
-    /// or <c>Icons.Series</c> (the full icon class). Null omits the badge entirely.
+    /// True for a movie. Decides the word that starts the meta line ("Movie" or
+    /// "Series") and the card's <c>data-content-type</c>, which the All /
+    /// Series / Movies filter reads. The poster itself carries no type badge.
     /// </summary>
-    public string? BadgeIcon { get; init; }
+    public bool IsMovie { get; init; }
 
-    /// <summary>Accessible label for <see cref="BadgeIcon"/>, e.g. "Movie" or "Series".</summary>
-    public string? BadgeLabel { get; init; }
+    /// <summary>"movie" or "series".</summary>
+    public string ContentType => IsMovie ? "movie" : "series";
 
     /// <summary>
-    /// Color modifier for the badge — "series" tints it amber, "movie" tints it
-    /// teal (the theme's accent colors). Ignored when <see cref="BadgeIcon"/> is null.
+    /// Readable progress shown under the title of a series being watched, e.g.
+    /// "6 of 16 · S05" (<c>SeasonWatchProgress.Label</c>). Null shows nothing.
     /// </summary>
-    public string BadgeVariant { get; init; } = "series";
+    public string? ProgressText { get; init; }
 
-    /// <summary>Optional line of text under the title, e.g. "Watched on Sep 11, 2026".</summary>
+    /// <summary>
+    /// What follows the type in the meta line, in place of the year: "watched
+    /// Sep 25" gives "Movie · watched Sep 25". Null shows the year.
+    /// </summary>
     public string? Caption { get; init; }
+
+    /// <summary>"Series · 2008", "Movie · watched Sep 25", or just the type when there is nothing to add.</summary>
+    public string MetaLine
+    {
+        get
+        {
+            var type = IsMovie ? "Movie" : "Series";
+            var detail = !string.IsNullOrWhiteSpace(Caption) ? Caption : FirstAired?.Year.ToString();
+            return string.IsNullOrWhiteSpace(detail) ? type : $"{type} · {detail}";
+        }
+    }
 }

@@ -1030,6 +1030,44 @@ dl.row dd a.tvdb-inline-edit {
 
 /* ---- Filter bar --------------------------------------------------------------------- */
 
+/* A page heading with its one action on the same line, right-aligned. */
+.tvdb-page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tvdb-space-2) var(--tvdb-space-4);
+    margin-bottom: var(--tvdb-space-4);
+}
+
+/* Phones: keep them on one line, so the button gives up its icon and some padding. */
+@media (max-width: 575.98px) {
+    .tvdb-page-head {
+        flex-wrap: nowrap;
+        gap: var(--tvdb-space-2);
+    }
+
+    .tvdb-page-head > h1 {
+        min-width: 0;
+    }
+
+    .tvdb-page-head > .btn {
+        flex: none;
+        --bs-btn-padding-x: var(--tvdb-space-3);
+    }
+
+    .tvdb-page-head > .btn > i {
+        display: none;
+    }
+}
+
+/* The filter's own line under the page head, set apart by a rule. */
+.tvdb-filter-row {
+    margin-bottom: var(--tvdb-space-5);
+    padding-bottom: var(--tvdb-space-3);
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
 .tvdb-filter-bar {
     display: inline-flex;
     flex-wrap: wrap;
@@ -1041,15 +1079,17 @@ dl.row dd a.tvdb-inline-edit {
 
 /* ---- Poster card and grid (the _SeriesCard partial) --------------------------------- */
 
+/* Two posters across on a phone: big enough to recognise, with room for the
+   title and two short lines under each. */
 .tvdb-series-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: clamp(0.75rem, 2vw, 1.5rem);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--tvdb-space-4) clamp(0.75rem, 2vw, 1.5rem);
 }
 
-@media (min-width: 576px) { .tvdb-series-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (min-width: 768px) { .tvdb-series-grid { grid-template-columns: repeat(5, 1fr); } }
-@media (min-width: 992px) { .tvdb-series-grid { grid-template-columns: repeat(6, 1fr); } }
+@media (min-width: 576px) { .tvdb-series-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 768px) { .tvdb-series-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 992px) { .tvdb-series-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
 /* In the narrow panel there is room for four. */
 .tvdb-shell--narrow .tvdb-series-grid {
@@ -1103,29 +1143,6 @@ dl.row dd a.tvdb-inline-edit {
     object-fit: cover;
 }
 
-/* Content type, top left, opposite the heart. */
-.tvdb-series-badge {
-    position: absolute;
-    top: var(--tvdb-space-2);
-    left: var(--tvdb-space-2);
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: var(--tvdb-radius-round);
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-on-ink);
-    background: var(--tvdb-scrim);
-    border: 1px solid var(--tvdb-on-ink-faint);
-}
-
-.tvdb-series-badge .ph {
-    font-size: 1em;
-    vertical-align: 0;
-}
-
 /* Watch progress along the poster's bottom edge: amber in progress, green
    when every aired episode is watched. */
 .tvdb-series-progress {
@@ -1166,7 +1183,18 @@ dl.row dd a.tvdb-inline-edit {
     text-decoration: underline;
 }
 
+/* "6 of 16 · S05": where the viewer is, in words (the bar on the poster is the glance). */
+.tvdb-series-progress-text {
+    display: block;
+    margin-top: 0.15rem;
+    font-family: var(--tvdb-font-mono);
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-text);
+}
+
+/* "Series · 2008", "Movie · watched Sep 25". */
 .tvdb-series-year {
+    display: block;
     margin-top: 0.15rem;
     font-size: var(--tvdb-text-xs);
     color: var(--tvdb-text-muted);
@@ -1181,8 +1209,8 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 .tvdb-series-card-like .tvdb-heart {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-color: transparent;
     background: var(--tvdb-scrim);
     color: var(--tvdb-on-ink);
@@ -1264,10 +1292,24 @@ dl.row dd a.tvdb-inline-edit {
     display: flex;
     flex-direction: column;
     gap: 0.1rem;
-    /* The top padding is the fade; the right padding clears the round button. */
-    padding: var(--tvdb-space-7) 3.5rem var(--tvdb-space-3) var(--tvdb-space-3);
-    background: linear-gradient(to top, var(--tvdb-scrim-strong), var(--tvdb-scrim) 45%, transparent);
+    /* The top padding is the fade; the right padding clears the round button.
+       The shade only sits behind the text (a short fade above it), and stops
+       short of black, so a dark still or dark background art keeps its detail;
+       the text shadow carries the caption over a bright one. */
+    padding: var(--tvdb-space-6) 3.5rem var(--tvdb-space-3) var(--tvdb-space-3);
+    background: linear-gradient(to top, var(--tvdb-scrim-caption), var(--tvdb-scrim) 55%, transparent);
+    text-shadow: var(--tvdb-text-shadow-on-art);
     pointer-events: none;
+}
+
+/* The dark placeholder is dark enough already. */
+.tvdb-catchup-media.is-empty .tvdb-catchup-caption {
+    background: none;
+}
+
+/* The caption names the episode; "No image" in the middle adds nothing. */
+.tvdb-catchup-media.is-empty::after {
+    content: none;
 }
 
 .tvdb-catchup-show {
@@ -1314,25 +1356,33 @@ dl.row dd a.tvdb-inline-edit {
     margin: 0;
 }
 
-/* ---- Upcoming card (the _UpcomingEpisodeCard partial) ---------------------------------- */
+/* ---- Upcoming card (the _UpcomingEpisodeCard partial) ----------------------------------
+   Compact: a small poster, the date with its countdown, then the episode. Two
+   columns of cards from tablet width up. */
 
 .tvdb-upcoming-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--tvdb-space-2);
+}
+
+@media (min-width: 768px) {
+    .tvdb-upcoming-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 /* Left edge: green when the viewer is caught up on the series, amber otherwise. */
 .tvdb-upcoming-card {
     position: relative;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--tvdb-space-3);
     padding: var(--tvdb-space-2);
     background: var(--tvdb-paper-dim);
     border: 1px solid var(--tvdb-ink-line);
     border-left: 3px solid var(--tvdb-signal);
-    border-radius: var(--tvdb-radius-lg);
+    border-radius: var(--tvdb-radius-md);
     transition: box-shadow var(--tvdb-ease);
 }
 
@@ -1355,16 +1405,43 @@ dl.row dd a.tvdb-inline-edit {
 .tvdb-upcoming-card .tvdb-thumb {
     position: relative;
     z-index: 0;
+    width: 40px;
+    height: 60px;
+}
+
+/* The date, right beside the episode it belongs to. A fixed width, so the
+   episode text lines up from card to card. */
+.tvdb-upcoming-when {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 5.75rem;
+    pointer-events: none;
+}
+
+.tvdb-upcoming-date {
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
+    white-space: nowrap;
+}
+
+.tvdb-upcoming-countdown {
+    font-family: var(--tvdb-font-mono);
+    font-size: var(--tvdb-text-xs);
+    line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-text-muted);
+    white-space: nowrap;
 }
 
 /* Clicks fall through the text to the card link; the series name opts back in. */
 .tvdb-upcoming-body {
     flex: 1;
     min-width: 0;
-    align-self: stretch;
     display: flex;
     flex-direction: column;
-    gap: var(--tvdb-space-1);
+    gap: 0.15rem;
     pointer-events: none;
 }
 
@@ -1376,6 +1453,7 @@ dl.row dd a.tvdb-inline-edit {
     overflow: hidden;
     font-size: var(--tvdb-text-sm);
     font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
     color: var(--tvdb-text);
     text-decoration: none;
     text-overflow: ellipsis;
@@ -1389,59 +1467,45 @@ dl.row dd a.tvdb-inline-edit {
     text-decoration: underline;
 }
 
-.tvdb-upcoming-epname {
+/* "S02 • E06  Episode name" on one line; the name gives way first. */
+.tvdb-upcoming-episode {
+    display: flex;
+    align-items: baseline;
+    gap: var(--tvdb-space-2);
+    min-width: 0;
     font-size: var(--tvdb-text-sm);
     line-height: var(--tvdb-leading-snug);
-    overflow-wrap: anywhere;
+}
+
+.tvdb-upcoming-episode .tvdb-slate--inline {
+    flex: none;
+}
+
+.tvdb-upcoming-epname {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--tvdb-text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tvdb-upcoming-tags {
     display: flex;
     flex-wrap: wrap;
     gap: var(--tvdb-space-1);
-    margin-top: auto;
-    padding-top: var(--tvdb-space-1);
+    padding-top: 0.15rem;
 }
 
-/* Right rail: the date on top, the countdown at the bottom. */
-.tvdb-upcoming-aside {
-    flex: none;
-    align-self: stretch;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: var(--tvdb-space-2);
-    text-align: right;
-    pointer-events: none;
-}
+/* Phones: the episode name gets its own line instead of being cut to a word. */
+@media (max-width: 575.98px) {
+    .tvdb-upcoming-episode {
+        flex-wrap: wrap;
+        row-gap: 0.15rem;
+    }
 
-.tvdb-upcoming-date {
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
-    white-space: nowrap;
-}
-
-.tvdb-upcoming-countdown {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    line-height: 1;
-}
-
-.tvdb-upcoming-countdown-num {
-    font-family: var(--tvdb-font-mono);
-    font-size: var(--tvdb-text-xl);
-    font-weight: 500;
-    color: var(--tvdb-text);
-}
-
-.tvdb-upcoming-countdown-label {
-    font-size: var(--tvdb-text-xs);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--tvdb-text-muted);
+    .tvdb-upcoming-epname {
+        flex-basis: 100%;
+    }
 }
 
 /* ---- Liked-episode row (the _FavoriteEpisodeRow partial) -------------------------------- */
@@ -1519,8 +1583,10 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 /* ---- Cast and crew (the _CastList partial) ---------------------------------------------
-   Phones: one row that scrolls sideways. Wider: a grid showing two rows until
-   "Show all" is pressed (tvdb-cast.js decides whether the button is needed). */
+   Collapsed until "Show all" is pressed (tvdb-cast.js decides whether the
+   button is needed). Cast: portrait cards, one full row; on phones one row
+   that scrolls sideways. Crew (--compact): name and jobs beside a small round
+   photo, in columns, showing the first few rows. */
 
 .tvdb-cast {
     margin-top: var(--tvdb-space-6);
@@ -1534,10 +1600,12 @@ dl.row dd a.tvdb-inline-edit {
     margin-bottom: var(--tvdb-space-3);
 }
 
+/* Rows beyond the first get no height and are clipped, so the collapsed list
+   is always exactly one full row whatever the width. */
 .tvdb-cast__list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-    grid-template-rows: auto auto;
+    grid-template-rows: auto;
     grid-auto-rows: 0;
     column-gap: var(--tvdb-space-3);
     margin: 0;
@@ -1595,8 +1663,56 @@ dl.row dd a.tvdb-inline-edit {
     overflow-wrap: anywhere;
 }
 
+/* The crew: a 40px round photo (or initials) with name and jobs beside it. */
+.tvdb-cast--compact .tvdb-cast__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(4, auto);
+    column-gap: var(--tvdb-space-5);
+}
+
+.tvdb-cast--compact .tvdb-person {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: var(--tvdb-space-3);
+    align-content: center;
+    align-items: center;
+    padding-bottom: var(--tvdb-space-3);
+}
+
+.tvdb-cast--compact .tvdb-person__photo {
+    grid-row: 1 / span 2;
+    width: 40px;
+    height: 40px;
+    aspect-ratio: auto;
+    margin-bottom: 0;
+    border-radius: var(--tvdb-radius-round);
+}
+
+.tvdb-cast--compact .tvdb-person__photo--initials {
+    font-family: var(--tvdb-font-ui);
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.tvdb-cast--compact .tvdb-person__name,
+.tvdb-cast--compact .tvdb-person__detail {
+    grid-column: 2;
+}
+
+/* A person with no job listed: the name centres on the avatar. */
+.tvdb-cast--compact .tvdb-person__name:last-child {
+    grid-row: 1 / span 2;
+}
+
+@media (min-width: 992px) {
+    .tvdb-cast--compact .tvdb-cast__list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
 @media (max-width: 575.98px) {
-    .tvdb-cast__list {
+    .tvdb-cast:not(.tvdb-cast--compact) .tvdb-cast__list {
         display: flex;
         gap: var(--tvdb-space-3);
         overflow-x: auto;
@@ -1607,13 +1723,20 @@ dl.row dd a.tvdb-inline-edit {
         scroll-padding-inline: var(--tvdb-shell-pad);
     }
 
-    .tvdb-person {
-        flex: 0 0 6.5rem;
+    /* Three and a bit cards across, so the fourth always peeks in at the edge
+       and says the row scrolls. */
+    .tvdb-cast:not(.tvdb-cast--compact) .tvdb-person {
+        flex: 0 0 clamp(4.75rem, calc((100% - 3 * var(--tvdb-space-3)) / 3.4), 6.5rem);
         scroll-snap-align: start;
     }
 
-    .tvdb-cast__toggle {
+    .tvdb-cast:not(.tvdb-cast--compact) .tvdb-cast__toggle {
         display: none;
+    }
+
+    .tvdb-cast--compact .tvdb-cast__list {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: repeat(6, auto);
     }
 }
 

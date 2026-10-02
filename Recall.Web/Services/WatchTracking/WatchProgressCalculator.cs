@@ -9,14 +9,21 @@ public static class WatchProgressCalculator
 {
     /// <summary>
     /// Watch order: numbered seasons in season/episode order, then the specials
-    /// (season 0), with a stable id tie-break. Because specials come last, the
-    /// next episode to watch is a special only when nothing else is left.
+    /// (season 0), with a stable id tie-break. The specials are in the list so
+    /// they can be shown and marked; <see cref="Build"/> leaves them out of
+    /// everything it counts.
     /// </summary>
     public static IReadOnlyList<WatchableEpisode> Order(IEnumerable<WatchableEpisode> episodes) =>
         episodes
             .OrderByWatchOrder(e => e.SeasonNumber, e => e.EpisodeNumber, e => e.Id)
             .ToList();
 
+    /// <summary>
+    /// Progress is about the regular episodes only. Specials (season 0) never
+    /// count: they are not in the released or watched totals and are never the
+    /// next episode, so a series whose regular episodes are all watched is up
+    /// to date whatever is left on its Specials tab.
+    /// </summary>
     public static SeriesWatchProgress Build(
         int seriesTvdbId,
         IEnumerable<WatchableEpisode> episodes,
@@ -24,15 +31,27 @@ public static class WatchProgressCalculator
         DateOnly today)
     {
         var ordered = Order(episodes);
-        var released = ordered.Where(e => e.HasAiredBy(today)).ToList();
+        var released = ordered.Where(e => !e.IsSpecial && e.HasAiredBy(today)).ToList();
         var watchedReleased = released.Count(e => watchedEpisodeIds.Contains(e.Id));
+        var next = released.FirstOrDefault(e => !watchedEpisodeIds.Contains(e.Id));
+
+        SeasonWatchProgress? currentSeason = null;
+        if (next?.SeasonNumber is { } seasonNumber)
+        {
+            var season = released.Where(e => e.SeasonNumber == seasonNumber).ToList();
+            currentSeason = new SeasonWatchProgress(
+                seasonNumber,
+                season.Count(e => watchedEpisodeIds.Contains(e.Id)),
+                season.Count);
+        }
 
         return new SeriesWatchProgress
         {
             SeriesTvdbId = seriesTvdbId,
             OrderedEpisodes = ordered,
             WatchedEpisodeIds = watchedEpisodeIds,
-            NextUnwatchedEpisode = released.FirstOrDefault(e => !watchedEpisodeIds.Contains(e.Id)),
+            NextUnwatchedEpisode = next,
+            CurrentSeason = currentSeason,
             ReleasedCount = released.Count,
             WatchedReleasedCount = watchedReleased,
         };
@@ -41,8 +60,8 @@ public static class WatchProgressCalculator
     /// <summary>
     /// The season a series page opens on: the season of the next episode to
     /// watch; when the viewer is caught up, the latest numbered season (where
-    /// anything new will appear); the specials only when there is nothing else.
-    /// Null when there are no episodes.
+    /// anything new will appear); the specials only when the series has no
+    /// other season. Null when there are no episodes.
     /// </summary>
     public static int? DefaultSeason(SeriesWatchProgress progress)
     {
@@ -109,8 +128,7 @@ public static class WatchProgressCalculator
         if (target is null)
             return orderedEpisodes;
 
-        var isSpecial = target.SeasonNumber == 0;
-        return orderedEpisodes.Where(e => (e.SeasonNumber == 0) == isSpecial).ToList();
+        return orderedEpisodes.Where(e => e.IsSpecial == target.IsSpecial).ToList();
     }
 
     private static int IndexOf(IReadOnlyList<WatchableEpisode> episodes, int episodeTvdbId)

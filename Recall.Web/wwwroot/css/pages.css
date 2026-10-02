@@ -65,6 +65,70 @@
 
 /* ---- Dashboard ---------------------------------------------------------------- */
 
+/* Three small stats in one row at every width; each is a link. */
+.tvdb-stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-stat-link {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+    height: 100%;
+    padding: var(--tvdb-space-2) var(--tvdb-space-3);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+    color: var(--tvdb-text);
+    text-decoration: none;
+    transition: border-color var(--tvdb-ease);
+}
+
+.tvdb-stat-link:hover,
+.tvdb-stat-link:focus-visible {
+    border-color: var(--tvdb-ink-line-strong);
+    color: var(--tvdb-text);
+}
+
+.tvdb-stat-link__value {
+    font-family: var(--tvdb-font-display);
+    font-size: var(--tvdb-text-xl);
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.tvdb-stat-link__label {
+    font-size: var(--tvdb-text-xs);
+    line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-stat-link:hover .tvdb-stat-link__label,
+.tvdb-stat-link:focus-visible .tvdb-stat-link__label {
+    color: var(--tvdb-signal-text);
+    text-decoration: underline;
+}
+
+@media (min-width: 576px) {
+    .tvdb-stat-row {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .tvdb-stat-link {
+        flex-direction: row;
+        align-items: baseline;
+        gap: var(--tvdb-space-2);
+    }
+
+    .tvdb-stat-link__label {
+        font-size: var(--tvdb-text-sm);
+    }
+}
+
 .tvdb-schedule-day {
     margin: var(--tvdb-space-5) 0 var(--tvdb-space-2);
     padding-bottom: var(--tvdb-space-1);
@@ -214,6 +278,23 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--tvdb-space-2);
+}
+
+/* Phones, two buttons: the primary takes its own row, the second fills the
+   next one with the heart beside it. */
+@media (max-width: 575.98px) {
+    .tvdb-action-row--stack > form:first-child {
+        flex: 0 0 100%;
+    }
+
+    .tvdb-action-row--stack > form:not(.tvdb-like-form),
+    .tvdb-action-row--stack > .tvdb-title-state {
+        flex-grow: 1;
+    }
+
+    .tvdb-action-row--stack > form:not(.tvdb-like-form) > .btn {
+        width: 100%;
+    }
 }
 
 /* "Up to date", "On your watchlist": a state, not a button. */

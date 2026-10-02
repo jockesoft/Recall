@@ -105,7 +105,7 @@ public class WatchProgressCalculatorTests
     }
 
     [Test]
-    public void Build_Should_OfferASpecial_OnlyWhenSpecialsAreAllThatRemain()
+    public void Build_Should_BeUpToDate_WhenOnlySpecialsAreUnwatched()
     {
         var episodes = new[]
         {
@@ -114,17 +114,16 @@ public class WatchProgressCalculatorTests
             Ep(10, 1, 1, Today.AddDays(-5)),
         };
 
-        var progress = WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10, 20 }, Today);
+        var progress = WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10 }, Today);
 
-        progress.NextUnwatchedEpisode!.Id.Should().Be(21);
-        progress.IsUpToDate.Should().BeFalse("an unwatched special still counts as something to watch");
+        progress.NextUnwatchedEpisode.Should().BeNull("a special is never the next episode");
+        progress.IsUpToDate.Should().BeTrue("a making-of must not keep a finished series in the queue");
+        progress.UnwatchedReleasedCount.Should().Be(0);
     }
 
     [Test]
-    public void Build_Should_OfferASpecial_WhenTheOnlyRegularEpisodeLeftHasNotAired()
+    public void Build_Should_NeverOfferASpecial_EvenWhenTheNextRegularEpisodeHasNotAired()
     {
-        // The next regular episode is in the future: there is nothing regular
-        // to watch now, so the unwatched special is what is left.
         var episodes = new[]
         {
             Ep(20, 0, 1, Today.AddDays(-50)),
@@ -132,8 +131,66 @@ public class WatchProgressCalculatorTests
             Ep(11, 1, 2, Today.AddDays(7)),
         };
 
-        WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10 }, Today)
-            .NextUnwatchedEpisode!.Id.Should().Be(20);
+        var progress = WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10 }, Today);
+
+        progress.NextUnwatchedEpisode.Should().BeNull();
+        progress.IsUpToDate.Should().BeTrue();
+    }
+
+    [Test]
+    public void Build_Should_LeaveSpecialsOutOfTheCounts()
+    {
+        var episodes = new[]
+        {
+            Ep(20, 0, 1, Today.AddDays(-50)),
+            Ep(21, 0, 2, Today.AddDays(-40)),
+            Ep(10, 1, 1, Today.AddDays(-5)),
+            Ep(11, 1, 2, Today.AddDays(-4)),
+        };
+
+        // One regular episode and one special watched.
+        var progress = WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10, 20 }, Today);
+
+        progress.ReleasedCount.Should().Be(2);
+        progress.WatchedReleasedCount.Should().Be(1, "a watched special is not progress through the series");
+        progress.UnwatchedReleasedCount.Should().Be(1);
+        progress.OrderedEpisodes.Should().HaveCount(4, "the specials are still listed");
+        progress.WatchedEpisodeIds.Should().Contain(20, "and still shown as watched");
+    }
+
+    [Test]
+    public void Build_Should_BeUpToDate_ForASeriesWithOnlySpecials()
+    {
+        var episodes = new[] { Ep(20, 0, 1, Today.AddDays(-50)) };
+
+        var progress = WatchProgressCalculator.Build(1, episodes, new HashSet<int>(), Today);
+
+        progress.IsUpToDate.Should().BeTrue();
+        progress.ReleasedCount.Should().Be(0);
+        WatchProgressCalculator.DefaultSeason(progress).Should().Be(0, "it is the only season there is");
+    }
+
+    [Test]
+    public void Build_Should_ReportProgressThroughTheSeasonOfTheNextEpisode()
+    {
+        var episodes = new[]
+        {
+            Ep(20, 0, 1, Today.AddDays(-50)),
+            Ep(10, 1, 1, Today.AddDays(-30)),
+            Ep(11, 1, 2, Today.AddDays(-29)),
+            Ep(12, 2, 1, Today.AddDays(-9)),
+            Ep(13, 2, 2, Today.AddDays(-8)),
+            Ep(14, 2, 3, Today.AddDays(-7)),
+            Ep(15, 2, 4, Today.AddDays(7)),
+        };
+
+        var midSeason = WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10, 11, 12, 20 }, Today);
+        var caughtUp = WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10, 11, 12, 13, 14 }, Today);
+
+        midSeason.CurrentSeason.Should().Be(new SeasonWatchProgress(2, WatchedCount: 1, ReleasedCount: 3),
+            "season 2 has three aired episodes; the one still to air is not counted");
+        midSeason.CurrentSeason!.Label.Should().Be("1 of 3 · S02");
+        caughtUp.CurrentSeason.Should().BeNull("there is no next episode to be in a season");
     }
 
     [Test]
@@ -152,7 +209,7 @@ public class WatchProgressCalculatorTests
 
         For().Should().Be(1, "nothing watched: start at season 1, not at the specials");
         For(10).Should().Be(2);
-        For(10, 11).Should().Be(0, "only a special is left to watch");
+        For(10, 11).Should().Be(3, "caught up, with a special unwatched: the latest season, never the specials");
         For(10, 11, 20).Should().Be(3, "caught up: the latest season, where the next episode will appear");
         WatchProgressCalculator.DefaultSeason(WatchProgressCalculator.Build(1, [], new HashSet<int>(), Today)).Should().BeNull();
     }

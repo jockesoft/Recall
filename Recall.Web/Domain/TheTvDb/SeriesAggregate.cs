@@ -8,6 +8,13 @@ public record SeriesAggregate
     public string? Overview { get; init; }
     public string? ImageUrl { get; init; }
 
+    /// <summary>
+    /// The series' 16:9 background art ("fanart"), sized for a card: TheTVDB's
+    /// thumbnail of its best-scored background. Null when the series has none,
+    /// and on a row cached before this was mapped, until it is next refreshed.
+    /// </summary>
+    public string? BackgroundUrl { get; init; }
+
     public DateOnly? FirstAired { get; init; }
     public DateOnly? LastAired { get; init; }
     public DateOnly? NextAired { get; init; }

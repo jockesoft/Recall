@@ -65,6 +65,28 @@ public sealed class TagOptionDto
     public string? TagName { get; init; }
 }
 
+/// <summary>
+/// One piece of artwork on an extended record. <see cref="Type"/> is TheTVDB's
+/// artwork type id; for a series, 3 is the 16:9 background ("fanart").
+/// </summary>
+public sealed class ArtworkDto
+{
+    [JsonPropertyName("id")]
+    public int Id { get; init; }
+
+    [JsonPropertyName("image")]
+    public string? Image { get; init; }
+
+    [JsonPropertyName("thumbnail")]
+    public string? Thumbnail { get; init; }
+
+    [JsonPropertyName("type")]
+    public int? Type { get; init; }
+
+    [JsonPropertyName("score")]
+    public double? Score { get; init; }
+}
+
 public sealed class RemoteIdDto
 {
     [JsonPropertyName("id")]

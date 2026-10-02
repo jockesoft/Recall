@@ -12,6 +12,13 @@ public sealed class CastListModel
     public required string Id { get; init; }
 
     public required IReadOnlyList<CastPerson> People { get; init; }
+
+    /// <summary>
+    /// False (the cast): portrait cards. True (the crew): a compact list of
+    /// name and jobs beside a small round photo, since most crew have no photo
+    /// and a wall of initials tiles says nothing.
+    /// </summary>
+    public bool Compact { get; init; }
 }
 
 /// <summary>

@@ -40,7 +40,12 @@ public sealed record CatchUpItem
     public int? EpisodeNumber { get; init; }
     public string Name { get; init; } = "";
 
-    /// <summary>Still for the next episode (full URL); falls back to the series cover.</summary>
+    /// <summary>
+    /// Still for the next episode; without one, the series' background art
+    /// (fanart), which is also 16:9. Null when the series has neither — the
+    /// card then shows a dark placeholder. Never the poster: a portrait cover
+    /// cropped to 16:9 shows a strip of it.
+    /// </summary>
     public string? ImageUrl { get; init; }
 
     /// <summary>
@@ -131,8 +136,8 @@ public sealed class DashboardModel(
             if (progress.NextUnwatchedEpisode is { } next)
             {
                 // Prefer the still already on the aggregate. Without one, show the
-                // series cover for now — EnrichCatchUpImagesAsync then tries the
-                // episode's own record for a screencap.
+                // series' background art for now — EnrichCatchUpImagesAsync then
+                // tries the episode's own record for a screencap.
                 var summaryImage = aggregate.Episodes.FirstOrDefault(e => e.Id == next.Id)?.Image;
                 if (string.IsNullOrWhiteSpace(summaryImage))
                     summaryImage = null;
@@ -145,7 +150,7 @@ public sealed class DashboardModel(
                     SeasonNumber = next.SeasonNumber,
                     EpisodeNumber = next.EpisodeNumber,
                     Name = next.Name,
-                    ImageUrl = summaryImage ?? aggregate.ImageUrl,
+                    ImageUrl = summaryImage ?? NullIfBlank(aggregate.BackgroundUrl),
                     HasEpisodeImage = summaryImage is not null
                 });
             }
@@ -212,14 +217,30 @@ public sealed class DashboardModel(
         }
     }
 
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>
+    /// The catch-up card's one-tap "watched" button. There is no confirmation
+    /// and the card is gone after the redirect, so the success toast carries an
+    /// Undo (the same one a bulk mark offers, for a batch of one).
+    /// </summary>
     public async Task<IActionResult> OnPostMarkWatchedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
     {
         var userId = currentUserService.UserId  ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
         try
         {
-            switch (await watchProgressService.MarkEpisodeWatchedAsync(userId, seriesId, episodeId, cancellationToken))
+            var result = await watchProgressService.MarkEpisodeWatchedUndoablyAsync(userId, seriesId, episodeId, cancellationToken);
+
+            switch (result.Outcome)
             {
+                case EpisodeWatchOutcome.MarkedWatched when result.Batch is { InsertedCount: > 0 } batch:
+                    this.SetSuccessToastWithWatchedUndo(
+                        await DescribeMarkedAsync(seriesId, episodeId, cancellationToken),
+                        seriesId,
+                        batch,
+                        undoSingle: true);
+                    break;
                 case EpisodeWatchOutcome.EpisodeNotInSeries:
                     this.SetErrorToast("That episode doesn't belong to this series.");
                     break;
@@ -235,5 +256,16 @@ public sealed class DashboardModel(
         }
 
         return RedirectToPage();
+    }
+
+    /// <summary>"Marked Severance S02E06 as watched." — from the (cached) aggregate; a plain sentence when it can't be read.</summary>
+    private async Task<string> DescribeMarkedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
+    {
+        var aggregate = await theTvDbService.TryGetSeriesAggregateAsync(seriesId, logger, nameof(DashboardModel), cancellationToken);
+        var episode = aggregate?.ToWatchableEpisodes().FirstOrDefault(e => e.Id == episodeId);
+
+        return aggregate is null || episode is null
+            ? "Marked as watched."
+            : $"Marked {aggregate.Name} {episode.SlateCode()} as watched.";
     }
 }
