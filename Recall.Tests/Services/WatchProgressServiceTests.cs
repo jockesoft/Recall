@@ -22,6 +22,7 @@ public class WatchProgressServiceTests
     private WatchProgressService CreateSut(TimeProvider timeProvider) => new(
         _tvDbService.Object,
         _watchRepository.Object,
+        Mock.Of<ITrackedSeriesRepository>(r => r.ExistsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()) == Task.FromResult(true)),
         _ratings.Object,
         timeProvider,
         NullLogger<WatchProgressService>.Instance);

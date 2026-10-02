@@ -302,10 +302,11 @@ public class SeriesDetailsPostTests
     // ---- single episode ---------------------------------------------------------
 
     [Test]
-    public async Task ToggleEpisodeWatched_Should_MarkWatched_AndMakeSureTheSeriesIsInTheLibrary()
+    public async Task ToggleEpisodeWatched_Should_MarkWatched_AndLeaveTheLibraryToTheWatchService()
     {
+        // The service adds an untracked series itself (MarkAddsToLibraryTests);
+        // the page neither adds nor, ever, removes.
         SignIn();
-        AlreadyInLibrary();
         _progress
             .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(EpisodeWatchOutcome.MarkedWatched);
@@ -314,27 +315,34 @@ public class SeriesDetailsPostTests
 
         AssertRedirectsBackToTheSeason(result);
         _sut.SuccessToast().Should().Be("Episode marked as watched.");
-        _tracked.Verify(x => x.GetByUserAndTvdbIdAsync(UserId, SeriesId, It.IsAny<CancellationToken>()), Times.Once);
-        _tracked.Verify(x => x.RemoveAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never,
-            "watching an episode of a tracked series must never un-track it");
+        _tracked.VerifyNoOtherCalls();
     }
 
-    [TestCase(EpisodeWatchOutcome.MarkedUnwatched, "info", "Episode marked as not watched.")]
-    [TestCase(EpisodeWatchOutcome.NotAired, "error", "You can't mark an episode as watched before it has aired.")]
-    [TestCase(EpisodeWatchOutcome.EpisodeNotInSeries, "error", "That episode doesn't belong to this series.")]
-    public async Task ToggleEpisodeWatched_Should_ReportTheOutcome_WithoutTouchingTheLibrary(
-        EpisodeWatchOutcome outcome, string kind, string expected)
+    [Test]
+    public async Task AMarkThatAddedTheSeriesToTheLibrary_Should_SaySo_InTheSameToast()
     {
         SignIn();
         _progress
             .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(outcome);
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, AddedToLibrary: "Silo"));
+        _progress
+            .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchStamp), AddedToLibrary: "Silo"));
+        _progress
+            .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchStamp), UpToDate, AddedToLibrary: "Silo"));
 
         await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked the episode as watched and added Silo to your library.");
 
-        (kind == "info" ? _sut.InfoToast() : _sut.ErrorToast()).Should().Be(expected);
-        _sut.SuccessToast().Should().BeNull();
-        _tracked.VerifyNoOtherCalls();
+        await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked 5 episodes as watched and added Silo to your library.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+
+        await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
+        _sut.SuccessToast().Should().Be(
+            "Marked 7 episodes as watched and added Silo to your library. You're up to date with Silo. We'll let you know when a new episode airs.");
+        _sut.InfoToast().Should().BeNull("still one toast");
     }
 
     [Test]

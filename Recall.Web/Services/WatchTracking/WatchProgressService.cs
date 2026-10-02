@@ -1,12 +1,14 @@
 using System.Globalization;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Mappings;
 
 namespace Recall.Web.Services.WatchTracking;
 
 public sealed class WatchProgressService(
     ITheTvDbService theTvDbService,
     IEpisodeWatchRepository episodeWatchRepository,
+    ITrackedSeriesRepository trackedSeriesRepository,
     IRatingRepository ratingRepository,
     TimeProvider timeProvider,
     ILogger<WatchProgressService> logger)
@@ -119,7 +121,8 @@ public sealed class WatchProgressService(
 
         return new MarkWatchedThroughResult(
             EpisodeFound: true, idsToMark.Count, Batch: batch,
-            CaughtUp: await CaughtUpByAsync(before, idsToMark, cancellationToken));
+            CaughtUp: await CaughtUpByAsync(before, idsToMark, cancellationToken),
+            AddedToLibrary: await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken));
     }
 
     public async Task<SeasonWatchResult> MarkSeasonWatchedAsync(
@@ -144,7 +147,11 @@ public sealed class WatchProgressService(
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, idsToMark, WatchSource.Bulk, cancellationToken: cancellationToken);
 
-        return new SeasonWatchResult(SeasonFound: true, batch, await CaughtUpByAsync(before, idsToMark, cancellationToken));
+        return new SeasonWatchResult(
+            SeasonFound: true, batch,
+            await CaughtUpByAsync(before, idsToMark, cancellationToken),
+            // A season with nothing left to mark wrote nothing, so it adds nothing either.
+            batch.InsertedCount > 0 ? await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken) : null);
     }
 
     public async Task<int> MarkSeasonUnwatchedAsync(
@@ -196,7 +203,8 @@ public sealed class WatchProgressService(
 
         return new EpisodeWatchResult(
             EpisodeWatchOutcome.MarkedWatched,
-            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken));
+            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken),
+            await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken));
     }
 
     public async Task<UndoableEpisodeWatch> MarkEpisodeWatchedUndoablyAsync(
@@ -215,7 +223,39 @@ public sealed class WatchProgressService(
             userId, seriesTvdbId, [episodeTvdbId], WatchSource.Single, cancellationToken: cancellationToken);
         return new UndoableEpisodeWatch(
             EpisodeWatchOutcome.MarkedWatched, batch,
-            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken));
+            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken),
+            await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken));
+    }
+
+    // ---- the library --------------------------------------------------------------
+
+    /// <summary>
+    /// Puts the series in the user's library if it is not there, after a mark.
+    /// Returns the series' name when this call added it, null when it was
+    /// already there (or was added by a concurrent request, or could not be
+    /// added: the watch is recorded either way, and the next mark tries again).
+    /// Only ever adds: nothing here removes a series from the library.
+    /// </summary>
+    private async Task<string?> EnsureInLibraryAsync(Guid userId, int seriesTvdbId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await trackedSeriesRepository.ExistsAsync(userId, seriesTvdbId, cancellationToken))
+                return null;
+
+            var details = await theTvDbService.GetSeriesByIdAsync(seriesTvdbId, cancellationToken);
+            if (details is null)
+                return null;
+
+            return await trackedSeriesRepository.AddAsync(TrackedSeriesMappings.FromTvDbDetails(userId, details), cancellationToken)
+                ? details.Name
+                : null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not add series {SeriesId} to the library after a mark.", seriesTvdbId);
+            return null;
+        }
     }
 
     // ---- "You're up to date" -------------------------------------------------------

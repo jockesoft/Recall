@@ -6,6 +6,12 @@ namespace Recall.Web.Services.WatchTracking;
 /// Owns all "where is the user in this series" reasoning: the next episode to
 /// watch, up-to-date state, prior-unwatched counts, and bulk "mark through".
 /// Page models call this instead of duplicating the logic.
+/// <para>
+/// Marking anything watched also puts the series in the user's library if it
+/// is not there yet (why track progress in a series you do not follow?), from
+/// whatever page the mark came; the result says so (<c>AddedToLibrary</c>).
+/// Unmarking, and undoing a bulk mark, never take a series out of the library.
+/// </para>
 /// </summary>
 public interface IWatchProgressService
 {
@@ -124,27 +130,34 @@ public interface IWatchProgressService
 /// <param name="HasAired">False when the target episode's air date is still in the future.</param>
 /// <param name="Batch">What was actually inserted, for an undo; null when nothing was written.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
+/// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there.</param>
 public sealed record MarkWatchedThroughResult(
     bool EpisodeFound,
     int MarkedCount,
     bool HasAired = true,
     WatchedBatch? Batch = null,
-    SeriesCaughtUp? CaughtUp = null);
+    SeriesCaughtUp? CaughtUp = null,
+    string? AddedToLibrary = null);
 
 /// <param name="SeasonFound">False when the series has no episodes in that season.</param>
 /// <param name="Batch">What was actually inserted; <see cref="WatchedBatch.InsertedCount"/> is 0 when the season was already fully marked.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
-public sealed record SeasonWatchResult(bool SeasonFound, WatchedBatch Batch, SeriesCaughtUp? CaughtUp = null);
+/// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there.</param>
+public sealed record SeasonWatchResult(
+    bool SeasonFound, WatchedBatch Batch, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null);
 
 /// <param name="Outcome">What happened; a refusal wrote nothing.</param>
 /// <param name="Batch">What was inserted, for an undo; null on a refusal.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
-public sealed record UndoableEpisodeWatch(EpisodeWatchOutcome Outcome, WatchedBatch? Batch = null, SeriesCaughtUp? CaughtUp = null);
+/// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there.</param>
+public sealed record UndoableEpisodeWatch(
+    EpisodeWatchOutcome Outcome, WatchedBatch? Batch = null, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null);
 
 /// <summary>What a single mark or toggle did.</summary>
 /// <param name="Outcome">What happened; a refusal wrote nothing.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it. Never on an unmark.</param>
-public sealed record EpisodeWatchResult(EpisodeWatchOutcome Outcome, SeriesCaughtUp? CaughtUp = null)
+/// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there. Never on an unmark.</param>
+public sealed record EpisodeWatchResult(EpisodeWatchOutcome Outcome, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null)
 {
     public static implicit operator EpisodeWatchResult(EpisodeWatchOutcome outcome) => new(outcome);
 }

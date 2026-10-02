@@ -265,6 +265,95 @@ public class EpisodeDetailsPostTests
         _sut.ErrorToast().Should().Be("Could not update watched status right now.");
     }
 
+    // ---- marking from here adds the series to the library, and says so -------------
+
+    private void EpisodeIs(int season, int number) =>
+        _tvDb
+            .Setup(x => x.GetEpisodeDetailsAsync(EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Episode { Id = EpisodeId, SeriesId = SeriesId, SeasonNumber = season, Number = number, Name = "Machines" });
+
+    [Test]
+    public async Task ToggleWatched_Should_SayTheSeriesWasAddedToTheLibrary_WhenItWas()
+    {
+        SignIn();
+        EpisodeIs(1, 3);
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, AddedToLibrary: "Silo"));
+
+        await _sut.OnPostToggleWatchedAsync(EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be("Marked S01E03 as watched and added Silo to your library.");
+        _sut.TempData.ContainsKey(PageModelToastExtensions.CaughtUpKindKey).Should().BeFalse();
+    }
+
+    [Test]
+    public async Task ToggleWatched_Should_SayOnlyThatItWasMarked_WhenTheSeriesWasAlreadyInTheLibrary()
+    {
+        SignIn();
+        EpisodeIs(1, 3);
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched));
+
+        await _sut.OnPostToggleWatchedAsync(EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be("Episode marked as watched.");
+    }
+
+    [Test]
+    public async Task ToggleWatched_Should_CombineAddedToTheLibrary_WithTheCaughtUpSentence_InOneToast()
+    {
+        SignIn();
+        EpisodeIs(1, 3);
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(
+                EpisodeWatchOutcome.MarkedWatched,
+                new SeriesCaughtUp(SeriesId, "Silo", Finished: false),
+                AddedToLibrary: "Silo"));
+
+        await _sut.OnPostToggleWatchedAsync(EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be(
+            "Marked S01E03 as watched and added Silo to your library. You're up to date with Silo. We'll let you know when a new episode airs.");
+        _sut.InfoToast().Should().BeNull("one toast per action");
+        _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpUpToDate);
+    }
+
+    [Test]
+    public async Task Unmarking_Should_SayNothingAboutTheLibrary()
+    {
+        SignIn();
+        EpisodeIs(1, 3);
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedUnwatched));
+
+        await _sut.OnPostToggleWatchedAsync(EpisodeId, default);
+
+        _sut.InfoToast().Should().Be("Episode marked as not watched.");
+        _sut.SuccessToast().Should().BeNull();
+    }
+
+    [Test]
+    public async Task MarkWatchedThrough_Should_SayTheSeriesWasAddedToTheLibrary_AndKeepTheUndo()
+    {
+        SignIn();
+        EpisodeIs(1, 3);
+        _progress
+            .SetupSequence(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp), AddedToLibrary: "Silo"))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchStamp), AddedToLibrary: "Silo"));
+
+        await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked 3 episodes as watched and added Silo to your library.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be(SeriesId.ToString());
+
+        await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked S01E03 as watched and added Silo to your library.");
+    }
+
     [Test]
     public async Task ToggleWatched_Should_SayFinished_WhenTheMarkFinishedTheSeries()
     {

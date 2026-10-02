@@ -81,6 +81,18 @@ public class PageModelToastExtensionsTests
     }
 
     [Test]
+    public void SetWatchedToast_Should_KeepAMessageThatMustNotBeLost_AndAddTheSentence()
+    {
+        var page = CreatePage();
+
+        page.SetWatchedToast("Marked S01E03 as watched and added Silo to your library.", UpToDate, Today, keepMessage: true);
+
+        page.TempData["Toast.Success"].Should().Be(
+            "Marked S01E03 as watched and added Silo to your library. You're up to date with Silo. We'll let you know when a new episode airs.");
+        page.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpUpToDate);
+    }
+
+    [Test]
     public void AFinishedSeries_Should_OfferRateIt_OnlyWhenTheUserHasNotRatedIt()
     {
         var unrated = CreatePage();

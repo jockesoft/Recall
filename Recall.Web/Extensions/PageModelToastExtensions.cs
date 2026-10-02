@@ -38,11 +38,16 @@ public static class PageModelToastExtensions
         /// Success toast for marking one episode watched. When the mark brought
         /// the user up to date with the series, or finished it
         /// (<paramref name="caughtUp"/>, from <c>IWatchProgressService</c>), the
-        /// toast says that instead: one toast per action, never two.
+        /// toast says that instead: one toast per action, never two. Pass
+        /// <paramref name="keepMessage"/> when the message itself says something
+        /// that must not be lost (the series was added to the library): the
+        /// caught-up sentence then follows it.
         /// </summary>
-        public void SetWatchedToast(string message, SeriesCaughtUp? caughtUp, DateOnly today)
+        public void SetWatchedToast(string message, SeriesCaughtUp? caughtUp, DateOnly today, bool keepMessage = false)
         {
-            pageModel.TempData[SuccessKey] = caughtUp?.Sentence(today) ?? message;
+            pageModel.TempData[SuccessKey] = caughtUp is null
+                ? message
+                : keepMessage ? $"{message} {caughtUp.Sentence(today)}" : caughtUp.Sentence(today);
             pageModel.MarkCaughtUp(caughtUp);
         }
 

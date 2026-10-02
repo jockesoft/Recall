@@ -146,6 +146,8 @@ public sealed class WatchProgressServicePersistenceTests
         new(
             _tvDbService.Object,
             new EpisodeWatchRepository(dbContext, NullLogger<EpisodeWatchRepository>.Instance),
+            // tracked_series cannot be inserted through EF on SQLite (xmin); the library is not this fixture's subject.
+            Mock.Of<ITrackedSeriesRepository>(r => r.ExistsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()) == Task.FromResult(true)),
             new RatingRepository(dbContext, NullLogger<RatingRepository>.Instance),
             TimeProvider.System,
             NullLogger<WatchProgressService>.Instance);

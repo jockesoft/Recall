@@ -205,6 +205,10 @@ public sealed class DetailsModel(
         return RedirectToPage(new { id });
     }
 
+    /// <summary>"S01E03" for the toast; "the episode" when TheTVDB has no numbers for it.</summary>
+    private static string SlateCode(Episode episode) =>
+        episode is { SeasonNumber: { } season, Number: { } number } ? $"S{season:D2}E{number:D2}" : "the episode";
+
     public async Task<IActionResult> OnPostToggleWatchedAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (id <= 0)
@@ -232,7 +236,12 @@ public sealed class DetailsModel(
                     this.SetInfoToast("Episode marked as not watched.");
                     break;
                 case EpisodeWatchOutcome.MarkedWatched:
-                    this.SetWatchedToast("Episode marked as watched.", toggled.CaughtUp, Today);
+                    // Marking from here puts the series in the library too, as on the series page; say so.
+                    this.SetWatchedToast(
+                        toggled.AddedToLibrary is { } added
+                            ? $"Marked {SlateCode(episode)} as watched and added {added} to your library."
+                            : "Episode marked as watched.",
+                        toggled.CaughtUp, Today, keepMessage: toggled.AddedToLibrary is not null);
                     break;
                 case EpisodeWatchOutcome.NotAired:
                     this.SetErrorToast("You can't mark an episode as watched before it has aired.");
@@ -292,10 +301,11 @@ public sealed class DetailsModel(
             }
             else
             {
+                var marked = result.MarkedCount > 1 ? $"Marked {result.MarkedCount} episodes" : $"Marked {SlateCode(episode)}";
                 this.SetSuccessToastWithWatchedUndo(
-                    result.MarkedCount > 1
-                        ? $"Marked {result.MarkedCount} episodes as watched."
-                        : "Episode marked as watched.",
+                    result.AddedToLibrary is { } added
+                        ? $"{marked} as watched and added {added} to your library."
+                        : result.MarkedCount > 1 ? $"{marked} as watched." : "Episode marked as watched.",
                     seriesId,
                     result.Batch,
                     caughtUp: result.CaughtUp,

@@ -56,7 +56,7 @@ public sealed class SeriesDetailsGetTests
             _currentUser.Object,
             _tracked.Object,
             _watches.Object,
-            new WatchProgressService(_tvDb.Object, _watches.Object, _ratings.Object, clock, NullLogger<WatchProgressService>.Instance),
+            new WatchProgressService(_tvDb.Object, _watches.Object, _tracked.Object, _ratings.Object, clock, NullLogger<WatchProgressService>.Instance),
             Mock.Of<ILikeRepository>(),
             _ratings.Object,
             Mock.Of<IOmdbSnapshotStore>(),

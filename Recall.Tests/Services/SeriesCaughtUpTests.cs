@@ -58,7 +58,10 @@ public sealed class SeriesCaughtUpTests
             });
 
         _sut = new WatchProgressService(
-            _tvDb.Object, _watches.Object, _ratings.Object,
+            _tvDb.Object, _watches.Object,
+            // Already in the library: adding it is MarkAddsToLibraryTests' subject.
+            Mock.Of<ITrackedSeriesRepository>(r => r.ExistsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()) == Task.FromResult(true)),
+            _ratings.Object,
             new FixedTimeProvider(new DateTimeOffset(Today.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero)),
             NullLogger<WatchProgressService>.Instance);
     }

@@ -190,7 +190,7 @@ public sealed class DetailsModel(
 
         try
         {
-            await AddToPersonalLibraryAsync(userId, id, onlyAdd: false, cancellationToken);
+            await ToggleLibraryAsync(userId, id, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -312,9 +312,12 @@ public sealed class DetailsModel(
                     this.SetInfoToast("Episode marked as not watched.");
                     break;
                 case EpisodeWatchOutcome.MarkedWatched:
-                    // Make sure the series is in the users library, otherwise why track progress
-                    await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
-                    this.SetWatchedToast("Episode marked as watched.", toggled.CaughtUp, Today);
+                    // The service put the series in the library if it wasn't there; say so.
+                    this.SetWatchedToast(
+                        toggled.AddedToLibrary is { } added
+                            ? $"Marked the episode as watched and added {added} to your library."
+                            : "Episode marked as watched.",
+                        toggled.CaughtUp, Today, keepMessage: toggled.AddedToLibrary is not null);
                     break;
                 case EpisodeWatchOutcome.NotAired:
                     this.SetErrorToast("You can't mark an episode as watched before it has aired.");
@@ -365,12 +368,8 @@ public sealed class DetailsModel(
             }
             else
             {
-                // Make sure the series is in the users library, otherwise why track progress
-                await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
                 this.SetSuccessToastWithWatchedUndo(
-                    result.MarkedCount > 1
-                        ? $"Marked {result.MarkedCount} episodes as watched."
-                        : "Episode marked as watched.",
+                    WatchedMessage(result.MarkedCount, result.AddedToLibrary),
                     id,
                     result.Batch,
                     caughtUp: result.CaughtUp,
@@ -409,12 +408,8 @@ public sealed class DetailsModel(
             }
             else
             {
-                // Make sure the series is in the users library, otherwise why track progress
-                await AddToPersonalLibraryAsync(userId, id, onlyAdd: true, cancellationToken);
                 this.SetSuccessToastWithWatchedUndo(
-                    result.Batch.InsertedCount == 1
-                        ? "Marked 1 episode as watched."
-                        : $"Marked {result.Batch.InsertedCount} episodes as watched.",
+                    WatchedMessage(result.Batch.InsertedCount, result.AddedToLibrary, one: "Marked 1 episode as watched."),
                     id,
                     result.Batch,
                     caughtUp: result.CaughtUp,
@@ -622,10 +617,28 @@ public sealed class DetailsModel(
     /// <summary>Spoken-length name: "Season 1", or "Specials".</summary>
     public string GetSeasonTitle(int season) => season == 0 ? "Specials" : $"Season {season}";
 
-    private async Task AddToPersonalLibraryAsync(
+    /// <summary>
+    /// "Marked 8 episodes as watched." or, when the mark also put the series in
+    /// the library (the watch service does that), "Marked 8 episodes as watched
+    /// and added Silo to your library."
+    /// </summary>
+    private static string WatchedMessage(int count, string? addedToLibrary, string one = "Episode marked as watched.")
+    {
+        if (addedToLibrary is null)
+            return count > 1 ? $"Marked {count} episodes as watched." : one;
+
+        return count > 1
+            ? $"Marked {count} episodes as watched and added {addedToLibrary} to your library."
+            : $"Marked the episode as watched and added {addedToLibrary} to your library.";
+    }
+
+    /// <summary>
+    /// The "Add to library" / "Remove from library" action. (A mark adds the
+    /// series by itself, in the watch service; it never removes it.)
+    /// </summary>
+    private async Task ToggleLibraryAsync(
         Guid userId,
         int seriesId,
-        bool onlyAdd,
         CancellationToken cancellationToken)
     {
         try
@@ -646,11 +659,8 @@ public sealed class DetailsModel(
             }
             else
             {
-                if (!onlyAdd)
-                {
-                    await trackedSeriesRepository.RemoveAsync(userId, existing.Id, cancellationToken);
-                    this.SetInfoToast("Series removed from your library.");
-                }
+                await trackedSeriesRepository.RemoveAsync(userId, existing.Id, cancellationToken);
+                this.SetInfoToast("Series removed from your library.");
             }
         }
         catch (Exception ex)
