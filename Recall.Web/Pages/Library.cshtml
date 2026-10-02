@@ -111,8 +111,15 @@
         }
         else
         {
-            @foreach (var part in Model.Sections.Where(s => s.Items.Count > 0))
+            @* The dormant group is not a section of its own here: it is drawn inside Watching. *@
+            @foreach (var part in Model.Sections.Where(s => s.Section != LibrarySection.Dormant))
             {
+                var hasDormant = part.Section == LibrarySection.Watching && Model.Dormant.Count > 0;
+                if (part.Items.Count == 0 && !hasDormant)
+                {
+                    continue;
+                }
+
                 // Watching is what the page is for: always the full grid. On a
                 // phone the other three are one scrolling row each, with a link
                 // to the section on its own; from 576px they are grids too.
@@ -127,12 +134,49 @@
                                aria-label="See all @part.Items.Count in @part.Title">See all @part.Items.Count <i class="@Icons.Forward" aria-hidden="true"></i></a>
                         }
                     </div>
-                    <div class="tvdb-series-grid @(isRow ? "tvdb-series-grid--row-on-phone" : null)">
-                        @foreach (var item in part.Items)
-                        {
-                            <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
-                        }
-                    </div>
+
+                    @if (part.Items.Count > 0)
+                    {
+                        <div class="tvdb-series-grid @(isRow ? "tvdb-series-grid--row-on-phone" : null)">
+                            @foreach (var item in part.Items)
+                            {
+                                <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="tvdb-meta mb-0">Nothing you have watched recently is waiting.</p>
+                    }
+
+                    @if (hasDormant)
+                    {
+                        // Series in progress but not touched in a while: collapsed
+                        // from 576px, a scrolling row with "See all" on a phone.
+                        var dormant = Model.Sections.Single(s => s.Section == LibrarySection.Dormant);
+
+                        <div class="tvdb-subgroup" id="@dormant.Slug">
+                            <div class="tvdb-section-head">
+                                <h3 class="mb-0">@dormant.Title <span class="tvdb-count">@dormant.Items.Count</span></h3>
+                                <a asp-page="/Library" asp-route-section="@dormant.Slug" class="tvdb-section-head__link d-sm-none"
+                                   aria-label="See all @dormant.Items.Count you haven't watched in a while">See all @dormant.Items.Count <i class="@Icons.Forward" aria-hidden="true"></i></a>
+                                <button type="button" class="btn btn-outline-dark btn-sm d-none d-sm-inline-flex align-items-center tvdb-subgroup__toggle"
+                                        data-bs-toggle="collapse" data-bs-target="#dormantSeries"
+                                        aria-expanded="false" aria-controls="dormantSeries">
+                                    <span data-toggle-label data-more="Show @dormant.Items.Count" data-less="Hide">Show @dormant.Items.Count</span>
+                                    <i class="@Icons.Expand ms-1" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="collapse tvdb-subgroup__body" id="dormantSeries">
+                                <div class="tvdb-series-grid tvdb-series-grid--row-on-phone">
+                                    @foreach (var item in dormant.Items)
+                                    {
+                                        <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
                 </section>
             }
 
@@ -145,4 +189,15 @@
 
 @section Scripts {
     <script src="~/js/tvdb-type-filter.js" asp-append-version="true"></script>
+    <script>
+        // The "haven't watched in a while" group: its button says what pressing it does.
+        (function () {
+            var body = document.getElementById('dormantSeries');
+            var label = document.querySelector('.tvdb-subgroup__toggle [data-toggle-label]');
+            if (!body || !label) return;
+
+            body.addEventListener('show.bs.collapse', function () { label.textContent = label.dataset.less; });
+            body.addEventListener('hide.bs.collapse', function () { label.textContent = label.dataset.more; });
+        })();
+    </script>
 }

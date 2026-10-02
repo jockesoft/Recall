@@ -100,4 +100,201 @@ public sealed class ContinueWatchingOrderTests
 
         ContinueWatchingOrder.AddedUtc(tracked).Should().Equal(new Dictionary<int, DateTime> { [10] = Day(2), [20] = Day(7) });
     }
+
+    // ---- grouping: "haven't watched in a while" --------------------------------
+
+    private static readonly DateOnly Today = new(2026, 10, 1);
+
+    private static DateTime DaysAgo(int days) => Today.AddDays(-days).ToDateTime(new TimeOnly(20, 0), DateTimeKind.Utc);
+
+    private static (IReadOnlyList<int> Active, IReadOnlyList<int> Dormant) Arrange(
+        IEnumerable<Show> shows,
+        Dictionary<int, DateTime>? lastWatched = null,
+        Dictionary<int, DateTime>? added = null,
+        int[]? premieres = null,
+        LibraryOptions? options = null)
+    {
+        var list = ContinueWatchingOrder.Arrange(
+            shows, s => s.Id, s => s.Name, lastWatched ?? [], added ?? [],
+            (premieres ?? []).ToHashSet(), Today, options ?? new LibraryOptions());
+
+        return (list.Active.Select(s => s.Id).ToList(), list.Dormant.Select(s => s.Id).ToList());
+    }
+
+    [Test]
+    public void ASeries_Should_BeDormant_OnceItsLastActivityIsOlderThanTheThreshold()
+    {
+        Show[] shows = [new(1, "Yesterday"), new(2, "Exactly Ninety Days"), new(3, "Ninety-One Days"), new(4, "A Year")];
+
+        var (active, dormant) = Arrange(shows,
+            lastWatched: new() { [1] = DaysAgo(1), [2] = DaysAgo(90), [3] = DaysAgo(91), [4] = DaysAgo(365) });
+
+        active.Should().Equal([1, 2], "ninety days is still within the threshold");
+        dormant.Should().Equal([3, 4], "the dormant group keeps the same order: most recently watched first");
+    }
+
+    [Test]
+    public void ASeriesNeverStarted_Should_BeDormant_OnceItWasAddedLongerAgoThanTheThreshold()
+    {
+        Show[] shows = [new(1, "Added Last Week"), new(2, "Added Four Months Ago"), new(3, "Added A Year Ago")];
+
+        var (active, dormant) = Arrange(shows, added: new() { [1] = DaysAgo(7), [2] = DaysAgo(120), [3] = DaysAgo(365) });
+
+        active.Should().Equal(1);
+        dormant.Should().Equal([2, 3], "newest added first");
+    }
+
+    [Test]
+    public void TheAddedDate_Should_NotKeepASeriesAwake_WhenItsLastActivityIsOld()
+    {
+        Show[] shows = [new(1, "Added Recently, Last Watched Long Ago"), new(2, "Added Long Ago, Watched Yesterday")];
+
+        var (active, dormant) = Arrange(shows,
+            lastWatched: new() { [1] = DaysAgo(200), [2] = DaysAgo(1) },
+            added: new() { [1] = DaysAgo(10), [2] = DaysAgo(900) });
+
+        active.Should().Equal([2], "for a series with activity only the activity counts");
+        dormant.Should().Equal(1);
+    }
+
+    [TestCase(0)]
+    [TestCase(-5)]
+    public void TheFeature_Should_BeOff_WhenTheThresholdIsZeroOrLess(int dormantAfterDays)
+    {
+        Show[] shows = [new(1, "Yesterday"), new(2, "Ten Years Ago"), new(3, "Never, Added Ten Years Ago")];
+
+        var (active, dormant) = Arrange(shows,
+            lastWatched: new() { [1] = DaysAgo(1), [2] = DaysAgo(3650) },
+            added: new() { [3] = DaysAgo(3650) },
+            options: new LibraryOptions { DormantAfterDays = dormantAfterDays });
+
+        dormant.Should().BeEmpty();
+        active.Should().Equal([1, 2, 3], "everything is in the main list, in the plain continue-watching order");
+    }
+
+    [Test]
+    public void TheThreshold_Should_BeConfigurable()
+    {
+        Show[] shows = [new(1, "Eight Days"), new(2, "Six Days")];
+
+        var (active, dormant) = Arrange(shows,
+            lastWatched: new() { [1] = DaysAgo(8), [2] = DaysAgo(6) },
+            options: new LibraryOptions { DormantAfterDays = 7 });
+
+        active.Should().Equal(2);
+        dormant.Should().Equal(1);
+    }
+
+    [Test]
+    public void ASeriesWithNoKnownDate_Should_NotBeDormant()
+    {
+        Show[] shows = [new(1, "No Dates At All"), new(2, "Default Added Date")];
+
+        var (active, dormant) = Arrange(shows, added: new() { [2] = default });
+
+        active.Should().BeEquivalentTo([1, 2]);
+        dormant.Should().BeEmpty("without a date there is nothing to call old");
+    }
+
+    [Test]
+    public void ARecentSeasonPremiere_Should_BringADormantSeriesBack_AfterTheSeriesWithRealActivity()
+    {
+        Show[] shows =
+        [
+            new(1, "Watched Yesterday"),
+            new(2, "Dormant, New Season"),
+            new(3, "Not Started, Added Last Week"),
+            new(4, "Dormant, Nothing New"),
+            new(5, "Watched Last Month"),
+            new(6, "Dormant And Never Started, New Season")
+        ];
+
+        var (active, dormant) = Arrange(shows,
+            lastWatched: new() { [1] = DaysAgo(1), [2] = DaysAgo(300), [4] = DaysAgo(200), [5] = DaysAgo(30) },
+            added: new() { [3] = DaysAgo(7), [6] = DaysAgo(400) },
+            premieres: [2, 6]);
+
+        active.Should().Equal(
+            [1, 5, 2, 6, 3],
+            "real activity first; then what a premiere brought back (in the usual order); then the series not started yet");
+        dormant.Should().Equal(4);
+    }
+
+    [Test]
+    public void APremiere_Should_ChangeNothing_ForASeriesThatIsNotDormant()
+    {
+        Show[] shows = [new(1, "Watched Yesterday"), new(2, "Watched Last Week, New Season")];
+
+        var (active, _) = Arrange(shows, lastWatched: new() { [1] = DaysAgo(1), [2] = DaysAgo(7) }, premieres: [2]);
+
+        active.Should().Equal([1, 2], "a series with real activity keeps its place by that activity");
+    }
+
+    // ---- what counts as a season premiere --------------------------------------
+
+    private static WatchableEpisode Ep(int id, int? season, int? number, DateOnly? aired) => new(id, season, number, aired, $"E{id}");
+
+    [Test]
+    public void HasRecentPremiere_Should_BeTrue_WhenARegularSeasonsFirstEpisodeAiredWithinTheWindow()
+    {
+        WatchableEpisode[] episodes =
+        [
+            Ep(1, 1, 1, Today.AddDays(-400)),
+            Ep(2, 1, 2, Today.AddDays(-393)),
+            Ep(3, 2, 1, Today.AddDays(-14)),
+            Ep(4, 2, 2, Today.AddDays(-7))
+        ];
+
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeTrue("fourteen days ago is still inside a fourteen-day window");
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 13).Should().BeFalse();
+    }
+
+    [Test]
+    public void HasRecentPremiere_Should_BeFalse_ForAnOrdinaryEpisode()
+    {
+        // A weekly show mid-season: episodes keep airing, but no season started recently.
+        WatchableEpisode[] episodes =
+        [
+            Ep(1, 22, 1, Today.AddDays(-120)),
+            Ep(2, 22, 17, Today.AddDays(-8)),
+            Ep(3, 22, 18, Today.AddDays(-1))
+        ];
+
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeFalse(
+            "an abandoned weekly show airs all the time and must be able to go dormant");
+    }
+
+    [Test]
+    public void HasRecentPremiere_Should_NotCountSpecials()
+    {
+        WatchableEpisode[] episodes =
+        [
+            Ep(1, 0, 1, Today.AddDays(-2)),      // a special that "premiered" two days ago
+            Ep(2, 1, 1, Today.AddDays(-500))
+        ];
+
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeFalse();
+    }
+
+    [Test]
+    public void HasRecentPremiere_Should_IgnoreThePremiereThatHasNotAiredYet_AndEpisodesWithoutADateOrNumber()
+    {
+        WatchableEpisode[] episodes =
+        [
+            Ep(1, 3, 1, Today.AddDays(3)),       // next week
+            Ep(2, 4, 1, null),                   // announced, no date
+            Ep(3, null, 1, Today.AddDays(-1)),   // no season
+            Ep(4, 5, null, Today.AddDays(-1))    // no episode number
+        ];
+
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeFalse();
+        ContinueWatchingOrder.HasRecentPremiere([Ep(9, 3, 1, Today)], Today, days: 14).Should().BeTrue("airing today counts");
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void HasRecentPremiere_Should_BeOff_WhenTheWindowIsZeroOrLess(int days)
+    {
+        ContinueWatchingOrder.HasRecentPremiere([Ep(1, 2, 1, Today)], Today, days).Should().BeFalse();
+    }
 }

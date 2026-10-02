@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Display;
@@ -32,10 +33,13 @@ public sealed record LibraryCardItem(
     string? Caption,
     string? ProgressText = null);
 
-/// <summary>The Library's four sections, in the order the page shows them.</summary>
+/// <summary>The Library's sections, in the order the page shows them.</summary>
 public enum LibrarySection
 {
     Watching,
+
+    /// <summary>Series in the queue the user hasn't watched in a while: a sub-group of Watching, with a view of its own.</summary>
+    Dormant,
     ToWatch,
     UpToDate,
     Watched
@@ -59,20 +63,30 @@ public sealed class LibraryModel(
     ITheTvDbService theTvDbService,
     ILikeRepository likeRepository,
     TimeProvider timeProvider,
+    IOptions<LibraryOptions> libraryOptions,
     ILogger<LibraryModel> logger)
     : PageModel
 {
     /// <summary>Today's date in UTC, for the card captions' date format.</summary>
     public DateOnly Today => AirDate.Today(timeProvider);
 
+    /// <summary>Series in progress with recent activity (or a season premiere that brought them back), in the continue-watching order.</summary>
     public IReadOnlyList<LibraryCardItem> Watching { get; private set; } = [];
+
+    /// <summary>
+    /// Series in progress that the user hasn't watched in a while
+    /// (<see cref="ContinueWatchingOrder.Arrange"/>). Shown as a sub-group of
+    /// Watching; not counted in Watching's number.
+    /// </summary>
+    public IReadOnlyList<LibraryCardItem> Dormant { get; private set; } = [];
 
     /// <summary>Movies on the watchlist — wanted, not yet watched. Most recently added first.</summary>
     public IReadOnlyList<LibraryCardItem> ToWatch { get; private set; } = [];
     public IReadOnlyList<LibraryCardItem> UpToDate { get; private set; } = [];
     public IReadOnlyList<LibraryCardItem> Watched { get; private set; } = [];
 
-    public bool IsEmpty => Watching.Count == 0 && ToWatch.Count == 0 && UpToDate.Count == 0 && Watched.Count == 0;
+    public bool IsEmpty =>
+        Watching.Count == 0 && Dormant.Count == 0 && ToWatch.Count == 0 && UpToDate.Count == 0 && Watched.Count == 0;
 
     /// <summary>
     /// <c>/Library?section=watched</c> shows one section on its own, with its
@@ -83,10 +97,11 @@ public sealed class LibraryModel(
     [BindProperty(SupportsGet = true)]
     public string? Section { get; set; }
 
-    /// <summary>The four sections in page order, empty ones included.</summary>
+    /// <summary>The sections in page order, empty ones included.</summary>
     public IReadOnlyList<LibrarySectionView> Sections =>
     [
         new(LibrarySection.Watching, "watching", "Watching", Watching),
+        new(LibrarySection.Dormant, "dormant", "Haven't watched in a while", Dormant),
         new(LibrarySection.ToWatch, "to-watch", "To Watch", ToWatch),
         new(LibrarySection.UpToDate, "up-to-date", "Up to Date", UpToDate),
         new(LibrarySection.Watched, "watched", "Watched", Watched)
@@ -126,21 +141,29 @@ public sealed class LibraryModel(
             var watching = new List<LibraryCardItem>();
             var upToDate = new List<LibraryCardItem>();
             var watched = new List<LibraryCardItem>();
+            var recentPremieres = new HashSet<int>();
 
-            await ClassifyTrackedSeriesAsync(userId, trackedSeries, likedSeriesIds, watching, upToDate, watched, cancellationToken);
+            await ClassifyTrackedSeriesAsync(userId, trackedSeries, likedSeriesIds, watching, upToDate, watched, recentPremieres, cancellationToken);
             await AddWatchedMoviesAsync(watchedMovies, watched, cancellationToken);
             ToWatch = await BuildWatchlistAsync(watchlistMovies, cancellationToken);
 
             // Watching is ordered like the Dashboard's "Continue watching": what
-            // was watched most recently first (ContinueWatchingOrder). The other
-            // sections stay alphabetical.
+            // was watched most recently first, with what hasn't been touched in a
+            // while split off into its own group (ContinueWatchingOrder has both
+            // rules). The other sections stay alphabetical.
             var lastWatchedBySeries = await episodeWatchRepository.GetLastWatchedUtcBySeriesAsync(userId, cancellationToken);
-            Watching = ContinueWatchingOrder.Order(
+            var queue = ContinueWatchingOrder.Arrange(
                 watching,
                 i => i.TvdbId,
                 i => i.Name,
                 lastWatchedBySeries,
-                ContinueWatchingOrder.AddedUtc(trackedSeries));
+                ContinueWatchingOrder.AddedUtc(trackedSeries),
+                recentPremieres,
+                Today,
+                libraryOptions.Value);
+
+            Watching = queue.Active;
+            Dormant = queue.Dormant;
             UpToDate = upToDate.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
             Watched = watched.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -161,10 +184,13 @@ public sealed class LibraryModel(
         List<LibraryCardItem> watching,
         List<LibraryCardItem> upToDate,
         List<LibraryCardItem> watched,
+        HashSet<int> recentPremieres,
         CancellationToken cancellationToken)
     {
         if (trackedSeries.Count == 0)
             return;
+
+        var today = Today;
 
         var aggregates = (await Task.WhenAll(
                 trackedSeries.Select(s => theTvDbService.TryGetSeriesAggregateAsync(s.TvdbId, logger, nameof(LibraryModel), cancellationToken))))
@@ -196,7 +222,12 @@ public sealed class LibraryModel(
             // Up to date is about regular episodes only: unwatched specials
             // never keep a series under Watching (see WatchProgressCalculator).
             if (!progress.IsUpToDate)
+            {
                 watching.Add(item with { ProgressText = progress.CurrentSeason?.Label });
+
+                if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
+                    recentPremieres.Add(aggregate.TvdbId);
+            }
             else if (!hasEnded)
                 upToDate.Add(item);
             else

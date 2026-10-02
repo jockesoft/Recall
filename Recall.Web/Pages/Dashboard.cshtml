@@ -102,24 +102,44 @@
             </li>
         </ul>
 
-        @if (Model.CatchUpEpisodes.Count > 0)
+        @if (Model.CatchUpEpisodes.Count > 0 || Model.DormantSeriesCount > 0)
         {
-            <h2>Continue watching</h2>
-            <div class="tvdb-catchup-grid tvdb-page-section">
-                @foreach (var ep in Model.CatchUpEpisodes)
+            <section class="tvdb-page-section" aria-labelledby="continueWatchingHeading">
+                <h2 id="continueWatchingHeading">Continue watching</h2>
+                @if (Model.CatchUpEpisodes.Count > 0)
                 {
-                    <partial name="_CatchUpCard" model="@(new CatchUpCardModel
-                             {
-                                 SeriesId = ep.SeriesId,
-                                 SeriesName = ep.SeriesName,
-                                 EpisodeId = ep.EpisodeId,
-                                 SeasonNumber = ep.SeasonNumber,
-                                 EpisodeNumber = ep.EpisodeNumber,
-                                 EpisodeName = ep.Name,
-                                 ImageUrl = ep.ImageUrl
-                             })" />
+                    <div class="tvdb-catchup-grid">
+                        @foreach (var ep in Model.CatchUpEpisodes)
+                        {
+                            <partial name="_CatchUpCard" model="@(new CatchUpCardModel
+                                     {
+                                         SeriesId = ep.SeriesId,
+                                         SeriesName = ep.SeriesName,
+                                         EpisodeId = ep.EpisodeId,
+                                         SeasonNumber = ep.SeasonNumber,
+                                         EpisodeNumber = ep.EpisodeNumber,
+                                         EpisodeName = ep.Name,
+                                         ImageUrl = ep.ImageUrl
+                                     })" />
+                        }
+                    </div>
                 }
-            </div>
+                else
+                {
+                    <p class="tvdb-meta mb-0">Nothing you have watched recently is waiting.</p>
+                }
+
+                @if (Model.DormantSeriesCount > 0)
+                {
+                    @* Series not touched in a while get no card; they are one click away in the Library. *@
+                    <p class="tvdb-dormant-link">
+                        <a asp-page="/Library" asp-route-section="dormant">
+                            <span class="tvdb-mono">@Model.DormantSeriesCount</span> series you haven't watched in a while
+                            <i class="@Icons.Forward" aria-hidden="true"></i>
+                        </a>
+                    </p>
+                }
+            </section>
         }
 
         <h2 id="upcoming" tabindex="-1">Upcoming</h2>

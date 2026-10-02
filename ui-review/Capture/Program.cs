@@ -46,6 +46,20 @@ List<Shot> shots =
     new("search", "no-results", Site.SignedIn, "/Search?Query=zzqqxxzzqq"),
     new("library", "populated", Site.SignedIn, "/Library"),
     new("library", "section-watched", Site.SignedIn, "/Library?section=watched"),
+    new("library", "section-dormant", Site.SignedIn, "/Library?section=dormant"),
+    new("library", "dormant-expanded", Site.SignedIn, "/Library",
+        Prepare: async page =>
+        {
+            // From 576px the "haven't watched in a while" group is collapsed behind a button; on a phone it is a row.
+            var toggle = page.Locator(".tvdb-subgroup__toggle");
+            if (await toggle.IsVisibleAsync())
+            {
+                await toggle.ClickAsync();
+                await page.Locator("#dormantSeries.show").WaitForAsync();
+            }
+
+            await page.Locator("#dormant").ScrollIntoViewIfNeededAsync();
+        }),
     new("series-details", "watching", Site.SignedIn, $"/Series/Details/{Watching}"),
     new("series-details", "up-to-date", Site.SignedIn, $"/Series/Details/{UpToDate}"),
     new("series-details", "all-watched", Site.SignedIn, $"/Series/Details/{AllWatched}"),

@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Recall.Tests.TestSupport;
 using Recall.Web.Domain.TheTvDb;
@@ -27,10 +28,14 @@ public class LibraryModelTests
     private Mock<ITheTvDbService> _tvDb = null!;
     private Mock<ILikeRepository> _likes = null!;
     private LibraryModel _sut = null!;
+    private LibraryOptions _libraryOptions = null!;
 
     [SetUp]
     public void SetUp()
     {
+        // A fresh instance per test: some tests change the settings.
+        _libraryOptions = new LibraryOptions();
+
         _currentUser = new Mock<ICurrentUserService>();
         _currentUser.SetupGet(x => x.IsAuthenticated).Returns(true);
         _currentUser.SetupGet(x => x.ExternalUserId).Returns(UserId.ToString());
@@ -69,6 +74,7 @@ public class LibraryModelTests
             _tvDb.Object,
             _likes.Object,
             new FixedTimeProvider(new DateTimeOffset(Today.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)),
+            Options.Create(_libraryOptions),
             NullLogger<LibraryModel>.Instance).WithTempData();
     }
 
@@ -186,7 +192,7 @@ public class LibraryModelTests
         await _sut.OnGetAsync(CancellationToken.None);
 
         _sut.SelectedSection.Should().BeNull();
-        _sut.Sections.Select(s => s.Slug).Should().Equal("watching", "to-watch", "up-to-date", "watched");
+        _sut.Sections.Select(s => s.Slug).Should().Equal("watching", "dormant", "to-watch", "up-to-date", "watched");
     }
 
     [Test]
@@ -229,6 +235,103 @@ public class LibraryModelTests
         _sut.Watching.Select(i => i.TvdbId).Should().Equal(
             [3, 2, 4, 1], "the same order as the Dashboard's Continue watching");
         _watches.Verify(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ---- haven't watched in a while -------------------------------------------
+
+    private static DateTime DaysAgo(int days) => Today.AddDays(-days).ToDateTime(new TimeOnly(20, 0), DateTimeKind.Utc);
+
+    private void SetUpLastWatched(params (int SeriesId, int DaysAgo)[] activity) =>
+        _watches
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(activity.ToDictionary(a => a.SeriesId, a => DaysAgo(a.DaysAgo)));
+
+    [Test]
+    public async Task Watching_Should_HoldOnlyActiveSeries_AndTheRestShouldBeTheDormantGroup()
+    {
+        _addedUtc[4] = DaysAgo(200);
+        _addedUtc[5] = DaysAgo(3);
+        SetUpSeries(
+            Series(1, "Watched Yesterday", "Continuing", Ep(10, 1, Today.AddDays(-400)), Ep(11, 2, Today.AddDays(-390))),
+            Series(2, "Watched Four Months Ago", "Continuing", Ep(20, 1, Today.AddDays(-400)), Ep(21, 2, Today.AddDays(-390))),
+            Series(3, "Watched A Year Ago", "Ended", Ep(30, 1, Today.AddDays(-400)), Ep(31, 2, Today.AddDays(-390))),
+            Series(4, "Never Started, Added Long Ago", "Continuing", Ep(40, 1, Today.AddDays(-400))),
+            Series(5, "Never Started, Added This Week", "Continuing", Ep(50, 1, Today.AddDays(-400))));
+        SetUpWatched(10, 20, 30);
+        SetUpLastWatched((1, 1), (2, 120), (3, 365));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Select(i => i.TvdbId).Should().Equal([1, 5], "the Watching count covers active series only");
+        _sut.Dormant.Select(i => i.TvdbId).Should().Equal([2, 3, 4], "most recently watched first, then the never-started one");
+        _sut.Dormant[0].ProgressText.Should().Be("1 of 2 · S01", "a dormant card still says where the viewer stopped");
+        _sut.IsEmpty.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task TheDormantGroup_Should_HaveItsOwnOneSectionView()
+    {
+        SetUpSeries(
+            Series(1, "Watched Yesterday", "Continuing", Ep(10, 1, Today.AddDays(-400)), Ep(11, 2, Today.AddDays(-390))),
+            Series(2, "Watched A Year Ago", "Continuing", Ep(20, 1, Today.AddDays(-400)), Ep(21, 2, Today.AddDays(-390))));
+        SetUpWatched(10, 20);
+        SetUpLastWatched((1, 1), (2, 365));
+        _sut.Section = "dormant";
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        var selected = _sut.SelectedSection!;
+        selected.Section.Should().Be(LibrarySection.Dormant);
+        selected.Title.Should().Be("Haven't watched in a while");
+        selected.Items.Select(i => i.TvdbId).Should().Equal(2);
+    }
+
+    [Test]
+    public async Task ALibraryOfOnlyDormantSeries_Should_NotBeEmpty()
+    {
+        SetUpSeries(Series(2, "Watched A Year Ago", "Continuing", Ep(20, 1, Today.AddDays(-400)), Ep(21, 2, Today.AddDays(-390))));
+        SetUpWatched(20);
+        SetUpLastWatched((2, 365));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Should().BeEmpty();
+        _sut.Dormant.Should().ContainSingle();
+        _sut.IsEmpty.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task TheDormantGroup_Should_BeEmpty_WhenTheFeatureIsOff()
+    {
+        _libraryOptions.DormantAfterDays = 0;
+        SetUpSeries(
+            Series(1, "Watched Yesterday", "Continuing", Ep(10, 1, Today.AddDays(-400)), Ep(11, 2, Today.AddDays(-390))),
+            Series(2, "Watched A Year Ago", "Continuing", Ep(20, 1, Today.AddDays(-400)), Ep(21, 2, Today.AddDays(-390))));
+        SetUpWatched(10, 20);
+        SetUpLastWatched((1, 1), (2, 365));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Select(i => i.TvdbId).Should().Equal(1, 2);
+        _sut.Dormant.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task ASeasonPremiere_Should_BringADormantSeriesBackIntoWatching()
+    {
+        var newSeason = new EpisodeSummary { Id = 22, SeasonNumber = 2, EpisodeNumber = 1, Name = "S2E1", Aired = Today.AddDays(-5) };
+        var newSpecial = new EpisodeSummary { Id = 32, SeasonNumber = 0, EpisodeNumber = 1, Name = "Special", Aired = Today.AddDays(-5) };
+        SetUpSeries(
+            Series(1, "Watched Yesterday", "Continuing", Ep(10, 1, Today.AddDays(-400)), Ep(11, 2, Today.AddDays(-390))),
+            Series(2, "New Season This Week", "Continuing", Ep(20, 1, Today.AddDays(-400)), Ep(21, 2, Today.AddDays(-390)), newSeason),
+            Series(3, "Only A New Special", "Continuing", Ep(30, 1, Today.AddDays(-400)), Ep(31, 2, Today.AddDays(-390)), newSpecial));
+        SetUpWatched(10, 20, 30);
+        SetUpLastWatched((1, 1), (2, 300), (3, 300));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Select(i => i.TvdbId).Should().Equal([1, 2], "back in the main list, after the series with real activity");
+        _sut.Dormant.Select(i => i.TvdbId).Should().Equal([3], "a special is not a season premiere");
     }
 
     [Test]

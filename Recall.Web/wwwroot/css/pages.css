@@ -93,6 +93,21 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 
 /* ---- Dashboard ---------------------------------------------------------------- */
 
+/* Under Continue watching: the series left out because they haven't been watched in a while. */
+.tvdb-dormant-link {
+    margin: var(--tvdb-space-3) 0 0;
+    font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-dormant-link > a {
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-dormant-link > a:hover,
+.tvdb-dormant-link > a:focus-visible {
+    color: var(--tvdb-signal-text);
+}
+
 .tvdb-schedule-day {
     margin: var(--tvdb-space-5) 0 var(--tvdb-space-2);
     padding-bottom: var(--tvdb-space-1);

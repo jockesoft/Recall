@@ -2,7 +2,7 @@
 -- against recall_db. It tops up what the dev user already has so every page
 -- has something to show: about 15 tracked series in different states, movies
 -- on the watchlist and watched, likes, ratings, read and unread notifications,
--- and a completed import.
+-- a completed import, and a few series not watched in a while.
 --
 -- Everything is derived from the cached aggregates, so it depends on the
 -- titles review.sh fetched (EXTRA_SERIES / EXTRA_MOVIES) and on the ones the
@@ -187,6 +187,21 @@ FROM job, (VALUES
     (11, 'tt9999992', 'Some Podcast Episode', 'Podcast Episode', NULL, 'Unsupported', NULL, '"Podcast Episode" isn''t a supported title type.'),
     (12, 'tt9999993', 'The Wire', 'TV Series', 10, 'Failed', NULL, 'TheTVDB did not answer. Try the import again later.')
   ) AS v(n, imdb, title, type, rating, status, tvdb, message);
+
+-- ---- Haven't watched in a while ---------------------------------------------
+-- Watch dates are spread so the queue has both an active list and a dormant
+-- group (Library:DormantAfterDays is 90): two series last watched months ago,
+-- and one never started that was added four months ago. The rest of the queue
+-- keeps its recent dates.
+
+UPDATE episode_watch SET watched_utc = watched_utc - interval '200 days'
+WHERE user_id = :dev AND series_tvdb_id = 314087;   -- The Grand Tour (2016)
+
+UPDATE episode_watch SET watched_utc = watched_utc - interval '130 days'
+WHERE user_id = :dev AND series_tvdb_id = 417223;   -- Baby Reindeer
+
+UPDATE tracked_series SET created_utc = now() - interval '120 days'
+WHERE user_id = :dev AND tvdb_id = 370112;          -- Mare of Easttown, nothing watched
 
 DROP FUNCTION ui_track(int);
 DROP FUNCTION ui_watch(int, int);

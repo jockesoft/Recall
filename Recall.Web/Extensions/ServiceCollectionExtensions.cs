@@ -87,6 +87,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMovieTrackingService, MovieTrackingService>();
         services.AddScoped<IRatingRepository, RatingRepository>();
         services.AddScoped<IWatchProgressService, WatchProgressService>();
+        // When a series in the queue counts as "haven't watched in a while" (ContinueWatchingOrder.Arrange).
+        services.AddOptions<LibraryOptions>().BindConfiguration(LibraryOptions.SectionName);
         services.AddScoped<IWatchTimeService, WatchTimeService>();
         services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();

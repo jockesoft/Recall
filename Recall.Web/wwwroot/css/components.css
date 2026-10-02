@@ -1139,6 +1139,26 @@ dl.row dd a.tvdb-inline-edit {
     line-height: var(--tvdb-leading-snug);
 }
 
+/* A group inside a section, under an h3 (the Library's "Haven't watched in a
+   while" inside Watching). From 576px its body is a Bootstrap collapse behind
+   the "Show N" button; on a phone it is always there, as a scrolling row. */
+.tvdb-subgroup {
+    margin-top: var(--tvdb-space-5);
+    padding-top: var(--tvdb-space-4);
+    border-top: 1px solid var(--tvdb-ink-line);
+    scroll-margin-top: var(--tvdb-space-4);
+}
+
+.tvdb-subgroup__toggle[aria-expanded="true"] .ph {
+    transform: rotate(180deg);
+}
+
+@media (max-width: 575.98px) {
+    .tvdb-subgroup__body.collapse:not(.show) {
+        display: block;
+    }
+}
+
 /* A section heading with a quiet link at the far end ("See all"). */
 .tvdb-section-head {
     display: flex;

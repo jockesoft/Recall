@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
@@ -67,7 +68,8 @@ public sealed class DashboardModel(
     IWatchProgressService watchProgressService,
     ILogger<DashboardModel> logger,
     ICurrentUserService currentUserService,
-    TimeProvider timeProvider) : PageModel
+    TimeProvider timeProvider,
+    IOptions<LibraryOptions> libraryOptions) : PageModel
 {
     /// <summary>Today's date in UTC — the date every air-date comparison on this page (and its view) uses.</summary>
     public DateOnly Today => AirDate.Today(timeProvider);
@@ -80,6 +82,12 @@ public sealed class DashboardModel(
     public int UnwatchedCount { get; private set; }
     public List<UpcomingEpisodeItem> UpcomingEpisodes { get; private set; } = [];
     public List<CatchUpItem> CatchUpEpisodes { get; private set; } = [];
+
+    /// <summary>
+    /// Series in the queue that the user hasn't watched in a while. They get no
+    /// card here: the page links to them in the Library instead.
+    /// </summary>
+    public int DormantSeriesCount { get; private set; }
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -105,6 +113,7 @@ public sealed class DashboardModel(
 
         var upcoming = new List<UpcomingEpisodeItem>();
         var catchUp = new List<CatchUpItem>();
+        var recentPremieres = new HashSet<int>();
         var unwatchedTotal = 0;
 
         foreach (var aggregate in aggregates)
@@ -135,6 +144,9 @@ public sealed class DashboardModel(
 
             if (progress.NextUnwatchedEpisode is { } next)
             {
+                if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
+                    recentPremieres.Add(aggregate.TvdbId);
+
                 // Prefer the still already on the aggregate. Without one, show the
                 // series' background art for now — EnrichCatchUpImagesAsync then
                 // tries the episode's own record for a screencap.
@@ -158,16 +170,24 @@ public sealed class DashboardModel(
 
         UpcomingEpisodes = [.. upcoming.OrderBy(e => e.AiredDate)];
 
-        // "Continue watching": what the user is in the middle of comes first
-        // (ContinueWatchingOrder has the rule, shared with the Library).
+        // "Continue watching": what the user is in the middle of comes first,
+        // and what they haven't touched in a while is left to the Library
+        // (ContinueWatchingOrder has both rules, shared with the Library). The
+        // unwatched count above still includes those series.
         var lastWatchedBySeries = await watchedRepository.GetLastWatchedUtcBySeriesAsync(userId, cancellationToken);
 
-        var orderedCatchUp = ContinueWatchingOrder.Order(
+        var queue = ContinueWatchingOrder.Arrange(
             catchUp,
             c => c.SeriesId,
             c => c.SeriesName,
             lastWatchedBySeries,
-            ContinueWatchingOrder.AddedUtc(trackedSeriesIds)).ToList();
+            ContinueWatchingOrder.AddedUtc(trackedSeriesIds),
+            recentPremieres,
+            today,
+            libraryOptions.Value);
+
+        var orderedCatchUp = queue.Active.ToList();
+        DormantSeriesCount = queue.Dormant.Count;
 
         CatchUpEpisodes = await EnrichCatchUpImagesAsync(orderedCatchUp, cancellationToken);
         UpcomingThisWeekCount = upcoming.Count(e => e.AiredDate <= thisWeekCutoff);

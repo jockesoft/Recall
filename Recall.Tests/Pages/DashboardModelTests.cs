@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Recall.Tests.TestSupport;
 using Recall.Web.Domain.TheTvDb;
@@ -24,10 +25,14 @@ public class DashboardModelTests
     private Mock<IEpisodeWatchRepository> _watches = null!;
     private Mock<IWatchProgressService> _progress = null!;
     private DashboardModel _sut = null!;
+    private LibraryOptions _libraryOptions = null!;
 
     [SetUp]
     public void SetUp()
     {
+        // A fresh instance per test: some tests change the settings.
+        _libraryOptions = new LibraryOptions();
+
         _tvDb = new Mock<ITheTvDbService>();
         _library = new Mock<ITrackedSeriesRepository>();
         _watches = new Mock<IEpisodeWatchRepository>();
@@ -55,7 +60,8 @@ public class DashboardModelTests
             _progress.Object,
             NullLogger<DashboardModel>.Instance,
             currentUser.Object,
-            new FixedTimeProvider(new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero))).WithTempData();
+            new FixedTimeProvider(new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero)),
+            Options.Create(_libraryOptions)).WithTempData();
     }
 
     private static EpisodeSummary Ep(int id, int season, int number, DateOnly? aired, string? image = null, string? finale = null) => new()
@@ -349,6 +355,86 @@ public class DashboardModelTests
         _sut.CatchUpEpisodes.Select(c => (c.SeriesId, c.EpisodeId)).Should().Equal(
             [(1, 10), (2, 21)],
             "the special is activity for the order, and S01E01 is still the episode to watch next");
+    }
+
+    // ---- haven't watched in a while -------------------------------------------
+
+    private static DateTime DaysAgo(int days) => Today.AddDays(-days).ToDateTime(new TimeOnly(20, 0), DateTimeKind.Utc);
+
+    private void SetUpLastWatched(params (int SeriesId, int DaysAgo)[] activity) =>
+        _watches
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(activity.ToDictionary(a => a.SeriesId, a => DaysAgo(a.DaysAgo)));
+
+    [Test]
+    public async Task DormantSeries_Should_GetNoCard_ButBeCountedForTheLink_AndStillCountAsUnwatched()
+    {
+        _addedUtc[4] = DaysAgo(200);
+        SetUpSeries(
+            new SeriesAggregate { TvdbId = 1, Name = "Watched Yesterday", Episodes = [Ep(10, 1, 1, Today.AddDays(-400)), Ep(11, 1, 2, Today.AddDays(-390))] },
+            new SeriesAggregate { TvdbId = 2, Name = "Watched Four Months Ago", Episodes = [Ep(20, 1, 1, Today.AddDays(-400)), Ep(21, 1, 2, Today.AddDays(-390)), Ep(22, 1, 3, Today.AddDays(-380))] },
+            new SeriesAggregate { TvdbId = 3, Name = "Watched A Year Ago", Episodes = [Ep(30, 1, 1, Today.AddDays(-400)), Ep(31, 1, 2, Today.AddDays(-390))] },
+            new SeriesAggregate { TvdbId = 4, Name = "Never Started, Added Long Ago", Episodes = [Ep(40, 1, 1, Today.AddDays(-400))] });
+        SetUpWatched(10, 20, 30);
+        SetUpLastWatched((1, 1), (2, 120), (3, 365));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal(1);
+        _sut.DormantSeriesCount.Should().Be(3, "the link reads \"3 series you haven't watched in a while\"");
+        _sut.UnwatchedCount.Should().Be(5, "the stat keeps counting every series: 1 + 2 + 1 + 1 unwatched aired episodes");
+    }
+
+    [Test]
+    public async Task TheDormantLink_Should_HaveNothingToCount_WhenEverythingIsRecent_OrTheFeatureIsOff()
+    {
+        SetUpSeries(
+            new SeriesAggregate { TvdbId = 1, Name = "Watched Yesterday", Episodes = [Ep(10, 1, 1, Today.AddDays(-400)), Ep(11, 1, 2, Today.AddDays(-390))] },
+            new SeriesAggregate { TvdbId = 2, Name = "Watched A Year Ago", Episodes = [Ep(20, 1, 1, Today.AddDays(-400)), Ep(21, 1, 2, Today.AddDays(-390))] });
+        SetUpWatched(10, 20);
+
+        SetUpLastWatched((1, 1), (2, 30));
+        await _sut.OnGetAsync(CancellationToken.None);
+        _sut.DormantSeriesCount.Should().Be(0, "nothing is older than ninety days, so the page shows no link");
+
+        SetUpLastWatched((1, 1), (2, 365));
+        _libraryOptions.DormantAfterDays = 0;
+        await _sut.OnGetAsync(CancellationToken.None);
+        _sut.DormantSeriesCount.Should().Be(0, "at 0 the feature is off");
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal(1, 2);
+    }
+
+    [Test]
+    public async Task ASeasonPremiere_Should_BringADormantSeriesBack_ButAnOrdinaryEpisodeOrASpecialShouldNot()
+    {
+        SetUpSeries(
+            new SeriesAggregate { TvdbId = 1, Name = "Watched Yesterday", Episodes = [Ep(10, 1, 1, Today.AddDays(-400)), Ep(11, 1, 2, Today.AddDays(-390))] },
+            new SeriesAggregate
+            {
+                TvdbId = 2, Name = "New Season Last Week",
+                Episodes = [Ep(20, 1, 1, Today.AddDays(-400)), Ep(21, 1, 2, Today.AddDays(-390)), Ep(22, 2, 1, Today.AddDays(-6))]
+            },
+            new SeriesAggregate
+            {
+                TvdbId = 3, Name = "Weekly Show, Another Episode Last Week",
+                Episodes = [Ep(30, 1, 1, Today.AddDays(-400)), Ep(31, 1, 2, Today.AddDays(-390)), Ep(32, 1, 40, Today.AddDays(-6))]
+            },
+            new SeriesAggregate
+            {
+                TvdbId = 4, Name = "New Special Last Week",
+                Episodes = [Ep(40, 1, 1, Today.AddDays(-400)), Ep(41, 1, 2, Today.AddDays(-390)), Ep(42, 0, 1, Today.AddDays(-6))]
+            });
+        SetUpWatched(10, 20, 30, 40);
+        SetUpLastWatched((1, 1), (2, 300), (3, 300), (4, 300));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal([1, 2], "the premiere brings series 2 back, after the series with real activity");
+        _sut.DormantSeriesCount.Should().Be(2);
+
+        _libraryOptions.PremiereReturnDays = 3;
+        await _sut.OnGetAsync(CancellationToken.None);
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal([1], "the window comes from configuration: six days ago is outside three");
     }
 
     [Test]
