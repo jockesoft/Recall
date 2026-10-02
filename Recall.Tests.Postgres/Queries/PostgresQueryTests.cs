@@ -158,7 +158,7 @@ public sealed class PostgresQueryTests : PostgresFixture
     }
 
     [Test]
-    public async Task EpisodesNeedingRefresh_Should_MatchTbaInAnyCase_AndChaseMissingImages()
+    public async Task EpisodesNeedingRefresh_Should_MatchTbaInAnyCase_AndRecheckMissingStillsOnTheSchedule()
     {
         var today = DateOnly.FromDateTime(Now);
         await using (var db = NewContext())
@@ -168,23 +168,60 @@ public sealed class PostgresQueryTests : PostgresFixture
                 Episode(2, "Plain and stale", Now.AddDays(-40)),
                 Episode(3, "tba", Now.AddDays(-2)),
                 Episode(4, "TBA", Now.AddHours(-2)),
-                Episode(5, "Aired, no still", Now.AddDays(-2), aired: today.AddDays(-1), hasImage: false),
+                Episode(5, "Aired yesterday, no still", Now.AddDays(-2), aired: today.AddDays(-1), hasImage: false),
                 Episode(6, "Not aired yet, no still", Now.AddDays(-2), aired: today.AddDays(1), hasImage: false),
-                Episode(7, "Given up on", Now.AddDays(-2), aired: today.AddDays(-1), hasImage: false, attempts: 5),
-                Episode(8, "Aired today, no still", Now.AddDays(-3), aired: today, hasImage: false));
+                Episode(7, "Aired yesterday, checked an hour ago", Now.AddHours(-1), aired: today.AddDays(-1), hasImage: false),
+                Episode(8, "Aired today, no still", Now.AddDays(-3), aired: today, hasImage: false),
+                Episode(9, "Aired 45 days ago, checked 3 days ago", Now.AddDays(-3), aired: today.AddDays(-45), hasImage: false),
+                Episode(10, "Aired 45 days ago, checked 9 days ago", Now.AddDays(-9), aired: today.AddDays(-45), hasImage: false),
+                Episode(11, "Aired 120 days ago, no still", Now.AddDays(-20), aired: today.AddDays(-120), hasImage: false));
             await db.SaveChangesAsync();
         }
 
         var ids = await TvdbStore().GetEpisodesNeedingRefreshAsync(
             staleBeforeUtc: Now.AddDays(-30),
             tbaStaleBeforeUtc: Now.AddDays(-1),
-            imageChaseBeforeUtc: Now.AddDays(-1),
-            today: today,
-            maxImageChaseAttempts: 5,
+            stillRecheck: new StillRecheck(Now),
             limit: 10);
 
-        // Oldest first: 2 (stale), 8 (no still), then 3 (tba) and 5 (no still).
-        ids.Should().Equal(2, 8, 3, 5);
+        // Oldest first: 2 (stale), 10 (weekly recheck), 8 (daily), then 3 (tba) and 5 (daily).
+        // Not 7 or 9 (checked too recently), 6 (not aired) or 11 (older than 90 days).
+        ids.Should().Equal(2, 10, 8, 3, 5);
+    }
+
+    [Test]
+    public async Task EpisodesNeedingRefresh_Should_SkipSeriesThatRarelyHaveStills()
+    {
+        var today = DateOnly.FromDateTime(Now);
+        CachedSeriesAggregateEntity Series(int id, int aired, int withStill)
+        {
+            var series = SeriesAggregate(id);
+            series.AiredEpisodeCount = aired;
+            series.AiredStillCount = withStill;
+            return series;
+        }
+
+        CachedEpisodeExtendedEntity Due(int id, int seriesId)
+        {
+            var episode = Episode(id, "Aired, no still", Now.AddDays(-2), aired: today.AddDays(-2), hasImage: false);
+            episode.SeriesTvdbId = seriesId;
+            return episode;
+        }
+
+        await using (var db = NewContext())
+        {
+            db.CachedSeriesAggregates.AddRange(
+                Series(201, aired: 177, withStill: 2),     // below 10%
+                Series(202, aired: 330, withStill: 306),   // above
+                Series(203, aired: 9, withStill: 0));      // fewer than 10 aired
+            db.CachedEpisodesExtended.AddRange(Due(1, 201), Due(2, 202), Due(3, 203), Due(4, 299));
+            await db.SaveChangesAsync();
+        }
+
+        var ids = await TvdbStore().GetEpisodesNeedingRefreshAsync(
+            staleBeforeUtc: Now.AddDays(-30), tbaStaleBeforeUtc: Now.AddDays(-1), stillRecheck: new StillRecheck(Now), limit: 10);
+
+        ids.Should().BeEquivalentTo([2, 3, 4], "only the series with stills for 2 of 177 aired episodes is skipped");
     }
 
     // ---- Watchlist import queue ----
@@ -318,11 +355,11 @@ public sealed class PostgresQueryTests : PostgresFixture
         };
 
     private static CachedEpisodeExtendedEntity Episode(
-        int id, string name, DateTime retrievedUtc, DateOnly? aired = null, bool hasImage = true, int attempts = 0) =>
+        int id, string name, DateTime retrievedUtc, DateOnly? aired = null, bool hasImage = true) =>
         new()
         {
             EpisodeTvdbId = id, Name = name, Payload = "{}", RetrievedUtc = retrievedUtc,
-            Aired = aired, HasImage = hasImage, RefreshAttempts = attempts
+            Aired = aired, HasImage = hasImage
         };
 
     // ---- weekly digest ----

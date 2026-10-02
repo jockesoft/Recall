@@ -620,6 +620,51 @@ public class TheTvDbApiClientTests
     }
 
     [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_KeepEveryStill_ThroughTheTranslatedList_WithNormalizedPaths()
+    {
+        // 10 has a relative path in both lists, 11 an absolute one, 12 a still
+        // only the translated list knows about, and 5 has none anywhere.
+        var api = SeriesApi(DarkExtended.Replace(
+                "\"runtime\": 44, \"image\": null", "\"runtime\": 44, \"image\": \"https://artworks.thetvdb.com/banners/v4/episode/11/screencap/abc.jpg\""),
+            _ => JsonResponse(HttpStatusCode.OK, """
+                {
+                  "status":"success",
+                  "data": { "id": 334824, "episodes": [
+                    { "id": 10, "seasonNumber": 1, "number": 1, "name": "Secrets", "image": "/banners/episodes/10.jpg" },
+                    { "id": 11, "seasonNumber": 1, "number": 2, "name": "Lies", "image": null },
+                    { "id": 12, "seasonNumber": 1, "number": 3, "name": "Past and Present", "image": "/banners/episodes/12.jpg" }
+                  ] },
+                  "links": { "next": null }
+                }
+                """));
+
+        var aggregate = await CreateSut(api).GetSeriesAggregateByIdAsync(334824);
+
+        var stills = aggregate!.Episodes.ToDictionary(e => e.Id, e => e.Image);
+        stills[10].Should().Be("https://artworks.thetvdb.com/banners/episodes/10.jpg", "a relative path is made absolute");
+        stills[11].Should().Be("https://artworks.thetvdb.com/banners/v4/episode/11/screencap/abc.jpg",
+            "the extended record's still survives a translated entry that has none");
+        stills[12].Should().Be("https://artworks.thetvdb.com/banners/episodes/12.jpg");
+        stills[5].Should().BeNull("TheTVDB has no still for it");
+    }
+
+    [Test]
+    public async Task GetSeriesAggregateByIdAsync_Should_NormalizeStills_WhenTheEpisodesComeFromTheTranslatedListAlone()
+    {
+        var api = SeriesApi(
+            """{"status":"success","data":{"id":334824,"name":"Dark","episodes":[]}}""",
+            _ => JsonResponse(HttpStatusCode.OK, """
+                {"status":"success","data":{"id":334824,"episodes":[
+                  {"id":10,"seasonNumber":1,"number":1,"name":"Secrets","image":"/banners/episodes/10.jpg"}
+                ]},"links":{"next":null}}
+                """));
+
+        var aggregate = await CreateSut(api).GetSeriesAggregateByIdAsync(334824);
+
+        aggregate!.Episodes.Single().Image.Should().Be("https://artworks.thetvdb.com/banners/episodes/10.jpg");
+    }
+
+    [Test]
     public async Task GetSeriesAggregateByIdAsync_Should_StopPagingTheTranslatedList_WhenNextNeverBecomesNull()
     {
         var api = SeriesApi(DarkExtended, page => JsonResponse(HttpStatusCode.OK,

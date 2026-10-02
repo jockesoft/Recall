@@ -55,6 +55,7 @@ public sealed class TvdbSnapshotStore(
             MappingVersion = SeriesDataDtoMappings.AggregateVersion,
             RetrievedUtc = DateTime.UtcNow
         };
+        (entity.AiredEpisodeCount, entity.AiredStillCount) = StillCoverage(aggregate);
 
         await InsertAsync(dbContext, entity, aggregate.TvdbId, cancellationToken);
     }
@@ -167,24 +168,55 @@ public sealed class TvdbSnapshotStore(
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// How many regular episodes of the series have aired as of now (UTC), and
+    /// how many of those have a still: the two numbers the still recheck judges
+    /// "this series rarely has stills" by. Specials and movie-flagged entries
+    /// are left out, like everywhere progress is counted.
+    /// </summary>
+    internal static (int Aired, int WithStill) StillCoverage(SeriesAggregate aggregate)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var aired = aggregate.Episodes
+            .Where(e => e.SeasonNumber != 0 && e.IsMovie != true && e.Aired is { } date && date <= today)
+            .ToList();
+
+        return (aired.Count, aired.Count(e => !string.IsNullOrWhiteSpace(e.Image)));
+    }
+
     public async Task<IReadOnlyList<int>> GetEpisodesNeedingRefreshAsync(
         DateTime staleBeforeUtc,
         DateTime tbaStaleBeforeUtc,
-        DateTime imageChaseBeforeUtc,
-        DateOnly today,
-        int maxImageChaseAttempts,
+        StillRecheck stillRecheck,
         int limit,
         CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
+        // Plain values for the query: see StillRecheck for the schedule.
+        var today = stillRecheck.Today;
+        var dailyFrom = stillRecheck.DailyFrom;
+        var weeklyFrom = stillRecheck.WeeklyFrom;
+        var dailyBeforeUtc = stillRecheck.DailyBeforeUtc;
+        var weeklyBeforeUtc = stillRecheck.WeeklyBeforeUtc;
+        var minStillPercent = stillRecheck.MinStillPercent;
+        var minAiredEpisodes = stillRecheck.MinAiredEpisodes;
+
         return await dbContext.CachedEpisodesExtended
             .AsNoTracking()
             .Where(x => x.RetrievedUtc < staleBeforeUtc
                         || (x.Name != null && x.Name.ToUpper() == "TBA" && x.RetrievedUtc < tbaStaleBeforeUtc)
+                        // Aired without a still: daily while it is recent, weekly
+                        // for a while longer, then no more.
                         || (!x.HasImage && x.Aired != null && x.Aired <= today
-                            && x.RefreshAttempts < maxImageChaseAttempts
-                            && x.RetrievedUtc < imageChaseBeforeUtc))
+                            && ((x.Aired >= dailyFrom && x.RetrievedUtc < dailyBeforeUtc)
+                                || (x.Aired < dailyFrom && x.Aired >= weeklyFrom && x.RetrievedUtc < weeklyBeforeUtc))
+                            // ...unless its series rarely has stills at all: enough
+                            // aired episodes to judge, and too few of them with one.
+                            && !dbContext.CachedSeriesAggregates.Any(a =>
+                                a.TvdbId == x.SeriesTvdbId
+                                && a.AiredEpisodeCount >= minAiredEpisodes
+                                && a.AiredStillCount * 100 < a.AiredEpisodeCount * minStillPercent)))
             .OrderBy(x => x.RetrievedUtc)
             .Take(limit)
             .Select(x => x.EpisodeTvdbId)
@@ -210,6 +242,7 @@ public sealed class TvdbSnapshotStore(
         row.KeepUpdated = aggregate.Status?.KeepUpdated;
         row.Payload = JsonSerializer.Serialize(aggregate, JsonOptions);
         row.MappingVersion = SeriesDataDtoMappings.AggregateVersion;
+        (row.AiredEpisodeCount, row.AiredStillCount) = StillCoverage(aggregate);
         row.RetrievedUtc = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -313,7 +346,6 @@ public sealed class TvdbSnapshotStore(
         row.Name = episode.Name;
         row.Aired = ParseAired(episode.Aired);
         row.HasImage = hasImage;
-        row.RefreshAttempts = hasImage ? 0 : row.RefreshAttempts + 1;
         row.Payload = JsonSerializer.Serialize(episode, JsonOptions);
         row.RetrievedUtc = DateTime.UtcNow;
 
@@ -353,7 +385,6 @@ public sealed class TvdbSnapshotStore(
 
             row.Payload = JsonSerializer.Serialize(updated, JsonOptions);
             row.HasImage = true;
-            row.RefreshAttempts = 0;
 
             patched.Add(updated);
         }

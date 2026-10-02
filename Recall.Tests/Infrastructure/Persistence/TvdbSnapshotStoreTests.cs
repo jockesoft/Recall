@@ -439,9 +439,7 @@ public sealed class TvdbSnapshotStoreTests
         var due = await NewStore().GetEpisodesNeedingRefreshAsync(
             staleBeforeUtc: now.AddDays(-30),
             tbaStaleBeforeUtc: now.AddHours(-12),
-            imageChaseBeforeUtc: now.AddHours(-12),
-            today: DateOnly.FromDateTime(now),
-            maxImageChaseAttempts: 5,
+            stillRecheck: new StillRecheck(now),
             limit: 10);
 
         // 1: older than 30d. 2: still "TBA" and older than 12h.
@@ -449,78 +447,235 @@ public sealed class TvdbSnapshotStoreTests
         due.Should().BeEquivalentTo(new[] { 1, 2 });
     }
 
+    private static CachedEpisodeExtendedEntity NoStill(int id, DateOnly aired, DateTime retrievedUtc, bool hasImage = false) =>
+        new() { EpisodeTvdbId = id, Name = $"Episode {id}", Payload = "{}", Aired = aired, HasImage = hasImage, RetrievedUtc = retrievedUtc };
+
     [Test]
-    public async Task GetEpisodesNeedingRefresh_ChasesAiredEpisodesMissingImage_ButRespectsCapAndBackoff()
+    public async Task GetEpisodesNeedingRefresh_RechecksAnAiredEpisodeWithoutAStill_DailyForThirtyDays_WeeklyToNinety_ThenNever()
     {
-        var now = DateTime.UtcNow;
+        var now = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
         var today = DateOnly.FromDateTime(now);
 
         await using (var seed = new AppDbContext(_dbOptions))
         {
             seed.CachedEpisodesExtended.AddRange(
-                // 10: aired, no image, under the attempt cap, refreshed long enough ago — due.
-                new CachedEpisodeExtendedEntity
-                {
-                    EpisodeTvdbId = 10, Name = "Aired No Image", Payload = "{}",
-                    Aired = today.AddDays(-1), HasImage = false, RefreshAttempts = 2,
-                    RetrievedUtc = now.AddHours(-13)
-                },
-                // 11: aired, no image, but already at the attempt cap — not due.
-                new CachedEpisodeExtendedEntity
-                {
-                    EpisodeTvdbId = 11, Name = "Given Up", Payload = "{}",
-                    Aired = today.AddDays(-5), HasImage = false, RefreshAttempts = 5,
-                    RetrievedUtc = now.AddHours(-13)
-                },
-                // 12: aired, no image, under the cap, but refreshed too recently — not due.
-                new CachedEpisodeExtendedEntity
-                {
-                    EpisodeTvdbId = 12, Name = "Too Soon", Payload = "{}",
-                    Aired = today.AddDays(-1), HasImage = false, RefreshAttempts = 1,
-                    RetrievedUtc = now.AddHours(-1)
-                },
-                // 13: not aired yet — not due even though it's imageless.
-                new CachedEpisodeExtendedEntity
-                {
-                    EpisodeTvdbId = 13, Name = "Future", Payload = "{}",
-                    Aired = today.AddDays(1), HasImage = false, RefreshAttempts = 0,
-                    RetrievedUtc = now.AddHours(-13)
-                },
-                // 14: aired, already has an image — not due.
-                new CachedEpisodeExtendedEntity
-                {
-                    EpisodeTvdbId = 14, Name = "Has Image", Payload = "{}",
-                    Aired = today.AddDays(-1), HasImage = true, RefreshAttempts = 0,
-                    RetrievedUtc = now.AddHours(-13)
-                });
+                // Daily while it aired within 30 days.
+                NoStill(10, today, now.AddHours(-25)),                    // aired today, checked yesterday: due
+                NoStill(11, today.AddDays(-3), now.AddHours(-23)),        // checked less than a day ago: not yet
+                NoStill(12, today.AddDays(-30), now.AddDays(-2)),         // the 30th day is still daily: due
+                // Weekly from day 31 to day 90.
+                NoStill(20, today.AddDays(-31), now.AddDays(-2)),         // checked two days ago: not yet
+                NoStill(21, today.AddDays(-31), now.AddDays(-8)),         // checked over a week ago: due
+                NoStill(22, today.AddDays(-90), now.AddDays(-8)),         // the 90th day is still weekly: due
+                // Then never.
+                NoStill(30, today.AddDays(-91), now.AddDays(-20)),        // 91 days: no more still rechecks
+                NoStill(31, today.AddDays(-400), now.AddDays(-29)),
+                // Never for these, whatever their age.
+                NoStill(40, today.AddDays(1), now.AddDays(-5)),           // not aired yet
+                NoStill(41, today.AddDays(-3), now.AddDays(-5), hasImage: true),
+                new CachedEpisodeExtendedEntity { EpisodeTvdbId = 42, Name = "No air date", Payload = "{}", HasImage = false, RetrievedUtc = now.AddDays(-5) });
             await seed.SaveChangesAsync();
         }
 
         var due = await NewStore().GetEpisodesNeedingRefreshAsync(
             staleBeforeUtc: now.AddDays(-30),
             tbaStaleBeforeUtc: now.AddHours(-12),
-            imageChaseBeforeUtc: now.AddHours(-12),
-            today: today,
-            maxImageChaseAttempts: 5,
-            limit: 10);
+            stillRecheck: new StillRecheck(now),
+            limit: 50);
 
-        due.Should().BeEquivalentTo(new[] { 10 });
+        due.Should().BeEquivalentTo([10, 12, 21, 22]);
     }
 
     [Test]
-    public async Task UpsertEpisodeExtended_TracksImageAndAttempts()
+    public async Task GetEpisodesNeedingRefresh_RechecksForAStill_HoweverOftenTheRowWasRefreshedBeforeItAired()
+    {
+        // The old rule counted consecutive refreshes without an image and gave
+        // up after five, including refreshes from before the episode aired (a
+        // "TBA" title is refreshed twice a day). The schedule goes by the air date.
+        var now = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+        var store = NewStore();
+        await store.SaveEpisodeExtendedAsync(new Episode { Id = 6001, Name = "Ep", Aired = "2026-10-01", Image = null });
+        for (var i = 0; i < 8; i++)
+            await store.UpsertEpisodeExtendedAsync(new Episode { Id = 6001, Name = "Ep", Aired = "2026-10-01", Image = null });
+
+        await using (var db = new AppDbContext(_dbOptions))
+        {
+            var row = await db.CachedEpisodesExtended.SingleAsync(x => x.EpisodeTvdbId == 6001);
+            row.RetrievedUtc = now.AddDays(-2);
+            await db.SaveChangesAsync();
+        }
+
+        (await store.GetEpisodesNeedingRefreshAsync(now.AddDays(-30), now.AddHours(-12), new StillRecheck(now), limit: 10))
+            .Should().Equal(6001);
+    }
+
+    [Test]
+    public async Task GetEpisodesNeedingRefresh_KeepsStillRechecksWithinTheCap_OldestCheckedFirst()
+    {
+        var now = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+        var today = DateOnly.FromDateTime(now);
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedEpisodesExtended.AddRange(
+                Enumerable.Range(1, 40).Select(n => NoStill(n, today.AddDays(-2), now.AddDays(-2).AddMinutes(-n))));
+            await seed.SaveChangesAsync();
+        }
+
+        var due = await NewStore().GetEpisodesNeedingRefreshAsync(
+            now.AddDays(-30), now.AddHours(-12), new StillRecheck(now), limit: 25);
+
+        due.Should().HaveCount(25, "the still rechecks share the episode tier's cap; they add no budget of their own");
+        due.Should().Equal(Enumerable.Range(16, 25).Reverse(), "the rows checked longest ago go first; the rest wait for the next run");
+    }
+
+    // ---- series that rarely have stills -----------------------------------------
+
+    private static CachedSeriesAggregateEntity SeriesWithStills(int id, int aired, int withStill) =>
+        new()
+        {
+            TvdbId = id, Language = "eng", Name = $"Series {id}", Payload = "{}", MappingVersion = Current,
+            KeepUpdated = true, RetrievedUtc = DateTime.UtcNow, AiredEpisodeCount = aired, AiredStillCount = withStill
+        };
+
+    private static CachedEpisodeExtendedEntity DueForAStill(int id, int seriesId, DateTime now) =>
+        new()
+        {
+            EpisodeTvdbId = id, SeriesTvdbId = seriesId, Name = $"Episode {id}", Payload = "{}",
+            Aired = DateOnly.FromDateTime(now).AddDays(-2), HasImage = false, RetrievedUtc = now.AddDays(-2)
+        };
+
+    [Test]
+    public async Task GetEpisodesNeedingRefresh_SkipsTheEpisodesOfASeriesThatRarelyHasStills()
+    {
+        var now = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedSeriesAggregates.AddRange(
+                SeriesWithStills(1, aired: 177, withStill: 2),      // 1%: below the threshold
+                SeriesWithStills(2, aired: 330, withStill: 306),    // 93%: above
+                SeriesWithStills(3, aired: 9, withStill: 0),        // none, but fewer than 10 aired: too early to judge
+                SeriesWithStills(4, aired: 100, withStill: 10),     // exactly 10% is not "fewer than 10%"
+                SeriesWithStills(5, aired: 100, withStill: 9),      // 9%: below
+                SeriesWithStills(6, aired: 10, withStill: 0));      // the tenth aired episode makes it judged
+            seed.CachedEpisodesExtended.AddRange(
+                DueForAStill(101, seriesId: 1, now),
+                DueForAStill(102, seriesId: 2, now),
+                DueForAStill(103, seriesId: 3, now),
+                DueForAStill(104, seriesId: 4, now),
+                DueForAStill(105, seriesId: 5, now),
+                DueForAStill(106, seriesId: 6, now),
+                DueForAStill(107, seriesId: 999, now));             // its series is not cached: rechecked as usual
+            await seed.SaveChangesAsync();
+        }
+
+        var due = await NewStore().GetEpisodesNeedingRefreshAsync(
+            now.AddDays(-30), now.AddHours(-12), new StillRecheck(now) { MinStillPercent = 10, MinAiredEpisodes = 10 }, limit: 50);
+
+        due.Should().BeEquivalentTo([102, 103, 104, 107]);
+    }
+
+    [Test]
+    public async Task GetEpisodesNeedingRefresh_UsesTheConfiguredThresholds_AndZeroPercentTurnsTheRuleOff()
+    {
+        var now = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedSeriesAggregates.AddRange(
+                SeriesWithStills(1, aired: 177, withStill: 2),
+                SeriesWithStills(2, aired: 30, withStill: 6));      // 20%
+            seed.CachedEpisodesExtended.AddRange(DueForAStill(101, 1, now), DueForAStill(102, 2, now));
+            await seed.SaveChangesAsync();
+        }
+
+        Task<IReadOnlyList<int>> DueWith(int percent, int minAired) => NewStore().GetEpisodesNeedingRefreshAsync(
+            now.AddDays(-30), now.AddHours(-12),
+            new StillRecheck(now) { MinStillPercent = percent, MinAiredEpisodes = minAired }, limit: 50);
+
+        (await DueWith(10, 10)).Should().Equal(102);
+        (await DueWith(25, 10)).Should().BeEmpty("at 25% the series with 20% is skipped too");
+        (await DueWith(25, 50)).Should().Equal([102], "with 50 aired episodes needed, a series of 30 is not judged yet");
+        (await DueWith(0, 10)).Should().BeEquivalentTo([101, 102], "0 percent turns the rule off");
+    }
+
+    [Test]
+    public async Task ASeriesThatRarelyHasStills_Should_StillGetItsStaleAndTbaRefreshes()
+    {
+        // Only the recheck for a still is skipped; the row is refreshed like any other.
+        var now = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+        var today = DateOnly.FromDateTime(now);
+
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.CachedSeriesAggregates.Add(SeriesWithStills(1, aired: 177, withStill: 2));
+            seed.CachedEpisodesExtended.AddRange(
+                new CachedEpisodeExtendedEntity { EpisodeTvdbId = 101, SeriesTvdbId = 1, Name = "Old", Payload = "{}", Aired = today.AddDays(-200), HasImage = false, RetrievedUtc = now.AddDays(-31) },
+                new CachedEpisodeExtendedEntity { EpisodeTvdbId = 102, SeriesTvdbId = 1, Name = "TBA", Payload = "{}", Aired = today.AddDays(3), HasImage = false, RetrievedUtc = now.AddHours(-13) });
+            await seed.SaveChangesAsync();
+        }
+
+        (await NewStore().GetEpisodesNeedingRefreshAsync(now.AddDays(-30), now.AddHours(-12), new StillRecheck(now), limit: 50))
+            .Should().BeEquivalentTo([101, 102]);
+    }
+
+    [Test]
+    public async Task SavingAndRefreshingASeries_Should_CountItsAiredRegularEpisodes_AndThoseWithAStill()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        EpisodeSummary Ep(int id, int? season, DateOnly? aired, string? image, bool isMovie = false) =>
+            new() { Id = id, SeasonNumber = season, EpisodeNumber = id, Name = $"E{id}", Aired = aired, Image = image, IsMovie = isMovie };
+
+        var aggregate = new SeriesAggregate
+        {
+            TvdbId = 900, Name = "Show",
+            Episodes =
+            [
+                Ep(1, 1, today.AddDays(-30), "https://example.test/1.jpg"),
+                Ep(2, 1, today.AddDays(-20), null),
+                Ep(3, 1, today, " "),                                            // aired today; a blank path is no still
+                Ep(4, 1, today.AddDays(5), "https://example.test/4.jpg"),        // not aired yet
+                Ep(5, 1, null, "https://example.test/5.jpg"),                    // no air date
+                Ep(6, 0, today.AddDays(-10), "https://example.test/6.jpg"),      // a special
+                Ep(7, 1, today.AddDays(-10), "https://example.test/7.jpg", isMovie: true),
+                Ep(8, null, today.AddDays(-10), "https://example.test/8.jpg")    // no season number: not a special
+            ]
+        };
+
+        var store = NewStore();
+        await store.SaveSeriesAggregateAsync(aggregate, "eng");
+
+        await using (var db = new AppDbContext(_dbOptions))
+        {
+            var row = await db.CachedSeriesAggregates.SingleAsync(x => x.TvdbId == 900);
+            (row.AiredEpisodeCount, row.AiredStillCount).Should().Be((4, 2), "episodes 1, 2, 3 and 8 have aired; 1 and 8 have a still");
+        }
+
+        // A refresh recounts: the still for episode 2 has arrived.
+        await store.UpsertSeriesAggregateAsync(
+            aggregate with { Episodes = aggregate.Episodes.Select(e => e.Id == 2 ? Ep(2, 1, today.AddDays(-20), "https://example.test/2.jpg") : e).ToArray() },
+            "eng");
+
+        await using (var db = new AppDbContext(_dbOptions))
+        {
+            var row = await db.CachedSeriesAggregates.SingleAsync(x => x.TvdbId == 900);
+            (row.AiredEpisodeCount, row.AiredStillCount).Should().Be((4, 3));
+        }
+    }
+
+    [Test]
+    public async Task UpsertEpisodeExtended_TracksWhetherTheEpisodeHasAStill()
     {
         var store = NewStore();
 
         await store.SaveEpisodeExtendedAsync(new Episode { Id = 6001, Name = "Ep", Aired = "2026-01-01", Image = null });
-
         await store.UpsertEpisodeExtendedAsync(new Episode { Id = 6001, Name = "Ep", Aired = "2026-01-01", Image = null });
 
         await using (var db = new AppDbContext(_dbOptions))
         {
             var row = await db.CachedEpisodesExtended.SingleAsync(x => x.EpisodeTvdbId == 6001);
             row.HasImage.Should().BeFalse();
-            row.RefreshAttempts.Should().Be(1);
             row.Aired.Should().Be(new DateOnly(2026, 1, 1));
         }
 
@@ -529,17 +684,15 @@ public sealed class TvdbSnapshotStoreTests
         await using (var db = new AppDbContext(_dbOptions))
         {
             var row = await db.CachedEpisodesExtended.SingleAsync(x => x.EpisodeTvdbId == 6001);
-            row.HasImage.Should().BeTrue();
-            row.RefreshAttempts.Should().Be(0);
+            row.HasImage.Should().BeTrue("a row with a still is not rechecked for one");
         }
     }
 
     [Test]
-    public async Task BackfillEpisodeImagesFromAggregateAsync_PatchesMissingImages_AndResetsAttempts()
+    public async Task BackfillEpisodeImagesFromAggregateAsync_PatchesMissingImages()
     {
         var store = NewStore();
         await store.SaveEpisodeExtendedAsync(new Episode { Id = 7001, SeriesId = 700, Name = "No Still", Image = null });
-        await store.UpsertEpisodeExtendedAsync(new Episode { Id = 7001, SeriesId = 700, Name = "No Still", Image = null });
 
         var aggregate = new SeriesAggregate
         {
@@ -559,7 +712,6 @@ public sealed class TvdbSnapshotStoreTests
         await using var db = new AppDbContext(_dbOptions);
         var row = await db.CachedEpisodesExtended.SingleAsync(x => x.EpisodeTvdbId == 7001);
         row.HasImage.Should().BeTrue();
-        row.RefreshAttempts.Should().Be(0);
     }
 
     [Test]

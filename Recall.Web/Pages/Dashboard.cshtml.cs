@@ -43,18 +43,13 @@ public sealed record CatchUpItem
     public string Name { get; init; } = "";
 
     /// <summary>
-    /// Still for the next episode; without one, the series' background art
-    /// (fanart), which is also 16:9. Null when the series has neither — the
-    /// card then shows a dark placeholder. Never the poster: a portrait cover
-    /// cropped to 16:9 shows a strip of it.
+    /// The next episode's art by the rule every page shares
+    /// (<see cref="EpisodeArt.Resolve"/>): its still, else the series'
+    /// background art (also 16:9), else null and the card shows a dark
+    /// placeholder. Never the poster: a portrait cover cropped to 16:9 shows a
+    /// strip of it.
     /// </summary>
     public string? ImageUrl { get; init; }
-
-    /// <summary>
-    /// True when the series aggregate already had this episode's own still, so
-    /// there is nothing left to look up. Not rendered.
-    /// </summary>
-    public bool HasEpisodeImage { get; init; }
 }
 
 // ---------------------------------------------------------------------------
@@ -162,13 +157,7 @@ public sealed class DashboardModel(
                 if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
                     recentPremieres.Add(aggregate.TvdbId);
 
-                // Prefer the still already on the aggregate. Without one, show the
-                // series' background art for now — EnrichCatchUpImagesAsync then
-                // tries the episode's own record for a screencap.
-                var summaryImage = aggregate.Episodes.FirstOrDefault(e => e.Id == next.Id)?.Image;
-                if (string.IsNullOrWhiteSpace(summaryImage))
-                    summaryImage = null;
-
+                // The image is filled in below, for the cards that are shown.
                 catchUp.Add(new CatchUpItem
                 {
                     SeriesId = aggregate.TvdbId,
@@ -176,9 +165,7 @@ public sealed class DashboardModel(
                     EpisodeId = next.Id,
                     SeasonNumber = next.SeasonNumber,
                     EpisodeNumber = next.EpisodeNumber,
-                    Name = next.Name,
-                    ImageUrl = summaryImage ?? NullIfBlank(aggregate.BackgroundUrl),
-                    HasEpisodeImage = summaryImage is not null
+                    Name = next.Name
                 });
             }
         }
@@ -204,49 +191,27 @@ public sealed class DashboardModel(
         var orderedCatchUp = queue.Active.ToList();
         DormantSeriesCount = queue.Dormant.Count;
 
-        CatchUpEpisodes = await EnrichCatchUpImagesAsync(orderedCatchUp, cancellationToken);
+        CatchUpEpisodes = await WithArtAsync(orderedCatchUp, aggregates.ToDictionary(a => a.TvdbId), cancellationToken);
         UpcomingThisWeekCount = upcoming.Count(e => e.AiredDate <= thisWeekCutoff);
         UnwatchedCount = unwatchedTotal;
     }
 
     /// <summary>
-    /// Fills in the still for "Continue watching" cards whose aggregate didn't have one:
-    /// the episode's own (layered-cached) record — the same source
-    /// Episodes/Details uses — sometimes does. A card that already has its
-    /// episode's still is left alone, so a library whose next episodes all have
-    /// stills costs no per-episode lookups at all.
+    /// Gives each "Continue watching" card its image, by the same rule Episode
+    /// Details and Favorites use (<see cref="EpisodeArt.Resolve"/>). A card
+    /// whose still is already in the series aggregate costs no lookup; only an
+    /// episode without one has its own record read.
     /// </summary>
-    private async Task<List<CatchUpItem>> EnrichCatchUpImagesAsync(
+    private async Task<List<CatchUpItem>> WithArtAsync(
         List<CatchUpItem> items,
+        IReadOnlyDictionary<int, SeriesAggregate> aggregatesBySeries,
         CancellationToken cancellationToken)
     {
-        if (items.All(item => item.HasEpisodeImage))
-            return items;
+        var art = await Task.WhenAll(items.Select(item =>
+            theTvDbService.GetEpisodeArtAsync(
+                aggregatesBySeries.GetValueOrDefault(item.SeriesId), item.EpisodeId, logger, cancellationToken: cancellationToken)));
 
-        var episodes = await Task.WhenAll(
-            items.Select(item => item.HasEpisodeImage
-                ? Task.FromResult<Episode?>(null)
-                : TryGetEpisodeAsync(item.EpisodeId, cancellationToken)));
-
-        return items
-            .Zip(episodes, (item, episode) =>
-                episode?.Image is { } image
-                    ? item with { ImageUrl = image }
-                    : item)
-            .ToList();
-    }
-
-    private async Task<Episode?> TryGetEpisodeAsync(int episodeId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await theTvDbService.GetEpisodeDetailsAsync(episodeId, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Failed to load episode {EpisodeId} for the home catch-up image.", episodeId);
-            return null;
-        }
+        return items.Zip(art, (item, image) => item with { ImageUrl = image.Url }).ToList();
     }
 
     /// <summary>A failed lookup just means no offer this time; it must not take the Dashboard down.</summary>
@@ -306,7 +271,6 @@ public sealed class DashboardModel(
         return RedirectToPage();
     }
 
-    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>
     /// The catch-up card's one-tap "watched" button. There is no confirmation

@@ -49,20 +49,15 @@ public interface ITvdbSnapshotStore
     /// <summary>
     /// Cached episode snapshots that are due a refresh: last retrieved before
     /// <paramref name="staleBeforeUtc"/>; still titled "TBA" and last retrieved
-    /// before <paramref name="tbaStaleBeforeUtc"/>; or missing its still image
-    /// despite having already aired (denormalized air date on or before
-    /// <paramref name="today"/>), last retrieved before
-    /// <paramref name="imageChaseBeforeUtc"/> and with fewer than
-    /// <paramref name="maxImageChaseAttempts"/> consecutive imageless refreshes.
+    /// before <paramref name="tbaStaleBeforeUtc"/>; or aired without a still
+    /// and due a recheck by <paramref name="stillRecheck"/>'s schedule.
     /// Oldest first, capped at <paramref name="limit"/>. Feeds the background
     /// refresh job so episode data can't drift from the series aggregate.
     /// </summary>
     Task<IReadOnlyList<int>> GetEpisodesNeedingRefreshAsync(
         DateTime staleBeforeUtc,
         DateTime tbaStaleBeforeUtc,
-        DateTime imageChaseBeforeUtc,
-        DateOnly today,
-        int maxImageChaseAttempts,
+        StillRecheck stillRecheck,
         int limit,
         CancellationToken cancellationToken = default);
 
@@ -98,3 +93,53 @@ public interface ITvdbSnapshotStore
 
 /// <summary>Composite key of a <c>cached_series_aggregate</c> or <c>cached_movie_aggregate</c> row.</summary>
 public readonly record struct CachedAggregateKey(int TvdbId, string Language);
+
+/// <summary>
+/// When an aired episode that has no still is looked at again, by how long ago
+/// it aired: stills usually arrive within days of airing, sometimes weeks,
+/// and after three months practically never.
+/// <list type="bullet">
+/// <item>Aired within <see cref="DailyDays"/> days: once a day.</item>
+/// <item>Aired within <see cref="WeeklyDays"/> days: once a week.</item>
+/// <item>Older: not rechecked for a still at all.</item>
+/// </list>
+/// An episode that has not aired yet is never rechecked for one. The schedule
+/// goes by the air date, so it does not matter when the row was first cached.
+/// <para>
+/// Not rechecked at all: the episodes of a series that rarely has stills.
+/// That is a series whose cached aggregate shows a still for fewer than
+/// <see cref="MinStillPercent"/> percent of its aired regular episodes, once
+/// at least <see cref="MinAiredEpisodes"/> have aired (some series have almost
+/// none, ever). Those episodes keep the background-art fallback. Both numbers
+/// come from configuration (<c>TheTvDb:StillRecheckMinStillPercent</c>,
+/// <c>TheTvDb:StillRecheckMinAiredEpisodes</c>); 0 percent turns the rule off.
+/// An episode whose series is not cached is rechecked as usual.
+/// </para>
+/// </summary>
+/// <param name="NowUtc">The time of the run; "today" is its UTC date.</param>
+public sealed record StillRecheck(DateTime NowUtc)
+{
+    public const int DailyDays = 30;
+    public const int WeeklyDays = 90;
+
+    public static readonly TimeSpan DailyInterval = TimeSpan.FromDays(1);
+    public static readonly TimeSpan WeeklyInterval = TimeSpan.FromDays(7);
+
+    /// <summary>Below this share of aired regular episodes with a still, a series' episodes are not rechecked.</summary>
+    public int MinStillPercent { get; init; } = 10;
+
+    /// <summary>The share is only judged once this many regular episodes have aired.</summary>
+    public int MinAiredEpisodes { get; init; } = 10;
+
+    public DateOnly Today => DateOnly.FromDateTime(NowUtc);
+
+    /// <summary>The earliest air date still rechecked daily.</summary>
+    public DateOnly DailyFrom => Today.AddDays(-DailyDays);
+
+    /// <summary>The earliest air date still rechecked at all.</summary>
+    public DateOnly WeeklyFrom => Today.AddDays(-WeeklyDays);
+
+    public DateTime DailyBeforeUtc => NowUtc - DailyInterval;
+
+    public DateTime WeeklyBeforeUtc => NowUtc - WeeklyInterval;
+}

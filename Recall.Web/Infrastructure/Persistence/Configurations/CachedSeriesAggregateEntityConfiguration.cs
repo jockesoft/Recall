@@ -40,6 +40,16 @@ public sealed class CachedSeriesAggregateEntityConfiguration : IEntityTypeConfig
             .HasDefaultValue(0)
             .IsRequired();
 
+        builder.Property(x => x.AiredEpisodeCount)
+            .HasColumnName("aired_episode_count")
+            .HasDefaultValue(0)
+            .IsRequired();
+
+        builder.Property(x => x.AiredStillCount)
+            .HasColumnName("aired_still_count")
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property(x => x.RetrievedUtc)
             .HasColumnName("retrieved_utc")
             .HasColumnType("timestamp with time zone")

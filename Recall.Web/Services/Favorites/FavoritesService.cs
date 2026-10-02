@@ -159,19 +159,15 @@ public sealed class FavoritesService(
             var episodeName = summary?.Name;
             var seasonNumber = summary?.SeasonNumber;
             var episodeNumber = summary?.EpisodeNumber;
-            var imageUrl = summary?.Image;
             var aired = summary?.Aired;
 
-            if (summary is null || string.IsNullOrWhiteSpace(imageUrl))
+            // The liked episode isn't in the cached aggregate (a special the
+            // aggregate omits, a removed entry, or a stale snapshot): its own
+            // record has what the card needs.
+            Episode? episode = null;
+            if (summary is null)
             {
-                // Fall back to a direct episode lookup when the liked episode
-                // isn't in the cached aggregate (a special, a removed entry, or a
-                // stale snapshot) OR when the aggregate has the episode but no
-                // still — the /episodes/{id} endpoint (same source Episodes/Details
-                // uses) usually has the image the aggregate is missing. This path
-                // also uses the pooled DbContext factory, so running it in
-                // parallel is safe.
-                var episode = await theTvDbService.GetEpisodeDetailsAsync(like.TargetTvdbId, cancellationToken);
+                episode = await theTvDbService.GetEpisodeDetailsAsync(like.TargetTvdbId, cancellationToken);
                 if (episode is null && aggregate is null)
                     return null;
 
@@ -179,16 +175,19 @@ public sealed class FavoritesService(
                 seasonNumber ??= episode?.SeasonNumber;
                 episodeNumber ??= episode?.Number;
 
-                if (string.IsNullOrWhiteSpace(imageUrl))
-                    imageUrl = episode?.Image;
-
                 // The episode's own record carries the date as text ("2013-09-29").
-                if (aired is null
-                    && DateOnly.TryParse(episode?.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-                {
+                if (DateOnly.TryParse(episode?.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
                     aired = parsed;
-                }
             }
+
+            // The image by the rule every page shares: the still, else the
+            // series' background art, else the card's placeholder. This reads
+            // the episode's own record only when the aggregate has no still, and
+            // uses the pooled DbContext factory, so running it in parallel is safe.
+            var art = summary is null
+                ? EpisodeArt.Resolve(aggregate, like.TargetTvdbId, episode)   // its record was just looked up
+                : await theTvDbService.GetEpisodeArtAsync(aggregate, like.TargetTvdbId, logger, cancellationToken: cancellationToken);
+            var imageUrl = art.Url;
 
             return new FavoriteEpisode(
                 like.TargetTvdbId,

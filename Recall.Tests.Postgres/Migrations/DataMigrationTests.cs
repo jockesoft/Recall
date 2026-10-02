@@ -19,6 +19,7 @@ public sealed class DataMigrationTests
     private const string BeforeWatchSource = "20261002075311_WeeklyDigest";
     private const string WatchSource = "20261002085341_WatchSource";
     private const string SeriesMappingVersion = "20261002095341_SeriesMappingVersion";
+    private const string BeforeSeriesStillCounts = "20261002122531_DropEpisodeRefreshAttempts";
 
     private static readonly DateTime ImportedUtc = new(2026, 9, 14, 8, 30, 0, DateTimeKind.Utc);
 
@@ -474,6 +475,42 @@ public sealed class DataMigrationTests
         (await database.ScalarAsync<string>("SELECT payload ->> 'name' FROM cached_series_aggregate WHERE tvdb_id = 2"))
             .Should().Be("With genres", "the payload itself is not touched");
     }
+
+    // ---- SeriesStillCounts: how many aired regular episodes of a cached series have a still ----
+
+    [Test]
+    public async Task SeriesStillCounts_Should_CountAiredRegularEpisodes_AndTheirStills_FromThePayload()
+    {
+        await using var database = await MigrationDatabase.CreateAsync();
+        await database.MigrateToAsync(BeforeSeriesStillCounts);
+
+        var past = DateTime.UtcNow.AddDays(-20).ToString("yyyy-MM-dd");
+        var future = DateTime.UtcNow.AddDays(20).ToString("yyyy-MM-dd");
+        await InsertCachedSeriesAsync(database, 1, $$"""
+            {"tvdbId":1,"name":"Mixed","episodes":[
+              {"id":1,"seasonNumber":1,"aired":"{{past}}","image":"https://example.test/1.jpg","isMovie":false},
+              {"id":2,"seasonNumber":1,"aired":"{{past}}","image":null,"isMovie":false},
+              {"id":3,"seasonNumber":1,"aired":"{{past}}","image":"","isMovie":null},
+              {"id":4,"seasonNumber":1,"aired":"{{future}}","image":"https://example.test/4.jpg"},
+              {"id":5,"seasonNumber":1,"aired":null,"image":"https://example.test/5.jpg"},
+              {"id":6,"seasonNumber":0,"aired":"{{past}}","image":"https://example.test/6.jpg"},
+              {"id":7,"seasonNumber":1,"aired":"{{past}}","image":"https://example.test/7.jpg","isMovie":true},
+              {"id":8,"seasonNumber":null,"aired":"{{past}}","image":"https://example.test/8.jpg"}
+            ]}
+            """);
+        await InsertCachedSeriesAsync(database, 2, """{"tvdbId":2,"name":"No episodes","episodes":[]}""");
+        await InsertCachedSeriesAsync(database, 3, """{"tvdbId":3,"name":"No episodes property"}""");
+
+        await database.MigrateToLatestAsync();
+
+        (await StillCountsAsync(database, 1)).Should().Be((4, 2), "episodes 1, 2, 3 and 8 have aired and are regular; 1 and 8 have a still");
+        (await StillCountsAsync(database, 2)).Should().Be((0, 0));
+        (await StillCountsAsync(database, 3)).Should().Be((0, 0));
+    }
+
+    private static async Task<(int Aired, int WithStill)> StillCountsAsync(MigrationDatabase database, int tvdbId) =>
+        (await database.ScalarAsync<int>("SELECT aired_episode_count FROM cached_series_aggregate WHERE tvdb_id = $1", tvdbId),
+            await database.ScalarAsync<int>("SELECT aired_still_count FROM cached_series_aggregate WHERE tvdb_id = $1", tvdbId));
 
     private static Task InsertCachedSeriesAsync(MigrationDatabase database, int tvdbId, string payload) =>
         database.ExecuteAsync(

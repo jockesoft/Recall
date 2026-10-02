@@ -5,7 +5,9 @@
 // <author>Joakim Fredlund</author>
 //-----------------------------------------------------------------------
 
+using Microsoft.Extensions.Options;
 using Quartz;
+using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
@@ -23,10 +25,10 @@ namespace Recall.Web.Infrastructure.Timers;
 /// TheTVDB's genres), until none are left —
 /// then up to <see cref="MaxEpisodesPerRun"/> <c>cached_episode_extended</c> rows
 /// that are either older than <see cref="EpisodeMaxAge"/>, still titled "TBA" and
-/// older than <see cref="TbaEpisodeMaxAge"/>, or missing their still image despite
-/// having already aired (re-checked every <see cref="MinRefreshAge"/>, up to
-/// <see cref="MaxImageChaseAttempts"/> times, so an episode that will never get
-/// art doesn't get polled forever). Refreshing episodes here keeps per-episode
+/// older than <see cref="TbaEpisodeMaxAge"/>, or aired without a still image and
+/// due a recheck (<see cref="StillRecheck"/>: daily for 30 days after airing,
+/// weekly up to 90, then no more, so an episode that will never get art is not
+/// polled forever; and not at all for a series that rarely has stills). Refreshing episodes here keeps per-episode
 /// data (title, air date, still) from drifting out of sync with the series
 /// aggregate. The age checks mean the job can be scheduled far more often than
 /// the refresh cadence without hammering the upstream API.
@@ -35,6 +37,7 @@ namespace Recall.Web.Infrastructure.Timers;
 public class UpdateTvDbInfoTimer(
     ITvdbSnapshotStore snapshotStore,
     ITheTvDbService theTvDbService,
+    IOptions<TheTvDbOptions> options,
     ILogger<UpdateTvDbInfoTimer> logger) : IJob
 {
     /// <summary>Don't re-fetch a series from TheTVDB more often than this.</summary>
@@ -55,18 +58,6 @@ public class UpdateTvDbInfoTimer(
     /// date usually land within a day or two of the placeholder.
     /// </summary>
     private static readonly TimeSpan TbaEpisodeMaxAge = TimeSpan.FromHours(12);
-
-    /// <summary>
-    /// Minimum time between re-checks of an aired episode that's still missing
-    /// its still image — reuses <see cref="MinRefreshAge"/>'s cadence.
-    /// </summary>
-    private static readonly TimeSpan ImageChaseInterval = MinRefreshAge;
-
-    /// <summary>
-    /// Give up chasing an aired episode's missing still after this many
-    /// consecutive imageless refreshes — some episodes simply never get art.
-    /// </summary>
-    private const int MaxImageChaseAttempts = 5;
 
     /// <summary>Upper bound on series refreshed per run — deliberately low to start.</summary>
     private const int MaxSeriesPerRun = 10;
@@ -151,12 +142,14 @@ public class UpdateTvDbInfoTimer(
         var now = DateTime.UtcNow;
         var staleBeforeUtc = now - EpisodeMaxAge;
         var tbaStaleBeforeUtc = now - TbaEpisodeMaxAge;
-        var imageChaseBeforeUtc = now - ImageChaseInterval;
-        var today = DateOnly.FromDateTime(now);
+        var stillRecheck = new StillRecheck(now)
+        {
+            MinStillPercent = options.Value.StillRecheckMinStillPercent,
+            MinAiredEpisodes = options.Value.StillRecheckMinAiredEpisodes
+        };
 
         var candidates = await snapshotStore.GetEpisodesNeedingRefreshAsync(
-            staleBeforeUtc, tbaStaleBeforeUtc, imageChaseBeforeUtc, today, MaxImageChaseAttempts,
-            MaxEpisodesPerRun, cancellationToken);
+            staleBeforeUtc, tbaStaleBeforeUtc, stillRecheck, MaxEpisodesPerRun, cancellationToken);
 
         if (candidates.Count == 0)
         {
@@ -165,8 +158,8 @@ public class UpdateTvDbInfoTimer(
         }
 
         logger.LogInformation(
-            "UpdateTvDbInfoTimer: refreshing {Count} cached episode(s) — stale before {StaleBefore:u} / TBA before {TbaBefore:u} / image chase before {ImageChaseBefore:u} (cap {Cap}).",
-            candidates.Count, staleBeforeUtc, tbaStaleBeforeUtc, imageChaseBeforeUtc, MaxEpisodesPerRun);
+            "UpdateTvDbInfoTimer: refreshing {Count} cached episode(s): stale before {StaleBefore:u}, TBA before {TbaBefore:u}, or aired without a still and due a recheck (cap {Cap}).",
+            candidates.Count, staleBeforeUtc, tbaStaleBeforeUtc, MaxEpisodesPerRun);
 
         var refreshed = 0;
 

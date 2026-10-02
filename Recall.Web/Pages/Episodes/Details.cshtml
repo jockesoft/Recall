@@ -98,10 +98,15 @@
         var ratingLabel = rating is null ? null : (rating.Name ?? rating.FullName);
 
         <div class="tvdb-episode-page">
-            <div class="tvdb-episode-page__still tvdb-media is-wide @(string.IsNullOrWhiteSpace(Model.DisplayImage) ? "is-empty" : "")">
-                @if (!string.IsNullOrWhiteSpace(Model.DisplayImage))
+            <div class="tvdb-episode-page__still tvdb-media is-wide @(Model.Art.HasImage ? "" : "is-empty")">
+                @if (Model.Art.IsStill)
                 {
-                    <img src="@Model.DisplayImage" alt="Still from @ep.Name" />
+                    <img src="@Model.Art.Url" alt="Still from @ep.Name" />
+                }
+                else if (Model.Art.HasImage)
+                {
+                    @* No still on TheTVDB: the series' background art stands in. It is not a picture of this episode, so it says nothing to a screen reader. *@
+                    <img src="@Model.Art.Url" alt="" />
                 }
                 else
                 {
@@ -389,7 +394,7 @@
             ["@type"] = "TVEpisode",
             ["name"] = ep.Name,
             ["description"] = ViewData["Description"],
-            ["image"] = Model.DisplayImage,
+            ["image"] = Model.Art.StillUrl,
             ["episodeNumber"] = ep.Number,
             ["seasonNumber"] = ep.SeasonNumber,
             ["partOfSeries"] = Model.SeriesName is null ? null : new Dictionary<string, object?>

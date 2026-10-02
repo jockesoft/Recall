@@ -15,15 +15,12 @@ public sealed class CachedEpisodeExtendedEntity
     /// <summary>Denormalized from the payload's air date, for refresh-query filtering.</summary>
     public DateOnly? Aired { get; set; }
 
-    /// <summary>Denormalized from whether the payload's <c>Image</c> is set.</summary>
-    public bool HasImage { get; set; }
-
     /// <summary>
-    /// Consecutive refreshes that still came back with no image. Reset to 0 the
-    /// moment an image is found, by any path. Caps how long the background job
-    /// keeps chasing an episode that will never get art.
+    /// Denormalized from whether the payload's <c>Image</c> is set. An aired
+    /// episode without one is rechecked on a schedule that depends on how long
+    /// ago it aired (<see cref="TvdbCache.StillRecheck"/>).
     /// </summary>
-    public int RefreshAttempts { get; set; }
+    public bool HasImage { get; set; }
 
     /// <summary>Serialized <c>Episode</c> (jsonb).</summary>
     public string Payload { get; set; } = string.Empty;

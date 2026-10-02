@@ -17,6 +17,17 @@ public sealed class CachedSeriesAggregateEntity
     /// <summary>Serialized <c>SeriesAggregate</c> (jsonb).</summary>
     public string Payload { get; set; } = string.Empty;
 
+    /// <summary>
+    /// How many regular episodes (not specials, not movie-flagged entries) had
+    /// aired when <see cref="Payload"/> was written, and how many of those had
+    /// a still. Denormalized so the episode refresh can skip, in SQL, the
+    /// episodes of a series that rarely has stills (<c>StillRecheck</c>).
+    /// </summary>
+    public int AiredEpisodeCount { get; set; }
+
+    /// <inheritdoc cref="AiredEpisodeCount"/>
+    public int AiredStillCount { get; set; }
+
     public DateTime RetrievedUtc { get; set; }
 
     /// <summary>

@@ -45,11 +45,12 @@ public sealed class DetailsModel(
     public bool IsAuthenticated => currentUserService.IsAuthenticated;
 
     /// <summary>
-    /// The still to render: the episode's own image, or — when TheTVDB hasn't
-    /// backfilled that yet — the per-episode image from the series aggregate,
-    /// which is sometimes populated first. Same fallback Index/Favorites use.
+    /// The image at the top of the page, by the rule the Dashboard and
+    /// Favorites share (<see cref="EpisodeArt.Resolve"/>): the episode's still,
+    /// else the series' background art, else nothing and the page shows its
+    /// placeholder. TheTVDB has no still for many episodes.
     /// </summary>
-    public string? DisplayImage { get; private set; }
+    public EpisodeArt Art { get; private set; } = EpisodeArt.None;
 
     public bool IsWatchedByCurrentUser { get; private set; }
 
@@ -459,7 +460,8 @@ public sealed class DetailsModel(
 
             if (Episode is not null)
             {
-                DisplayImage = Episode.Image;
+                // Until the series is loaded, the episode's own record is all there is.
+                Art = EpisodeArt.Resolve(series: null, id, Episode);
 
                 if (DateOnly.TryParse(Episode.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var aired))
                     AiredDate = aired;
@@ -470,8 +472,7 @@ public sealed class DetailsModel(
                     if (aggregate is not null && Episode.Id is { } currentId)
                     {
                         SetEpisodeNav(aggregate, currentId);
-
-                        DisplayImage ??= aggregate.Episodes.FirstOrDefault(e => e.Id == currentId)?.Image;
+                        Art = EpisodeArt.Resolve(aggregate, currentId, Episode);
                     }
                 }
 

@@ -31,11 +31,6 @@ public sealed class CachedEpisodeExtendedEntityConfiguration : IEntityTypeConfig
             .HasDefaultValue(false)
             .IsRequired();
 
-        builder.Property(x => x.RefreshAttempts)
-            .HasColumnName("refresh_attempts")
-            .HasDefaultValue(0)
-            .IsRequired();
-
         builder.Property(x => x.Payload)
             .HasColumnName("payload")
             .HasColumnType("jsonb")

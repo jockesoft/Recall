@@ -132,7 +132,9 @@ public sealed class TheTvDbApiClient(
     /// <summary>
     /// Gives each episode the name and overview of its translated counterpart.
     /// An episode the translated list lacks, or a blank translated field, keeps
-    /// what the extended record said; every other field is the extended record's.
+    /// what the extended record said; every other field is the extended record's
+    /// (the still included, which the translated list only supplies when the
+    /// extended record has none).
     /// </summary>
     private static List<EpisodeDto> WithTranslations(
         IReadOnlyList<EpisodeDto> episodes, IReadOnlyList<EpisodeDto> translated)
@@ -150,7 +152,10 @@ public sealed class TheTvDbApiClient(
                     ? episode with
                     {
                         Name = string.IsNullOrWhiteSpace(match.Name) ? episode.Name : match.Name,
-                        Overview = string.IsNullOrWhiteSpace(match.Overview) ? episode.Overview : match.Overview
+                        Overview = string.IsNullOrWhiteSpace(match.Overview) ? episode.Overview : match.Overview,
+                        // The still is the extended record's. The two lists carry the same
+                        // image, so this only matters if one of them is ever ahead of the other.
+                        Image = string.IsNullOrWhiteSpace(episode.Image) ? match.Image : episode.Image
                     }
                     : episode)
             .ToList();

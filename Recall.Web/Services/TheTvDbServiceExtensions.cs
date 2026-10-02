@@ -51,4 +51,35 @@ public static class TheTvDbServiceExtensions
             return null;
         }
     }
+
+    /// <summary>
+    /// The art for an episode by <see cref="EpisodeArt.Resolve"/>'s rule. When
+    /// the aggregate has no still for it and the caller has not already loaded
+    /// the episode's own record, that record is read (layered cache; fetched
+    /// from TheTVDB the first time, which also puts the episode in the refresh
+    /// job's care, so a still that arrives later is picked up). Best-effort:
+    /// a failed lookup falls through to the background art.
+    /// </summary>
+    public static async Task<EpisodeArt> GetEpisodeArtAsync(
+        this ITheTvDbService theTvDbService,
+        SeriesAggregate? series,
+        int episodeId,
+        ILogger logger,
+        Episode? record = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (record is null && EpisodeArt.StillInAggregate(series, episodeId) is null)
+        {
+            try
+            {
+                record = await theTvDbService.GetEpisodeDetailsAsync(episodeId, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Could not load episode {EpisodeId} to look for its still.", episodeId);
+            }
+        }
+
+        return EpisodeArt.Resolve(series, episodeId, record);
+    }
 }
