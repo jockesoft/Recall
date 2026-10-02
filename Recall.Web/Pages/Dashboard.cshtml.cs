@@ -6,6 +6,7 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.Digest;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages;
@@ -69,7 +70,9 @@ public sealed class DashboardModel(
     ILogger<DashboardModel> logger,
     ICurrentUserService currentUserService,
     TimeProvider timeProvider,
-    IOptions<LibraryOptions> libraryOptions) : PageModel
+    IOptions<LibraryOptions> libraryOptions,
+    IAppUserRepository userRepository,
+    IOptions<DigestOptions> digestOptions) : PageModel
 {
     /// <summary>Today's date in UTC — the date every air-date comparison on this page (and its view) uses.</summary>
     public DateOnly Today => AirDate.Today(timeProvider);
@@ -89,6 +92,16 @@ public sealed class DashboardModel(
     /// </summary>
     public int DormantSeriesCount { get; private set; }
 
+    /// <summary>
+    /// The one-time offer of the weekly email: shown to someone with a library
+    /// who has neither switched the digest on nor said "No thanks", and only
+    /// where the digest is enabled.
+    /// </summary>
+    public bool ShowDigestPrompt { get; private set; }
+
+    /// <summary>The day the digest goes out, for the offer's wording.</summary>
+    public DayOfWeek DigestDay => digestOptions.Value.DayOfWeek;
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
@@ -97,6 +110,8 @@ public sealed class DashboardModel(
 
         if (trackedSeriesIds.Count == 0)
             return;
+
+        ShowDigestPrompt = await ShouldOfferDigestAsync(userId, cancellationToken);
 
         var aggregates = (await Task.WhenAll(
                 trackedSeriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id.TvdbId, logger, nameof(DashboardModel), cancellationToken))))
@@ -232,6 +247,63 @@ public sealed class DashboardModel(
             logger.LogWarning(ex, "Failed to load episode {EpisodeId} for the home catch-up image.", episodeId);
             return null;
         }
+    }
+
+    /// <summary>A failed lookup just means no offer this time; it must not take the Dashboard down.</summary>
+    private async Task<bool> ShouldOfferDigestAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (!digestOptions.Value.Enabled)
+            return false;
+
+        try
+        {
+            return await userRepository.GetByIdAsync(userId, cancellationToken)
+                is { DigestOptedInUtc: null, DigestPromptDismissedUtc: null };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not read the digest preference for the dashboard.");
+            return false;
+        }
+    }
+
+    /// <summary>"Turn it on" on the one-time offer: the same opt-in as the switch on Profile.</summary>
+    public async Task<IActionResult> OnPostDigestOptInAsync(CancellationToken cancellationToken)
+    {
+        var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+        if (!digestOptions.Value.Enabled)
+            return RedirectToPage();
+
+        try
+        {
+            await userRepository.SetDigestOptInAsync(userId, optedIn: true, cancellationToken);
+            this.SetSuccessToast($"Weekly email is on. It arrives on {DigestDay}s, when there is something new. You can turn it off in your profile.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed switching the weekly digest on for user {UserId}.", userId);
+            this.SetErrorToast("Could not turn the weekly email on right now.");
+        }
+
+        return RedirectToPage();
+    }
+
+    /// <summary>"No thanks" on the one-time offer: remembered, so it is not shown again. The switch on Profile stays.</summary>
+    public async Task<IActionResult> OnPostDigestDismissAsync(CancellationToken cancellationToken)
+    {
+        var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+        try
+        {
+            await userRepository.DismissDigestPromptAsync(userId, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed recording the dismissed digest offer for user {UserId}.", userId);
+        }
+
+        return RedirectToPage();
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

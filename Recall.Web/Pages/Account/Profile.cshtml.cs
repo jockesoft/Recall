@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Display;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.Digest;
 using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Favorites.Models;
 using Recall.Web.Services.WatchTracking;
@@ -19,9 +21,20 @@ public sealed class ProfileModel(
     IFavoritesService favoritesService,
     ILikeRepository likeRepository,
     IWatchlistImportRepository importRepository,
+    IAppUserRepository userRepository,
+    IOptions<DigestOptions> digestOptions,
     TimeProvider timeProvider,
     ILogger<ProfileModel> logger) : PageModel
 {
+    /// <summary>The weekly digest exists on this installation (<c>Digest:Enabled</c>); otherwise its switch is not shown.</summary>
+    public bool DigestAvailable => digestOptions.Value.Enabled;
+
+    /// <summary>The user has switched the weekly email on.</summary>
+    public bool DigestOn { get; private set; }
+
+    /// <summary>The day the digest goes out, for the switch's explanation.</summary>
+    public DayOfWeek DigestDay => digestOptions.Value.DayOfWeek;
+
     /// <summary>Today's date in UTC, for the date format of the last import.</summary>
     public DateOnly Today => AirDate.Today(timeProvider);
 
@@ -82,6 +95,18 @@ public sealed class ProfileModel(
         if (currentUser.UserId is not { } userId)
             return;
 
+        if (DigestAvailable)
+        {
+            try
+            {
+                DigestOn = (await userRepository.GetByIdAsync(userId, cancellationToken))?.DigestOptedInUtc is not null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Could not load the digest setting for the profile page.");
+            }
+        }
+
         try
         {
             WatchTime = await watchTimeService.GetTotalWatchTimeAsync(userId, cancellationToken);
@@ -108,6 +133,28 @@ public sealed class ProfileModel(
         {
             logger.LogWarning(ex, "Could not load the latest watchlist import job for the profile page.");
         }
+    }
+
+    /// <summary>The "Weekly email" switch. Opt-in: nothing is sent to anyone who has not turned it on.</summary>
+    public async Task<IActionResult> OnPostSetDigestAsync(bool on, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId || !DigestAvailable)
+            return RedirectToPage();
+
+        try
+        {
+            await userRepository.SetDigestOptInAsync(userId, on, cancellationToken);
+            this.SetSuccessToast(on
+                ? $"Weekly email is on. It arrives on {DigestDay}s, when there is something new."
+                : "Weekly email is off.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed changing the digest setting for user {UserId}.", userId);
+            this.SetErrorToast("Could not change that setting right now.");
+        }
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostToggleSeriesLikeAsync(int id, CancellationToken cancellationToken)

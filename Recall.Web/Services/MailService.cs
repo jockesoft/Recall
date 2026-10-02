@@ -33,6 +33,13 @@ public sealed class MailService(
     public const int NormalPriority = 0;
 
     /// <summary>
+    /// Priority of a weekly digest. The queue is drained in priority order, then
+    /// by age, so a sign-in link (<see cref="NormalPriority"/>) queued after any
+    /// number of digests still goes out in the next batch, ahead of all of them.
+    /// </summary>
+    public const int DigestPriority = 10;
+
+    /// <summary>
     /// Adds a message to the queue. It is committed immediately and picked up on
     /// the next <see cref="SendPendingEmailsAsync"/> run — this method never talks
     /// to an SMTP server itself, so callers don't block on delivery.
@@ -129,6 +136,14 @@ public sealed class MailService(
 
         // MailAddressCollection.Add accepts a comma-separated list.
         message.To.Add(email.ToAddress);
+
+        // RFC 8058 one-click unsubscribe: the mail client shows its own
+        // "Unsubscribe" button and POSTs to this address when it is pressed.
+        if (!string.IsNullOrWhiteSpace(email.ListUnsubscribeUrl))
+        {
+            message.Headers.Add("List-Unsubscribe", $"<{email.ListUnsubscribeUrl}>");
+            message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+        }
 
         if (string.IsNullOrWhiteSpace(email.HtmlBody))
         {

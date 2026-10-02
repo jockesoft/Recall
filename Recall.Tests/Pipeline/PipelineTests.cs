@@ -1,6 +1,7 @@
 using System.Net;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Recall.Tests.Pipeline;
 
@@ -59,6 +60,7 @@ public sealed class PipelineTests
     }
 
     [TestCase("/Account/Delete")]
+    [TestCase("/Admin/DigestPreview")]
     [TestCase("/Dashboard")]
     [TestCase("/Library")]
     [TestCase("/Search")]
@@ -171,6 +173,35 @@ public sealed class PipelineTests
     }
 
     [Test]
+    public async Task DigestUnsubscribe_Should_WorkSignedOut_AndOnlyTheOneClickAddressShouldAcceptAPostWithoutAnAntiforgeryToken()
+    {
+        var tokens = _factory.Services.GetRequiredService<Recall.Web.Services.Digest.IDigestUnsubscribeTokens>();
+        var token = tokens.Create(Guid.NewGuid());   // an account that does not exist: the answer is the same
+
+        var page = await _client.GetAsync($"/Digest/Unsubscribe?token={token}");
+        page.StatusCode.Should().Be(HttpStatusCode.OK, "the link works without signing in");
+        (await page.Content.ReadAsStringAsync()).Should().Contain("Turn off the weekly email?");
+
+        using var noAntiforgery = new FormUrlEncodedContent(new Dictionary<string, string> { ["Token"] = token });
+        var button = await _client.PostAsync($"/Digest/Unsubscribe?token={token}", noAntiforgery);
+        button.StatusCode.Should().Be(HttpStatusCode.BadRequest, "the page's own button is behind the antiforgery token");
+
+        // What a mail client sends for List-Unsubscribe-Post (RFC 8058): no cookie, no token of ours.
+        using var oneClickBody = new FormUrlEncodedContent(new Dictionary<string, string> { ["List-Unsubscribe"] = "One-Click" });
+        var oneClick = await _client.PostAsync($"/Digest/OneClick?token={token}", oneClickBody);
+        oneClick.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await oneClick.Content.ReadAsStringAsync()).Should().Be("Unsubscribed.");
+
+        using var badBody = new FormUrlEncodedContent(new Dictionary<string, string> { ["List-Unsubscribe"] = "One-Click" });
+        var bad = await _client.PostAsync("/Digest/OneClick?token=made-up", badBody);
+        bad.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var opened = await _client.GetAsync($"/Digest/OneClick?token={token}");
+        opened.StatusCode.Should().Be(HttpStatusCode.Redirect, "opening the header's address in a browser leads to the page with the button");
+        opened.Headers.Location!.OriginalString.Should().StartWith("/Digest/Unsubscribe?token=");
+    }
+
+    [Test]
     public async Task NoPage_Should_ShowACookieNotice()
     {
         foreach (var path in new[] { "/", "/Account/Login", "/Privacy" })
@@ -193,6 +224,8 @@ public sealed class PipelineTests
         html.Should().Contain("deleted 7 days after they expired or were used");
         html.Should().Contain("artworks.thetvdb.com");
         html.Should().Contain("Deleting your account").And.Contain("about 9 days");
+        html.Should().Contain("The weekly email").And.Contain("only if you turn it on");
+        html.Should().Contain("The record of which weeks the weekly email was sent to you: deleted 60 days after it was made.");
     }
 
     [Test]

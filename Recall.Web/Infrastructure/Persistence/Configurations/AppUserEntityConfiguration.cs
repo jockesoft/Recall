@@ -30,6 +30,14 @@ public sealed class AppUserEntityConfiguration : IEntityTypeConfiguration<AppUse
             .HasDefaultValue(UserRole.User)
             .IsRequired();
 
+        builder.Property(x => x.DigestOptedInUtc)
+            .HasColumnName("digest_opted_in_utc")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(x => x.DigestPromptDismissedUtc)
+            .HasColumnName("digest_prompt_dismissed_utc")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")

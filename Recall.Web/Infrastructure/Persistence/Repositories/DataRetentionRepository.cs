@@ -38,6 +38,13 @@ public sealed class DataRetentionRepository(AppDbContext dbContext) : IDataReten
             .ExecuteDeleteAsync(cancellationToken);
     }
 
+    public Task<int> DeleteDigestLedgerAsync(DateTime createdBeforeUtc, CancellationToken cancellationToken = default)
+    {
+        return dbContext.DigestSends
+            .Where(x => x.CreatedUtc < createdBeforeUtc)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     public async Task<int> DeleteCompletedImportJobsAsync(DateTime completedBeforeUtc, CancellationToken cancellationToken = default)
     {
         var expiredJobs = dbContext.WatchlistImportJobs

@@ -14,7 +14,11 @@
 # keys in user secrets. "start" builds Recall.Web (Debug) first.
 #
 # The instances run with the import job switched off (Jobs:Disabled), so rows
-# left waiting for a screenshot are never looked up on TheTVDB.
+# left waiting for a screenshot are never looked up on TheTVDB. They apply
+# pending migrations to the clones at startup (the clones are copies of
+# recall_db, which may be a migration behind the code; recall_db itself is not
+# touched). The weekly digest is switched on so its Profile switch, Dashboard
+# offer and preview show, with its job off so nothing is queued.
 #
 # recall_db itself is only read (as the template for the clones). The apps use
 # Redis database 1, so the development cache in database 0 is left alone too.
@@ -54,8 +58,11 @@ start_app() { # name url database environment [directory]
     ASPNETCORE_URLS="$2" \
     ConnectionStrings__DefaultConnection="$(connection "$3")" \
     REDIS_CONNECTION="localhost:6379,defaultDatabase=$REDIS_DB" \
-    Database__MigrateOnStartup=false \
+    Database__MigrateOnStartup=true \
     Jobs__Disabled__0=WatchlistImportTimer \
+    Jobs__Disabled__1=WeeklyDigestTimer \
+    Digest__Enabled=true \
+    Site__BaseUrl="$2" \
     nohup dotnet "$dll" > "$RUN/$1.log" 2>&1 &
     echo $! > "$RUN/$1.pid" )
   for _ in $(seq 1 60); do

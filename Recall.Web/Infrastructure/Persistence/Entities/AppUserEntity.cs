@@ -10,6 +10,18 @@ public sealed class AppUserEntity : IHasAuditTimestamps
     /// <summary>Access level. Defaults to <see cref="UserRole.User"/> on creation.</summary>
     public UserRole Role { get; set; } = UserRole.User;
 
+    /// <summary>
+    /// When the user switched the weekly email digest on; null while it is off.
+    /// The digest is opt-in, and this is the record of the consent.
+    /// </summary>
+    public DateTime? DigestOptedInUtc { get; set; }
+
+    /// <summary>
+    /// When the user answered "No thanks" to the Dashboard's one-time offer of
+    /// the weekly digest. Set once; the offer is not shown again.
+    /// </summary>
+    public DateTime? DigestPromptDismissedUtc { get; set; }
+
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
 

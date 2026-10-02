@@ -270,6 +270,31 @@ public sealed class UniqueViolationTests : PostgresFixture
         await act.Should().ThrowAsync<DbUpdateException>();
     }
 
+    [Test]
+    public async Task Digest_Record_Should_QueueNothing_WhenAnotherRunRecordedTheWeekFirst()
+    {
+        var user = await SeedUserAsync();
+        var week = new DateOnly(2026, 10, 2);
+        var race = Competing(db => db.DigestSends.Add(new DigestSendEntity
+        {
+            Id = Guid.NewGuid(), UserId = user, PeriodStart = week, Status = DigestSendStatus.Queued, CreatedUtc = DateTime.UtcNow
+        }));
+        await using var db = NewContext(race);
+        var address = $"{user:N}@example.com";
+
+        var recorded = await new DigestRepository(db).RecordAsync(user, week, DigestSendStatus.Queued, new Recall.Web.Domain.Internal.OutboundEmail
+        {
+            Id = Guid.NewGuid(), ToAddress = address, Subject = "Your week on Recall", Body = "text"
+        });
+
+        race.Fired.Should().BeTrue();
+        recorded.Should().BeFalse("the other run got there first");
+        (await CountAsync(x => x.DigestSends.CountAsync(d => d.UserId == user && d.PeriodStart == week))).Should().Be(1);
+        (await CountAsync(x => x.Emails.CountAsync(e => e.ToAddress == address)))
+            .Should().Be(0, "the ledger row and the email are one transaction: no second digest is queued");
+        await ContextShouldStillSaveAsync(db);
+    }
+
     private CompetingWriteInterceptor Competing(Action<AppDbContext> add) =>
         new(async () =>
         {

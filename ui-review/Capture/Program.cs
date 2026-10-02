@@ -147,6 +147,16 @@ List<Shot> shots =
         },
         Cleanup: _ => RunReviewScriptAsync(options, "import-progress", "off")),
     new("admin", "default", Site.SignedIn, "/Admin"),
+    new("admin", "digest-preview", Site.SignedIn, "/Admin/DigestPreview"),
+    new("digest-unsubscribe", "confirm", Site.SignedIn, "/Admin/DigestPreview", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // The link needs a signed token; the preview page shows the one for the dev user.
+            // Only the page with the button is opened: nothing is unsubscribed.
+            var href = await page.Locator("#previewUnsubscribeLink").GetAttributeAsync("href");
+            await page.GotoAsync(href!);
+            await page.Locator("#unsubscribeConfirm").WaitForAsync();
+        }),
     new("privacy", "signed-in", Site.SignedIn, "/Privacy"),
     new("error", "signed-in", Site.SignedIn, "/Error"),
     new("nav", "bell-unread", Site.SignedIn, "/Dashboard", ViewportOnly: true, Prepare: OpenMobileMenuAsync),
@@ -224,6 +234,7 @@ List<Shot> shots =
         }),
     new("episode-details", "load-error", Site.Anonymous, "/Episodes/Details/999999999", ViewportOnly: true),
     new("movie-details", "signed-out", Site.Anonymous, $"/Movies/Details/{WatchedMovie}"),
+    new("digest-unsubscribe", "invalid-link", Site.Anonymous, "/Digest/Unsubscribe?token=not-a-real-token", ViewportOnly: true),
     new("privacy", "signed-out", Site.Anonymous, "/Privacy"),
     new("error", "signed-out", Site.Anonymous, "/Error"),
     new("not-found", "signed-out", Site.Anonymous, "/this-page-does-not-exist"),
@@ -410,7 +421,9 @@ static async Task MeasureAsync(IPage page, ShotResult result)
     result.Title = metrics.GetProperty("title").GetString();
     result.H1 = metrics.GetProperty("h1").EnumerateArray().Select(e => e.GetString()!).ToList();
 
-    var axe = await page.RunAxe();
+    // Not inside frames: the only one in the app is the digest preview's sandboxed
+    // frame, where scripts are off, so the scan could never be injected and would wait forever.
+    var axe = await page.RunAxe(new Deque.AxeCore.Commons.AxeRunOptions { Iframes = false });
     result.Violations = axe.Violations
         .Select(v => new Violation(
             v.Id,

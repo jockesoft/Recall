@@ -39,7 +39,7 @@ public sealed class AccountDeletionTests : PostgresFixture
         var tables = await UserOwnedTablesAsync();
         tables.Should().Contain(
         [
-            "tracked_series", "tracked_movie", "episode_watch", "user_movie_watch", "user_like", "user_rating",
+            "digest_send", "tracked_series", "tracked_movie", "episode_watch", "user_movie_watch", "user_like", "user_rating",
             "notification", "notified_episode", "login_token", "watchlist_import_job"
         ], "these are the tables the test seeds; the list itself comes from the database");
 
@@ -247,6 +247,11 @@ public sealed class AccountDeletionTests : PostgresFixture
         db.LoginTokens.Add(new LoginTokenEntity
         {
             Id = Guid.NewGuid(), UserId = userId, TokenHash = Guid.NewGuid().ToString("N"), ExpiresUtc = now.AddMinutes(15)
+        });
+
+        db.DigestSends.Add(new DigestSendEntity
+        {
+            Id = Guid.NewGuid(), UserId = userId, PeriodStart = DateOnly.FromDateTime(now), Status = DigestSendStatus.Queued, CreatedUtc = now
         });
 
         var jobId = Guid.NewGuid();

@@ -22,7 +22,7 @@ public class DisabledJobsTests
     public void ByDefault_NoJob_Should_BeDisabled()
     {
         InfrastructureServiceCollectionExtensions.DisabledJobs(Configuration()).Should().BeEmpty();
-        InfrastructureServiceCollectionExtensions.ScheduledJobNames.Should().HaveCount(8).And.OnlyHaveUniqueItems();
+        InfrastructureServiceCollectionExtensions.ScheduledJobNames.Should().HaveCount(9).And.OnlyHaveUniqueItems();
     }
 
     [Test]

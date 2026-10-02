@@ -1,0 +1,49 @@
+@page
+@model Recall.Web.Pages.Digest.UnsubscribeModel
+@{
+    ViewData["Title"] = "Weekly email";
+}
+
+<div class="tvdb-shell tvdb-shell--narrow">
+    @switch (Model.State)
+    {
+        case UnsubscribeModel.UnsubscribeState.Confirm:
+            <div class="tvdb-empty-state">
+                <span class="tvdb-empty-state__icon"><i class="@Icons.Mail" aria-hidden="true"></i></span>
+                <h1 class="tvdb-empty-state__title">Turn off the weekly email?</h1>
+                <p class="tvdb-empty-state__text">
+                    You will stop getting Recall's weekly summary. Sign-in links are not affected, and you can
+                    turn it back on in your profile.
+                </p>
+                <form method="post" class="tvdb-empty-state__actions">
+                    <input type="hidden" asp-for="Token" />
+                    <button type="submit" class="btn btn-primary" id="unsubscribeConfirm">Turn it off</button>
+                </form>
+            </div>
+            break;
+
+        case UnsubscribeModel.UnsubscribeState.Done:
+            <partial name="_EmptyState" model="@(new EmptyStateModel
+                     {
+                         Icon = Icons.Success,
+                         Heading = "The weekly email is off",
+                         Text = "You won't get it any more. You can turn it back on in your profile whenever you like.",
+                         HeadingLevel = 1,
+                         ActionText = "Go to Recall",
+                         ActionPage = "/Index"
+                     })" />
+            break;
+
+        default:
+            <partial name="_EmptyState" model="@(new EmptyStateModel
+                     {
+                         Icon = Icons.Problem,
+                         Heading = "This link doesn't work",
+                         Text = "It may be incomplete or too old. To turn the weekly email off, sign in and use the switch in your profile.",
+                         HeadingLevel = 1,
+                         ActionText = "Sign in",
+                         ActionPage = "/Account/Login"
+                     })" />
+            break;
+    }
+</div>

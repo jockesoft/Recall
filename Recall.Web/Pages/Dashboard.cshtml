@@ -102,6 +102,28 @@
             </li>
         </ul>
 
+        @if (Model.ShowDigestPrompt)
+        {
+            @* Shown once: either button settles it, and the switch stays in Profile. *@
+            <section class="tvdb-offer tvdb-page-section" aria-labelledby="digestOfferHeading">
+                <span class="tvdb-offer__icon"><i class="@Icons.Mail" aria-hidden="true"></i></span>
+                <div class="tvdb-offer__text">
+                    <h2 class="tvdb-offer__title" id="digestOfferHeading">Get a weekly email of what's new?</h2>
+                    <p class="tvdb-meta mb-0">
+                        A @Model.DigestDay summary of new episodes, new seasons and what airs next. Only when there is something to say.
+                    </p>
+                </div>
+                <div class="tvdb-offer__actions">
+                    <form method="post" asp-page-handler="DigestOptIn">
+                        <button type="submit" class="btn btn-primary btn-sm" id="digestOptIn">Turn it on</button>
+                    </form>
+                    <form method="post" asp-page-handler="DigestDismiss">
+                        <button type="submit" class="btn btn-outline-dark btn-sm" id="digestDismiss">No thanks</button>
+                    </form>
+                </div>
+            </section>
+        }
+
         @if (Model.CatchUpEpisodes.Count > 0 || Model.DormantSeriesCount > 0)
         {
             <section class="tvdb-page-section" aria-labelledby="continueWatchingHeading">

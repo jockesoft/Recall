@@ -287,4 +287,101 @@ public sealed class PostgresQueryTests : PostgresFixture
             EpisodeTvdbId = id, Name = name, Payload = "{}", RetrievedUtc = retrievedUtc,
             Aired = aired, HasImage = hasImage, RefreshAttempts = attempts
         };
+
+    // ---- weekly digest ----
+
+    [Test]
+    public async Task DigestRecipients_Should_BeOptedInUsersWithoutALedgerRowForTheWeek()
+    {
+        await ExecuteAsync("TRUNCATE app_user CASCADE;");
+        var week = new DateOnly(2026, 10, 2);
+        var due = await SeedUserAsync("due");
+        var done = await SeedUserAsync("done");
+        var doneLastWeek = await SeedUserAsync("done-last-week");
+        var notOptedIn = await SeedUserAsync("not-opted-in");
+
+        await using (var db = NewContext())
+        {
+            var users = new AppUserRepository(db);
+            (await users.SetDigestOptInAsync(due, true)).Should().BeTrue();
+            (await users.SetDigestOptInAsync(done, true)).Should().BeTrue();
+            (await users.SetDigestOptInAsync(doneLastWeek, true)).Should().BeTrue();
+
+            var digests = new DigestRepository(db);
+            await digests.RecordAsync(done, week, DigestSendStatus.Skipped, null);
+            await digests.RecordAsync(doneLastWeek, week.AddDays(-7), DigestSendStatus.Skipped, null);
+        }
+
+        await using var read = NewContext();
+        var recipients = await new DigestRepository(read).GetDueRecipientsAsync(week, 10);
+
+        recipients.Select(r => r.UserId).Should().BeEquivalentTo([due, doneLastWeek]);
+        recipients.Select(r => r.UserId).Should().NotContain(notOptedIn);
+    }
+
+    [Test]
+    public async Task TheDigestPreference_Should_KeepTheFirstOptInTime_AndTheDismissalShouldBeSetOnce()
+    {
+        var user = await SeedUserAsync();
+
+        await using (var db = NewContext())
+        {
+            var users = new AppUserRepository(db);
+            await users.SetDigestOptInAsync(user, true);
+            await users.DismissDigestPromptAsync(user);
+        }
+
+        DateTime? firstOptIn, firstDismissal;
+        await using (var read = NewContext())
+        {
+            var row = await read.AppUsers.AsNoTracking().SingleAsync(x => x.Id == user);
+            (firstOptIn, firstDismissal) = (row.DigestOptedInUtc, row.DigestPromptDismissedUtc);
+            firstOptIn.Should().NotBeNull();
+            firstDismissal.Should().NotBeNull();
+        }
+
+        await using (var db = NewContext())
+        {
+            var users = new AppUserRepository(db);
+            await users.SetDigestOptInAsync(user, true);     // already on
+            await users.DismissDigestPromptAsync(user);      // already dismissed
+        }
+
+        await using (var read = NewContext())
+        {
+            var row = await read.AppUsers.AsNoTracking().SingleAsync(x => x.Id == user);
+            row.DigestOptedInUtc.Should().Be(firstOptIn, "the time of the consent is not overwritten");
+            row.DigestPromptDismissedUtc.Should().Be(firstDismissal);
+        }
+
+        await using (var db = NewContext())
+        {
+            var users = new AppUserRepository(db);
+            (await users.SetDigestOptInAsync(user, false)).Should().BeTrue();
+            (await users.SetDigestOptInAsync(Guid.NewGuid(), false)).Should().BeFalse("no such user");
+        }
+
+        await using var after = NewContext();
+        (await after.AppUsers.AsNoTracking().SingleAsync(x => x.Id == user)).DigestOptedInUtc.Should().BeNull();
+    }
+
+    [Test]
+    public async Task ADigestEmail_Should_FitInTheQueue_HoweverLongItsTextPartIs()
+    {
+        // The body column used to be limited to 2,000 characters; a digest's text part is longer.
+        var user = await SeedUserAsync();
+        var address = $"{user:N}@example.com";
+        var longText = string.Join('\n', Enumerable.Range(1, 200).Select(i => $"- Series {i}: S01 · E{i:D2} https://recall.example/Episodes/Details/{i}"));
+
+        await using (var db = NewContext())
+        {
+            (await new DigestRepository(db).RecordAsync(user, new DateOnly(2026, 10, 2), DigestSendStatus.Queued, new Recall.Web.Domain.Internal.OutboundEmail
+            {
+                Id = Guid.NewGuid(), ToAddress = address, Subject = "Your week on Recall", Body = longText, HtmlBody = "<p>html</p>"
+            })).Should().BeTrue();
+        }
+
+        await using var read = NewContext();
+        (await read.Emails.AsNoTracking().SingleAsync(x => x.ToAddress == address)).Body.Length.Should().BeGreaterThan(2000);
+    }
 }

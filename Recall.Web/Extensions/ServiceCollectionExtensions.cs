@@ -8,6 +8,7 @@ using Recall.Web.Infrastructure.Mail;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
+using Recall.Web.Services.Digest;
 using Recall.Web.Services;
 using Recall.Web.Services.Authentication;
 using Recall.Web.Services.External.Omdb;
@@ -70,6 +71,39 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEpisodeOmdbSnapshotStore, EpisodeOmdbSnapshotStore>();
         services.AddScoped<IMovieOmdbSnapshotStore, MovieOmdbSnapshotStore>();
         services.AddSingleton<IOmdbRequestBudget, OmdbRequestBudget>();
+        return services;
+    }
+
+    /// <summary>
+    /// The weekly email digest: its options, and the check that it cannot be
+    /// switched on half-configured. Digest emails are sent by a background job,
+    /// which has no request to build links from, so an enabled digest without
+    /// <c>Site:BaseUrl</c> would mail out links that lead nowhere. That fails
+    /// startup instead.
+    /// </summary>
+    public static IServiceCollection AddWeeklyDigest(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<DigestOptions>(configuration.GetSection(DigestOptions.SectionName));
+        services.Configure<SiteOptions>(configuration.GetSection(SiteOptions.SectionName));
+        services.AddSingleton<IDigestUnsubscribeTokens, DigestUnsubscribeTokens>();
+        services.AddScoped<IDigestRepository, DigestRepository>();
+        services.AddScoped<IDigestComposer, DigestComposer>();
+        services.AddScoped<IWeeklyDigestService, WeeklyDigestService>();
+
+        var digest = configuration.GetSection(DigestOptions.SectionName).Get<DigestOptions>() ?? new DigestOptions();
+        var site = configuration.GetSection(SiteOptions.SectionName).Get<SiteOptions>() ?? new SiteOptions();
+
+        if (digest.Enabled && site.NormalizedBaseUrl is null)
+        {
+            throw new InvalidOperationException(
+                "Digest:Enabled is true but Site:BaseUrl is not set to an absolute http(s) address " +
+                "(for example https://recall.nu). The weekly digest needs it for the links in its emails. " +
+                "Set Site__BaseUrl, or set Digest__Enabled=false.");
+        }
+
+        if (digest.HourUtc is < 0 or > 23)
+            throw new InvalidOperationException($"Digest:HourUtc must be between 0 and 23, but is {digest.HourUtc}.");
+
         return services;
     }
 

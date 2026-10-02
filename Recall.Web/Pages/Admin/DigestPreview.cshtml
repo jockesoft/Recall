@@ -1,0 +1,90 @@
+@page
+@model Recall.Web.Pages.Admin.DigestPreviewModel
+@{
+    ViewData["Title"] = "Digest preview";
+    var asOf = Model.AsOf ?? Model.Today;
+}
+
+<div class="tvdb-shell">
+    <a asp-page="/Admin/Index" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Back to admin</a>
+
+    <h1 class="mb-2">Digest preview</h1>
+    <p class="tvdb-prose text-muted mb-4">
+        What the weekly email would say. Nothing is sent and nothing is recorded.
+        @if (!Model.DigestEnabled)
+        {
+            <text>The digest is switched off on this installation (<code>Digest:Enabled</code>).</text>
+        }
+    </p>
+
+    <form method="get" class="tvdb-preview-form tvdb-page-section">
+        @if (Model.CanChooseUser)
+        {
+            <div>
+                <label asp-for="Email" class="form-label">User's email (Development only)</label>
+                <input asp-for="Email" class="form-control" placeholder="your own, if left empty" autocomplete="off" />
+            </div>
+        }
+        <div>
+            <label for="AsOf" class="form-label">As of</label>
+            <input type="date" id="AsOf" name="AsOf" class="form-control" value="@asOf.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+        </div>
+        <button type="submit" class="btn btn-outline-dark">Preview</button>
+    </form>
+
+    @if (Model.Refusal is not null)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Problem,
+                     Heading = "No preview",
+                     Text = Model.Refusal,
+                     Inline = true
+                 })" />
+    }
+    else if (Model.Digest is { } digest && Model.Subject is { } subject)
+    {
+        <section class="tvdb-page-section">
+            <h2>For @subject.Username</h2>
+            <dl class="row mb-0">
+                <dt class="col-5 col-sm-3">To</dt>
+                <dd class="col-7 col-sm-9">@subject.Email</dd>
+                <dt class="col-5 col-sm-3">Weekly email</dt>
+                <dd class="col-7 col-sm-9">@(subject.DigestOptedInUtc is null ? "Off: this user would not be sent it" : "On")</dd>
+                <dt class="col-5 col-sm-3">As of</dt>
+                <dd class="col-7 col-sm-9">@DisplayDate.Format(asOf, Model.Today)</dd>
+                <dt class="col-5 col-sm-3">Unsubscribe page</dt>
+                <dd class="col-7 col-sm-9"><a href="@Model.UnsubscribeUrl" id="previewUnsubscribeLink" class="tvdb-metalink">Open this user's unsubscribe page</a></dd>
+            </dl>
+        </section>
+
+        @if (digest.Email is null)
+        {
+            <partial name="_EmptyState" model="@(new EmptyStateModel
+                     {
+                         Icon = Icons.Mail,
+                         Heading = "Nothing to send",
+                         Text = "No new season, nothing aired this past week that is unwatched, and nothing airs in the coming week. No email goes out.",
+                         Inline = true
+                     })" />
+        }
+        else
+        {
+            <section class="tvdb-page-section">
+                <h2>Subject</h2>
+                <p class="mb-0" id="previewSubject">@digest.Email.Subject</p>
+            </section>
+
+            <section class="tvdb-page-section">
+                <h2>HTML part</h2>
+                @* sandbox with no permissions: the email is shown, and nothing in it can run or navigate this page. *@
+                <iframe class="tvdb-email-preview" title="The digest's HTML part" sandbox="" srcdoc="@digest.Email.HtmlBody"></iframe>
+            </section>
+
+            <section class="tvdb-page-section">
+                <h2>Plain-text part</h2>
+                <pre class="tvdb-email-text" tabindex="0">@digest.Email.TextBody</pre>
+            </section>
+        }
+    }
+</div>

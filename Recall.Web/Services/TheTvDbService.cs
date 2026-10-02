@@ -86,6 +86,24 @@ public sealed class TheTvDbService(
         return aggregate?.WithNormalizedImages();
     }
 
+    public async Task<SeriesAggregate?> GetCachedSeriesAggregateAsync(
+        int seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        // The same layers as GetSeriesAggregateByIdAsync without the last one:
+        // Redis, then the Postgres snapshot (written back up to Redis), and
+        // nothing when neither has it. "Nothing" is not cached.
+        var aggregate = await GetLayeredAsync<SeriesAggregate>(
+            AggregateCacheKey(seriesId, Language),
+            ct => store.GetSeriesAggregateAsync(seriesId, Language, ct),
+            _ => Task.FromResult<SeriesAggregate?>(null),
+            _ => Task.CompletedTask,
+            AggregateTtl,
+            cancellationToken);
+
+        return aggregate?.WithNormalizedImages();
+    }
+
     public async Task<bool> RefreshSeriesAggregateByIdAsync(
         int seriesId,
         CancellationToken cancellationToken = default)

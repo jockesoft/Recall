@@ -100,6 +100,27 @@
 
             <dt class="col-5 col-sm-3">Sign-in</dt>
             <dd class="col-7 col-sm-9">Emailed sign-in link. No password is stored.</dd>
+
+            @if (Model.DigestAvailable)
+            {
+                <dt class="col-5 col-sm-3">Weekly email</dt>
+                <dd class="col-7 col-sm-9">
+                    <form method="post" asp-page-handler="SetDigest" class="tvdb-setting">
+                        <input type="hidden" name="on" value="@(Model.DigestOn ? "false" : "true")" />
+                        <span class="tvdb-setting__state">
+                            <strong>@(Model.DigestOn ? "On" : "Off")</strong>
+                            <span class="tvdb-meta">
+                                @(Model.DigestOn
+                                    ? $"Sent on {Model.DigestDay}s, when there is something new."
+                                    : $"A {Model.DigestDay} summary of new episodes, new seasons and what airs next.")
+                            </span>
+                        </span>
+                        <button type="submit" class="btn btn-outline-dark btn-sm" id="digestSwitch">
+                            @(Model.DigestOn ? "Turn off" : "Turn on")
+                        </button>
+                    </form>
+                </dd>
+            }
         </dl>
 
         <div class="tvdb-quiet-actions">

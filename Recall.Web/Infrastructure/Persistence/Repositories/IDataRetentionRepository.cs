@@ -24,6 +24,9 @@ public interface IDataRetentionRepository
     /// <summary>"Already notified" ledger rows written before <paramref name="createdBeforeUtc"/>.</summary>
     Task<int> DeleteNotifiedEpisodesAsync(DateTime createdBeforeUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>Weekly-digest ledger rows written before <paramref name="createdBeforeUtc"/>.</summary>
+    Task<int> DeleteDigestLedgerAsync(DateTime createdBeforeUtc, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Import jobs completed before <paramref name="completedBeforeUtc"/>, with
     /// their rows. Returns the number of jobs removed. A job still processing

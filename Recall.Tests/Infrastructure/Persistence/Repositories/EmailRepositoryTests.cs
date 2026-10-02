@@ -5,6 +5,8 @@ using Recall.Web.Domain.Internal;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 
+using Recall.Web.Services;
+
 namespace Recall.Tests.Infrastructure.Persistence.Repositories;
 
 [TestFixture]
@@ -132,5 +134,82 @@ public sealed class EmailRepositoryTests
         abandoned.HtmlBody.Should().BeNull();
         abandoned.ToAddress.Should().Be("alice@test.local");
         other.Body.Should().Contain("raw-secret-token", "only the message that gave up is erased");
+    }
+
+    // ---- order of sending -------------------------------------------------------
+
+    [Test]
+    public async Task GetPendingAsync_Should_PutASignInLinkAheadOfAHundredDigestsQueuedBeforeIt()
+    {
+        var signInId = Guid.NewGuid();
+        var queuedAt = new DateTime(2026, 10, 2, 15, 0, 0, DateTimeKind.Utc);
+
+        await using (var dbContext = new AppDbContext(_dbOptions))
+        {
+            var sut = new EmailRepository(dbContext);
+
+            for (var i = 0; i < 100; i++)
+            {
+                await sut.AddAsync(new OutboundEmail
+                {
+                    Id = Guid.NewGuid(),
+                    Priority = MailService.DigestPriority,
+                    ToAddress = $"reader{i}@test.local",
+                    Subject = "Your week on Recall",
+                    Body = "digest",
+                    CreatedUtc = queuedAt.AddSeconds(i),
+                    UpdatedUtc = queuedAt.AddSeconds(i)
+                });
+            }
+
+            // Queued last, a quarter of an hour after the first digest.
+            await sut.AddAsync(new OutboundEmail
+            {
+                Id = signInId,
+                Priority = MailService.NormalPriority,
+                ToAddress = "alice@test.local",
+                Subject = "Your Recall sign-in link",
+                Body = "link",
+                CreatedUtc = queuedAt.AddMinutes(15),
+                UpdatedUtc = queuedAt.AddMinutes(15)
+            });
+        }
+
+        await using var read = new AppDbContext(_dbOptions);
+        var batch = await new EmailRepository(read).GetPendingAsync(maxCount: 20, maxAttempts: 5);
+
+        batch.Should().HaveCount(20);
+        batch[0].Id.Should().Be(signInId, "someone waiting to sign in must not queue behind a hundred weekly digests");
+        batch.Skip(1).Should().OnlyContain(e => e.Priority == MailService.DigestPriority);
+        batch.Skip(1).Select(e => e.ToAddress).Should().Equal(
+            Enumerable.Range(0, 19).Select(i => $"reader{i}@test.local"), "digests keep their own order, oldest first");
+    }
+
+    [Test]
+    public async Task MarkSentAsync_And_GivingUp_Should_EraseTheUnsubscribeUrl_WithTheBodies()
+    {
+        var sentId = Guid.NewGuid();
+        var abandonedId = Guid.NewGuid();
+        OutboundEmail Digest(Guid id) => new()
+        {
+            Id = id, Priority = MailService.DigestPriority, ToAddress = "reader@test.local", Subject = "Your week on Recall",
+            Body = "digest", HtmlBody = "<p>digest</p>", ListUnsubscribeUrl = "https://recall.example/Digest/OneClick?token=secret"
+        };
+
+        await using (var dbContext = new AppDbContext(_dbOptions))
+        {
+            var sut = new EmailRepository(dbContext);
+            await sut.AddAsync(Digest(sentId));
+            await sut.AddAsync(Digest(abandonedId));
+
+            (await sut.GetPendingAsync(10, 5)).Should().OnlyContain(e => e.ListUnsubscribeUrl != null, "the URL travels with the queued message");
+
+            await sut.MarkSentAsync(sentId);
+            await sut.RecordFailedAttemptAsync(abandonedId, maxAttempts: 1);
+        }
+
+        await using var read = new AppDbContext(_dbOptions);
+        (await read.Emails.AsNoTracking().Select(x => x.ListUnsubscribeUrl).ToListAsync())
+            .Should().OnlyContain(url => url == null, "the URL carries a token, so it goes when the message is done");
     }
 }

@@ -147,6 +147,24 @@ public sealed class DataRetentionRepositoryTests
     }
 
     [Test]
+    public async Task DeleteDigestLedgerAsync_Should_RemoveLedgerRowsOlderThanTheCutoff()
+    {
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.DigestSends.AddRange(
+                new DigestSendEntity { Id = Guid.NewGuid(), UserId = _userId, PeriodStart = new DateOnly(2026, 6, 5), Status = DigestSendStatus.Queued, CreatedUtc = Old },
+                new DigestSendEntity { Id = Guid.NewGuid(), UserId = _userId, PeriodStart = new DateOnly(2026, 9, 25), Status = DigestSendStatus.Skipped, CreatedUtc = Recent });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var deleted = await new DataRetentionRepository(dbContext).DeleteDigestLedgerAsync(Cutoff);
+
+        deleted.Should().Be(1);
+        (await dbContext.DigestSends.Select(x => x.PeriodStart).ToListAsync()).Should().Equal(new DateOnly(2026, 9, 25));
+    }
+
+    [Test]
     public async Task DeleteCompletedImportJobsAsync_Should_RemoveOldCompletedJobsWithTheirRows_ButNeverOneStillProcessing()
     {
         var oldCompleted = Guid.NewGuid();

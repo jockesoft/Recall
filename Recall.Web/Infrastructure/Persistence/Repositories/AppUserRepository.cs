@@ -17,6 +17,37 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
     public Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    public async Task<bool> SetDigestOptInAsync(Guid userId, bool optedIn, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        // ExecuteUpdate bypasses the change tracker, so UpdatedUtc is set here.
+        var changed = optedIn
+            ? await dbContext.AppUsers
+                .Where(x => x.Id == userId && x.DigestOptedInUtc == null)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(x => x.DigestOptedInUtc, now).SetProperty(x => x.UpdatedUtc, now),
+                    cancellationToken)
+            : await dbContext.AppUsers
+                .Where(x => x.Id == userId && x.DigestOptedInUtc != null)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(x => x.DigestOptedInUtc, (DateTime?)null).SetProperty(x => x.UpdatedUtc, now),
+                    cancellationToken);
+
+        return changed > 0 || await dbContext.AppUsers.AnyAsync(x => x.Id == userId, cancellationToken);
+    }
+
+    public async Task DismissDigestPromptAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        await dbContext.AppUsers
+            .Where(x => x.Id == userId && x.DigestPromptDismissedUtc == null)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(x => x.DigestPromptDismissedUtc, now).SetProperty(x => x.UpdatedUtc, now),
+                cancellationToken);
+    }
+
     public async Task<bool> IsOnlyAdminAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var isAdmin = await dbContext.AppUsers
@@ -64,6 +95,7 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
         await dbContext.TrackedMovies.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.TrackedSeries.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.LoginTokens.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.DigestSends.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
 
         // The mail queue has no user id: its rows are found by the address
         // (stored lower-cased on the user).

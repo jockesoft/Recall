@@ -22,6 +22,12 @@ public sealed class OutboundEmail
     /// <summary>Optional HTML body; when set the message is sent multipart/alternative.</summary>
     public string? HtmlBody { get; init; }
 
+    /// <summary>
+    /// When set, the message is sent with <c>List-Unsubscribe</c> and
+    /// <c>List-Unsubscribe-Post</c> headers pointing here (the weekly digest).
+    /// </summary>
+    public string? ListUnsubscribeUrl { get; init; }
+
     public int SendAttempts { get; init; }
 
     public DateTime? SentUtc { get; init; }

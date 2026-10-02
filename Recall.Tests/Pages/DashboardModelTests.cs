@@ -8,7 +8,9 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Pages;
+using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Services;
+using Recall.Web.Services.Digest;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Tests.Pages;
@@ -26,12 +28,16 @@ public class DashboardModelTests
     private Mock<IWatchProgressService> _progress = null!;
     private DashboardModel _sut = null!;
     private LibraryOptions _libraryOptions = null!;
+    private Mock<IAppUserRepository> _users = null!;
+    private DigestOptions _digestOptions = null!;
 
     [SetUp]
     public void SetUp()
     {
         // A fresh instance per test: some tests change the settings.
         _libraryOptions = new LibraryOptions();
+        _users = new Mock<IAppUserRepository>();
+        _digestOptions = new DigestOptions { Enabled = true };
 
         _tvDb = new Mock<ITheTvDbService>();
         _library = new Mock<ITrackedSeriesRepository>();
@@ -61,7 +67,9 @@ public class DashboardModelTests
             NullLogger<DashboardModel>.Instance,
             currentUser.Object,
             new FixedTimeProvider(new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero)),
-            Options.Create(_libraryOptions)).WithTempData();
+            Options.Create(_libraryOptions),
+            _users.Object,
+            Options.Create(_digestOptions)).WithTempData();
     }
 
     private static EpisodeSummary Ep(int id, int season, int number, DateOnly? aired, string? image = null, string? finale = null) => new()
@@ -451,6 +459,97 @@ public class DashboardModelTests
 
         _sut.TrackedSeriesCount.Should().Be(2, "the count is of what the user tracks, not of what loaded");
         _sut.CatchUpEpisodes.Should().ContainSingle().Which.SeriesName.Should().Be("Fine");
+    }
+
+    // ---- the one-time offer of the weekly email --------------------------------
+
+    private void UserIs(DateTime? optedIn = null, DateTime? dismissed = null) =>
+        _users.Setup(x => x.GetByIdAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AppUserEntity { Id = UserId, DigestOptedInUtc = optedIn, DigestPromptDismissedUtc = dismissed });
+
+    private void SetUpAnyLibrary() =>
+        SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Show", Episodes = [Ep(10, 1, 1, Today.AddDays(-9))] });
+
+    [Test]
+    public async Task TheDigestOffer_Should_BeShown_ToSomeoneWhoHasNotAnsweredIt()
+    {
+        SetUpAnyLibrary();
+        UserIs();
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.ShowDigestPrompt.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task TheDigestOffer_Should_BeHidden_OnceEitherAnswerIsGiven()
+    {
+        SetUpAnyLibrary();
+
+        UserIs(optedIn: new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc));
+        await _sut.OnGetAsync(CancellationToken.None);
+        _sut.ShowDigestPrompt.Should().BeFalse("it is already on");
+
+        UserIs(dismissed: new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc));
+        await _sut.OnGetAsync(CancellationToken.None);
+        _sut.ShowDigestPrompt.Should().BeFalse("\"No thanks\" is remembered");
+    }
+
+    [Test]
+    public async Task TheDigestOffer_Should_BeHidden_WhereTheDigestIsNotEnabled_OrTheLibraryIsEmpty()
+    {
+        UserIs();
+
+        _library.Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        await _sut.OnGetAsync(CancellationToken.None);
+        _sut.ShowDigestPrompt.Should().BeFalse("with nothing tracked there is nothing a digest could say");
+
+        SetUpAnyLibrary();
+        _digestOptions.Enabled = false;
+        await _sut.OnGetAsync(CancellationToken.None);
+        _sut.ShowDigestPrompt.Should().BeFalse();
+        _users.Verify(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never, "no lookup for a feature that is off");
+    }
+
+    [Test]
+    public async Task TheDigestOffer_Should_JustNotShow_WhenThePreferenceCannotBeRead()
+    {
+        SetUpAnyLibrary();
+        _users.Setup(x => x.GetByIdAsync(UserId, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("db down"));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.ShowDigestPrompt.Should().BeFalse();
+        _sut.CatchUpEpisodes.Should().ContainSingle("the rest of the Dashboard still renders");
+    }
+
+    [Test]
+    public async Task TurnItOn_Should_OptIn_AndConfirm()
+    {
+        var result = await _sut.OnPostDigestOptInAsync(CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>();
+        _users.Verify(x => x.SetDigestOptInAsync(UserId, true, It.IsAny<CancellationToken>()), Times.Once);
+        _sut.SuccessToast().Should().StartWith("Weekly email is on.");
+    }
+
+    [Test]
+    public async Task NoThanks_Should_RecordTheDismissal_AndNotOptIn()
+    {
+        var result = await _sut.OnPostDigestDismissAsync(CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>();
+        _users.Verify(x => x.DismissDigestPromptAsync(UserId, It.IsAny<CancellationToken>()), Times.Once);
+        _users.Verify(x => x.SetDigestOptInAsync(It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        _sut.SuccessToast().Should().BeNull();
+    }
+
+    [Test]
+    public void BothAnswers_Should_BePostHandlers()
+    {
+        typeof(DashboardModel).GetMethods().Select(m => m.Name)
+            .Should().Contain(["OnPostDigestOptInAsync", "OnPostDigestDismissAsync"])
+            .And.NotContain(n => n.StartsWith("OnGetDigest", StringComparison.Ordinal), "answering the offer changes state");
     }
 
     // ---- POST: mark watched ----------------------------------------------------

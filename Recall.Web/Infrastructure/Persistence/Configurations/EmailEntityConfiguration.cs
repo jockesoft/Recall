@@ -29,14 +29,21 @@ public sealed class EmailEntityConfiguration : IEntityTypeConfiguration<EmailEnt
             .HasMaxLength(500)
             .IsRequired();
 
+        // "text", not a length limit: a digest's plain-text part lists many
+        // lines with a link each and does not fit in the 2,000 characters a
+        // sign-in email needed.
         builder.Property(x => x.Body)
             .HasColumnName("body")
-            .HasMaxLength(2000)
+            .HasColumnType("text")
             .IsRequired();
 
         builder.Property(x => x.HtmlBody)
             .HasColumnName("html_body")
             .HasColumnType("text");
+
+        builder.Property(x => x.ListUnsubscribeUrl)
+            .HasColumnName("list_unsubscribe_url")
+            .HasMaxLength(2000);
 
         builder.Property(x => x.SendAttempts)
             .HasColumnName("send_attempts")

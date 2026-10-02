@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NotifiedEpisodeEntity> NotifiedEpisodes => Set<NotifiedEpisodeEntity>();
     public DbSet<EmailEntity> Emails => Set<EmailEntity>();
     public DbSet<LoginTokenEntity> LoginTokens => Set<LoginTokenEntity>();
+    public DbSet<DigestSendEntity> DigestSends => Set<DigestSendEntity>();
     public DbSet<WatchlistImportJobEntity> WatchlistImportJobs => Set<WatchlistImportJobEntity>();
     public DbSet<WatchlistImportItemEntity> WatchlistImportItems => Set<WatchlistImportItemEntity>();
 

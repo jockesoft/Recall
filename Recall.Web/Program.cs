@@ -41,6 +41,7 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddTheTvDb(builder.Configuration);
 builder.Services.AddOmdb(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddWeeklyDigest(builder.Configuration);
 builder.Services.AddNotifications();
 builder.Services.AddMail(builder.Configuration);
 builder.Services.AddWatchlistImport();

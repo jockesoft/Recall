@@ -92,6 +92,19 @@ gunzip -c /var/backups/recall/recall_db_YYYYMMDD_HHMMSS.sql.gz \
       psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
 
+Before enabling the weekly digest
+
+The weekly email is off by default (`Digest:Enabled` is false) and nothing is sent until every step here is done.
+In production the settings go in `.env.prod`.
+
+1. Set `Site__BaseUrl` to the site's public address, for example `https://recall.nu`. The links in the email are built from it. There is no default, and the app refuses to start with the digest enabled and this missing.
+2. Set `Digest__MaxPerRun` to fit the mail provider's sending limits. It is the number of users handled per hourly run (default 100); the rest follow in the next runs, for up to `Digest__CatchUpHours` (default 48). Sign-in links are always sent before digests.
+3. Check SPF, DKIM and DMARC for the sending domain (the domain of `Mail__FromAddress`). A weekly mail from a domain without them lands in spam, and takes the sign-in links with it.
+4. Preview your own digest: sign in as an admin and open Admin, "Preview the weekly email". Check the text, the links and the unsubscribe page. The preview sends nothing.
+5. Set `Digest__Enabled=true` and deploy. Users then see a "Weekly email" switch in their profile and a one-time offer on the Dashboard; only those who turn it on are sent anything. The digest goes out on `Digest__DayOfWeek` (default Friday) from `Digest__HourUtc` (default 15, UTC).
+
+To switch it off again, set `Digest__Enabled=false`. Users keep their choice.
+
 Add update to DB
 ```
 dotnet ef migrations add <Any name> --project Recall.Web

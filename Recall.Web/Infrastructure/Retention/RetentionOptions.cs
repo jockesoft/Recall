@@ -25,6 +25,13 @@ public sealed class RetentionOptions
     /// </summary>
     public int NotifiedEpisodeDays { get; set; } = 30;
 
+    /// <summary>
+    /// The weekly digest's ledger ("this user was dealt with for this week").
+    /// It only has to outlive the week it is about, plus the catch-up window;
+    /// keep it comfortably above that or someone could get a digest twice.
+    /// </summary>
+    public int DigestLedgerDays { get; set; } = 60;
+
     /// <summary>Completed IMDb import jobs and their rows, counted from completion. A job still processing is never deleted.</summary>
     public int ImportJobDays { get; set; } = 90;
 }

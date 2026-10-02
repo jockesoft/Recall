@@ -33,6 +33,14 @@ namespace Recall.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_utc");
 
+                    b.Property<DateTime?>("DigestOptedInUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("digest_opted_in_utc");
+
+                    b.Property<DateTime?>("DigestPromptDismissedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("digest_prompt_dismissed_utc");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(320)
@@ -314,6 +322,41 @@ namespace Recall.Web.Migrations
                     b.ToTable("cached_series_omdb", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.DigestSendEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_utc");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date")
+                        .HasColumnName("period_start");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedUtc");
+
+                    b.HasIndex("UserId", "PeriodStart")
+                        .IsUnique();
+
+                    b.ToTable("digest_send", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.EmailEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -323,8 +366,7 @@ namespace Recall.Web.Migrations
 
                     b.Property<string>("Body")
                         .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
+                        .HasColumnType("text")
                         .HasColumnName("body");
 
                     b.Property<DateTime>("CreatedUtc")
@@ -334,6 +376,11 @@ namespace Recall.Web.Migrations
                     b.Property<string>("HtmlBody")
                         .HasColumnType("text")
                         .HasColumnName("html_body");
+
+                    b.Property<string>("ListUnsubscribeUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("list_unsubscribe_url");
 
                     b.Property<int>("Priority")
                         .ValueGeneratedOnAdd()
@@ -917,6 +964,15 @@ namespace Recall.Web.Migrations
                     b.HasIndex("UserId", "CreatedUtc");
 
                     b.ToTable("watchlist_import_job", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.DigestSendEntity", b =>
+                {
+                    b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.EpisodeWatchEntity", b =>

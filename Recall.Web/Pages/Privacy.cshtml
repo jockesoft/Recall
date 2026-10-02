@@ -62,6 +62,29 @@
         a fingerprint (hash) of the link, not the link itself. Requests for links are rate limited to stop abuse.
     </p>
 
+    <h2 id="emails">Emails</h2>
+    <p class="tvdb-prose">
+        We send two kinds of email, and nothing else.
+    </p>
+    <ul class="tvdb-prose tvdb-privacy-list">
+        <li>
+            <strong>Sign-in links</strong>, when you ask for one.
+        </li>
+        <li>
+            <strong>The weekly email</strong>, only if you turn it on (in your profile, or when the Dashboard
+            offers it; it is off until you do). It lists new seasons, episodes that aired in the past week
+            and that you have not watched, and what airs in the coming week. Weeks with nothing to say
+            are skipped.
+        </li>
+    </ul>
+    <p class="tvdb-prose">
+        You can turn the weekly email off in your profile, or with the link at the bottom of every one,
+        which works without signing in. The emails contain no images, no tracking pixels and no tracked
+        links: every link goes straight to Recall.nu. We store whether the weekly email is on (and when you
+        turned it on), whether you answered the Dashboard's one-time offer, and a record of the weeks we
+        have sent it to you so that nobody gets it twice.
+    </p>
+
     <h2>How long things are kept</h2>
     <p class="tvdb-prose">
         Your library, watch history, likes and ratings are kept for as long as your account
@@ -83,6 +106,7 @@
             @PrivacyModel.After(Model.Retention.NotifiedEpisodeDays, "it was made").
         </li>
         <li>IMDb imports and their rows: @PrivacyModel.After(Model.Retention.ImportJobDays, "the import finished").</li>
+        <li>The record of which weeks the weekly email was sent to you: @PrivacyModel.After(Model.Retention.DigestLedgerDays, "it was made").</li>
     </ul>
 
     <h2 id="delete">Deleting your account</h2>
@@ -94,8 +118,8 @@
     <ul class="tvdb-prose tvdb-privacy-list">
         <li>
             <strong>Removed immediately:</strong> the account itself (email address and username), your
-            library, watch history, likes, ratings, notifications, IMDb imports, sign-in links and
-            the emails we sent you. Ratings you gave no longer count towards Recall ratings.
+            library, watch history, likes, ratings, notifications, IMDb imports, sign-in links,
+            the emails we sent you, and your weekly-email setting with its history. Ratings you gave no longer count towards Recall ratings.
         </li>
         <li>
             <strong>Not removed immediately:</strong> database backups are kept for about 9 days@(Model.LogRetentionDays is { } days ? $", and server logs for {days} days" : ", and server logs for a limited time").

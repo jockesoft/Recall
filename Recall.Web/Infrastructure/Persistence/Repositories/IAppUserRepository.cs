@@ -39,6 +39,16 @@ public interface IAppUserRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Switches the weekly digest on (recording when, as the consent) or off.
+    /// Switching on something already on keeps the original time. Returns false
+    /// when no such user exists.
+    /// </summary>
+    Task<bool> SetDigestOptInAsync(Guid userId, bool optedIn, CancellationToken cancellationToken = default);
+
+    /// <summary>Records that the user declined the Dashboard's one-time offer of the weekly digest.</summary>
+    Task DismissDigestPromptAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// True when the user is an admin and no other admin exists. Such an
     /// account cannot be deleted: nobody would be left to run the site.
     /// </summary>

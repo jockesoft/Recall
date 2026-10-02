@@ -222,6 +222,29 @@ public static class InfrastructureServiceCollectionExtensions
         });
     }
 
+    /// <summary>Name of the per-IP policy on the digest's unsubscribe pages; see <see cref="DigestUnsubscribePartition"/>.</summary>
+    public const string DigestUnsubscribePolicy = "digest-unsubscribe";
+
+    /// <summary>How many requests one client IP may make to the unsubscribe pages per minute.</summary>
+    public const int DigestUnsubscribePermitsPerMinute = 30;
+
+    /// <summary>
+    /// The unsubscribe pages work without signing in and take a token from the
+    /// URL, so they are an address anyone can throw guesses at. Tokens cannot be
+    /// guessed, but each attempt costs a decryption: this caps them per client IP.
+    /// </summary>
+    public static RateLimitPartition<string> DigestUnsubscribePartition(HttpContext httpContext)
+    {
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter($"digest-unsubscribe:{clientIp}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = DigestUnsubscribePermitsPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
+    }
+
     /// <summary>Name of the per-IP policy on the public Details pages; see <see cref="PublicDetailsPartition"/>.</summary>
     public const string PublicDetailsPolicy = "public-details";
 
@@ -249,6 +272,7 @@ public static class InfrastructureServiceCollectionExtensions
             options.AddPolicy(PublicDetailsPolicy, PublicDetailsPartition);
 
             options.AddPolicy(LoginEmailPolicy, LoginEmailPartition);
+            options.AddPolicy(DigestUnsubscribePolicy, DigestUnsubscribePartition);
 
             // Site-wide backstop on the same endpoint: bounds total sign-in POSTs
             // regardless of how many distinct IPs they come from (a botnet spread
@@ -315,7 +339,7 @@ public static class InfrastructureServiceCollectionExtensions
     [
         nameof(UpdateTvDbInfoTimer), nameof(UpdateMovieInfoTimer), nameof(MailTimer), nameof(UpdateOmdbInfoTimer),
         nameof(UpdateMovieOmdbInfoTimer), nameof(NewEpisodeNotificationTimer), nameof(WatchlistImportTimer),
-        nameof(PruneOldDataTimer)
+        nameof(PruneOldDataTimer), nameof(WeeklyDigestTimer)
     ];
 
     /// <summary>
@@ -411,6 +435,12 @@ public static class InfrastructureServiceCollectionExtensions
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(50))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())
                 .WithDescription("Drain the IMDb watchlist import queue at a steady pace, a few rows per minute."));
+
+            Schedule<WeeklyDigestTimer>(trigger => trigger
+                .WithIdentity("WeeklyDigestTimer-trigger")
+                .StartAt(DateTimeOffset.UtcNow.AddSeconds(120))
+                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(1)).RepeatForever())
+                .WithDescription("Queue the weekly email digest when it is due (hourly check; does nothing unless Digest:Enabled)."));
 
             Schedule<PruneOldDataTimer>(trigger => trigger
                 .WithIdentity("PruneOldDataTimer-trigger")

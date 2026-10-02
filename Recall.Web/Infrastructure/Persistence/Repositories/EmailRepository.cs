@@ -39,6 +39,7 @@ public sealed class EmailRepository(AppDbContext dbContext) : IEmailRepository
                     // readable in the table (or in its backups) afterwards.
                     .SetProperty(x => x.Body, string.Empty)
                     .SetProperty(x => x.HtmlBody, (string?)null)
+                    .SetProperty(x => x.ListUnsubscribeUrl, (string?)null)
                     .SetProperty(x => x.UpdatedUtc, DateTime.UtcNow),
                 cancellationToken);
     }
@@ -56,6 +57,7 @@ public sealed class EmailRepository(AppDbContext dbContext) : IEmailRepository
                 s => s
                     .SetProperty(x => x.Body, x => x.SendAttempts + 1 >= maxAttempts ? string.Empty : x.Body)
                     .SetProperty(x => x.HtmlBody, x => x.SendAttempts + 1 >= maxAttempts ? null : x.HtmlBody)
+                    .SetProperty(x => x.ListUnsubscribeUrl, x => x.SendAttempts + 1 >= maxAttempts ? null : x.ListUnsubscribeUrl)
                     .SetProperty(x => x.SendAttempts, x => x.SendAttempts + 1)
                     .SetProperty(x => x.UpdatedUtc, DateTime.UtcNow),
                 cancellationToken);

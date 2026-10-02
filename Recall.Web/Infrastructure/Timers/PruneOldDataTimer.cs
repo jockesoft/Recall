@@ -43,6 +43,9 @@ public sealed class PruneOldDataTimer(
         await PruneAsync("notified-episode ledger rows", retention.NotifiedEpisodeDays, now,
             (cutoff, ct) => retentionRepository.DeleteNotifiedEpisodesAsync(cutoff, ct), cancellationToken);
 
+        await PruneAsync("weekly-digest ledger rows", retention.DigestLedgerDays, now,
+            (cutoff, ct) => retentionRepository.DeleteDigestLedgerAsync(cutoff, ct), cancellationToken);
+
         await PruneAsync("completed import jobs", retention.ImportJobDays, now,
             (cutoff, ct) => retentionRepository.DeleteCompletedImportJobsAsync(cutoff, ct), cancellationToken);
     }

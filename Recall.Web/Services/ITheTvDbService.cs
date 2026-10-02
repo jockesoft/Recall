@@ -25,6 +25,14 @@ public interface ITheTvDbService
     Task<SeriesAggregate?> GetSeriesAggregateByIdAsync(int seriesId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The series aggregate from the caches only (Redis, then the Postgres
+    /// snapshot); never from TheTVDB. Null when it is in neither. For work that
+    /// must not spend API quota, such as the weekly digest: a series that is not
+    /// cached is simply left out, and the hourly refresh job fills it in later.
+    /// </summary>
+    Task<SeriesAggregate?> GetCachedSeriesAggregateAsync(int seriesId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Bypasses the read tiers: fetches the series aggregate straight from
     /// TheTVDB and overwrites both the local snapshot and the Redis entry.
     /// Returns <c>false</c> when the API has nothing for the id.

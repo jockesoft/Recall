@@ -32,6 +32,13 @@ public sealed class EmailEntity : IHasAuditTimestamps
     /// <summary>Set once the message has been handed to SMTP; <c>null</c> while pending.</summary>
     public DateTime? SentUtc { get; set; }
 
+    /// <summary>
+    /// For a message people can unsubscribe from (the weekly digest): the URL
+    /// that goes into its <c>List-Unsubscribe</c> header. It carries a token,
+    /// so it is erased with the bodies once the message is sent or given up on.
+    /// </summary>
+    public string? ListUnsubscribeUrl { get; set; }
+
     public DateTime CreatedUtc { get; set; }
 
     public DateTime UpdatedUtc { get; set; }

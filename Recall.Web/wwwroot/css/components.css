@@ -595,6 +595,22 @@ h1.tvdb-empty-state__title {
     color: var(--tvdb-danger-ink);
 }
 
+/* A setting in a facts list: what it is now, and the button that changes it. */
+.tvdb-setting {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tvdb-space-2) var(--tvdb-space-4);
+}
+
+.tvdb-setting__state {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
 /* A row of quiet actions (Profile: Sign out, Delete my account). */
 .tvdb-quiet-actions {
     display: flex;
@@ -1157,6 +1173,45 @@ dl.row dd a.tvdb-inline-edit {
     .tvdb-subgroup__body.collapse:not(.show) {
         display: block;
     }
+}
+
+/* A one-time offer on a page (the Dashboard's weekly-email card): an icon,
+   what is offered, and the two answers. */
+.tvdb-offer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--tvdb-space-3) var(--tvdb-space-4);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-signal-tint);
+    border: 1px solid var(--tvdb-signal-edge);
+    border-radius: var(--tvdb-radius-lg);
+}
+
+.tvdb-offer__icon {
+    flex: none;
+    font-size: var(--tvdb-text-xl);
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-offer__text {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.tvdb-offer__title {
+    margin: 0 0 var(--tvdb-space-1);
+    font-family: var(--tvdb-font-ui);
+    font-size: var(--tvdb-text-md);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.tvdb-offer__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2);
 }
 
 /* A section heading with a quiet link at the far end ("See all"). */

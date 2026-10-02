@@ -43,6 +43,7 @@ public class PruneOldDataTimerTests
         _repository.Verify(x => x.DeleteReadNotificationsAsync(DaysAgo(90), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteNotifiedEpisodesAsync(DaysAgo(30), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteCompletedImportJobsAsync(DaysAgo(90), It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(x => x.DeleteDigestLedgerAsync(DaysAgo(60), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

@@ -207,6 +207,40 @@ public sealed class MailServiceTests
     }
 
     [Test]
+    public async Task SendPendingEmailsAsync_Should_AddTheOneClickUnsubscribeHeaders_ToAMessageThatHasAnUnsubscribeUrl()
+    {
+        _repository
+            .Setup(x => x.GetPendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new OutboundEmail
+                {
+                    Id = Guid.NewGuid(), ToAddress = "user@test.local", Subject = "Your week on Recall", Body = "text",
+                    HtmlBody = "<p>html</p>", ListUnsubscribeUrl = "https://recall.example/Digest/OneClick?token=abc"
+                }
+            ]);
+
+        await _sut.SendPendingEmailsAsync();
+
+        var eml = await File.ReadAllTextAsync(Directory.GetFiles(_pickupDirectory, "*.eml").Single());
+        eml.Should().Contain("List-Unsubscribe: <https://recall.example/Digest/OneClick?token=abc>");
+        eml.Should().Contain("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
+    }
+
+    [Test]
+    public async Task SendPendingEmailsAsync_Should_NotAddUnsubscribeHeaders_ToASignInEmail()
+    {
+        _repository
+            .Setup(x => x.GetPendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new OutboundEmail { Id = Guid.NewGuid(), ToAddress = "user@test.local", Subject = "Sign in", Body = "link" }]);
+
+        await _sut.SendPendingEmailsAsync();
+
+        var eml = await File.ReadAllTextAsync(Directory.GetFiles(_pickupDirectory, "*.eml").Single());
+        eml.Should().NotContain("List-Unsubscribe");
+    }
+
+    [Test]
     public async Task SendPendingEmailsAsync_Should_RecordFailedAttempt_ForBadMessage_AndKeepGoing()
     {
         var good = Pending("good@test.local", "Fine");
