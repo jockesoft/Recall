@@ -34,3 +34,8 @@ Recall.Web/mail-pickup/
 
 #Log files created by the application
 Recall.Web/Logs/
+
+# UI review: the capture script is tracked, its output and working files are not
+ui-review/screenshots/
+ui-review/UI-INVENTORY.md
+ui-review/.run/
