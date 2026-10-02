@@ -52,6 +52,9 @@ public static class DisplayDate
             : value;
     }
 
+    /// <summary>A time of day: "8:00 PM".</summary>
+    public static string Time(TimeOnly time) => time.ToString("h:mm tt", English);
+
     /// <summary>"just now", "5m ago", "3h ago", "2d ago", "4w ago". Notifications only.</summary>
     public static string Relative(TimeSpan age)
     {

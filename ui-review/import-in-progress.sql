@@ -4,9 +4,9 @@
 -- never against recall_db.
 --
 -- It is newer than the completed job from seed.sql, so it is the one the
--- import page shows while it exists. The waiting rows use IMDb ids that do not
--- exist: if the import job happens to run in the seconds this is in place, it
--- finds no match and adds nothing to the library.
+-- import page shows while it exists; that is why it is not part of the seed.
+-- The review instances run with the import job switched off (Jobs:Disabled in
+-- review.sh), so the waiting rows are never looked up on TheTVDB.
 
 \set dev '''11111111-1111-1111-1111-111111111111'''
 \set job '''cccccccc-0000-4000-8000-000000000001'''

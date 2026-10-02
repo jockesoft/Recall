@@ -1,0 +1,87 @@
+@page
+@model Recall.Web.Pages.Account.DeleteModel
+@{
+    ViewData["Title"] = "Delete my account";
+}
+
+<div class="tvdb-shell tvdb-shell--narrow">
+    <a asp-page="/Account/Profile" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Back to profile</a>
+
+    @if (Model.IsOnlyAdmin)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Administrator,
+                     Heading = "This account can't be deleted",
+                     Text = "You are the only administrator of Recall.nu. Make someone else an administrator first, then come back to delete this account.",
+                     HeadingLevel = 1,
+                     ActionText = "Back to profile",
+                     ActionPage = "/Account/Profile"
+                 })" />
+    }
+    else
+    {
+        <h1 class="mb-2">Delete my account</h1>
+        <p class="tvdb-prose text-muted mb-4">
+            This removes your account and everything in it, right away. It can't be undone.
+        </p>
+
+        <h2>What is deleted</h2>
+        <ul class="tvdb-prose tvdb-privacy-list mb-4">
+            <li>Your library: the series you track and the movies on your watchlist.</li>
+            <li>Your watch history: every episode and movie you marked as watched.</li>
+            <li>Your likes and ratings. Recall ratings are recalculated without yours.</li>
+            <li>Your notifications and your IMDb imports.</li>
+            <li>Your sign-in links, the emails we sent you, and the account itself (<strong>@Model.Username</strong>, @Model.Email).</li>
+        </ul>
+        <p class="tvdb-meta mb-4">
+            Signing in again later with the same email address creates a new, empty account.
+            Other browsers where you are signed in stop working within a few minutes.
+            Backups and server logs keep what they hold until they expire; see the
+            <a asp-page="/Privacy" asp-fragment="delete">privacy policy</a>.
+        </p>
+
+        <form method="post" id="deleteAccountForm" data-username="@Model.Username" data-email="@Model.Email">
+            <div class="mb-3">
+                <label asp-for="Confirmation" class="form-label">Type your username (<strong>@Model.Username</strong>) to confirm</label>
+                <input asp-for="Confirmation" class="form-control" autocomplete="off" autocapitalize="none" spellcheck="false"
+                       aria-describedby="confirmationMessage" />
+                <div class="tvdb-field-message" id="confirmationMessage">
+                    <span asp-validation-for="Confirmation" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="tvdb-form-actions">
+                <a asp-page="/Account/Profile" class="btn btn-outline-dark">Cancel</a>
+                <button type="submit" class="btn btn-danger" id="deleteAccountSubmit">Delete my account</button>
+            </div>
+        </form>
+    }
+</div>
+
+@section Scripts {
+    @if (!Model.IsOnlyAdmin)
+    {
+        <script>
+            // The final button stays off until the field holds the username (or
+            // the email address). The server checks the same thing again.
+            (function () {
+                var form = document.getElementById('deleteAccountForm');
+                var input = document.getElementById('Confirmation');
+                var submit = document.getElementById('deleteAccountSubmit');
+                if (!form || !input || !submit) return;
+
+                var accepted = [form.dataset.username, form.dataset.email]
+                    .map(function (value) { return (value || '').trim().toLowerCase(); })
+                    .filter(function (value) { return value.length > 0; });
+
+                function update() {
+                    submit.disabled = accepted.indexOf(input.value.trim().toLowerCase()) === -1;
+                }
+
+                input.addEventListener('input', update);
+                update();
+            })();
+        </script>
+    }
+}

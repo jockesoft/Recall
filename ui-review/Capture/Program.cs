@@ -117,6 +117,8 @@ List<Shot> shots =
             await page.Locator("#Input_Username").FillAsync("saga");
             await page.Locator("#usernameStatus:not([hidden])").WaitForAsync(new() { Timeout = 5000 });
         }),
+    // In the seeded clone the dev user is the only administrator: the page explains instead of offering the form.
+    new("delete-account", "only-admin", Site.SignedIn, "/Account/Delete"),
     new("favorites", "populated", Site.SignedIn, "/Account/Favorites"),
     new("notifications", "populated", Site.SignedIn, "/Account/Notifications"),
     new("import-watchlist", "completed", Site.SignedIn, "/Account/ImportWatchlist"),
@@ -163,6 +165,15 @@ List<Shot> shots =
     // ---- Signed in, nothing tracked: the empty states ------------------------
     new("dashboard", "empty", Site.Empty, "/Dashboard"),
     new("library", "empty", Site.Empty, "/Library"),
+    // The empty clone has a second administrator, so the confirmation form is offered. Nothing is submitted.
+    new("delete-account", "confirmation", Site.Empty, "/Account/Delete"),
+    new("delete-account", "ready", Site.Empty, "/Account/Delete", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // The email address is accepted as well as the username, and the dev user's is known.
+            await page.Locator("#Confirmation").FillAsync("dev@example.com");
+            await page.Locator("#deleteAccountSubmit:not([disabled])").WaitForAsync();
+        }),
     new("favorites", "empty", Site.Empty, "/Account/Favorites"),
     new("notifications", "empty", Site.Empty, "/Account/Notifications"),
     new("profile", "empty", Site.Empty, "/Account/Profile"),
@@ -170,7 +181,6 @@ List<Shot> shots =
 
     // ---- Signed out ----------------------------------------------------------
     new("landing", "signed-out", Site.Anonymous, "/"),
-    new("landing", "cookie-notice", Site.Anonymous, "/", ViewportOnly: true, KeepCookieNotice: true),
     new("login", "default", Site.Anonymous, "/Account/Login"),
     new("login", "validation", Site.Anonymous, "/Account/Login",
         Prepare: async page =>
@@ -261,13 +271,6 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
         HasTouch = viewport.IsMobile,
         Locale = "en-US",
     });
-
-    if (!shot.KeepCookieNotice)
-    {
-        // The cookie notice would otherwise cover the bottom of every first visit.
-        await context.AddInitScriptAsync(
-            "try { window.localStorage.setItem('recall.cookie-notice-dismissed', '1'); } catch (e) {}");
-    }
 
     var page = await context.NewPageAsync();
     page.Console += (_, message) =>
@@ -458,8 +461,7 @@ record Shot(
     string Path,
     Func<IPage, Task>? Prepare = null,
     Func<IPage, Task>? Cleanup = null,
-    bool ViewportOnly = false,
-    bool KeepCookieNotice = false)
+    bool ViewportOnly = false)
 {
     public string Name => $"{Page}_{State}";
 }

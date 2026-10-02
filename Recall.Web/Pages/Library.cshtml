@@ -118,7 +118,7 @@
                 // to the section on its own; from 576px they are grids too.
                 var isRow = part.Section != LibrarySection.Watching;
 
-                <section class="tvdb-library-section" id="@part.Slug" data-library-section>
+                <section class="tvdb-page-section" id="@part.Slug" data-library-section>
                     <div class="tvdb-section-head">
                         <h2 class="mb-0">@part.Title <span class="tvdb-count">@part.Items.Count</span></h2>
                         @if (isRow)
@@ -127,7 +127,7 @@
                                aria-label="See all @part.Items.Count in @part.Title">See all @part.Items.Count <i class="@Icons.Forward" aria-hidden="true"></i></a>
                         }
                     </div>
-                    <div class="tvdb-series-grid @(isRow ? "tvdb-series-grid--row-on-phone" : null) mb-4">
+                    <div class="tvdb-series-grid @(isRow ? "tvdb-series-grid--row-on-phone" : null)">
                         @foreach (var item in part.Items)
                         {
                             <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />

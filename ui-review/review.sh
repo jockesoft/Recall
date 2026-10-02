@@ -13,6 +13,9 @@
 # Needs the local_postgres and my-redis containers from the README and TheTVDB
 # keys in user secrets. "start" builds Recall.Web (Debug) first.
 #
+# The instances run with the import job switched off (Jobs:Disabled), so rows
+# left waiting for a screenshot are never looked up on TheTVDB.
+#
 # recall_db itself is only read (as the template for the clones). The apps use
 # Redis database 1, so the development cache in database 0 is left alone too.
 set -euo pipefail
@@ -52,6 +55,7 @@ start_app() { # name url database environment [directory]
     ConnectionStrings__DefaultConnection="$(connection "$3")" \
     REDIS_CONNECTION="localhost:6379,defaultDatabase=$REDIS_DB" \
     Database__MigrateOnStartup=false \
+    Jobs__Disabled__0=WatchlistImportTimer \
     nohup dotnet "$dll" > "$RUN/$1.log" 2>&1 &
     echo $! > "$RUN/$1.pid" )
   for _ in $(seq 1 60); do
@@ -97,6 +101,16 @@ setup() {
   psql_db "$EMPTY_DB" -c "
     TRUNCATE tracked_series, tracked_movie, episode_watch, user_movie_watch, user_like, user_rating,
              notification, notified_episode, login_token, email, watchlist_import_item, watchlist_import_job;"
+
+  # A second administrator in the empty clone, so the dev user is not the only
+  # one there and "Delete my account" shows its confirmation form. In the seeded
+  # clone the dev user is the only admin and gets the explanation instead.
+  psql_db "$EMPTY_DB" -c "
+    UPDATE app_user SET role = 'Admin' WHERE id = '11111111-1111-1111-1111-111111111111';
+    INSERT INTO app_user (id, email, user_name, role, created_utc, updated_utc)
+    VALUES (gen_random_uuid(), 'second-admin@example.com', 'second-admin', 'Admin', now(), now());"
+  psql_db "$SEEDED_DB" -c "
+    UPDATE app_user SET role = 'Admin' WHERE id = '11111111-1111-1111-1111-111111111111';"
 
   docker exec "$REDIS_CONTAINER" redis-cli -n "$REDIS_DB" FLUSHDB > /dev/null
 
@@ -175,5 +189,5 @@ case "${1:-}" in
   stop) stop_apps ;;
   teardown) teardown ;;
   all) setup; start; capture; teardown ;;
-  *) sed -n '2,17p' "$0"; exit 1 ;;
+  *) sed -n '2,20p' "$0"; exit 1 ;;
 esac

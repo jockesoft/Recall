@@ -20,6 +20,11 @@
           data-current-username="@Model.CurrentUsername">
         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
+        @* No minlength attribute on the field: the validation library would turn
+           it into a rule of its own with its stock message. The length and
+           character rules come from the model's attributes (data-val-*), whose
+           messages are the same sentences the live check uses. *@
+
         <div class="mb-3 tvdb-field">
             <label asp-for="Input.Username" class="form-label">Username</label>
             <div class="tvdb-input-affix">
@@ -29,7 +34,6 @@
                        autocapitalize="none"
                        spellcheck="false"
                        autofocus
-                       minlength="@EditProfileModel.UsernameMinLength"
                        maxlength="@EditProfileModel.UsernameMaxLength"
                        aria-describedby="usernameHint usernameStatus" />
                 <span class="tvdb-input-affix-icon" id="usernameAffixIcon" aria-hidden="true"></span>

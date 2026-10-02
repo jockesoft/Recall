@@ -32,6 +32,7 @@ public static class Icons
     public const string Unsupported = "ph ph-prohibit";
     public const string Upload = "ph ph-upload-simple";
     public const string SignOut = "ph ph-sign-out";
+    public const string Delete = "ph ph-trash";
     public const string Mail = "ph ph-envelope-simple";
 
     // Navigation

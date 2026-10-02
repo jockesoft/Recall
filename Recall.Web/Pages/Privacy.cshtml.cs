@@ -46,9 +46,6 @@ public sealed class PrivacyModel(
 
     public int SignInCookieDays => InfrastructureServiceCollectionExtensions.SignInCookieDays;
 
-    /// <summary>The key the cookie notice writes to the browser's local storage when it is dismissed.</summary>
-    public const string CookieNoticeStorageKey = "recall.cookie-notice-dismissed";
-
     /// <summary>
     /// "deleted 30 days after …" for a retention period, or "kept" when that
     /// category's clean-up is switched off (a period of 0 or less).

@@ -12,7 +12,7 @@
 <div class="tvdb-shell tvdb-shell--narrow">
     <a asp-page="/Account/Profile" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Back to profile</a>
 
-    <h1 class="mb-3">Import from IMDb</h1>
+    <h1 class="mb-4">Import from IMDb</h1>
 
     <ol class="tvdb-steps mb-3">
         <li>On IMDb, open <em>Your ratings</em> or <em>Your watchlist</em> and choose <em>Export</em>.</li>
@@ -25,7 +25,7 @@
 
     @if (Model.IsProcessing)
     {
-        <section class="tvdb-import-progress mb-4" aria-label="Import progress">
+        <section class="tvdb-import-progress tvdb-page-section" aria-label="Import progress">
             <div class="tvdb-eyebrow text-truncate mb-1">Importing @job!.FileName</div>
             <div class="progress" role="progressbar" aria-label="Rows matched"
                  aria-valuenow="@job.ProcessedCount" aria-valuemin="0" aria-valuemax="@job.TotalCount"
@@ -40,7 +40,7 @@
     }
     else
     {
-        <form method="post" asp-page-handler="Upload" enctype="multipart/form-data" class="mb-4">
+        <form method="post" asp-page-handler="Upload" enctype="multipart/form-data" class="tvdb-page-section">
             <div class="mb-3">
                 <label for="file" class="form-label">CSV file</label>
                 <input type="file" id="file" name="file" accept=".csv" class="form-control" required />
@@ -53,7 +53,7 @@
 
     @if (job is not null)
     {
-        <section class="mb-4">
+        <section class="tvdb-page-section">
             <h2>@(Model.IsProcessing ? "So far" : "Last import")</h2>
             <p class="tvdb-meta mb-2">@job.FileName, @DisplayDate.Format(job.CreatedUtc, Model.Today)</p>
 

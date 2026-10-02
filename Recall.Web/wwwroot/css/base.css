@@ -1,7 +1,7 @@
 /* =========================================================================
    Recall theme — 2 of 4: base
    Fonts, element defaults, the two surfaces, focus, icons, type helpers and
-   the page frame (skip link, navbar, panel, footer, cookie notice).
+   the page frame (skip link, navbar, panel, footer).
    ========================================================================= */
 
 /* ---- Fonts: self-hosted, latin subset, woff2 (see libman.json) ----------- */
@@ -91,7 +91,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 h1 { font-size: clamp(var(--tvdb-text-2xl), 5vw, var(--tvdb-text-3xl)); }
-h2 { font-size: var(--tvdb-text-xl); }
+h2 { font-size: var(--tvdb-text-xl); margin-bottom: var(--tvdb-space-3); }
 h3 { font-size: var(--tvdb-text-lg); }
 h4, h5, h6 { font-size: var(--tvdb-text-md); }
 
@@ -679,35 +679,4 @@ main:focus {
     .omdbattribution .omdb-lead {
         display: none;
     }
-}
-
-/* ---- Cookie notice ---------------------------------------------------------------- */
-
-/* A compact bar: one or two lines of text with the button beside it, at
-   every width. On a phone it stays well under a sixth of the screen. */
-.cookie-notice {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1040;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--tvdb-space-3);
-    padding: var(--tvdb-space-2) var(--tvdb-space-4);
-    background: var(--tvdb-ink-2);
-    border-top: 1px solid var(--tvdb-line);
-    box-shadow: var(--tvdb-shadow-md);
-}
-
-.cookie-notice__text {
-    min-width: 0;
-    margin: 0;
-    font-size: var(--tvdb-text-sm);
-    line-height: var(--tvdb-leading-snug);
-}
-
-.cookie-notice__button {
-    flex: none;
 }

@@ -81,7 +81,7 @@
     else
     {
         @* One compact row, on phones too. Each stat links to the place that explains it. *@
-        <ul class="tvdb-stat-row list-unstyled mb-4">
+        <ul class="tvdb-stat-row list-unstyled tvdb-page-section">
             <li>
                 <a asp-page="/Library" class="tvdb-stat-item">
                     <span class="tvdb-stat-item__value">@Model.TrackedSeriesCount</span>
@@ -104,8 +104,8 @@
 
         @if (Model.CatchUpEpisodes.Count > 0)
         {
-            <h2 class="mb-3">Catch up</h2>
-            <div class="tvdb-catchup-grid mb-4">
+            <h2>Catch up</h2>
+            <div class="tvdb-catchup-grid tvdb-page-section">
                 @foreach (var ep in Model.CatchUpEpisodes)
                 {
                     <partial name="_CatchUpCard" model="@(new CatchUpCardModel
@@ -122,7 +122,7 @@
             </div>
         }
 
-        <h2 class="mb-3" id="upcoming" tabindex="-1">Upcoming</h2>
+        <h2 id="upcoming" tabindex="-1">Upcoming</h2>
 
         @if (Model.UpcomingEpisodes.Count == 0)
         {

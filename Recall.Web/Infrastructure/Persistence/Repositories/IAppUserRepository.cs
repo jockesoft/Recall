@@ -37,6 +37,39 @@ public interface IAppUserRepository
         Guid userId,
         string username,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// True when the user is an admin and no other admin exists. Such an
+    /// account cannot be deleted: nobody would be left to run the site.
+    /// </summary>
+    Task<bool> IsOnlyAdminAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the account and everything that belongs to it, in one
+    /// transaction: tracked series and movies, episode and movie watches,
+    /// likes, ratings, notifications and the notified-episode ledger, IMDb
+    /// imports and their rows, sign-in tokens, the emails queued or sent to
+    /// the account's address, and the user row itself. The shared metadata
+    /// caches (TheTVDB and OMDb snapshots) are not user data and stay.
+    /// Refuses, deleting nothing, when the user is the only admin.
+    ///
+    /// A table that holds rows belonging to a user must be deleted here. The
+    /// PostgreSQL test for this method fails when a table with a
+    /// <c>user_id</c> column still has rows for a deleted user.
+    /// </summary>
+    Task<AccountDeletionResult> DeleteAccountAsync(Guid userId, CancellationToken cancellationToken = default);
+}
+
+public enum AccountDeletionResult
+{
+    /// <summary>The account and all of its data are gone.</summary>
+    Deleted,
+
+    /// <summary>Nothing was deleted: the user is the only admin.</summary>
+    OnlyAdmin,
+
+    /// <summary>No user row exists for the supplied id (already deleted, for instance from another session).</summary>
+    UserNotFound
 }
 
 public enum UsernameUpdateResult

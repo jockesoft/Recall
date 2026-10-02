@@ -115,7 +115,7 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 .tvdb-landing-hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    align-items: center;
+    align-items: start;
     gap: var(--tvdb-space-6);
     padding-block: var(--tvdb-space-4) var(--tvdb-space-6);
 }
@@ -171,22 +171,23 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     margin-top: var(--tvdb-space-2);
 }
 
-/* Phones: the rows need the width, so the poster goes under them. */
-@media (max-width: 575.98px) {
-    .tvdb-landing-preview__split {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .tvdb-landing-preview__poster {
-        max-width: 8rem;
-    }
-}
-
 .tvdb-landing-preview__split > div {
     display: flex;
     flex-direction: column;
     gap: var(--tvdb-space-2);
     min-width: 0;
+}
+
+/* Phones: the rows need the width, and a lone poster under them leaves a
+   hole beside it, so the preview is the catch-up card and the rows there. */
+@media (max-width: 575.98px) {
+    .tvdb-landing-preview__split {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .tvdb-landing-preview__split > .tvdb-landing-preview__poster {
+        display: none;
+    }
 }
 
 .tvdb-landing-preview__rows {
@@ -312,15 +313,8 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     min-width: 0;
 }
 
-/* A list title like any other (episode rows, import rows): the UI face,
-   semibold, not the display face of a section heading. */
 .tvdb-result__title {
     margin: 0;
-    font-family: var(--tvdb-font-ui);
-    font-size: var(--tvdb-text-md);
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: var(--tvdb-leading-snug);
 }
 
 /* The row is the link, so the title carries no underline of its own. */
@@ -636,7 +630,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     display: flex;
     align-items: baseline;
     gap: var(--tvdb-space-2);
-    font-weight: 600;
 }
 
 .tvdb-episode__title .tvdb-mono {
@@ -884,12 +877,10 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     min-width: 0;
 }
 
-.tvdb-notification__title {
-    line-height: var(--tvdb-leading-snug);
-}
 
-.tvdb-notification.is-unread .tvdb-notification__title {
-    font-weight: 600;
+/* Unread is the list-title weight; a read row steps back to regular. */
+.tvdb-notification:not(.is-unread) .tvdb-notification__title {
+    font-weight: 400;
 }
 
 .tvdb-notification__dot {
@@ -983,14 +974,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 .tvdb-profile-stat__label {
     font-size: var(--tvdb-text-sm);
     color: var(--tvdb-text-muted);
-}
-
-.tvdb-profile-section {
-    margin-bottom: var(--tvdb-space-6);
-}
-
-.tvdb-profile-section:last-child {
-    margin-bottom: 0;
 }
 
 @media (max-width: 575.98px) {
@@ -1148,7 +1131,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 }
 
 .tvdb-import-row__title {
-    font-weight: 600;
     overflow-wrap: anywhere;
 }
 

@@ -17,6 +17,64 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
     public Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    public async Task<bool> IsOnlyAdminAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var isAdmin = await dbContext.AppUsers
+            .AnyAsync(x => x.Id == userId && x.Role == UserRole.Admin, cancellationToken);
+
+        return isAdmin
+               && !await dbContext.AppUsers.AnyAsync(x => x.Id != userId && x.Role == UserRole.Admin, cancellationToken);
+    }
+
+    public async Task<AccountDeletionResult> DeleteAccountAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        // Serializable, so two admins deleting their accounts at the same moment
+        // cannot both pass the "is there another admin?" check: one of the two
+        // transactions fails and its caller reports an error.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable, cancellationToken);
+
+        var user = await dbContext.AppUsers
+            .AsNoTracking()
+            .Where(x => x.Id == userId)
+            .Select(x => new { x.Email, x.Role })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (user is null)
+            return AccountDeletionResult.UserNotFound;
+
+        if (user.Role == UserRole.Admin
+            && !await dbContext.AppUsers.AnyAsync(x => x.Id != userId && x.Role == UserRole.Admin, cancellationToken))
+        {
+            return AccountDeletionResult.OnlyAdmin;
+        }
+
+        // Every table that holds rows belonging to a user, children first. The
+        // foreign keys cascade from app_user as well, but spelling the tables
+        // out keeps the list of what an account owns in one readable place,
+        // and covers what no foreign key reaches (the mail queue).
+        await dbContext.WatchlistImportItems.Where(x => x.Job.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.WatchlistImportJobs.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.NotifiedEpisodes.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.Notifications.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.UserRatings.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.UserLikes.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.UserMovieWatches.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.EpisodeWatches.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.TrackedMovies.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.TrackedSeries.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.LoginTokens.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+
+        // The mail queue has no user id: its rows are found by the address
+        // (stored lower-cased on the user).
+        await dbContext.Emails.Where(x => x.ToAddress.ToLower() == user.Email).ExecuteDeleteAsync(cancellationToken);
+
+        await dbContext.AppUsers.Where(x => x.Id == userId).ExecuteDeleteAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+        return AccountDeletionResult.Deleted;
+    }
+
     public async Task<bool> IsUsernameAvailableAsync(
         string username,
         Guid excludingUserId,

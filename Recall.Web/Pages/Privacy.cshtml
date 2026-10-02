@@ -6,7 +6,7 @@
         + "we use, how long things are kept, and how passwordless email sign-in works.";
     ViewData["Robots"] = "index, follow";
 }
-<div class="tvdb-shell tvdb-shell--narrow">
+<div class="tvdb-shell tvdb-shell--narrow tvdb-text-page">
     <h1 class="mb-3">@ViewData["Title"]</h1>
 
     <p class="tvdb-prose">
@@ -16,10 +16,11 @@
         has no analytics or tracking scripts.
     </p>
 
-    <h2 id="cookies" class="mt-4">Cookies and browser storage</h2>
+    <h2 id="cookies">Cookies</h2>
     <p class="tvdb-prose">
-        Everything the site stores in your browser is there to make it work. None of it is
-        used for tracking, analytics or advertising.
+        Recall only uses cookies that are strictly necessary for the site to work, which is why
+        you are not asked for consent to them. None is used for tracking, analytics or
+        advertising, and nothing else is stored in your browser.
     </p>
     <ul class="tvdb-prose tvdb-privacy-list">
         <li>
@@ -37,14 +38,9 @@
             confirmation such as "Marked as watched" from one page to the next. It exists for a
             moment and is removed as soon as the message has been shown.
         </li>
-        <li>
-            <strong>Cookie notice flag</strong> (<code>@PrivacyModel.CookieNoticeStorageKey</code>, in your browser's
-            local storage): remembers that you closed the cookie notice. It stays until you clear
-            the site's data and is never sent to us.
-        </li>
     </ul>
 
-    <h2 class="mt-4">What is loaded from elsewhere</h2>
+    <h2>What is loaded from elsewhere</h2>
     <p class="tvdb-prose">
         Fonts, icons, styles and scripts are served from Recall.nu itself. Two things are not:
     </p>
@@ -59,17 +55,18 @@
         </li>
     </ul>
 
-    <h2 class="mt-4">Sign-in</h2>
+    <h2>Sign-in</h2>
     <p class="tvdb-prose">
         There are no passwords. You enter your email address and we send you a link that works
         once and expires after @Model.SignInLinkMinutes minutes. Once the email has gone out we keep only
         a fingerprint (hash) of the link, not the link itself. Requests for links are rate limited to stop abuse.
     </p>
 
-    <h2 class="mt-4">How long things are kept</h2>
+    <h2>How long things are kept</h2>
     <p class="tvdb-prose">
         Your library, watch history, likes and ratings are kept for as long as your account
-        exists. The rest is cleaned up automatically once a day:
+        exists; <a href="#delete">deleting your account</a> removes them. The rest is cleaned up
+        automatically once a day:
     </p>
     <ul class="tvdb-prose tvdb-privacy-list">
         <li>Sign-in links: @PrivacyModel.After(Model.Retention.LoginTokenDays, "they expired or were used").</li>
@@ -88,7 +85,30 @@
         <li>IMDb imports and their rows: @PrivacyModel.After(Model.Retention.ImportJobDays, "the import finished").</li>
     </ul>
 
-    <h2 class="mt-4">Logs</h2>
+    <h2 id="delete">Deleting your account</h2>
+    <p class="tvdb-prose">
+        You can delete your account yourself: open your
+        <a asp-page="/Account/Profile">profile</a> and choose "Delete my account" at the bottom of
+        the Account section. You are asked to type your username to confirm.
+    </p>
+    <ul class="tvdb-prose tvdb-privacy-list">
+        <li>
+            <strong>Removed immediately:</strong> the account itself (email address and username), your
+            library, watch history, likes, ratings, notifications, IMDb imports, sign-in links and
+            the emails we sent you. Ratings you gave no longer count towards Recall ratings.
+        </li>
+        <li>
+            <strong>Not removed immediately:</strong> database backups are kept for about 9 days@(Model.LogRetentionDays is { } days ? $", and server logs for {days} days" : ", and server logs for a limited time").
+            Your data disappears from those as they expire. Backups are only used to restore the
+            service after a failure.
+        </li>
+        <li>
+            Other browsers where you were signed in stop working within a few minutes. Signing in
+            again with the same email address creates a new, empty account.
+        </li>
+    </ul>
+
+    <h2>Logs</h2>
     <p class="tvdb-prose">
         The server keeps technical logs for operation and security. They can contain IP
         addresses, for example when a rate limit is hit. Logs are not used to profile
@@ -99,7 +119,7 @@
         }
     </p>
 
-    <h2 class="mt-4">Contact &amp; support</h2>
+    <h2>Contact &amp; support</h2>
     <p class="tvdb-prose">
         Questions about your data, a bug to report, or general feedback? Reach us through
         the

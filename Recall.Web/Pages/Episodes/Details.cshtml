@@ -18,7 +18,7 @@
         if (!string.IsNullOrWhiteSpace(airsTime)
             && TimeOnly.TryParse(airsTime, ci, System.Globalization.DateTimeStyles.None, out var t))
         {
-            text += " · " + t.ToString("h:mm tt", ci);
+            text += " · " + DisplayDate.Time(t);
         }
         return text;
     }
@@ -179,7 +179,7 @@
 
                     @if (!Model.HasAired)
                     {
-                        <button type="button" class="btn btn-outline-secondary" disabled>
+                        <button type="button" class="btn btn-outline-dark" disabled>
                             <i class="@Icons.NotAiredYet me-1" aria-hidden="true"></i>
                             <span>Airs&nbsp;@FormatAirMoment(Model.AiredDate!.Value, Model.AirsTime)</span>
                         </button>

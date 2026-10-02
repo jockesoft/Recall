@@ -31,6 +31,13 @@ public sealed class DisplayDateTests
     }
 
     [Test]
+    public void Time_Should_UseTheTwelveHourClock()
+    {
+        DisplayDate.Time(new TimeOnly(20, 0)).Should().Be("8:00 PM");
+        DisplayDate.Time(new TimeOnly(9, 5)).Should().Be("9:05 AM");
+    }
+
+    [Test]
     public void Format_Should_UseTheDatePartOfATimestamp()
     {
         DisplayDate.Format(new DateTime(2026, 9, 4, 23, 59, 0, DateTimeKind.Utc), Today).Should().Be("Fri, Sep 4");

@@ -310,6 +310,36 @@ public static class InfrastructureServiceCollectionExtensions
         });
     }
 
+    /// <summary>The scheduled jobs, by the names <c>Jobs:Disabled</c> accepts.</summary>
+    public static readonly IReadOnlyList<string> ScheduledJobNames =
+    [
+        nameof(UpdateTvDbInfoTimer), nameof(UpdateMovieInfoTimer), nameof(MailTimer), nameof(UpdateOmdbInfoTimer),
+        nameof(UpdateMovieOmdbInfoTimer), nameof(NewEpisodeNotificationTimer), nameof(WatchlistImportTimer),
+        nameof(PruneOldDataTimer)
+    ];
+
+    /// <summary>
+    /// The jobs switched off with <c>Jobs:Disabled</c> (a list of job class
+    /// names, empty by default). It exists for an instance that must not do a
+    /// job's work, such as the UI review instances, which must not let the
+    /// import job call TheTVDB. A name that is not a job fails startup: a typo
+    /// would otherwise leave the job running unnoticed.
+    /// </summary>
+    public static IReadOnlySet<string> DisabledJobs(IConfiguration configuration)
+    {
+        var names = configuration.GetSection("Jobs:Disabled").Get<string[]>() ?? [];
+
+        var unknown = names.Where(name => !ScheduledJobNames.Contains(name, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (unknown.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Jobs:Disabled names a job that does not exist: {string.Join(", ", unknown)}. " +
+                $"Known jobs: {string.Join(", ", ScheduledJobNames)}.");
+        }
+
+        return names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Registers the Quartz.NET jobs that keep TVDB/OMDb data fresh, drain the mail
     /// and import queues, raise new-episode notifications and prune old rows, plus
@@ -322,51 +352,67 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IDataRetentionRepository, DataRetentionRepository>();
         services.TryAddSingleton(TimeProvider.System);
 
+        var disabledJobs = DisabledJobs(configuration);
+
         services.AddQuartz(q =>
         {
-            q.ScheduleJob<UpdateTvDbInfoTimer>(trigger => trigger
+            // A job named in Jobs:Disabled is not scheduled at all.
+            void Schedule<TJob>(Action<ITriggerConfigurator<TJob>> trigger) where TJob : IJob
+            {
+                var name = typeof(TJob).Name;
+
+                // Keeps ScheduledJobNames honest: a job added here but not there
+                // could not be switched off, and would not be reported as known.
+                if (!ScheduledJobNames.Contains(name))
+                    throw new InvalidOperationException($"{name} is scheduled but missing from {nameof(ScheduledJobNames)}.");
+
+                if (!disabledJobs.Contains(name))
+                    q.ScheduleJob<TJob>(trigger);
+            }
+
+            Schedule<UpdateTvDbInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateTvDbInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(10))
                 .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Check for new TVDB info every 60 minutes, but only refresh series and episodes that are due for a refresh."));
 
-            q.ScheduleJob<UpdateMovieInfoTimer>(trigger => trigger
+            Schedule<UpdateMovieInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateMovieInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(15))
                 .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Check for new TVDB movie info every 60 minutes, but only refresh movies that are due for a refresh."));
 
-            q.ScheduleJob<MailTimer>(trigger => trigger
+            Schedule<MailTimer>(trigger => trigger
                 .WithIdentity("MailTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(30))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())
                 .WithDescription("Drain the outbound email queue once a minute."));
 
-            q.ScheduleJob<UpdateOmdbInfoTimer>(trigger => trigger
+            Schedule<UpdateOmdbInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateOmdbInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(20))
                 .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Refresh OMDb data for cached series — at most 30 requests/hour, each series at most monthly."));
 
-            q.ScheduleJob<UpdateMovieOmdbInfoTimer>(trigger => trigger
+            Schedule<UpdateMovieOmdbInfoTimer>(trigger => trigger
                 .WithIdentity("UpdateMovieOmdbInfoTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(25))
                 .WithDailyTimeIntervalSchedule(s => s.WithInterval(60, IntervalUnit.Minute))
                 .WithDescription("Refresh OMDb data for cached movies — at most 30 requests/hour, each movie at most monthly."));
 
-            q.ScheduleJob<NewEpisodeNotificationTimer>(trigger => trigger
+            Schedule<NewEpisodeNotificationTimer>(trigger => trigger
                 .WithIdentity("NewEpisodeNotificationTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(45))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(6)).RepeatForever())
                 .WithDescription("Notify users when a series they track has an episode that aired in the last few days."));
 
-            q.ScheduleJob<WatchlistImportTimer>(trigger => trigger
+            Schedule<WatchlistImportTimer>(trigger => trigger
                 .WithIdentity("WatchlistImportTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(50))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())
                 .WithDescription("Drain the IMDb watchlist import queue at a steady pace, a few rows per minute."));
 
-            q.ScheduleJob<PruneOldDataTimer>(trigger => trigger
+            Schedule<PruneOldDataTimer>(trigger => trigger
                 .WithIdentity("PruneOldDataTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(90))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(24)).RepeatForever())

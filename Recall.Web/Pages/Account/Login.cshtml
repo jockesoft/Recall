@@ -14,8 +14,10 @@
         <div class="tvdb-empty-state">
             <span class="tvdb-empty-state__icon"><i class="@Icons.Mail" aria-hidden="true"></i></span>
             <h1 class="tvdb-empty-state__title">Check your inbox</h1>
+            @* The same words whether or not a link went out (the address may not be
+               allowed, or may have asked too often): the page never reveals which. *@
             <p class="tvdb-empty-state__text">
-                A sign-in link is on its way to <strong class="tvdb-break-anywhere">@Model.Email</strong>.
+                If this address can sign in, a link is on its way to <strong class="tvdb-break-anywhere">@Model.Email</strong>.
             </p>
             <p class="tvdb-meta mb-0">
                 The link expires in @Model.LinkLifetimeMinutes minute@(Model.LinkLifetimeMinutes == 1 ? "" : "s") and works once.

@@ -58,6 +58,7 @@ public sealed class PipelineTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [TestCase("/Account/Delete")]
     [TestCase("/Dashboard")]
     [TestCase("/Library")]
     [TestCase("/Search")]
@@ -170,15 +171,28 @@ public sealed class PipelineTests
     }
 
     [Test]
+    public async Task NoPage_Should_ShowACookieNotice()
+    {
+        foreach (var path in new[] { "/", "/Account/Login", "/Privacy" })
+        {
+            var html = await (await _client.GetAsync(path)).Content.ReadAsStringAsync();
+
+            html.Should().NotContain("cookieNotice", "only strictly necessary cookies are used, so there is no notice ({0})", path);
+            html.Should().NotContain("cookie-notice__");
+        }
+    }
+
+    [Test]
     public async Task PrivacyPage_Should_NameWhatIsStoredInTheBrowser_AndTheRetentionPeriods()
     {
         var html = await (await _client.GetAsync("/Privacy")).Content.ReadAsStringAsync();
 
         html.Should().Contain("Recall.Auth");
         html.Should().Contain(".AspNetCore.Antiforgery");
-        html.Should().Contain("recall.cookie-notice-dismissed");
+        html.Should().Contain("strictly necessary");
         html.Should().Contain("deleted 7 days after they expired or were used");
         html.Should().Contain("artworks.thetvdb.com");
+        html.Should().Contain("Deleting your account").And.Contain("about 9 days");
     }
 
     [Test]

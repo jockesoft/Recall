@@ -237,47 +237,12 @@
 
 @await RenderSectionAsync("Scripts", required: false)
 
-<div id="cookieNotice" class="cookie-notice" role="region" aria-label="About cookies" hidden>
-    <p class="cookie-notice__text">
-        Recall only uses cookies it needs to work, such as keeping you signed in.
-        <a asp-page="/Privacy" asp-fragment="cookies">Learn more</a>
-    </p>
-    <button type="button" id="cookieNoticeDismiss" class="btn btn-primary btn-sm cookie-notice__button">
-        Got it
-    </button>
-</div>
 <script>
-    // Inline (not in an external script) so it runs before paint: a returning visitor who
-    // already dismissed this never sees it flash on screen.
-    (function () {
-        "use strict";
-        var STORAGE_KEY = "@PrivacyModel.CookieNoticeStorageKey";
-        var notice = document.getElementById("cookieNotice");
-        if (!notice) return;
-
-        var alreadyDismissed = false;
-        try {
-            alreadyDismissed = window.localStorage.getItem(STORAGE_KEY) === "1";
-        } catch (e) {
-            // Storage unavailable (private mode, blocked, etc.) — just show the notice.
-        }
-
-        if (!alreadyDismissed) {
-            notice.hidden = false;
-        }
-
-        var dismissButton = document.getElementById("cookieNoticeDismiss");
-        if (dismissButton) {
-            dismissButton.addEventListener("click", function () {
-                notice.hidden = true;
-                try {
-                    window.localStorage.setItem(STORAGE_KEY, "1");
-                } catch (e) {
-                    // Nothing to do — worst case the notice reappears next visit.
-                }
-            });
-        }
-    })();
+    // The site used to show a cookie notice and remembered its dismissal in
+    // local storage. The notice is gone; this takes the leftover key out of
+    // browsers that still have it. It can be deleted once it has had time to
+    // run for returning visitors (added 2026-10-02).
+    try { window.localStorage.removeItem("recall.cookie-notice-dismissed"); } catch (e) { }
 </script>
 </body>
 </html>
