@@ -44,6 +44,7 @@ public class DetailsSignInGuardTests
             _movieTracking.Object,
             _ratings.Object,
             Mock.Of<IMovieOmdbSnapshotStore>(),
+            TimeProvider.System,
             NullLogger<DetailsModel>.Instance)
         {
             TempData = new TempDataDictionary(new DefaultHttpContext(), Mock.Of<ITempDataProvider>())

@@ -1,0 +1,49 @@
+using System.Globalization;
+
+namespace Recall.Web.Infrastructure.Display;
+
+/// <summary>
+/// The one place dates are turned into text for people. A date in the current
+/// year reads "Sat, Sep 4"; any other year reads "Sep 4, 2026". Relative time
+/// ("3h ago") is for notifications only. Machine-readable output (sitemap,
+/// JSON-LD, form values) keeps its own ISO formatting and does not come here.
+/// </summary>
+public static class DisplayDate
+{
+    private static readonly CultureInfo English = CultureInfo.InvariantCulture;
+
+    /// <summary>"Sat, Sep 4" in the current year, "Sep 4, 2026" otherwise.</summary>
+    public static string Format(DateOnly date, DateOnly today) =>
+        date.Year == today.Year
+            ? date.ToString("ddd, MMM d", English)
+            : date.ToString("MMM d, yyyy", English);
+
+    /// <inheritdoc cref="Format(DateOnly, DateOnly)"/>
+    public static string Format(DateTime date, DateOnly today) =>
+        Format(DateOnly.FromDateTime(date), today);
+
+    /// <summary>
+    /// Formats a date that arrives as text, as TheTVDB sends them
+    /// ("2008-01-20", "2024-12-23 18:07:56"). Text that is not a date is
+    /// returned unchanged, and nothing at all for a blank value.
+    /// </summary>
+    public static string? Format(string? value, DateOnly today)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return DateTime.TryParse(value, English, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+            ? Format(parsed, today)
+            : value;
+    }
+
+    /// <summary>"just now", "5m ago", "3h ago", "2d ago", "4w ago". Notifications only.</summary>
+    public static string Relative(TimeSpan age)
+    {
+        if (age < TimeSpan.FromMinutes(1)) return "just now";
+        if (age < TimeSpan.FromHours(1)) return $"{(int)age.TotalMinutes}m ago";
+        if (age < TimeSpan.FromDays(1)) return $"{(int)age.TotalHours}h ago";
+        if (age < TimeSpan.FromDays(7)) return $"{(int)age.TotalDays}d ago";
+        return $"{(int)(age.TotalDays / 7)}w ago";
+    }
+}

@@ -4,15 +4,14 @@
     ViewData["Title"] = "Sign-in link";
 }
 
-<div class="tvdb-shell">
-    <div class="row justify-content-center">
-        <div class="col-sm-10 col-md-8 col-lg-6">
-            <h1 class="tvdb-display mb-3">This sign-in link didn't work</h1>
-            <p class="tvdb-prose text-muted">
-                It may have expired, already been used, or been copied incompletely.
-                Request a fresh one and try again.
-            </p>
-            <a class="btn btn-primary" asp-page="/Account/Login">Back to sign in</a>
-        </div>
-    </div>
+<div class="tvdb-shell tvdb-shell--narrow">
+    <partial name="_EmptyState" model="@(new EmptyStateModel
+             {
+                 Icon = Icons.Problem,
+                 Heading = "This sign-in link didn't work",
+                 Text = "It may have expired, already been used, or been copied incompletely. Request a fresh one and try again.",
+                 HeadingLevel = 1,
+                 ActionText = "Back to sign in",
+                 ActionPage = "/Account/Login"
+             })" />
 </div>

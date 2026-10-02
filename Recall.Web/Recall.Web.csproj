@@ -9,6 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+      <!-- Records where wwwroot/lib came from (libman restore); not needed at run time. -->
+      <Content Update="libman.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+  <ItemGroup>
       <Content Include="../.dockerignore">
           <Link>.dockerignore</Link>
       </Content>

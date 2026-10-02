@@ -17,8 +17,9 @@
 
             @if (!string.IsNullOrWhiteSpace(Model.BadgeIcon))
             {
-                <span class="tvdb-series-badge tvdb-series-badge--@Model.BadgeVariant" title="@Model.BadgeLabel" aria-label="@Model.BadgeLabel">
-                    <i class="fa-solid @Model.BadgeIcon" aria-hidden="true"></i>
+                <span class="tvdb-series-badge" title="@Model.BadgeLabel">
+                    <i class="@Model.BadgeIcon" aria-hidden="true"></i>
+                    <span class="visually-hidden">@Model.BadgeLabel</span>
                 </span>
             }
 

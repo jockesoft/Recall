@@ -1,0 +1,552 @@
+/* =========================================================================
+   Recall theme — 4 of 4: pages
+   Layout and pieces that belong to one page or one group of pages. Anything
+   used by more than one kind of page lives in components.css.
+   ========================================================================= */
+
+/* ---- Section headings (every page) ---------------------------------------- */
+
+.tvdb-section-title {
+    margin-bottom: var(--tvdb-space-3);
+}
+
+/* The number after a heading: "Watching 7", "Notifications 4 new". */
+.tvdb-count {
+    margin-left: var(--tvdb-space-1);
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.7em;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-rule-below { border-bottom: 1px solid var(--tvdb-ink-line); }
+.tvdb-rule-above { border-top: 1px solid var(--tvdb-ink-line); }
+
+/* ---- Stat tiles (Dashboard, Admin) ---------------------------------------- */
+
+.tvdb-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--tvdb-space-3);
+}
+
+.tvdb-stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+}
+
+.tvdb-stat__value {
+    font-family: var(--tvdb-font-display);
+    font-size: var(--tvdb-text-2xl);
+    font-weight: 800;
+    line-height: 1;
+    color: var(--tvdb-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.tvdb-stat__label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-stat__hint {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+}
+
+/* ---- Dashboard ---------------------------------------------------------------- */
+
+.tvdb-schedule-day {
+    margin: var(--tvdb-space-5) 0 var(--tvdb-space-2);
+    padding-bottom: var(--tvdb-space-1);
+    border-bottom: 1px solid var(--tvdb-ink-line);
+    font-family: var(--tvdb-font-ui);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-schedule-day:first-of-type {
+    margin-top: 0;
+}
+
+/* ---- Landing -------------------------------------------------------------------- */
+
+.tvdb-hero {
+    max-width: 36rem;
+    margin-inline: auto;
+    padding: var(--tvdb-space-6) 0 var(--tvdb-space-4);
+    text-align: center;
+}
+
+.tvdb-feature-title {
+    font-size: var(--tvdb-text-lg);
+}
+
+.tvdb-steps {
+    max-width: 30rem;
+}
+
+/* ---- Search ----------------------------------------------------------------------- */
+
+.tvdb-result {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--tvdb-space-4);
+}
+
+.tvdb-result__body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tvdb-result__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    margin-bottom: var(--tvdb-space-1);
+}
+
+.tvdb-result__title {
+    margin: 0;
+    font-size: var(--tvdb-text-xl);
+}
+
+/* The row is the link, so the title carries no underline of its own. */
+.list-group-item .tvdb-result__title a {
+    text-decoration: none;
+}
+
+.tvdb-result:hover .tvdb-result__title a,
+.tvdb-result__title a:focus-visible {
+    color: var(--tvdb-signal-text);
+}
+
+/* The stretched link covers the row; keep its focus ring on the row. */
+.tvdb-result__title a:focus-visible {
+    outline: none;
+}
+
+.tvdb-result:focus-within {
+    outline: 2px solid var(--tvdb-focus);
+    outline-offset: -2px;
+}
+
+.tvdb-result__year {
+    margin-left: auto;
+    font-family: var(--tvdb-font-mono);
+}
+
+.tvdb-result__overview {
+    margin: 0;
+    font-size: var(--tvdb-text-sm);
+    line-height: var(--tvdb-leading-body);
+    color: var(--tvdb-text-muted);
+}
+
+/* ---- Details pages (series, episode, movie) ------------------------------------------ */
+
+/* Series name above an episode title. */
+.tvdb-episode-series-link {
+    display: inline-block;
+    margin-bottom: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-md);
+    font-weight: 600;
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+
+.tvdb-episode-series-link:hover,
+.tvdb-episode-series-link:focus-visible {
+    color: var(--tvdb-signal-text);
+    text-decoration: underline;
+}
+
+/* OMDb awards line. */
+.tvdb-awards {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--tvdb-space-3);
+    margin-top: var(--tvdb-space-4);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-signal-tint);
+    border: 1px solid var(--tvdb-signal-edge);
+    border-radius: var(--tvdb-radius-md);
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-awards > i {
+    flex: none;
+    font-size: var(--tvdb-text-xl);
+}
+
+.tvdb-awards p {
+    line-height: 1.5;
+}
+
+.tvdb-awards-src {
+    display: inline-block;
+    margin-top: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* Cast: six cards, the rest behind "Show N more". */
+.tvdb-cast-card {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--tvdb-space-3);
+    height: 100%;
+    padding: var(--tvdb-space-3);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+}
+
+.tvdb-cast-card__photo {
+    flex: none;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--tvdb-radius-md);
+    object-fit: cover;
+    background: var(--tvdb-ink-2);
+}
+
+.tvdb-cast-card__photo.is-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--tvdb-text-2xl);
+    color: var(--tvdb-on-ink-faint);
+}
+
+.tvdb-cast-card__body {
+    min-width: 0;
+}
+
+.tvdb-cast-card__name {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#castGrid .cast-item:nth-child(n+7) {
+    display: none;
+}
+
+#castContainer.is-expanded #castGrid .cast-item:nth-child(n+7) {
+    display: block;
+}
+
+#castToggleIcon {
+    transition: transform 0.3s ease;
+}
+
+#castContainer.is-expanded #castToggleIcon {
+    transform: rotate(180deg);
+}
+
+/* One episode in a season's list. */
+.tvdb-episode-row__main {
+    min-width: 0;
+}
+
+.tvdb-episode-row__title {
+    font-weight: 600;
+}
+
+.tvdb-episode-row__title .tvdb-mono {
+    margin-right: var(--tvdb-space-1);
+    font-weight: 400;
+    color: var(--tvdb-text-muted);
+}
+
+/* Date and runtime: never broken across lines. */
+.tvdb-episode-row__facts {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Previous / next episode. */
+.tvdb-epnav-bar {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--tvdb-space-4);
+    border-top: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-epnav {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    padding: var(--tvdb-space-2) var(--tvdb-space-3);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+    color: var(--tvdb-text);
+    text-decoration: none;
+    transition: border-color var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-epnav--next {
+    text-align: right;
+}
+
+.tvdb-epnav:hover,
+.tvdb-epnav:focus-visible {
+    border-color: var(--tvdb-signal);
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-epnav.is-disabled {
+    color: var(--tvdb-text-muted);
+    border-style: dashed;
+    background: transparent;
+    pointer-events: none;
+}
+
+.tvdb-epnav-text {
+    display: flex;
+    flex-direction: column;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.tvdb-epnav-label {
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+}
+
+.tvdb-epnav-slate {
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-epnav-arrow {
+    flex: none;
+    font-size: var(--tvdb-text-lg);
+}
+
+/* ---- Notifications --------------------------------------------------------------------- */
+
+.tvdb-notification-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-2);
+}
+
+/* Each row is a submit button: opening a notification marks it read. */
+.tvdb-notification {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--tvdb-space-3);
+    width: 100%;
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-paper);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-lg);
+    color: var(--tvdb-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--tvdb-ease), background-color var(--tvdb-ease);
+}
+
+.tvdb-notification:hover,
+.tvdb-notification:focus-visible {
+    border-color: var(--tvdb-signal);
+    background: var(--tvdb-paper-dim);
+}
+
+.tvdb-notification.is-unread {
+    border-left: 3px solid var(--tvdb-signal);
+    background: var(--tvdb-paper-dim);
+}
+
+.tvdb-notification-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--tvdb-radius-round);
+    background: var(--tvdb-ink-2);
+    color: var(--tvdb-signal);
+    font-size: var(--tvdb-text-md);
+}
+
+.tvdb-notification-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.tvdb-notification-title {
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.tvdb-notification.is-unread .tvdb-notification-title::after {
+    content: "";
+    display: inline-block;
+    width: 0.45rem;
+    height: 0.45rem;
+    margin-left: var(--tvdb-space-2);
+    border-radius: var(--tvdb-radius-round);
+    background: var(--tvdb-signal-text);
+    vertical-align: middle;
+}
+
+.tvdb-notification-text {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-notification-time {
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-text-muted);
+}
+
+/* ---- Profile ------------------------------------------------------------------------------ */
+
+.profile-avatar {
+    flex: none;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--tvdb-radius-round);
+    object-fit: cover;
+    border: 1px solid var(--tvdb-ink-line);
+    background: var(--tvdb-paper-dim);
+}
+
+.tvdb-watchtime-value {
+    font-family: var(--tvdb-font-display);
+    font-size: clamp(var(--tvdb-text-2xl), 6vw, var(--tvdb-text-3xl));
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: var(--tvdb-leading-tight);
+}
+
+/* "Titles ›": a row that links to the Favorites page. */
+.tvdb-fav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tvdb-space-4);
+    margin-bottom: var(--tvdb-space-3);
+    padding: var(--tvdb-space-2) 0;
+    border-bottom: 1px solid var(--tvdb-ink-line);
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+
+.tvdb-fav-header:hover,
+.tvdb-fav-header:focus-visible {
+    color: var(--tvdb-text);
+}
+
+.tvdb-fav-subtitle {
+    font-size: var(--tvdb-text-lg);
+    font-weight: 600;
+}
+
+.tvdb-fav-header-arrow {
+    flex: none;
+    color: var(--tvdb-text-muted);
+    transition: transform var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-fav-header:hover .tvdb-fav-header-arrow,
+.tvdb-fav-header:focus-visible .tvdb-fav-header-arrow {
+    color: var(--tvdb-signal-text);
+    transform: translateX(3px);
+}
+
+/* ---- Edit profile -------------------------------------------------------------------------- */
+
+/* Input with a status icon inside its right edge. */
+.tvdb-input-affix {
+    position: relative;
+}
+
+.tvdb-input-affix .form-control {
+    padding-right: 2.5rem;
+}
+
+.tvdb-input-affix-icon {
+    position: absolute;
+    top: 50%;
+    right: var(--tvdb-space-3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.tvdb-input-affix .form-control.is-valid + .tvdb-input-affix-icon { color: var(--tvdb-ok-ink); }
+.tvdb-input-affix .form-control.is-invalid + .tvdb-input-affix-icon { color: var(--tvdb-danger); }
+
+/* The live availability line under the field. */
+.tvdb-field-status {
+    display: block;
+    font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-field-status.is-ok { color: var(--tvdb-ok-ink); }
+.tvdb-field-status.is-bad { color: var(--tvdb-danger-ink); }
+.tvdb-field-status.is-checking { color: var(--tvdb-text-muted); }
+
+/* ---- Sign in --------------------------------------------------------------------------------- */
+
+/* Honeypot field: off screen for people, present for bots. */
+.tvdb-honeypot {
+    position: absolute;
+    left: -9999px;
+    top: -9999px;
+}
+
+/* ---- Error ------------------------------------------------------------------------------------ */
+
+.tvdb-error-reference {
+    margin: 0;
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-text-muted);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+/* ---- Motion -------------------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    #castToggleIcon,
+    .tvdb-fav-header-arrow {
+        transition: none;
+    }
+
+    .tvdb-fav-header:hover .tvdb-fav-header-arrow,
+    .tvdb-fav-header:focus-visible .tvdb-fav-header-arrow {
+        transform: none;
+    }
+}

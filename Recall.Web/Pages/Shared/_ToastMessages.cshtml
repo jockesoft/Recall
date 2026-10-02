@@ -15,33 +15,36 @@
     @if (!string.IsNullOrWhiteSpace(success))
     {
         @* A toast offering an undo stays until dismissed (data-toast-persist skips the auto-close below). *@
-        <div class="alert alert-success alert-dismissible fade show" role="alert" data-toast-persist="@(offerUndo ? "true" : null)">
-            @success
+        <div class="alert alert-success fade show" role="alert" data-toast-persist="@(offerUndo ? "true" : null)">
+            <i class="@Icons.Success tvdb-toast-icon" aria-hidden="true"></i>
+            <span class="tvdb-toast-text">@success</span>
             @if (offerUndo)
             {
-                <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undoSeriesId" class="d-inline ms-2">
+                <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undoSeriesId" class="d-inline-flex">
                     <input type="hidden" name="stamp" value="@undoStamp" />
                     <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
-                    <button type="submit" class="btn btn-sm btn-outline-dark">Undo</button>
+                    <button type="submit" class="tvdb-toast-action">Undo</button>
                 </form>
             }
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
         </div>
     }
 
     @if (!string.IsNullOrWhiteSpace(error))
     {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @error
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <div class="alert alert-danger fade show" role="alert">
+            <i class="@Icons.Error tvdb-toast-icon" aria-hidden="true"></i>
+            <span class="tvdb-toast-text">@error</span>
+            <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
         </div>
     }
 
     @if (!string.IsNullOrWhiteSpace(info))
     {
-        <div class="alert alert-info alert-dismissible fade show" role="alert">
-            @info
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <div class="alert alert-info fade show" role="alert">
+            <i class="@Icons.Info tvdb-toast-icon" aria-hidden="true"></i>
+            <span class="tvdb-toast-text">@info</span>
+            <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
         </div>
     }
 </div>

@@ -1,0 +1,1524 @@
+/* =========================================================================
+   Recall theme — 3 of 4: components
+   First the Bootstrap components, themed through their own --bs-* variables;
+   then Recall's shared components (the partials and repeated patterns).
+   ========================================================================= */
+
+/* =========================================================================
+   Bootstrap components
+   ========================================================================= */
+
+/* ---- Buttons ------------------------------------------------------------- */
+
+.btn {
+    --bs-btn-font-family: var(--tvdb-font-ui);
+    --bs-btn-font-size: var(--tvdb-text-sm);
+    --bs-btn-font-weight: 500;
+    --bs-btn-border-radius: var(--tvdb-radius-md);
+    --bs-btn-disabled-opacity: 0.55;
+}
+
+.btn-sm {
+    --bs-btn-font-size: var(--tvdb-text-xs);
+    --bs-btn-border-radius: var(--tvdb-radius-md);
+}
+
+.btn-lg {
+    --bs-btn-font-size: var(--tvdb-text-md);
+    --bs-btn-border-radius: var(--tvdb-radius-md);
+}
+
+.btn:focus-visible {
+    outline: 2px solid var(--tvdb-focus);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.btn-primary {
+    --bs-btn-color: var(--tvdb-on-signal);
+    --bs-btn-bg: var(--tvdb-signal);
+    --bs-btn-border-color: var(--tvdb-signal);
+    --bs-btn-hover-color: var(--tvdb-on-signal);
+    --bs-btn-hover-bg: var(--tvdb-signal-hover);
+    --bs-btn-hover-border-color: var(--tvdb-signal-hover);
+    --bs-btn-active-color: var(--tvdb-on-signal);
+    --bs-btn-active-bg: var(--tvdb-signal-hover);
+    --bs-btn-active-border-color: var(--tvdb-signal-hover);
+    --bs-btn-disabled-color: var(--tvdb-on-signal);
+    --bs-btn-disabled-bg: var(--tvdb-signal);
+    --bs-btn-disabled-border-color: var(--tvdb-signal);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--tvdb-signal-ink);
+    --bs-btn-border-color: var(--tvdb-signal);
+    --bs-btn-hover-color: var(--tvdb-on-signal);
+    --bs-btn-hover-bg: var(--tvdb-signal);
+    --bs-btn-hover-border-color: var(--tvdb-signal);
+    --bs-btn-active-color: var(--tvdb-on-signal);
+    --bs-btn-active-bg: var(--tvdb-signal);
+    --bs-btn-active-border-color: var(--tvdb-signal);
+    --bs-btn-disabled-color: var(--tvdb-signal-ink);
+    --bs-btn-disabled-border-color: var(--tvdb-signal);
+}
+
+.btn-outline-danger {
+    --bs-btn-color: var(--tvdb-danger);
+    --bs-btn-border-color: var(--tvdb-danger);
+    --bs-btn-hover-color: var(--tvdb-on-danger);
+    --bs-btn-hover-bg: var(--tvdb-danger);
+    --bs-btn-hover-border-color: var(--tvdb-danger);
+    --bs-btn-active-color: var(--tvdb-on-danger);
+    --bs-btn-active-bg: var(--tvdb-danger);
+    --bs-btn-active-border-color: var(--tvdb-danger);
+    --bs-btn-disabled-color: var(--tvdb-danger);
+    --bs-btn-disabled-border-color: var(--tvdb-danger);
+}
+
+.btn-dark {
+    --bs-btn-color: var(--tvdb-on-ink);
+    --bs-btn-bg: var(--tvdb-ink);
+    --bs-btn-border-color: var(--tvdb-ink);
+    --bs-btn-hover-color: var(--tvdb-on-ink);
+    --bs-btn-hover-bg: var(--tvdb-ink-3);
+    --bs-btn-hover-border-color: var(--tvdb-ink-3);
+    --bs-btn-active-color: var(--tvdb-on-ink);
+    --bs-btn-active-bg: var(--tvdb-ink-3);
+    --bs-btn-active-border-color: var(--tvdb-ink-3);
+}
+
+.btn-outline-dark,
+.btn-outline-secondary {
+    --bs-btn-color: var(--tvdb-text);
+    --bs-btn-border-color: var(--tvdb-ink-line-strong);
+    --bs-btn-hover-color: var(--tvdb-on-ink);
+    --bs-btn-hover-bg: var(--tvdb-ink);
+    --bs-btn-hover-border-color: var(--tvdb-ink);
+    --bs-btn-active-color: var(--tvdb-on-ink);
+    --bs-btn-active-bg: var(--tvdb-ink);
+    --bs-btn-active-border-color: var(--tvdb-ink);
+    --bs-btn-disabled-color: var(--tvdb-text-muted);
+    --bs-btn-disabled-border-color: var(--tvdb-ink-line);
+}
+
+.btn-outline-secondary {
+    --bs-btn-color: var(--tvdb-text-muted);
+}
+
+.btn-link {
+    --bs-btn-font-weight: 500;
+}
+
+/* "Mark as watched": soft green until done, solid green once watched (and
+   brick on hover, to say "click to undo"). */
+.btn-watch {
+    --bs-btn-color: var(--tvdb-ok-ink);
+    --bs-btn-bg: var(--tvdb-ok-tint);
+    --bs-btn-border-color: var(--tvdb-ok-edge);
+    --bs-btn-hover-color: var(--tvdb-on-ok);
+    --bs-btn-hover-bg: var(--tvdb-ok);
+    --bs-btn-hover-border-color: var(--tvdb-ok);
+    --bs-btn-active-color: var(--tvdb-on-ok);
+    --bs-btn-active-bg: var(--tvdb-ok);
+    --bs-btn-active-border-color: var(--tvdb-ok);
+    --bs-btn-disabled-color: var(--tvdb-ok-ink);
+    --bs-btn-disabled-bg: var(--tvdb-ok-tint);
+    --bs-btn-disabled-border-color: var(--tvdb-ok-edge);
+}
+
+.btn-watch--on {
+    --bs-btn-color: var(--tvdb-on-ok);
+    --bs-btn-bg: var(--tvdb-ok);
+    --bs-btn-border-color: var(--tvdb-ok);
+    --bs-btn-hover-color: var(--tvdb-on-danger);
+    --bs-btn-hover-bg: var(--tvdb-danger);
+    --bs-btn-hover-border-color: var(--tvdb-danger);
+    --bs-btn-active-color: var(--tvdb-on-danger);
+    --bs-btn-active-bg: var(--tvdb-danger);
+    --bs-btn-active-border-color: var(--tvdb-danger);
+}
+
+/* ---- Alerts ---------------------------------------------------------------- */
+
+.alert {
+    --bs-alert-border-radius: var(--tvdb-radius-md);
+}
+
+.alert-warning {
+    --bs-alert-color: var(--tvdb-signal-ink);
+    --bs-alert-bg: var(--tvdb-signal-tint);
+    --bs-alert-border-color: var(--tvdb-signal-edge);
+    --bs-alert-link-color: var(--tvdb-signal-ink);
+}
+
+.alert-info {
+    --bs-alert-color: var(--tvdb-info-ink);
+    --bs-alert-bg: var(--tvdb-info-tint);
+    --bs-alert-border-color: var(--tvdb-info-edge);
+    --bs-alert-link-color: var(--tvdb-info-ink);
+}
+
+.alert-success {
+    --bs-alert-color: var(--tvdb-ok-ink);
+    --bs-alert-bg: var(--tvdb-ok-tint);
+    --bs-alert-border-color: var(--tvdb-ok-edge);
+    --bs-alert-link-color: var(--tvdb-ok-ink);
+}
+
+.alert-danger {
+    --bs-alert-color: var(--tvdb-danger-ink);
+    --bs-alert-bg: var(--tvdb-danger-tint);
+    --bs-alert-border-color: var(--tvdb-danger-edge);
+    --bs-alert-link-color: var(--tvdb-danger-ink);
+}
+
+/* ---- List group (episode and search rows) ---------------------------------- */
+
+.list-group {
+    --bs-list-group-color: var(--tvdb-text);
+    --bs-list-group-bg: transparent;
+    --bs-list-group-border-color: var(--tvdb-ink-line);
+    --bs-list-group-border-radius: var(--tvdb-radius-md);
+    --bs-list-group-item-padding-x: var(--tvdb-space-4);
+    --bs-list-group-item-padding-y: var(--tvdb-space-3);
+}
+
+.list-group-item:hover {
+    background: var(--tvdb-wash);
+}
+
+.list-group-item.is-watched {
+    background: var(--tvdb-ok-wash);
+}
+
+/* ---- Forms ------------------------------------------------------------------- */
+
+.form-label {
+    margin-bottom: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-sm);
+    font-weight: 500;
+    color: var(--bs-body-color);
+}
+
+.form-control {
+    background-color: var(--tvdb-paper-dim);
+    border-color: var(--tvdb-ink-line-strong);
+    border-radius: var(--tvdb-radius-md);
+}
+
+.form-control:focus {
+    color: var(--bs-body-color);
+    background-color: var(--tvdb-paper-dim);
+    border-color: var(--tvdb-focus);
+    box-shadow: 0 0 0 0.2rem var(--tvdb-focus-halo);
+}
+
+.form-control::placeholder {
+    color: var(--tvdb-text-muted);
+    opacity: 1;
+}
+
+.form-control::file-selector-button {
+    font-weight: 500;
+    border-color: var(--tvdb-ink-line-strong);
+}
+
+.form-text {
+    font-size: var(--tvdb-text-sm);
+}
+
+/* Validation: we draw our own status icon, so drop Bootstrap's background
+   image and keep the border colour. */
+.form-control.is-valid,
+.form-control.is-invalid {
+    background-image: none;
+    padding-right: 2.5rem;
+}
+
+.form-control.is-valid,
+.form-control.is-valid:focus {
+    border-color: var(--tvdb-ok);
+    box-shadow: none;
+}
+
+.form-control.is-invalid,
+.form-control.is-invalid:focus {
+    border-color: var(--tvdb-danger);
+    box-shadow: none;
+}
+
+.form-control.is-valid:focus { box-shadow: 0 0 0 0.2rem var(--tvdb-ok-tint); }
+.form-control.is-invalid:focus { box-shadow: 0 0 0 0.2rem var(--tvdb-danger-tint); }
+
+.field-validation-error {
+    display: block;
+    margin-top: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-sm);
+}
+
+/* ---- Table --------------------------------------------------------------------- */
+
+.table {
+    --bs-table-color: var(--tvdb-text);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--tvdb-ink-line);
+    --bs-table-striped-color: var(--tvdb-text);
+    --bs-table-striped-bg: var(--tvdb-wash);
+    --bs-table-hover-color: var(--tvdb-text);
+    --bs-table-hover-bg: var(--tvdb-wash);
+
+    font-size: var(--tvdb-text-sm);
+}
+
+.table > thead th {
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+    border-bottom-color: var(--tvdb-ink-line-strong);
+}
+
+/* ---- Modal --------------------------------------------------------------------- */
+
+.modal {
+    --bs-modal-color: var(--tvdb-text);
+    --bs-modal-bg: var(--tvdb-paper);
+    --bs-modal-border-color: var(--tvdb-ink-line);
+    --bs-modal-border-radius: var(--tvdb-radius-lg);
+    --bs-modal-inner-border-radius: var(--tvdb-radius-lg);
+    --bs-modal-header-border-color: var(--tvdb-ink-line);
+    --bs-modal-footer-border-color: var(--tvdb-ink-line);
+}
+
+.modal-title {
+    font-size: var(--tvdb-text-xl);
+}
+
+/* ---- Progress -------------------------------------------------------------------- */
+
+.progress {
+    --bs-progress-bg: var(--tvdb-paper-dim);
+    --bs-progress-bar-bg: var(--tvdb-signal);
+    --bs-progress-border-radius: var(--tvdb-radius-pill);
+}
+
+/* =========================================================================
+   Recall components
+   ========================================================================= */
+
+/* ---- Close button: a Phosphor "x" (toasts and modals) --------------------- */
+
+.tvdb-close {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--tvdb-radius-round);
+    background: transparent;
+    color: inherit;
+    font-size: var(--tvdb-text-lg);
+    opacity: 0.7;
+    cursor: pointer;
+    transition: opacity var(--tvdb-ease), background-color var(--tvdb-ease);
+}
+
+.tvdb-close:hover,
+.tvdb-close:focus-visible {
+    opacity: 1;
+    background: var(--bs-secondary-bg);
+}
+
+/* ---- Empty state (the _EmptyState partial) --------------------------------- */
+
+.tvdb-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    max-width: 30rem;
+    margin-inline: auto;
+    padding: var(--tvdb-space-6) var(--tvdb-space-4);
+    text-align: center;
+}
+
+.tvdb-empty-state__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    margin-bottom: var(--tvdb-space-2);
+    border-radius: var(--tvdb-radius-round);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    color: var(--tvdb-text-muted);
+    font-size: var(--tvdb-text-2xl);
+}
+
+.tvdb-empty-state__icon .ph,
+.tvdb-empty-state__icon .ph-fill {
+    font-size: 1em;
+    vertical-align: 0;
+}
+
+.tvdb-empty-state__title {
+    margin: 0;
+    font-size: var(--tvdb-text-xl);
+}
+
+h1.tvdb-empty-state__title {
+    font-size: var(--tvdb-text-2xl);
+}
+
+.tvdb-empty-state__text {
+    margin: 0;
+    line-height: var(--tvdb-leading-body);
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-empty-state__action {
+    margin-top: var(--tvdb-space-3);
+}
+
+/* A compact one inside a section that already has a heading. */
+.tvdb-empty-state--inline {
+    padding-block: var(--tvdb-space-5);
+}
+
+/* ---- Media frame and status slate (posters and stills on detail pages) ----- */
+
+.tvdb-media {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    margin-inline: auto;
+    aspect-ratio: 2 / 3;
+    min-height: 200px;
+    overflow: hidden;
+    background: var(--tvdb-media-bg);
+    border-radius: var(--tvdb-radius-lg);
+}
+
+.tvdb-media.is-wide {
+    aspect-ratio: 16 / 9;
+}
+
+.tvdb-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    object-fit: cover;
+}
+
+/* Shared "nothing to show" placeholder for every artwork frame. */
+.tvdb-media.is-empty::after,
+.tvdb-series-poster.is-empty::after,
+.tvdb-catchup-media.is-empty::after,
+.tvdb-fav-episode-art.is-empty::after {
+    content: "No image";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--tvdb-space-2);
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-on-ink-faint);
+    text-align: center;
+}
+
+@media (max-width: 575.98px) {
+    /* On a phone the aspect ratio alone decides the height. */
+    .tvdb-media { min-height: 0; }
+}
+
+.tvdb-slate,
+.tvdb-slate--inline {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    border: 1px solid var(--tvdb-signal-halo);
+    border-radius: var(--tvdb-radius-sm);
+    font-family: var(--tvdb-font-mono);
+    font-size: var(--tvdb-text-xs);
+    letter-spacing: 0.04em;
+    color: var(--tvdb-on-ink);
+}
+
+.tvdb-slate {
+    position: absolute;
+    left: var(--tvdb-space-3);
+    bottom: var(--tvdb-space-3);
+    padding: var(--tvdb-space-1) var(--tvdb-space-2);
+    background: var(--tvdb-scrim-strong);
+}
+
+.tvdb-slate--inline {
+    padding: 0.1rem var(--tvdb-space-2);
+    background: var(--tvdb-ink-2);
+}
+
+.tvdb-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--tvdb-radius-round);
+    background: var(--tvdb-signal);
+    box-shadow: 0 0 6px 1px var(--tvdb-signal-edge);
+    animation: tvdb-pulse 2.2s ease-in-out infinite;
+}
+
+.tvdb-dot.is-ok {
+    background: var(--tvdb-ok);
+    box-shadow: 0 0 6px 1px var(--tvdb-ok-edge);
+}
+
+@keyframes tvdb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+/* Small thumbnail in a list row. */
+.tvdb-thumb {
+    flex: none;
+    width: 56px;
+    height: 84px;
+    border-radius: var(--tvdb-radius-sm);
+    object-fit: cover;
+    background: var(--tvdb-ink-2);
+}
+
+.tvdb-thumb.is-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-on-ink-faint);
+    text-align: center;
+}
+
+/* External-source link with a brand mark (IMDb). */
+.tvdb-extlink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    padding: var(--tvdb-space-1) var(--tvdb-space-3);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-ink-2);
+    border: 1px solid var(--tvdb-line);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 500;
+    color: var(--tvdb-on-ink);
+    text-decoration: none;
+    transition: border-color var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-extlink:hover,
+.tvdb-extlink:focus-visible {
+    border-color: var(--tvdb-signal-edge);
+    color: var(--tvdb-signal);
+}
+
+.tvdb-extlink img {
+    flex: none;
+    display: block;
+    height: 15px;
+    width: auto;
+}
+
+/* ---- Badges ----------------------------------------------------------------- */
+
+.tvdb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-1);
+    padding: 0.2rem var(--tvdb-space-2);
+    border: 1px solid transparent;
+    border-radius: var(--tvdb-radius-pill);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: var(--tvdb-leading-snug);
+    text-transform: uppercase;
+}
+
+.tvdb-badge--amber {
+    color: var(--tvdb-signal-ink);
+    background: var(--tvdb-signal-tint-strong);
+    border-color: var(--tvdb-signal-edge);
+}
+
+.tvdb-badge--ok {
+    color: var(--tvdb-ok-ink);
+    background: var(--tvdb-ok-tint);
+    border-color: var(--tvdb-ok-edge);
+}
+
+.tvdb-badge--info {
+    color: var(--tvdb-info-ink);
+    background: var(--tvdb-info-tint);
+    border-color: var(--tvdb-info-edge);
+}
+
+.tvdb-badge--neutral {
+    color: var(--tvdb-text-muted);
+    background: var(--tvdb-paper-dim);
+    border-color: var(--tvdb-ink-line);
+}
+
+.tvdb-genre-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2);
+}
+
+/* Role pill on the profile page: neutral, amber for an admin. */
+.tvdb-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    padding: var(--tvdb-space-1) var(--tvdb-space-3);
+    border-radius: var(--tvdb-radius-pill);
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    color: var(--tvdb-text);
+}
+
+.tvdb-role-badge--admin {
+    background: var(--tvdb-signal-tint);
+    border-color: var(--tvdb-signal-edge);
+    color: var(--tvdb-signal-ink);
+}
+
+/* ---- Metadata list (dl.row) -------------------------------------------------- */
+
+dl.row dt {
+    padding-block: var(--tvdb-space-2);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+dl.row dd {
+    padding-block: var(--tvdb-space-2);
+    font-size: var(--tvdb-text-sm);
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+/* A link that is part of a value: ink-coloured with a quiet underline. */
+dl.row dd a,
+.tvdb-metalink,
+.list-group-item a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--tvdb-ink-line-strong);
+    text-underline-offset: 0.15em;
+    transition: color var(--tvdb-ease), text-decoration-color var(--tvdb-ease);
+}
+
+dl.row dd a:hover,
+dl.row dd a:focus-visible,
+.tvdb-metalink:hover,
+.tvdb-metalink:focus-visible,
+.list-group-item a:hover,
+.list-group-item a:focus-visible {
+    color: var(--tvdb-signal-text);
+    text-decoration-color: currentColor;
+}
+
+/* Phosphor "arrow-up-right" after a link that leaves the site. */
+dl.row dd a[target="_blank"]::after,
+.tvdb-metalink[target="_blank"]::after {
+    content: "\e092";
+    display: inline-block;
+    margin-left: 0.25em;
+    font-family: "Phosphor";
+    font-size: 0.9em;
+    color: var(--tvdb-text-muted);
+    text-decoration: none;
+}
+
+/* Small "Edit" chip next to a value. */
+.tvdb-inline-edit {
+    padding: 0.1rem var(--tvdb-space-2);
+    border: 1px solid var(--tvdb-ink-line-strong);
+    border-radius: var(--tvdb-radius-pill);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+dl.row dd a.tvdb-inline-edit {
+    color: var(--tvdb-signal-text);
+    text-decoration: none;
+}
+
+.tvdb-inline-edit:hover,
+.tvdb-inline-edit:focus-visible {
+    border-color: var(--tvdb-signal-text);
+}
+
+/* Middot-separated inline facts: aired · runtime. */
+.tvdb-meta-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.tvdb-meta-inline > * + *::before {
+    content: "·";
+    margin: 0 var(--tvdb-space-2);
+    opacity: 0.6;
+}
+
+/* ---- Ratings ------------------------------------------------------------------ */
+
+.tvdb-rating {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-rating-star {
+    align-self: center;
+    color: var(--tvdb-signal);
+}
+
+.tvdb-rating-score {
+    font-family: var(--tvdb-font-mono);
+}
+
+.tvdb-rating-score strong {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--tvdb-text);
+}
+
+.tvdb-rating-votes {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+}
+
+/* Everything rating-related on an episode, in one tile. */
+.tvdb-rating-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--tvdb-space-2) var(--tvdb-space-5);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+}
+
+/* "Your rating": ten pills, each a submit button (the _RatingWidget partial). */
+.tvdb-rating-picker {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-rating-picker-label {
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-rating-pill {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: var(--tvdb-radius-round);
+    border: 1px solid var(--tvdb-ink-line-strong);
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-text-muted);
+    font-family: var(--tvdb-font-mono);
+    font-size: var(--tvdb-text-xs);
+    cursor: pointer;
+    transition: color var(--tvdb-ease), border-color var(--tvdb-ease), background var(--tvdb-ease);
+}
+
+.tvdb-rating-pill:hover,
+.tvdb-rating-pill:focus-visible {
+    border-color: var(--tvdb-signal);
+    color: var(--tvdb-signal-ink);
+}
+
+/* Every pill up to the current rating is tinted; the rating itself is solid. */
+.tvdb-rating-pill.is-filled {
+    background: var(--tvdb-signal-tint-strong);
+    border-color: var(--tvdb-signal-edge);
+    color: var(--tvdb-signal-ink);
+}
+
+.tvdb-rating-pill.is-current {
+    background: var(--tvdb-signal);
+    border-color: var(--tvdb-signal);
+    color: var(--tvdb-on-signal);
+    font-weight: 500;
+}
+
+.tvdb-rating-clear {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-text-muted);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.tvdb-rating-clear:hover,
+.tvdb-rating-clear:focus-visible {
+    color: var(--tvdb-danger);
+}
+
+/* ---- Like (the _LikeToggle partial) ---------------------------------------------- */
+
+.tvdb-like-form {
+    display: inline-flex;
+}
+
+.tvdb-heart {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: var(--tvdb-radius-round);
+    border: 1px solid var(--tvdb-ink-line-strong);
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-text-muted);
+    font-size: var(--tvdb-text-lg);
+    cursor: pointer;
+    transition: color var(--tvdb-ease), border-color var(--tvdb-ease), background var(--tvdb-ease);
+}
+
+.tvdb-heart .ph,
+.tvdb-heart .ph-fill {
+    font-size: 1em;
+    vertical-align: 0;
+}
+
+.tvdb-heart:hover,
+.tvdb-heart:focus-visible {
+    color: var(--tvdb-like);
+    border-color: var(--tvdb-like);
+}
+
+.tvdb-heart--on {
+    color: var(--tvdb-like);
+    border-color: var(--tvdb-like-edge);
+    background: var(--tvdb-like-tint);
+}
+
+/* ---- Watched controls ------------------------------------------------------------- */
+
+/* Round toggle in dense episode rows: empty ring until watched. */
+.tvdb-watch-dot {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: var(--tvdb-radius-round);
+    border: 1px solid var(--tvdb-text-muted);
+    background: transparent;
+    color: transparent;
+    font-size: var(--tvdb-text-sm);
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-watch-dot:hover,
+.tvdb-watch-dot:focus-visible {
+    border-color: var(--tvdb-ok);
+    color: var(--tvdb-ok-ink);
+}
+
+/* Not aired yet: inert. */
+.tvdb-watch-dot:disabled {
+    border-style: dashed;
+    border-color: var(--tvdb-ink-line-strong);
+    color: transparent;
+    cursor: not-allowed;
+}
+
+.tvdb-watch-dot--on {
+    background: var(--tvdb-ok);
+    border-color: var(--tvdb-ok);
+    color: var(--tvdb-on-ok);
+}
+
+.tvdb-watch-dot--on:hover,
+.tvdb-watch-dot--on:focus-visible {
+    background: var(--tvdb-danger);
+    border-color: var(--tvdb-danger);
+    color: var(--tvdb-on-danger);
+}
+
+/* Round "mark watched" button that sits on top of a still. */
+.tvdb-watch-badge {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--tvdb-radius-round);
+    border: 1px solid var(--tvdb-on-ink-faint);
+    background: var(--tvdb-scrim);
+    backdrop-filter: blur(3px);
+    color: var(--tvdb-on-ink);
+    font-size: var(--tvdb-text-md);
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-watch-badge:hover,
+.tvdb-watch-badge:focus-visible {
+    background: var(--tvdb-ok);
+    border-color: var(--tvdb-ok);
+    color: var(--tvdb-on-ok);
+}
+
+.tvdb-watch-badge:focus-visible {
+    outline-color: var(--tvdb-on-ink);
+    outline-offset: -4px;
+}
+
+/* ---- Filter bar and season chips --------------------------------------------------- */
+
+.tvdb-filter-bar {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-filter-btn--series i { color: var(--tvdb-signal-text); }
+.tvdb-filter-btn--movie i { color: var(--tvdb-info); }
+
+/* Check on a season chip whose every episode is watched. */
+.tvdb-season-check {
+    margin-right: var(--tvdb-space-1);
+    color: var(--tvdb-ok-ink);
+}
+
+.btn-dark .tvdb-season-check {
+    color: var(--tvdb-ok);
+}
+
+/* ---- Poster card and grid (the _SeriesCard partial) --------------------------------- */
+
+.tvdb-series-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+@media (min-width: 576px) { .tvdb-series-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 768px) { .tvdb-series-grid { grid-template-columns: repeat(5, 1fr); } }
+@media (min-width: 992px) { .tvdb-series-grid { grid-template-columns: repeat(6, 1fr); } }
+
+/* In the narrow panel there is room for four. */
+.tvdb-shell--narrow .tvdb-series-grid {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+@media (min-width: 576px) {
+    .tvdb-shell--narrow .tvdb-series-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+.tvdb-series-card-wrap {
+    position: relative;
+    display: block;
+}
+
+.tvdb-series-card {
+    display: flex;
+    flex-direction: column;
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+
+.tvdb-series-card:hover,
+.tvdb-series-card:focus-visible {
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+
+.tvdb-series-poster {
+    position: relative;
+    display: block;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    background: var(--tvdb-media-bg);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+    transition: transform var(--tvdb-ease), box-shadow var(--tvdb-ease), border-color var(--tvdb-ease);
+}
+
+.tvdb-series-card:hover .tvdb-series-poster,
+.tvdb-series-card:focus-visible .tvdb-series-poster {
+    transform: translateY(-2px);
+    border-color: var(--tvdb-signal-edge);
+    box-shadow: var(--tvdb-shadow-md);
+}
+
+.tvdb-series-poster img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Content type, top left, opposite the heart. */
+.tvdb-series-badge {
+    position: absolute;
+    top: var(--tvdb-space-2);
+    left: var(--tvdb-space-2);
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--tvdb-radius-round);
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-on-ink);
+    background: var(--tvdb-scrim);
+    border: 1px solid var(--tvdb-on-ink-faint);
+}
+
+.tvdb-series-badge .ph {
+    font-size: 1em;
+    vertical-align: 0;
+}
+
+/* Watch progress along the poster's bottom edge: amber in progress, green
+   when every aired episode is watched. */
+.tvdb-series-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    overflow: hidden;
+    background: var(--tvdb-scrim);
+}
+
+.tvdb-series-progress-fill {
+    display: block;
+    height: 100%;
+    min-width: 3px;
+    background: var(--tvdb-signal);
+}
+
+.tvdb-series-progress.is-complete .tvdb-series-progress-fill {
+    background: var(--tvdb-ok);
+}
+
+.tvdb-series-title {
+    display: -webkit-box;
+    margin-top: var(--tvdb-space-2);
+    overflow: hidden;
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.tvdb-series-card:hover .tvdb-series-title,
+.tvdb-series-card:focus-visible .tvdb-series-title {
+    color: var(--tvdb-signal-text);
+}
+
+.tvdb-series-year {
+    margin-top: 0.15rem;
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-text-muted);
+}
+
+/* The heart overlaid on a poster's top-right corner. */
+.tvdb-series-card-like {
+    position: absolute;
+    top: var(--tvdb-space-2);
+    right: var(--tvdb-space-2);
+    z-index: 2;
+}
+
+.tvdb-series-card-like .tvdb-heart {
+    width: 32px;
+    height: 32px;
+    border-color: transparent;
+    background: var(--tvdb-scrim);
+    color: var(--tvdb-on-ink);
+    font-size: var(--tvdb-text-md);
+    backdrop-filter: blur(2px);
+}
+
+.tvdb-series-card-like .tvdb-heart:hover,
+.tvdb-series-card-like .tvdb-heart:focus-visible,
+.tvdb-series-card-like .tvdb-heart--on {
+    color: var(--tvdb-like);
+    border-color: transparent;
+    background: var(--tvdb-scrim-strong);
+}
+
+.tvdb-series-card-like .tvdb-heart:focus-visible {
+    outline-color: var(--tvdb-on-ink);
+    outline-offset: -3px;
+}
+
+/* ---- Catch-up card (the _CatchUpCard partial) ----------------------------------------- */
+
+.tvdb-catchup-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+@media (min-width: 576px) { .tvdb-catchup-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 992px) { .tvdb-catchup-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.tvdb-catchup-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--tvdb-media-bg);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-lg);
+    transition: box-shadow var(--tvdb-ease), border-color var(--tvdb-ease);
+}
+
+.tvdb-catchup-card:hover .tvdb-catchup-media,
+.tvdb-catchup-card:focus-within .tvdb-catchup-media {
+    border-color: var(--tvdb-signal-edge);
+    box-shadow: var(--tvdb-shadow-md);
+}
+
+.tvdb-catchup-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.tvdb-catchup-card:hover .tvdb-catchup-media img {
+    transform: scale(1.03);
+}
+
+/* The whole still opens the episode; the caption and button sit above it. */
+.tvdb-catchup-hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+.tvdb-catchup-hit:focus-visible {
+    outline-color: var(--tvdb-on-ink);
+    outline-offset: -4px;
+}
+
+.tvdb-catchup-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    /* The top padding is the fade; the right padding clears the round button. */
+    padding: var(--tvdb-space-7) 3.5rem var(--tvdb-space-3) var(--tvdb-space-3);
+    background: linear-gradient(to top, var(--tvdb-scrim-strong), var(--tvdb-scrim) 45%, transparent);
+    pointer-events: none;
+}
+
+.tvdb-catchup-show {
+    align-self: flex-start;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: var(--tvdb-text-md);
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-on-ink);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: auto;
+}
+
+.tvdb-catchup-show:hover,
+.tvdb-catchup-show:focus-visible {
+    color: var(--tvdb-signal);
+}
+
+.tvdb-catchup-slate {
+    font-family: var(--tvdb-font-mono);
+    font-size: var(--tvdb-text-xs);
+    letter-spacing: 0.04em;
+    color: var(--tvdb-on-ink);
+}
+
+.tvdb-catchup-ep {
+    overflow: hidden;
+    font-size: var(--tvdb-text-sm);
+    line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-on-ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tvdb-catchup-check {
+    position: absolute;
+    right: var(--tvdb-space-3);
+    bottom: var(--tvdb-space-3);
+    z-index: 3;
+    margin: 0;
+}
+
+/* ---- Upcoming card (the _UpcomingEpisodeCard partial) ---------------------------------- */
+
+.tvdb-upcoming-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-2);
+}
+
+/* Left edge: green when the viewer is caught up on the series, amber otherwise. */
+.tvdb-upcoming-card {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--tvdb-space-3);
+    padding: var(--tvdb-space-2);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-left: 3px solid var(--tvdb-signal);
+    border-radius: var(--tvdb-radius-lg);
+    transition: box-shadow var(--tvdb-ease);
+}
+
+.tvdb-upcoming-card.is-current {
+    border-left-color: var(--tvdb-ok);
+}
+
+.tvdb-upcoming-card:hover,
+.tvdb-upcoming-card:focus-within {
+    box-shadow: var(--tvdb-shadow-sm);
+}
+
+.tvdb-upcoming-hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+}
+
+.tvdb-upcoming-card .tvdb-thumb {
+    position: relative;
+    z-index: 0;
+}
+
+/* Clicks fall through the text to the card link; the series name opts back in. */
+.tvdb-upcoming-body {
+    flex: 1;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+    pointer-events: none;
+}
+
+.tvdb-upcoming-series {
+    position: relative;
+    z-index: 2;
+    align-self: flex-start;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    color: var(--tvdb-text);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: auto;
+}
+
+.tvdb-upcoming-series:hover,
+.tvdb-upcoming-series:focus-visible {
+    color: var(--tvdb-signal-text);
+    text-decoration: underline;
+}
+
+.tvdb-upcoming-epname {
+    font-size: var(--tvdb-text-sm);
+    line-height: var(--tvdb-leading-snug);
+    overflow-wrap: anywhere;
+}
+
+.tvdb-upcoming-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-1);
+    margin-top: auto;
+    padding-top: var(--tvdb-space-1);
+}
+
+/* Right rail: the date on top, the countdown at the bottom. */
+.tvdb-upcoming-aside {
+    flex: none;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: var(--tvdb-space-2);
+    text-align: right;
+    pointer-events: none;
+}
+
+.tvdb-upcoming-date {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+    white-space: nowrap;
+}
+
+.tvdb-upcoming-countdown {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1;
+}
+
+.tvdb-upcoming-countdown-num {
+    font-family: var(--tvdb-font-mono);
+    font-size: var(--tvdb-text-xl);
+    font-weight: 500;
+    color: var(--tvdb-text);
+}
+
+.tvdb-upcoming-countdown-label {
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+/* ---- Liked-episode row (the _FavoriteEpisodeRow partial) -------------------------------- */
+
+.tvdb-fav-episode-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-fav-episode {
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-4);
+    padding: var(--tvdb-space-2) var(--tvdb-space-3);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-lg);
+    color: var(--tvdb-text);
+    text-decoration: none;
+    transition: border-color var(--tvdb-ease), box-shadow var(--tvdb-ease);
+}
+
+.tvdb-fav-episode:hover,
+.tvdb-fav-episode:focus-visible {
+    color: var(--tvdb-text);
+    border-color: var(--tvdb-signal-edge);
+    box-shadow: var(--tvdb-shadow-sm);
+}
+
+.tvdb-fav-episode-art {
+    position: relative;
+    flex: none;
+    width: 104px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--tvdb-media-bg);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+}
+
+.tvdb-fav-episode-art img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tvdb-fav-episode-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.tvdb-fav-episode-show,
+.tvdb-fav-episode-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tvdb-fav-episode-show {
+    font-weight: 600;
+}
+
+.tvdb-fav-episode-meta {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+}
+
+@media (max-width: 400px) {
+    .tvdb-fav-episode-art { width: 84px; }
+}
+
+/* ---- Toasts (the _ToastMessages partial) --------------------------------------------------
+   A fixed stack at the bottom right, dark so it reads over any page. */
+
+.tvdb-toast-stack {
+    position: fixed;
+    z-index: 1080;
+    right: var(--tvdb-space-4);
+    bottom: var(--tvdb-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-2);
+    width: min(380px, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.tvdb-toast-stack .alert {
+    --bs-alert-color: var(--tvdb-on-ink);
+    --bs-alert-bg: var(--tvdb-ink-2);
+    --bs-alert-border-color: var(--tvdb-line);
+    --bs-alert-padding-x: var(--tvdb-space-3);
+    --bs-alert-padding-y: var(--tvdb-space-3);
+    --bs-alert-margin-bottom: 0;
+    --bs-secondary-bg: var(--tvdb-ink-3);
+    --tvdb-focus: var(--tvdb-signal);
+
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    border-left-width: 4px;
+    font-size: var(--tvdb-text-sm);
+    box-shadow: var(--tvdb-shadow-lg);
+    pointer-events: auto;
+    animation: tvdb-toast-in 0.25s ease-out;
+}
+
+.tvdb-toast-icon {
+    flex: none;
+    font-size: var(--tvdb-text-lg);
+}
+
+.tvdb-toast-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tvdb-toast-stack .alert-success { border-left-color: var(--tvdb-ok); }
+.tvdb-toast-stack .alert-success .tvdb-toast-icon { color: var(--tvdb-ok); }
+.tvdb-toast-stack .alert-danger { border-left-color: var(--tvdb-danger); }
+.tvdb-toast-stack .alert-danger .tvdb-toast-icon { color: var(--tvdb-danger-on-ink); }
+.tvdb-toast-stack .alert-info { border-left-color: var(--tvdb-info); }
+.tvdb-toast-stack .alert-info .tvdb-toast-icon { color: var(--tvdb-info-on-ink); }
+
+/* "Undo" and friends: amber, so it stands out on the dark toast. */
+.tvdb-toast-action {
+    appearance: none;
+    flex: none;
+    padding: var(--tvdb-space-1) var(--tvdb-space-3);
+    border: 1px solid var(--tvdb-signal);
+    border-radius: var(--tvdb-radius-md);
+    background: transparent;
+    color: var(--tvdb-signal);
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-toast-action:hover,
+.tvdb-toast-action:focus-visible {
+    background: var(--tvdb-signal);
+    color: var(--tvdb-on-signal);
+}
+
+@keyframes tvdb-toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 480px) {
+    .tvdb-toast-stack {
+        left: var(--tvdb-space-4);
+        width: auto;
+    }
+}
+
+/* ---- Motion ------------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .tvdb-dot,
+    .tvdb-toast-stack .alert {
+        animation: none;
+    }
+
+    .tvdb-series-poster,
+    .tvdb-catchup-media img {
+        transition: none;
+    }
+
+    .tvdb-series-card:hover .tvdb-series-poster,
+    .tvdb-series-card:focus-visible .tvdb-series-poster,
+    .tvdb-catchup-card:hover .tvdb-catchup-media img {
+        transform: none;
+    }
+}

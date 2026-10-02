@@ -5,56 +5,52 @@
     ViewData["Title"] = "Edit profile";
 }
 
-<div class="tvdb-shell">
-    <div class="row justify-content-center">
-        <div class="col-sm-10 col-md-8 col-lg-6">
-            <a asp-page="/Account/Profile" class="tvdb-back-link">&larr; Back to profile</a>
+<div class="tvdb-shell tvdb-shell--narrow">
+    <a asp-page="/Account/Profile" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Back to profile</a>
 
-            <h1 class="tvdb-display mb-1">Edit profile</h1>
-            <p class="tvdb-prose text-muted mb-4">
-                Your username is how you show up across Recall. It has to be unique and
-                at least @EditProfileModel.UsernameMinLength characters long.
-            </p>
+    <h1 class="mb-2">Edit profile</h1>
+    <p class="tvdb-prose text-muted mb-4">
+        Your username is how you show up across Recall. It has to be unique and
+        at least @EditProfileModel.UsernameMinLength characters long.
+    </p>
 
-            <form method="post" novalidate
-                  id="editProfileForm"
-                  data-check-url="@Url.Page("/Account/EditProfile", "CheckUsername")"
-                  data-current-username="@Model.CurrentUsername">
-                <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <form method="post" novalidate
+          id="editProfileForm"
+          data-check-url="@Url.Page("/Account/EditProfile", "CheckUsername")"
+          data-current-username="@Model.CurrentUsername">
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-                <div class="mb-3 tvdb-field">
-                    <label asp-for="Input.Username" class="form-label">Username</label>
-                    <div class="tvdb-input-affix">
-                        <input asp-for="Input.Username"
-                               class="form-control"
-                               autocomplete="username"
-                               autocapitalize="none"
-                               spellcheck="false"
-                               autofocus
-                               minlength="@EditProfileModel.UsernameMinLength"
-                               maxlength="@EditProfileModel.UsernameMaxLength"
-                               aria-describedby="usernameHint usernameStatus" />
-                        <span class="tvdb-input-affix-icon" id="usernameAffixIcon" aria-hidden="true"></span>
-                    </div>
+        <div class="mb-3 tvdb-field">
+            <label asp-for="Input.Username" class="form-label">Username</label>
+            <div class="tvdb-input-affix">
+                <input asp-for="Input.Username"
+                       class="form-control"
+                       autocomplete="username"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       autofocus
+                       minlength="@EditProfileModel.UsernameMinLength"
+                       maxlength="@EditProfileModel.UsernameMaxLength"
+                       aria-describedby="usernameHint usernameStatus" />
+                <span class="tvdb-input-affix-icon" id="usernameAffixIcon" aria-hidden="true"></span>
+            </div>
 
-                    @* Server-side / unobtrusive validation message (source of truth). *@
-                    <span asp-validation-for="Input.Username" class="text-danger d-block mt-1"></span>
+            @* Server-side / unobtrusive validation message (source of truth). *@
+            <span asp-validation-for="Input.Username" class="text-danger d-block mt-1"></span>
 
-                    @* Live availability feedback, driven by the script below. *@
-                    <span id="usernameStatus" class="tvdb-field-status mt-1" role="status" aria-live="polite" hidden></span>
+            @* Live availability feedback, driven by the script below. *@
+            <span id="usernameStatus" class="tvdb-field-status mt-1" role="status" aria-live="polite" hidden></span>
 
-                    <span id="usernameHint" class="form-text tvdb-mono">
-                        @EditProfileModel.UsernameMinLength&ndash;@EditProfileModel.UsernameMaxLength characters &middot; letters, numbers, and <code>. - _</code>
-                    </span>
-                </div>
-
-                <div class="d-flex flex-wrap gap-2 mt-4">
-                    <button type="submit" class="btn btn-primary" id="editProfileSubmit">Save changes</button>
-                    <a asp-page="/Account/Profile" class="btn btn-outline-secondary">Cancel</a>
-                </div>
-            </form>
+            <span id="usernameHint" class="form-text d-block">
+                @EditProfileModel.UsernameMinLength&ndash;@EditProfileModel.UsernameMaxLength characters &middot; letters, numbers, and <code>. - _</code>
+            </span>
         </div>
-    </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-4">
+            <button type="submit" class="btn btn-primary" id="editProfileSubmit">Save changes</button>
+            <a asp-page="/Account/Profile" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
 </div>
 
 @section Scripts {
@@ -78,8 +74,8 @@
 
             const ICONS = {
                 checking: '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>',
-                ok: '✓',
-                bad: '✕'
+                ok: '<i class="@Icons.Check"></i>',
+                bad: '<i class="@Icons.Invalid"></i>'
             };
 
             function setState(state, message) {
@@ -105,7 +101,7 @@
                 } else if (state === 'ok') {
                     input.classList.add('is-valid');
                     status.classList.add('is-ok');
-                    affix.textContent = ICONS.ok;
+                    affix.innerHTML = ICONS.ok;
                     submit.disabled = false;
                 } else if (state === 'unchanged') {
                     status.classList.add('is-checking');
@@ -113,7 +109,7 @@
                 } else { // bad
                     input.classList.add('is-invalid');
                     status.classList.add('is-bad');
-                    affix.textContent = ICONS.bad;
+                    affix.innerHTML = ICONS.bad;
                     submit.disabled = true;
                 }
             }

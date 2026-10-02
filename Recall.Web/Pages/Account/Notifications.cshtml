@@ -4,60 +4,59 @@
     ViewData["Title"] = "Notifications";
 }
 
-<div class="tvdb-shell">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <a asp-page="/Account/Profile"
-               class="tvdb-mono text-muted d-inline-flex align-items-center gap-1 mb-3"
-               style="text-decoration:none;">
-                <span aria-hidden="true">&larr;</span> Back to profile
-            </a>
+<div class="tvdb-shell tvdb-shell--narrow">
+    <a asp-page="/Account/Profile" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Back to profile</a>
 
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
-                <h1 class="tvdb-display mb-0">
-                    Notifications
-                    @if (Model.UnreadCount > 0)
-                    {
-                        <span class="tvdb-fav-count">&middot; @Model.UnreadCount new</span>
-                    }
-                </h1>
-
-                @if (Model.UnreadCount > 0)
-                {
-                    <form method="post" asp-page-handler="MarkAllRead">
-                        <button type="submit" class="btn btn-outline-secondary btn-sm">Mark all as read</button>
-                    </form>
-                }
-            </div>
-
-            @if (Model.Notifications.Count == 0)
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+        <h1 class="mb-0">
+            Notifications
+            @if (Model.UnreadCount > 0)
             {
-                <p class="tvdb-mono text-muted mb-0">You&rsquo;re all caught up &mdash; no notifications yet.</p>
+                <span class="tvdb-count">@Model.UnreadCount new</span>
             }
-            else
+        </h1>
+
+        @if (Model.UnreadCount > 0)
+        {
+            <form method="post" asp-page-handler="MarkAllRead">
+                <button type="submit" class="btn btn-outline-secondary btn-sm">Mark all as read</button>
+            </form>
+        }
+    </div>
+
+    @if (Model.Notifications.Count == 0)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.NoNotifications,
+                     Heading = "No notifications yet",
+                     Text = "When a new episode of a series in your library airs, it shows up here.",
+                     ActionText = "Go to your library",
+                     ActionPage = "/Library"
+                 })" />
+    }
+    else
+    {
+        <div class="tvdb-notification-list">
+            @foreach (var n in Model.Notifications)
             {
-                <div class="tvdb-notification-list">
-                    @foreach (var n in Model.Notifications)
-                    {
-                        @* A form, not a link: opening marks the notification read. *@
-                        <form method="post" asp-page-handler="Open" asp-route-id="@n.Id">
-                        <button type="submit" class="tvdb-notification @(n.IsRead ? null : "is-unread")">
-                            <span class="tvdb-notification-icon">
-                                <i class="@n.IconClass" aria-hidden="true"></i>
-                            </span>
-                            <span class="tvdb-notification-body">
-                                <span class="tvdb-notification-title">@n.Title</span>
-                                @if (!string.IsNullOrWhiteSpace(n.Body))
-                                {
-                                    <span class="tvdb-notification-text">@n.Body</span>
-                                }
-                                <span class="tvdb-notification-time">@n.RelativeTime</span>
-                            </span>
-                        </button>
-                        </form>
-                    }
-                </div>
+                @* A form, not a link: opening marks the notification read. *@
+                <form method="post" asp-page-handler="Open" asp-route-id="@n.Id">
+                <button type="submit" class="tvdb-notification @(n.IsRead ? null : "is-unread")">
+                    <span class="tvdb-notification-icon">
+                        <i class="@n.IconClass" aria-hidden="true"></i>
+                    </span>
+                    <span class="tvdb-notification-body">
+                        <span class="tvdb-notification-title">@n.Title</span>
+                        @if (!string.IsNullOrWhiteSpace(n.Body))
+                        {
+                            <span class="tvdb-notification-text">@n.Body</span>
+                        }
+                        <span class="tvdb-notification-time">@n.RelativeTime</span>
+                    </span>
+                </button>
+                </form>
             }
         </div>
-    </div>
+    }
 </div>

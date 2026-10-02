@@ -91,7 +91,10 @@ public sealed class DetailsModel(
     /// Drives "Aired" vs "Airs" wording and whether the watched button is enabled.
     /// </summary>
     public bool HasAired =>
-        !AirDate.IsInFuture(AiredDate, AirDate.Today(timeProvider));
+        !AirDate.IsInFuture(AiredDate, Today);
+
+    /// <summary>Today's date in UTC, for the air-date check and the view's date format.</summary>
+    public DateOnly Today => AirDate.Today(timeProvider);
 
     /// <summary>
     /// How many episodes before this one (by season/episode order) the current

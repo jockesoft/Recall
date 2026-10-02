@@ -13,7 +13,7 @@
                 title="Mark as unwatched"
                 aria-pressed="true"
                 aria-label="Watched. Click to mark as unwatched.">
-            <span aria-hidden="true">&#10003;</span>
+            <i class="@Icons.Check" aria-hidden="true"></i>
             @if (!Model.Compact)
             {
                 <text> @(Model.WatchedLabel ?? "Watched")</text>

@@ -1,5 +1,11 @@
 ﻿@inject Recall.Web.Services.ICurrentUserService CurrentUser
 @{
+    // The page being rendered ("/Dashboard", "/Account/Profile"), for aria-current in the navigation.
+    var currentPage = ViewContext.RouteData.Values["page"] as string;
+    string? CurrentIf(params string[] pages) =>
+        pages.Any(p => string.Equals(p, currentPage, StringComparison.OrdinalIgnoreCase)) ? "page" : null;
+    var homePage = CurrentUser.IsAuthenticated ? "/Dashboard" : "/Index";
+
     string buildNumber = "unknown";
     string path = System.IO.Path.Combine(AppContext.BaseDirectory, "build.txt");
     if (System.IO.File.Exists(path))
@@ -24,7 +30,7 @@
 
     var requestPath = Context.Request.Path.Value ?? "/";
     var canonicalUrl = siteUrl + (requestPath == "/" ? "/" : requestPath.TrimEnd('/'));
-    var ogImageUrl = siteUrl + Url.Content("~/images/banner.png");
+    var ogImageUrl = siteUrl + Url.Content("~/images/og-image.png");
 
     var websiteJsonLd = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
     {
@@ -58,38 +64,46 @@
     <meta name="twitter:description" content="@pageDescription" />
     <meta name="twitter:image" content="@ogImageUrl" />
 
-    <link href="~/favicon.png" rel="icon" type="image/png" />
+    <link rel="icon" href="~/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="~/apple-touch-icon.png" />
+    <meta name="theme-color" content="#1f2733" />
+
+    @* Order matters: Bootstrap, the icon fonts, then the theme (tokens → base → components → pages). *@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
-    <link rel="stylesheet" href="~/css/tvdb-theme.css" asp-append-version="true"/>
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
-    <link rel="stylesheet" href="~/Recall.Web.styles.css" asp-append-version="true"/>
-    <link rel="stylesheet" href="~/lib/font-awesome/css/all.css" asp-append-version="false" />
+    <link rel="stylesheet" href="~/lib/phosphor-icons/src/regular/style.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/lib/phosphor-icons/src/fill/style.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/css/tokens.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/css/base.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/css/components.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/css/pages.css" asp-append-version="true"/>
     <script type="application/ld+json">@Html.Raw(websiteJsonLd)</script>
     @await RenderSectionAsync("Head", required: false)
 </head>
 <body>
+<a class="tvdb-skip-link" href="#main">Skip to main content</a>
 <header>
-    <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+    <nav class="navbar navbar-expand-sm" aria-label="Main">
         <div class="container">
-            <a class="navbar-brand" asp-area="" asp-page="@(CurrentUser.IsAuthenticated ? "/Dashboard" : "/Index")">
-                <img src="~/images/banner.png" asp-append-version="true" alt="Recall" class="navbar-logo" />
+            <a class="navbar-brand" asp-area="" asp-page="@homePage">
+                <img src="~/images/logo.svg" asp-append-version="true" alt="Recall" class="navbar-logo" width="150" height="32" />
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                    aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                    aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                <i class="@Icons.Menu" aria-hidden="true"></i>
             </button>
-            <div class="navbar-collapse collapse">
+            <div class="navbar-collapse collapse" id="mainNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link text-dark" asp-area="" asp-page="@(CurrentUser.IsAuthenticated ? "/Dashboard" : "/Index")">Home</a>
+                        <a class="nav-link" asp-area="" asp-page="@homePage" aria-current="@CurrentIf("/Dashboard", "/Index")">Home</a>
                     </li>
                     @if (CurrentUser.IsAuthenticated)
                     {
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Search">Search</a>
+                            <a class="nav-link" asp-area="" asp-page="/Search" aria-current="@CurrentIf("/Search")">Search</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-page="/Library">My Library</a>
+                            <a class="nav-link" asp-page="/Library" aria-current="@CurrentIf("/Library")">My Library</a>
                         </li>
                     }
                 </ul>
@@ -111,14 +125,14 @@
                                         <span class="dropdown-header-sub d-block text-truncate">@CurrentUser.Email</span>
                                     }
                                 </li>
-                                <li><a class="dropdown-item" asp-page="/Account/Profile">Profile</a></li>
-                                <li><a class="dropdown-item" asp-page="/Account/Notifications">Notifications</a></li>
+                                <li><a class="dropdown-item" asp-page="/Account/Profile" aria-current="@CurrentIf("/Account/Profile")">Profile</a></li>
+                                <li><a class="dropdown-item" asp-page="/Account/Notifications" aria-current="@CurrentIf("/Account/Notifications")">Notifications</a></li>
                                 @if (CurrentUser.IsAdmin)
                                 {
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
-                                        <a class="dropdown-item" asp-page="/Admin/Index">
-                                            <i class="fa-solid fa-gauge-high fa-fw me-2"></i>Admin panel
+                                        <a class="dropdown-item" asp-page="/Admin/Index" aria-current="@CurrentIf("/Admin/Index")">
+                                            <i class="@Icons.AdminPanel tvdb-icon--fw me-1" aria-hidden="true"></i>Admin panel
                                         </a>
                                     </li>
                                 }
@@ -134,7 +148,7 @@
                     else
                     {
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-page="/Account/Login">Login</a>
+                            <a class="nav-link" asp-page="/Account/Login" aria-current="@CurrentIf("/Account/Login")">Login</a>
                         </li>
                     }
                 </ul>
@@ -143,12 +157,12 @@
     </nav>
 </header>
 <div class="container">
-    <main role="main" class="pb-3">
+    <main id="main" role="main" tabindex="-1" class="pb-3">
         @RenderBody()
     </main>
 </div>
 
-<footer class="border-top footer text-muted">
+<footer class="footer">
     <div class="container py-3">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-4">
             <div class="footer-support">
@@ -159,7 +173,7 @@
                 </p>
                 <a class="footer-social" href="https://www.facebook.com/profile.php?id=61594107509642"
                    target="_blank" rel="noopener" aria-label="Recall on Facebook">
-                    <i class="fa-brands fa-facebook" aria-hidden="true"></i>
+                    <i class="@Icons.Facebook" aria-hidden="true"></i>
                     <span>Recall on Facebook</span>
                 </a>
             </div>

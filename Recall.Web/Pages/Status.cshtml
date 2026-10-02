@@ -1,0 +1,19 @@
+@page "/Status/{code:int}"
+@model StatusModel
+@{
+    Model.SetStatusCode();
+    var (icon, heading, text) = Model.Message;
+    ViewData["Title"] = heading;
+}
+
+<div class="tvdb-shell tvdb-shell--narrow">
+    <partial name="_EmptyState" model="@(new EmptyStateModel
+             {
+                 Icon = icon,
+                 Heading = heading,
+                 Text = text,
+                 HeadingLevel = 1,
+                 ActionText = "Go to the home page",
+                 ActionPage = "/Index"
+             })" />
+</div>

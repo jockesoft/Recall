@@ -1,28 +1,24 @@
 ﻿@page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = "Something went wrong";
 }
 
-<div class="tvdb-shell">
-    <h1 class="tvdb-display text-danger mb-2">Error.</h1>
-    <h2 class="tvdb-display text-danger h4 mb-3">An error occurred while processing your request.</h2>
+<div class="tvdb-shell tvdb-shell--narrow">
+    <partial name="_EmptyState" model="@(new EmptyStateModel
+             {
+                 Icon = Icons.Problem,
+                 Heading = "Something went wrong",
+                 Text = "Sorry about that. The problem is on our side, and it has been logged. Please try again in a little while.",
+                 HeadingLevel = 1,
+                 ActionText = "Go to the home page",
+                 ActionPage = "/Index"
+             })" />
 
     @if (Model.ShowRequestId)
     {
-        <p class="tvdb-prose">
-            <strong>Request ID:</strong> <code>@Model.RequestId</code>
+        <p class="tvdb-error-reference">
+            If you contact us about this, mention reference <span class="tvdb-mono">@Model.RequestId</span>
         </p>
     }
-
-    <h3 class="mb-2">Development Mode</h3>
-    <p class="tvdb-prose">
-        Swapping to the <strong>Development</strong> environment displays detailed information about the error that occurred.
-    </p>
-    <p class="tvdb-prose">
-        <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-        It can result in displaying sensitive information from exceptions to end users.
-        For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-        and restarting the app.
-    </p>
 </div>

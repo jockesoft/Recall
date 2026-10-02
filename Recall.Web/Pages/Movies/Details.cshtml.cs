@@ -26,9 +26,13 @@ public sealed class DetailsModel(
     IMovieTrackingService movieTrackingService,
     IRatingRepository ratingRepository,
     IMovieOmdbSnapshotStore omdbSnapshotStore,
+    TimeProvider timeProvider,
     ILogger<DetailsModel> logger)
     : PageModel
 {
+    /// <summary>Today's date in UTC, for the view's date format.</summary>
+    public DateOnly Today => AirDate.Today(timeProvider);
+
     public MovieAggregate? Movie { get; private set; }
 
     /// <summary>OMDb enrichment for this movie, when the background job has stored it.</summary>

@@ -46,6 +46,7 @@ public class MovieDetailsPostTests
             _tracking.Object,
             _ratings.Object,
             Mock.Of<IMovieOmdbSnapshotStore>(),
+            TimeProvider.System,
             NullLogger<DetailsModel>.Instance).WithTempData();
     }
 

@@ -1,0 +1,652 @@
+/* =========================================================================
+   Recall theme — 2 of 4: base
+   Fonts, element defaults, the two surfaces, focus, icons, type helpers and
+   the page frame (skip link, navbar, panel, footer, cookie notice).
+   ========================================================================= */
+
+/* ---- Fonts: self-hosted, latin subset, woff2 (see libman.json) ----------- */
+
+@font-face {
+    font-family: "Big Shoulders Display";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../lib/fontsource/big-shoulders-display/files/big-shoulders-display-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Big Shoulders Display";
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url("../lib/fontsource/big-shoulders-display/files/big-shoulders-display-latin-800-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../lib/fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../lib/fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../lib/fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../lib/fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../lib/fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2") format("woff2");
+}
+
+/* ---- Elements ------------------------------------------------------------ */
+
+html {
+    font-size: 16px;
+    /* Reserve the scrollbar's room so the centred layout doesn't shift between
+       a page that scrolls and one that doesn't. */
+    scrollbar-gutter: stable;
+}
+
+/* Sticky footer: body is a column and the main container takes the slack. */
+body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+body > .container {
+    flex: 1 0 auto;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: var(--tvdb-leading-tight);
+}
+
+h1 { font-size: clamp(var(--tvdb-text-2xl), 5vw, var(--tvdb-text-3xl)); }
+h2 { font-size: var(--tvdb-text-xl); }
+h3 { font-size: var(--tvdb-text-lg); }
+h4, h5, h6 { font-size: var(--tvdb-text-md); }
+
+hr {
+    border-color: var(--bs-border-color);
+    opacity: 1;
+}
+
+code {
+    font-size: 0.9em;
+    padding: 0.05em 0.3em;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--tvdb-radius-sm);
+    background: var(--bs-secondary-bg);
+    overflow-wrap: anywhere;
+}
+
+::selection {
+    background: var(--tvdb-signal-halo);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--tvdb-ink); }
+::-webkit-scrollbar-thumb { background: var(--tvdb-ink-3); border-radius: var(--tvdb-radius-md); }
+::-webkit-scrollbar-thumb:hover { background: var(--tvdb-signal); }
+
+/* ---- Surfaces --------------------------------------------------------------
+   Anything that sits on paper re-points Bootstrap's variables (and the focus
+   ring) at the paper palette. Nothing inside needs to know which surface it
+   is on. */
+
+.tvdb-shell,
+.tvdb-surface-paper,
+.modal-content,
+.dropdown-menu {
+    --bs-body-color: var(--tvdb-text);
+    --bs-body-color-rgb: 44, 42, 36;
+    --bs-body-bg: var(--tvdb-paper);
+    --bs-body-bg-rgb: 241, 236, 226;
+    --bs-emphasis-color: var(--tvdb-text);
+    --bs-emphasis-color-rgb: 44, 42, 36;
+    --bs-secondary-color: var(--tvdb-text-muted);
+    --bs-secondary-bg: var(--tvdb-paper-dim);
+    --bs-tertiary-bg: var(--tvdb-paper);
+    --bs-border-color: var(--tvdb-ink-line);
+    --bs-link-color: var(--tvdb-signal-text);
+    --bs-link-color-rgb: 143, 84, 16;
+    --bs-link-hover-color: var(--tvdb-signal-ink);
+    --bs-link-hover-color-rgb: 107, 61, 15;
+    --bs-danger-rgb: 107, 44, 31;
+
+    --tvdb-focus: var(--tvdb-ink);
+    --tvdb-focus-halo: rgba(21, 27, 36, 0.18);
+
+    color: var(--tvdb-text);
+}
+
+/* ---- Focus ------------------------------------------------------------------ */
+
+:focus-visible {
+    outline: 2px solid var(--tvdb-focus);
+    outline-offset: 2px;
+}
+
+.tvdb-skip-link {
+    position: absolute;
+    left: var(--tvdb-space-3);
+    top: var(--tvdb-space-3);
+    z-index: 1100;
+    padding: var(--tvdb-space-2) var(--tvdb-space-4);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-signal);
+    color: var(--tvdb-on-signal);
+    font-weight: 600;
+    text-decoration: none;
+    transform: translateY(-200%);
+}
+
+.tvdb-skip-link:focus {
+    transform: none;
+    color: var(--tvdb-on-signal);
+    outline-color: var(--tvdb-on-ink);
+}
+
+main:focus {
+    outline: none;
+}
+
+/* ---- Icons (Phosphor) -------------------------------------------------------
+   <i class="ph ph-heart" aria-hidden="true"></i>          regular
+   <i class="ph-fill ph-heart" aria-hidden="true"></i>     filled
+   Icons take the size and colour of the text around them. */
+
+.ph,
+.ph-fill {
+    display: inline-block;
+    font-size: 1.15em;
+    vertical-align: -0.15em;
+}
+
+.tvdb-icon--sm { font-size: 1em; }
+.tvdb-icon--md { font-size: 1.25em; }
+.tvdb-icon--lg { font-size: var(--tvdb-text-xl); }
+.tvdb-icon--xl { font-size: var(--tvdb-text-3xl); }
+
+/* Same box for every icon, so labels line up in a menu or a list. */
+.tvdb-icon--fw {
+    width: 1.25em;
+    text-align: center;
+}
+
+/* ---- Type helpers --------------------------------------------------------- */
+
+/* Small uppercase label above or beside content. */
+.tvdb-eyebrow {
+    font-family: var(--tvdb-font-ui);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: var(--tvdb-leading-snug);
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+/* Running text: overviews and explanations. */
+.tvdb-prose {
+    font-size: var(--tvdb-text-md);
+    line-height: var(--tvdb-leading-body);
+}
+
+/* Secondary line under or beside something: dates, runtimes, hints. */
+.tvdb-meta {
+    font-size: var(--tvdb-text-sm);
+    line-height: var(--tvdb-leading-snug);
+    color: var(--bs-secondary-color);
+}
+
+/* Data only: episode codes, countdowns, counts and ids. */
+.tvdb-mono {
+    font-family: var(--tvdb-font-mono);
+    font-size: 0.92em;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Navbar ------------------------------------------------------------------ */
+
+.navbar {
+    --bs-navbar-padding-y: var(--tvdb-space-2);
+    --bs-navbar-color: var(--tvdb-on-ink-muted);
+    --bs-navbar-hover-color: var(--tvdb-signal);
+    --bs-navbar-active-color: var(--tvdb-signal);
+    --bs-navbar-brand-color: var(--tvdb-on-ink);
+    --bs-navbar-brand-hover-color: var(--tvdb-on-ink);
+    --bs-navbar-brand-padding-y: 0;
+    --bs-navbar-nav-link-padding-x: var(--tvdb-space-3);
+    --bs-navbar-toggler-border-color: var(--tvdb-line);
+    --bs-navbar-toggler-padding-x: var(--tvdb-space-2);
+    --bs-navbar-toggler-padding-y: var(--tvdb-space-1);
+    --bs-navbar-toggler-focus-width: 0;
+
+    margin-bottom: var(--tvdb-space-4);
+    background: var(--tvdb-ink-2);
+    border-bottom: 1px solid var(--tvdb-line);
+}
+
+.navbar-brand {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* The logo is sized by height; the width follows the artwork. */
+.navbar-logo {
+    display: block;
+    height: 32px;
+    width: auto;
+}
+
+.navbar .nav-link {
+    font-size: var(--tvdb-text-sm);
+    font-weight: 500;
+}
+
+.navbar .nav-link[aria-current="page"] {
+    box-shadow: inset 0 -2px 0 var(--tvdb-signal);
+}
+
+.navbar-toggler {
+    color: var(--tvdb-on-ink);
+    font-size: var(--tvdb-text-xl);
+    line-height: 1;
+}
+
+.navbar-toggler:focus-visible {
+    outline: 2px solid var(--tvdb-focus);
+    outline-offset: 2px;
+}
+
+@media (max-width: 575.98px) {
+    .navbar-logo {
+        height: 28px;
+    }
+
+    /* In the collapsed menu the links become rows with a proper tap target. */
+    .navbar .navbar-nav {
+        padding-block: var(--tvdb-space-2);
+    }
+
+    .navbar .navbar-nav .nav-link:not(.nav-avatar) {
+        padding: var(--tvdb-space-3) var(--tvdb-space-1);
+        font-size: var(--tvdb-text-md);
+    }
+
+    .navbar .nav-link[aria-current="page"] {
+        box-shadow: inset 2px 0 0 var(--tvdb-signal);
+        padding-left: var(--tvdb-space-3);
+    }
+}
+
+/* Avatar and its account menu. */
+.navbar .nav-avatar.nav-link {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--tvdb-space-1);
+}
+
+.nav-avatar-img {
+    display: block;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--tvdb-radius-round);
+    object-fit: cover;
+    background: var(--tvdb-ink-3);
+    border: 1px solid var(--tvdb-line);
+    transition: border-color var(--tvdb-ease), box-shadow var(--tvdb-ease);
+}
+
+.nav-avatar:hover .nav-avatar-img,
+.nav-avatar:focus-visible .nav-avatar-img,
+.nav-avatar.show .nav-avatar-img {
+    border-color: var(--tvdb-signal);
+    box-shadow: 0 0 0 2px var(--tvdb-signal-halo);
+}
+
+/* The avatar is the affordance: no caret. */
+.nav-avatar.dropdown-toggle::after {
+    display: none;
+}
+
+.dropdown-menu {
+    --bs-dropdown-bg: var(--tvdb-paper);
+    --bs-dropdown-color: var(--tvdb-text);
+    --bs-dropdown-border-color: var(--tvdb-ink-line);
+    --bs-dropdown-border-radius: var(--tvdb-radius-md);
+    --bs-dropdown-padding-x: var(--tvdb-space-1);
+    --bs-dropdown-padding-y: var(--tvdb-space-1);
+    --bs-dropdown-min-width: 13rem;
+    --bs-dropdown-font-size: var(--tvdb-text-sm);
+    --bs-dropdown-divider-bg: var(--tvdb-ink-line);
+    --bs-dropdown-divider-margin-y: var(--tvdb-space-1);
+    --bs-dropdown-link-color: var(--tvdb-text);
+    --bs-dropdown-link-hover-color: var(--tvdb-text);
+    --bs-dropdown-link-hover-bg: var(--tvdb-paper-dim);
+    --bs-dropdown-link-active-color: var(--tvdb-text);
+    --bs-dropdown-link-active-bg: var(--tvdb-paper-dim);
+    --bs-dropdown-item-padding-x: var(--tvdb-space-3);
+    --bs-dropdown-item-padding-y: var(--tvdb-space-2);
+    --bs-dropdown-header-color: var(--tvdb-text);
+    --bs-dropdown-header-padding-x: var(--tvdb-space-3);
+    --bs-dropdown-header-padding-y: var(--tvdb-space-2);
+
+    box-shadow: var(--tvdb-shadow-lg);
+}
+
+.navbar .dropdown-menu {
+    margin-top: var(--tvdb-space-2);
+}
+
+.dropdown-item {
+    border: 0;
+    border-radius: var(--tvdb-radius-sm);
+}
+
+.dropdown-header {
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.dropdown-header-sub {
+    font-size: var(--tvdb-text-xs);
+    font-weight: 400;
+    color: var(--tvdb-text-muted);
+}
+
+/* Notification bell. */
+.navbar .nav-bell.nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    font-size: var(--tvdb-text-lg);
+    color: var(--tvdb-on-ink);
+    border-radius: var(--tvdb-radius-round);
+    transition: color var(--tvdb-ease), background-color var(--tvdb-ease);
+}
+
+.navbar .nav-bell.nav-link:hover,
+.navbar .nav-bell.nav-link:focus-visible {
+    color: var(--tvdb-signal);
+    background: var(--tvdb-ink-3);
+}
+
+.navbar .nav-bell.nav-link.has-unread,
+.navbar .nav-bell.nav-link[aria-current="page"] {
+    color: var(--tvdb-signal);
+    box-shadow: none;
+}
+
+.nav-bell-label {
+    display: none;
+}
+
+.nav-bell-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 var(--tvdb-space-1);
+    border-radius: var(--tvdb-radius-pill);
+    background: var(--tvdb-signal);
+    color: var(--tvdb-on-signal);
+    font-family: var(--tvdb-font-mono);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 500;
+    line-height: 1.1rem;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--tvdb-ink-2);
+}
+
+@media (max-width: 575.98px) {
+    /* In the collapsed menu the bell reads as a normal labelled row. */
+    .navbar .navbar-nav .nav-bell.nav-link {
+        width: auto;
+        height: auto;
+        justify-content: flex-start;
+        gap: var(--tvdb-space-2);
+        border-radius: var(--tvdb-radius-sm);
+        padding: var(--tvdb-space-3) var(--tvdb-space-1);
+        font-size: var(--tvdb-text-md);
+    }
+
+    .nav-bell-label {
+        display: inline;
+    }
+
+    .nav-bell-badge {
+        position: static;
+        box-shadow: none;
+    }
+}
+
+/* ---- The panel ----------------------------------------------------------------
+   Every page puts its content in one .tvdb-shell. There are two widths: the
+   full panel for grids and detail pages, and .tvdb-shell--narrow for forms
+   and text pages. */
+
+.tvdb-shell {
+    max-width: var(--tvdb-width-full);
+    margin: 0 auto;
+    padding: var(--tvdb-shell-pad);
+    background: var(--tvdb-paper);
+    border-radius: var(--tvdb-radius-lg);
+}
+
+.tvdb-shell--narrow {
+    max-width: calc(var(--tvdb-width-narrow) + 2 * var(--tvdb-shell-pad));
+}
+
+/* The way back, always the first thing inside the panel. */
+.tvdb-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-1);
+    margin-bottom: var(--tvdb-space-4);
+    font-size: var(--tvdb-text-sm);
+    font-weight: 500;
+    color: var(--tvdb-text-muted);
+    text-decoration: none;
+}
+
+.tvdb-back-link:hover,
+.tvdb-back-link:focus-visible {
+    color: var(--tvdb-text);
+    text-decoration: underline;
+}
+
+/* ---- Footer --------------------------------------------------------------------- */
+
+.footer {
+    flex-shrink: 0;
+    width: 100%;
+    margin-top: var(--tvdb-space-4);
+    background: var(--tvdb-ink-2);
+    border-top: 1px solid var(--tvdb-line);
+    color: var(--tvdb-on-ink-muted);
+    font-size: var(--tvdb-text-sm);
+}
+
+.footer a {
+    color: var(--tvdb-on-ink);
+}
+
+.footer a:hover,
+.footer a:focus-visible {
+    color: var(--tvdb-signal);
+}
+
+.footer-support {
+    max-width: 34rem;
+}
+
+.footer-support__title {
+    margin-bottom: var(--tvdb-space-1);
+    font-family: var(--tvdb-font-display);
+    font-weight: 800;
+    font-size: var(--tvdb-text-md);
+    color: var(--tvdb-on-ink);
+}
+
+.footer-support__text {
+    margin: 0 0 var(--tvdb-space-3);
+    line-height: 1.5;
+}
+
+.footer-social {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    padding: var(--tvdb-space-2) var(--tvdb-space-3);
+    border-radius: var(--tvdb-radius-pill);
+    border: 1px solid var(--tvdb-line);
+    background: var(--tvdb-ink-2);
+    font-weight: 600;
+    text-decoration: none;
+    transition: border-color var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.footer-social:hover,
+.footer-social:focus-visible {
+    border-color: var(--tvdb-signal);
+    text-decoration: none;
+}
+
+/* TheTVDB attribution: required by the free tier. The wording must stay
+   visible at every width; it may wrap, it is never hidden. */
+.thetvdbattribution {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    padding: var(--tvdb-space-2) var(--tvdb-space-3);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-attribution-bg);
+    border: 1px solid var(--tvdb-attribution-edge);
+    line-height: var(--tvdb-leading-snug);
+    text-decoration: none;
+    transition: background-color var(--tvdb-ease);
+}
+
+.footer .thetvdbattribution,
+.footer .thetvdbattribution:hover,
+.footer .thetvdbattribution:focus-visible {
+    color: var(--tvdb-on-ink);
+}
+
+.thetvdbattribution:hover,
+.thetvdbattribution:focus-visible {
+    background: var(--tvdb-attribution-bg-hover);
+}
+
+.thetvdbattribution img {
+    flex-shrink: 0;
+}
+
+/* OMDb attribution: CC BY-NC 4.0 requires the credit and the licence link. */
+.omdbattribution {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    padding: var(--tvdb-space-2) var(--tvdb-space-3);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-ink-3);
+    border: 1px solid var(--tvdb-line);
+    color: var(--tvdb-on-ink);
+    line-height: var(--tvdb-leading-snug);
+    white-space: nowrap;
+}
+
+.omdbattribution .omdb-sep {
+    opacity: 0.5;
+}
+
+.footer-legal {
+    margin-top: var(--tvdb-space-4);
+    padding-top: var(--tvdb-space-3);
+    border-top: 1px solid var(--tvdb-line);
+}
+
+@media (max-width: 575.98px) {
+    .footer .container,
+    .footer-attributions {
+        justify-content: center;
+        text-align: center;
+        row-gap: var(--tvdb-space-2);
+    }
+
+    .thetvdbattribution {
+        text-align: left;
+    }
+
+    /* On a phone the OMDb chip reads "OMDb API · CC BY-NC 4.0". */
+    .omdbattribution .omdb-lead {
+        display: none;
+    }
+}
+
+/* ---- Cookie notice ---------------------------------------------------------------- */
+
+.cookie-notice {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1040;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tvdb-space-3) var(--tvdb-space-5);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-ink-2);
+    border-top: 1px solid var(--tvdb-line);
+    box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.25);
+}
+
+.cookie-notice__text {
+    margin: 0;
+    max-width: 56rem;
+    font-size: var(--tvdb-text-sm);
+    line-height: 1.5;
+}
+
+.cookie-notice__button {
+    flex-shrink: 0;
+}

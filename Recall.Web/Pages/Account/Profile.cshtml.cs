@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Display;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
@@ -34,8 +35,8 @@ public sealed class ProfileModel(
     /// <summary>Label, CSS modifier and icon for the role pill shown on the page.</summary>
     public (string Label, string CssModifier, string Icon) RoleBadge => Role switch
     {
-        UserRole.Admin => ("Administrator", "tvdb-role-badge--admin", "fa-user-shield"),
-        _ => ("Member", string.Empty, "fa-user")
+        UserRole.Admin => ("Administrator", "tvdb-role-badge--admin", Icons.Administrator),
+        _ => ("Member", string.Empty, Icons.Member)
     };
 
     public WatchTimeSummary WatchTime { get; private set; } = WatchTimeSummary.Empty;

@@ -55,9 +55,8 @@ public sealed class SeriesCardModel
     public string DetailsPage { get; init; } = "/Series/Details";
 
     /// <summary>
-    /// Optional small corner icon indicating content type, e.g. "fa-film" for a
-    /// movie or "fa-tv" for a series (any Font Awesome solid icon name, without
-    /// the "fa-solid" prefix). Null omits the badge entirely.
+    /// Optional small corner icon indicating content type: <c>Icons.Movie</c>
+    /// or <c>Icons.Series</c> (the full icon class). Null omits the badge entirely.
     /// </summary>
     public string? BadgeIcon { get; init; }
 

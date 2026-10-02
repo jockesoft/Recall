@@ -42,7 +42,7 @@ Layering inside `Recall.Web` is by folder and namespace, not by assembly:
 - **Packages that matter** (`Recall.Web/Recall.Web.csproj`): EF Core 10.0.12, `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, `Microsoft.Extensions.Caching.StackExchangeRedis` 10.0.12, `Quartz` 4.3.0, `Microsoft.Extensions.Http.Resilience` 10.10.0, `Serilog.AspNetCore` 10.0.0 with Console and File sinks.
 - Every package referenced by `Recall.Web` is used. (Swashbuckle, the two `NuGet.*` packages and the Visual Studio code-generation package were removed; scaffolding with `dotnet aspnet-codegenerator` would need the last one back.)
 - **Tests** (`Recall.Tests/Recall.Tests.csproj`): NUnit 5.0.0, Moq 4.21.0, AwesomeAssertions 9.6.0, `Microsoft.EntityFrameworkCore.Sqlite`, coverlet. `Recall.Tests.Postgres` uses the same NUnit and AwesomeAssertions versions plus `Testcontainers.PostgreSql` 4.15.0. `Microsoft.AspNetCore.Mvc.Testing` drives the pipeline tests.
-- **Front end**: no npm, bundler or Tailwind. Vendored files in `wwwroot/lib`: Bootstrap 5.3.3, jQuery 3.7.1, jquery-validation (+ unobtrusive), Font Awesome Free 6.4.2. Custom CSS in `wwwroot/css/tvdb-theme.css` (about 2,500 lines, imports Google Fonts) and `site.css`. JavaScript is one small file (`wwwroot/js/tvdb-type-filter.js`) plus inline `<script>` blocks in pages.
+- **Front end**: no npm, bundler or Tailwind. `wwwroot/lib` is committed and holds only the files that are served: Bootstrap 5.3.3 (`bootstrap.min.css`, `bootstrap.bundle.min.js`), jQuery 3.7.1, jquery-validation (+ unobtrusive), and three things installed with LibMan from `Recall.Web/libman.json`: Phosphor Icons 2.1.2 (regular and fill, `woff2`), and the fonts from `@fontsource` 5.3.0 (Big Shoulders Display 600/800, IBM Plex Sans 400/500/600, IBM Plex Mono 400/500; latin subset, `woff2`). To change a version, edit `libman.json`, run `libman restore` in `Recall.Web` and commit the files. Nothing is loaded from a third party at run time. The theme is four stylesheets in `wwwroot/css` (see "Design system" in section 4). JavaScript is one small file (`wwwroot/js/tvdb-type-filter.js`) plus inline `<script>` blocks in pages.
 
 ## 3. Hosting and startup (`Recall.Web/Program.cs`)
 
@@ -71,7 +71,7 @@ All of these live in `Extensions/ServiceCollectionExtensions.cs` (application se
 
 **Before serving**: `await app.MigrateDatabaseAsync()` applies pending migrations with 10 retries, 3 s apart. Disable with `Database:MigrateOnStartup=false`.
 
-**Middleware pipeline**: developer exception page (Development) or exception handler that logs and redirects to `/Error` + HSTS → `UseForwardedHeaders` → `UseHttpsRedirection` → `UseStaticFiles` → `UseRouting` → `UseAuthentication` → `DevAuthMiddleware` (Debug builds only) → `UseRateLimiter` → `UseAuthorization` → endpoints. The rate limiter sits after authentication because the `public-details` policy exempts signed-in users.
+**Middleware pipeline**: developer exception page (Development) or exception handler that logs and redirects to `/Error` + HSTS → `UseForwardedHeaders` → `UseHttpsRedirection` → `UseStatusCodePagesWithReExecute("/Status/{0}")` → `UseStaticFiles` → `UseRouting` → `UseAuthentication` → `DevAuthMiddleware` (Debug builds only) → `UseRateLimiter` → `UseAuthorization` → endpoints. The rate limiter sits after authentication because the `public-details` policy exempts signed-in users. A response that ends with an error status and no body (unknown URL, `NotFound()` from a page, a rejected antiforgery token, a 429) is re-run as `Pages/Status`, which renders inside the layout and keeps the status code; the re-run keeps the original method, so that page has no handlers and ignores antiforgery.
 
 **Endpoints**: `/health` (runs `DbHealthCheck`, a `SELECT 1`), `/health/live` (no checks), `MapStaticAssets`, `MapRazorPages`.
 
@@ -93,14 +93,85 @@ Razor Pages only. No MVC controllers, Blazor or minimal APIs. Two handlers retur
 | `/Account/Profile`, `EditProfile`, `Favorites`, `Notifications`, `ImportWatchlist` | `[Authorize]` | Account area |
 | `/Admin` | `[Authorize(Roles = Roles.Admin)]` | User counts |
 | `/sitemap.xml` (`Pages/Sitemap`) | anonymous | Dynamic sitemap from the cache tables |
-| `/Privacy`, `/Error` | anonymous | Static |
+| `/Privacy`, `/Error` | anonymous | Static. `/Error` apologises, links home and shows the request id in small print |
+| `/Status/{code}` (`Pages/Status`) | anonymous | The 404 page, and the page for any other bodiless error status; reached by re-execution, see section 3 |
 
 - The three Details pages have no `[Authorize]`. Their POST handlers start with `if (!currentUserService.TryGetUserId(out var userId)) return SignInRequired(id, "…");` (`Services/CurrentUserServiceExtensions.cs` plus a small private helper per page), which sends an anonymous caller back with an error toast. All three carry `[EnableRateLimiting(PublicDetailsPolicy)]`: an anonymous client IP gets 60 Details page loads a minute across the three (then 429 with `Retry-After`); signed-in users are not limited. Anonymous requests may fetch an uncached title from TheTVDB but never call OMDb.
 - **Layout** (`Pages/Shared/_Layout.cshtml`): nav, footer attributions (TheTVDB and OMDb; do not change their wording or remove them without being asked, the free tiers require attribution), cookie notice, and per-page SEO tags from `ViewData["Title"|"Description"|"Robots"]`. Robots defaults to `noindex, nofollow`; Index, Login, Privacy and the three Details pages opt in. The build number is read from `build.txt` next to the binaries.
-- **Partials** (`Pages/Shared/`): `_SeriesCard`, `_CatchUpCard`, `_UpcomingEpisodeCard`, `_FavoriteEpisodeRow`, `_EpisodeWatchedToggle`, `_LikeToggle`, `_RatingWidget`, `_TypeFilterBar`, `_NotificationBell` (injects `INotificationService` and runs an unread `COUNT` on every signed-in page render), `_ToastMessages`. Each takes a small model class from the same folder.
+- **Partials** (`Pages/Shared/`): `_SeriesCard`, `_CatchUpCard`, `_UpcomingEpisodeCard`, `_FavoriteEpisodeRow`, `_EpisodeWatchedToggle`, `_LikeToggle`, `_RatingWidget`, `_TypeFilterBar`, `_EmptyState`, `_NotificationBell` (injects `INotificationService` and runs an unread `COUNT` on every signed-in page render), `_ToastMessages`. Each takes a small model class from the same folder.
 - **Forms**: plain `<form method="post" asp-page-handler="…">`, then redirect (PRG). Antiforgery is the Razor Pages default; inline `fetch` calls copy `__RequestVerificationToken` from the page. State changes are never GET handlers, including sign-out and opening a notification (which marks it read).
 - **Validation**: data annotations on `[BindProperty]` properties (`Login`, `Search`, `EditProfile`) with jQuery unobtrusive validation on the client. Most action handlers take route/form primitives and validate by hand (`if (value is < 1 or > 10)`).
-- **Feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)` write TempData keys that `_ToastMessages` renders. `SetSuccessToastWithWatchedUndo(message, seriesId, batch)` adds an Undo button to the toast: a POST form to `Series/Details?handler=UndoWatched`, shown when the bulk mark inserted more than one row.
+- **Feedback**: `this.SetSuccessToast/SetErrorToast/SetInfoToast(...)` write TempData keys that `_ToastMessages` renders as a dark toast with an icon. A button inside a toast uses `.tvdb-toast-action`. `SetSuccessToastWithWatchedUndo(message, seriesId, batch)` adds an Undo button to the toast: a POST form to `Series/Details?handler=UndoWatched`, shown when the bulk mark inserted more than one row.
+
+### Design system
+
+The look is one theme: a dark navy canvas ("ink") with the content on a cream panel ("paper"). `ui-review/UI-INVENTORY.md` (not tracked) describes the UI before this system existed.
+
+**Stylesheets**, loaded in this order by `_Layout.cshtml`: `bootstrap.min.css`, the two Phosphor stylesheets, then `css/tokens.css` → `base.css` → `components.css` → `pages.css`.
+
+| File | Holds |
+|---|---|
+| `tokens.css` | Every custom property: colours, type scale, spacing, radii, shadows, widths, and Bootstrap's root `--bs-*` variables |
+| `base.css` | `@font-face`, element defaults, the two surfaces, focus ring, skip link, icon helpers, type helpers, navbar, panel, footer, cookie notice |
+| `components.css` | Bootstrap components themed through their `--bs-*` variables, then the shared components (the partials and repeated patterns) |
+| `pages.css` | Pieces that belong to one page or one group of pages |
+
+There is no `!important` in the theme and none should be added. Bootstrap is themed through its own variables: root `--bs-*` values in `tokens.css`, per-component variables on the component class (`.btn-primary { --bs-btn-bg: … }`). Plain rules are used only where Bootstrap has no variable (for example `.form-control:focus`). There are no page-level `<style>` blocks.
+
+**Surfaces.** `:root` carries the values for the dark canvas. `.tvdb-shell`, `.modal-content`, `.dropdown-menu` and `.tvdb-surface-paper` re-point the same `--bs-*` variables (text, muted text, links, borders, danger) and the focus ring at the paper palette, so Bootstrap utilities such as `.text-muted` and `.text-danger` are right on both and nothing inside needs to know where it is.
+
+**Colour tokens** (all `--tvdb-*`). Components use tokens only; a new colour is a new token.
+
+| Token | Value | Use |
+|---|---|---|
+| `ink`, `ink-2`, `ink-3` | `#151b24`, `#1f2733`, `#29333f` | Page background; navbar, footer, media frames; hover on dark |
+| `on-ink`, `on-ink-muted`, `on-ink-faint` | `#f1ece2`, 72% and 55% of it | Text on dark |
+| `paper`, `paper-dim` | `#f1ece2`, `#e6dfd0` | The panel; recessed rows, tiles, inputs |
+| `text`, `text-muted` | `#2c2a24`, `#655b49` | Text on paper (muted is 5.7:1 on paper, 5.0:1 on paper-dim) |
+| `ink-line`, `ink-line-strong`, `line` | 12% and 28% ink; 8% white | Borders on paper; borders on dark |
+| `signal` | `#e8a33d` | Amber as a fill, and as text or links on dark only |
+| `signal-text` | `#8f5410` | Amber as text or a link on paper (5.2:1). Never use `signal` for text on paper |
+| `signal-ink`, `on-signal` | `#6b3d0f`, `#2a1a05` | Text on an amber tint; text on a solid amber fill |
+| `ok`, `ok-ink`, `on-ok` | `#6f9d6f`, `#2f4a2f`, `#1c2b1c` | Watched, continuing, success |
+| `danger`, `danger-ink` | `#a3472f`, `#6b2c1f` | Remove, errors |
+| `info`, `info-ink` | `#4f8a93`, `#234047` | Movies, informational |
+| `like` | `#d9536a` | The heart |
+| `*-tint`, `*-edge` | accent at low alpha | Fill and border of chips, alerts and soft buttons |
+| `focus` | `signal` on dark, `ink` on paper | The focus ring (`:focus-visible`, 2px, offset 2px) |
+
+**Type.** The root font size is 16px at every width. Three families, self-hosted:
+
+| Token | Family | Use |
+|---|---|---|
+| `font-display` | Big Shoulders Display 600/800 | Headings and big numbers |
+| `font-ui` | IBM Plex Sans 400/500/600 | Everything people read or press: body text, buttons, navigation, labels, forms |
+| `font-mono` | IBM Plex Mono 400/500 | Data only: episode codes (`S05 · E07`, `E1`), countdowns, counts and ids. Apply with `.tvdb-mono` |
+
+Seven sizes, used through the tokens, never as literals:
+
+| Token | Size | Use |
+|---|---|---|
+| `text-xs` | 12px | Fine print, badges, eyebrows |
+| `text-sm` | 14px | Secondary text, buttons, labels |
+| `text-md` | 16px | Body |
+| `text-lg` | 18px | Lead text, `h3` |
+| `text-xl` | 24px | `h2` |
+| `text-2xl` | 32px | Stat numbers; `h1` on phones |
+| `text-3xl` | 40px | `h1` on desktop (`h1` is `clamp(2xl, 5vw, 3xl)`) |
+
+Helpers: `.tvdb-eyebrow` (small uppercase label), `.tvdb-prose` (running text), `.tvdb-meta` (secondary line: dates, runtimes, hints), `.tvdb-mono` (data). Line heights `leading-tight` 1.1, `leading-snug` 1.3, `leading-body` 1.55.
+
+**Spacing and radius.** `space-1` … `space-7` are 4, 8, 12, 16, 24, 32 and 48px. `radius-sm` 4px (chips, code), `radius-md` 8px (buttons, inputs, posters, tiles), `radius-lg` 12px (the panel, cards, modals), `radius-pill`, `radius-round`.
+
+**Icons** are Phosphor, regular and fill weights, and every icon is a constant in `Infrastructure/Display/Icons.cs` holding the full class (`Icons.Series` is `"ph ph-television-simple"`, `Icons.Liked` is `"ph-fill ph-heart"`). Markup writes `<i class="@Icons.Series" aria-hidden="true"></i>`; C# that picks an icon returns the constant. Do not write `ph-…` literals in pages, use Unicode characters or inline SVG as icons, or use Bootstrap's built-in icons (`btn-close`, `navbar-toggler-icon`; the close button is `.tvdb-close` with `Icons.Close`). A new icon is a new constant; `IconsTests` fails if a constant names an icon Phosphor does not have. Icons are decorative (`aria-hidden`); the text or the control's `aria-label` carries the meaning. Size helpers: `.tvdb-icon--sm|md|lg|xl`, and `.tvdb-icon--fw` for a fixed-width box in menus and lists. The one icon drawn from CSS is the external-link arrow after `.tvdb-metalink[target=_blank]`.
+
+**Page frame.** Every page puts its content in one `<div class="tvdb-shell">`. Two widths only: the full panel (1100px) for grids and detail pages, and `tvdb-shell--narrow` (680px of content) for forms and text pages; do not narrow content with grid columns. Every page has exactly one `h1` and heading levels do not skip (`h2` sections, `h3` inside them). A way back is `<a class="tvdb-back-link">` with `Icons.Back`, always the first thing inside the panel. The layout provides the skip link (`#main`), marks the current navigation item with `aria-current="page"` (`CurrentIf(...)` in `_Layout.cshtml`), and the mobile menu is `#mainNav`.
+
+**States.** "Nothing here" is the `_EmptyState` partial (`EmptyStateModel`: icon, heading, sentence, optional button, heading level; `Inline = true` inside a section). It is also the body of the status, error, sign-in-link and not-found pages, with `HeadingLevel = 1`. Do not use an alert or a line of muted text for an empty page.
+
+**Dates** are formatted only by `Infrastructure/Display/DisplayDate.cs`: `DisplayDate.Format(date, today)` gives "Sat, Sep 4" for a date in the current year and "Sep 4, 2026" otherwise; it also takes the date strings TheTVDB sends. `today` is the page model's `Today` (from `TimeProvider`). `DisplayDate.Relative` ("3h ago") is for notifications only. Machine-readable output (sitemap, JSON-LD) keeps ISO dates and does not use it.
+
+**Logo.** `wwwroot/images/logo.svg` (navbar lockup, cream wordmark), `logo-light.svg` (ink wordmark), `logo-mark.svg`, plus `favicon.svg`, `favicon.ico`, `apple-touch-icon.png` and `images/og-image.png`. All are generated by `ui-review/logo/render.sh [play|check|bookmark]` from `make_logo.py`, which draws the mark and converts the wordmark to paths; edit the script, not the files. The navbar logo is sized by height (32px, 28px on phones). `images/banner.png` and `favicon.png` are the previous logo, kept unreferenced.
 
 ## 5. Domain model
 
@@ -254,13 +325,14 @@ There are no other hosted services, queues or message brokers. The email and imp
 
 ## 11. Testing
 
-- 641 tests, all passing as of this writing: 562 in `Recall.Tests` and 79 in `Recall.Tests.Postgres`. NUnit + Moq + AwesomeAssertions. Folders in `Recall.Tests` mirror `Recall.Web`.
+- 695 tests, all passing as of this writing: 616 in `Recall.Tests` and 79 in `Recall.Tests.Postgres`. NUnit + Moq + AwesomeAssertions. Folders in `Recall.Tests` mirror `Recall.Web`.
 - **Persistence tests** use a real `AppDbContext` on in-memory SQLite (`SqliteConnection("DataSource=:memory:")` + `EnsureCreatedAsync`), not mocks. See `LoginTokenRepositoryTests.cs` for the pattern.
 - **Covered**: `PasswordlessAuthService`, `MailService`, `TheTvDbService`, `TheTvDbApiClient`, `TheTvDbClientState`, snapshot stores, watch progress and watch time, notifications, favorites, sitemap, watchlist import and CSV parser, mappings, health check, OMDb budget, trusted forwarded headers (run through the real `ForwardedHeadersMiddleware`), the retention deletes and `PruneOldDataTimer`, audit timestamps, the OMDb JSON format, and UTC air dates. Tests that need a clock use `TestSupport/FixedTimeProvider`.
 - **Page-model tests** (`Recall.Tests/Pages/`) construct the page model directly with Moq dependencies and call the handler. `TestSupport/PageModelTesting.cs` supplies `WithTempData()` and `SuccessToast()` / `ErrorToast()` / `InfoToast()`. Covered: Dashboard, Library, and every POST handler on the three Details pages (sign-in guard, validation, each outcome's toast, the error path).
 - **Job tests** (`Recall.Tests/Infrastructure/Timers/`) call `Execute` with mocked stores and services and check the per-run cap and that one failing item doesn't stop the batch. All eight jobs are covered.
 - **Pipeline tests** (`Recall.Tests/Pipeline/`) start the real app with `RecallWebApplicationFactory`: environment `Test` (so `DevAuthMiddleware` stands aside), SQLite instead of Postgres, an in-memory distributed cache instead of Redis, a mocked `ITheTvDbService`, migrations off, and the Quartz hosted service removed. They need nothing running locally or in CI. `Program.cs` ends with `public partial class Program;` for this. Keep this set small: public page renders, protected pages redirect to login, POSTs without an antiforgery token are rejected.
 - **HTTP clients** are tested with `TestSupport/StubHttpMessageHandler`; anything needing a clock uses `TestSupport/FixedTimeProvider`.
+- **UI checks** are not part of `dotnet test`. `./ui-review/review.sh all` clones `recall_db` into two throwaway databases (never seed `recall_db` itself: it holds real data), runs three app instances, and captures every page at 1280 and 390px with Playwright and axe-core into `ui-review/screenshots/` (`report.json` has the axe results, overflow and headings per shot). After the phase 0 foundation work the run has no axe violations; keep it that way. It spends roughly 100 TheTVDB requests per run. What `dotnet test` does cover of the UI: the pipeline tests check the status and error pages, the skip link and `aria-current`; `IconsTests` checks every icon constant; `DisplayDateTests` the date formats.
 - **PostgreSQL tests** (`Recall.Tests.Postgres`) cover what SQLite cannot. `PostgresSuite` (a `[SetUpFixture]`) starts one `postgres:18.1` container per run with `Testcontainers.PostgreSql` and builds a template database by applying the real migrations; a fixture derives from `PostgresFixture` and gets its own database cloned from the template (`CREATE DATABASE … TEMPLATE`). Tests in a fixture share that database, so each works on its own user (`SeedUserAsync`) and its own ids (`NextId`); a fixture whose queries take "the first N rows" truncates the tables it reads in `[SetUp]`. What is covered:
   - `Migrations/`: all migrations apply to an empty database, re-applying is a no-op, the model has no changes missing from the migrations (`HasPendingModelChanges`), and the four data-moving migrations are tested by stopping at the migration before (`MigrationDatabase.MigrateToAsync`), seeding rows with plain SQL, applying the rest and asserting. A new migration that contains `migrationBuilder.Sql` gets a test here.
   - `Concurrency/UniqueViolationTests`: every `UniqueViolation` catch block. `CompetingWriteInterceptor` inserts the competing row just before the first `SaveChanges`, so the violation happens on every run. Each test also checks the context still saves afterwards.
@@ -339,6 +411,7 @@ dotnet ef database update --project Recall.Web --startup-project Recall.Web
 - **Handlers on public pages** start with `currentUserService.TryGetUserId(out var userId)`; do not re-derive the check from `IsAuthenticated`.
 - **Comments**: the codebase explains *why* in comments and XML docs on non-obvious code; keep that density.
 - **SEO**: pages are `noindex` unless they set `ViewData["Robots"]`.
+- **Design system**: tokens, type scale, icon constants, the page frame, `_EmptyState` and `DisplayDate` are described under "Design system" in section 4. In short: no literal colours, font sizes or radii outside `tokens.css`; no `!important`; icons through `Icons.*`; dates through `DisplayDate`; one `h1` per page; mono for data only.
 - **Culture**: the process culture is pinned to `en-US` (`Infrastructure/Hosting/AppCulture.cs`). Do not set `LANG`/`LC_ALL` in images or add request localization; machine-readable output (sitemap dates, JSON-LD, anything parsed back) should still pass `CultureInfo.InvariantCulture` explicitly.
 - **Public pages and quota**: a page reachable without sign-in must not call OMDb, and if it can trigger a TheTVDB fetch it needs the `public-details` rate-limit policy. `PublicDetailsRateLimitTests` checks the three current pages carry it.
 
@@ -392,8 +465,8 @@ Still open:
 - **External APIs**: TheTVDB v4 (primary metadata), OMDb (IMDb ratings), Cloudflare Turnstile, SMTP.
 - **Auth**: passwordless magic link → 30-day cookie; roles `User`/`Admin`; Debug builds auto-sign-in as a fixed admin.
 - **Jobs**: eight Quartz.NET jobs, in-memory schedule, single instance.
-- **Front end**: Bootstrap 5.3.3 + jQuery, vendored; no build step.
+- **Front end**: Bootstrap 5.3.3 themed through CSS variables, Phosphor Icons, self-hosted fonts, jQuery for validation; all vendored through `libman.json`, no build step.
 - **Run**: `dotnet watch run --project Recall.Web --launch-profile Recall.Web` (needs local Redis and Postgres) → https://localhost:7123
 - **Build**: `dotnet build Recall.sln --configuration Release`
-- **Test**: `dotnet test Recall.sln` (641 tests, NUnit; SQLite in-memory for persistence, plus a Testcontainers PostgreSQL suite that needs Docker and is skipped without it)
+- **Test**: `dotnet test Recall.sln` (695 tests, NUnit; SQLite in-memory for persistence, plus a Testcontainers PostgreSQL suite that needs Docker and is skipped without it)
 - **Deploy**: push to `main` → GitHub Actions → GHCR image → `docker compose -f compose.prod.yml up -d` over SSH.

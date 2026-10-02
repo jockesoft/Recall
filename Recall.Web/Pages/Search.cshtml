@@ -6,7 +6,7 @@
 }
 
 <div class="tvdb-shell">
-    <h1 class="tvdb-display mb-3">Search</h1>
+    <h1 class="mb-3">Search</h1>
 
     <form method="get" class="row g-2 mb-4">
         <div class="col-md-8">
@@ -15,7 +15,9 @@
             <span asp-validation-for="Query" class="text-danger"></span>
         </div>
         <div class="col-md-4 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100">Search</button>
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="@Icons.Search me-1" aria-hidden="true"></i> Search
+            </button>
         </div>
     </form>
 
@@ -28,56 +30,58 @@
 
     @if (Model.HasSearched && Model.Results.Count == 0 && string.IsNullOrWhiteSpace(Model.ErrorMessage))
     {
-        <div class="alert alert-info" role="alert">
-            No series or movies found for <strong>@Model.Query</strong>.
-        </div>
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Search,
+                     Heading = "No matches",
+                     Text = $"Nothing on TheTVDB matches \u201C{Model.Query}\u201D. Check the spelling or try the original title.",
+                     Inline = true
+                 })" />
     }
 
     @if (Model.Results.Count > 0)
     {
-        <p class="tvdb-mono text-muted">Found @Model.Results.Count result(s).</p>
+        <p class="tvdb-meta" role="status">
+            <span class="tvdb-mono">@Model.Results.Count</span> @(Model.Results.Count == 1 ? "result" : "results")
+        </p>
 
-        <div class="list-group">
+        <div class="list-group tvdb-result-list">
             @foreach (var item in Model.Results)
             {
                 var isSeries = item.Type == SearchResultType.Series;
-                var typeBadgeClass = isSeries ? "tvdb-badge--amber" : "tvdb-badge--info";
-                var typeIcon = isSeries ? "fa-tv" : "fa-film";
 
-                <div class="list-group-item">
-                    <a asp-page="@(isSeries ? "/Series/Details" : "/Movies/Details")" asp-route-id="@item.TvdbId" class="stretched-link"></a>
+                <div class="list-group-item tvdb-result">
+                    <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "is-empty" : "")">
+                        @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                        {
+                            <img src="@item.ImageUrl" alt="" class="tvdb-thumb" loading="lazy"/>
+                        }
+                        else
+                        {
+                            <span>No image</span>
+                        }
+                    </div>
 
-                    <div class="d-flex gap-3 align-items-start">
-                        <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "is-empty" : "")">
-                            @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                    <div class="tvdb-result__body">
+                        <div class="tvdb-result__head">
+                            <h2 class="tvdb-result__title">
+                                @* The stretched link makes the whole row the target, and gives it a name. *@
+                                <a asp-page="@(isSeries ? "/Series/Details" : "/Movies/Details")" asp-route-id="@item.TvdbId" class="stretched-link">@item.Name</a>
+                            </h2>
+                            <span class="tvdb-badge @(isSeries ? "tvdb-badge--amber" : "tvdb-badge--info")">
+                                <i class="@(isSeries ? Icons.Series : Icons.Movie)" aria-hidden="true"></i>
+                                @(isSeries ? "Series" : "Movie")
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(item.Year))
                             {
-                                <img src="@item.ImageUrl" alt="" class="tvdb-thumb" loading="lazy"/>
-                            }
-                            else
-                            {
-                                <span>No art</span>
-                            }
-                        </div>
-
-                        <div class="flex-grow-1">
-                            <div class="d-flex w-100 justify-content-between align-items-start gap-2">
-                                <h5 class="mb-1">
-                                    @item.Name
-                                    <span class="tvdb-badge @typeBadgeClass" title="@item.Type" aria-label="@item.Type">
-                                        <i class="fa-solid @typeIcon" aria-hidden="true"></i>
-                                    </span>
-                                </h5>
-                                @if (!string.IsNullOrWhiteSpace(item.Year))
-                                {
-                                    <small class="tvdb-mono text-nowrap">@item.Year</small>
-                                }
-                            </div>
-
-                            @if (!string.IsNullOrWhiteSpace(item.Overview))
-                            {
-                                <p class="mb-1 tvdb-prose text-muted">@item.Overview</p>
+                                <span class="tvdb-result__year tvdb-meta">@item.Year</span>
                             }
                         </div>
+
+                        @if (!string.IsNullOrWhiteSpace(item.Overview))
+                        {
+                            <p class="tvdb-result__overview">@item.Overview</p>
+                        }
                     </div>
                 </div>
             }

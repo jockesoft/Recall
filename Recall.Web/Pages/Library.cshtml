@@ -22,7 +22,7 @@
         ReleasedEpisodes = item.ReleasedEpisodes,
         Caption = item.Caption,
         DetailsPage = item.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
-        BadgeIcon = item.Type == SearchResultType.Movie ? "fa-film" : "fa-tv",
+        BadgeIcon = item.Type == SearchResultType.Movie ? Icons.Movie : Icons.Series,
         BadgeLabel = item.Type == SearchResultType.Movie ? "Movie" : "Series",
         BadgeVariant = item.Type == SearchResultType.Movie ? "movie" : "series",
         ShowLike = item.Type == SearchResultType.Series,
@@ -31,26 +31,34 @@
 }
 
 <div class="tvdb-shell">
-    <h1 class="tvdb-display mb-3">My Library</h1>
+    <h1 class="mb-3">My Library</h1>
 
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <a asp-page="/Search" class="btn btn-primary">Find series or movies</a>
+    @if (!Model.IsEmpty)
+    {
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+            <a asp-page="/Search" class="btn btn-primary">Find series or movies</a>
 
-        <partial name="_TypeFilterBar" model="showFilters" />
-    </div>
+            <partial name="_TypeFilterBar" model="showFilters" />
+        </div>
+    }
 
     @if (Model.IsEmpty)
     {
-        <div class="alert alert-info" role="alert">
-            Your library is empty. Search and save series, or add a movie to your watchlist, to get started.
-        </div>
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.EmptyLibrary,
+                     Heading = "Your library is empty",
+                     Text = "Save a series or add a movie to your watchlist and it shows up here, sorted by what you still have to watch.",
+                     ActionText = "Find series or movies",
+                     ActionPage = "/Search"
+                 })" />
     }
     else
     {
         @if (Model.Watching.Count > 0)
         {
             <div class="tvdb-library-section" data-library-section>
-                <h4 class="mb-3 tvdb-eyebrow">Watching &middot; @Model.Watching.Count</h4>
+                <h2 class="tvdb-section-title">Watching <span class="tvdb-count">@Model.Watching.Count</span></h2>
                 <div class="tvdb-series-grid mb-4">
                     @foreach (var item in Model.Watching)
                     {
@@ -63,7 +71,7 @@
         @if (Model.ToWatch.Count > 0)
         {
             <div class="tvdb-library-section" data-library-section>
-                <h4 class="mb-3 tvdb-eyebrow">To Watch &middot; @Model.ToWatch.Count</h4>
+                <h2 class="tvdb-section-title">To Watch <span class="tvdb-count">@Model.ToWatch.Count</span></h2>
                 <div class="tvdb-series-grid mb-4">
                     @foreach (var item in Model.ToWatch)
                     {
@@ -76,7 +84,7 @@
         @if (Model.UpToDate.Count > 0)
         {
             <div class="tvdb-library-section" data-library-section>
-                <h4 class="mb-3 tvdb-eyebrow">Up to Date &middot; @Model.UpToDate.Count</h4>
+                <h2 class="tvdb-section-title">Up to Date <span class="tvdb-count">@Model.UpToDate.Count</span></h2>
                 <div class="tvdb-series-grid mb-4">
                     @foreach (var item in Model.UpToDate)
                     {
@@ -89,7 +97,7 @@
         @if (Model.Watched.Count > 0)
         {
             <div class="tvdb-library-section" data-library-section>
-                <h4 class="mb-3 tvdb-eyebrow">Watched &middot; @Model.Watched.Count</h4>
+                <h2 class="tvdb-section-title">Watched <span class="tvdb-count">@Model.Watched.Count</span></h2>
                 <div class="tvdb-series-grid mb-4">
                     @foreach (var item in Model.Watched)
                     {
@@ -99,9 +107,9 @@
             </div>
         }
 
-        <div id="tvdb-library-empty-filter" class="alert alert-info" role="alert" hidden>
+        <p id="tvdb-library-empty-filter" class="tvdb-meta" role="status" hidden>
             Nothing matches this filter.
-        </div>
+        </p>
     }
 </div>
 

@@ -1,0 +1,14 @@
+@model Recall.Web.Pages.Shared.EmptyStateModel
+@{
+    var headingTag = Model.HeadingLevel switch { 1 => "h1", 3 => "h3", _ => "h2" };
+}
+
+<div class="tvdb-empty-state @(Model.Inline ? "tvdb-empty-state--inline" : null)">
+    <span class="tvdb-empty-state__icon"><i class="@Model.Icon" aria-hidden="true"></i></span>
+    @Html.Raw($"<{headingTag} class=\"tvdb-empty-state__title\">")@Model.Heading@Html.Raw($"</{headingTag}>")
+    <p class="tvdb-empty-state__text">@Model.Text</p>
+    @if (!string.IsNullOrWhiteSpace(Model.ActionText) && !string.IsNullOrWhiteSpace(Model.ActionPage))
+    {
+        <a asp-page="@Model.ActionPage" class="btn btn-primary tvdb-empty-state__action">@Model.ActionText</a>
+    }
+</div>

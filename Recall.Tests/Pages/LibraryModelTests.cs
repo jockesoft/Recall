@@ -65,6 +65,7 @@ public class LibraryModelTests
             _watchlist.Object,
             _tvDb.Object,
             _likes.Object,
+            new FixedTimeProvider(new DateTimeOffset(Today.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)),
             NullLogger<LibraryModel>.Instance).WithTempData();
     }
 
@@ -179,11 +180,11 @@ public class LibraryModelTests
         var watched = _sut.Watched.Should().ContainSingle().Subject;
         watched.Type.Should().Be(SearchResultType.Movie);
         watched.Name.Should().Be("Seen It");
-        watched.Caption.Should().Be("Watched Sep 12, 2026");
+        watched.Caption.Should().Be("Watched Sat, Sep 12", "a date in the current year is shown without the year");
 
         _sut.ToWatch.Select(i => i.TvdbId).Should().Equal([601, 602], "the watchlist keeps its own order, most recently added first");
         _sut.ToWatch[0].Name.Should().Be("Want To See");
-        _sut.ToWatch[0].Caption.Should().Be("Added Oct 1, 2026");
+        _sut.ToWatch[0].Caption.Should().Be("Added Thu, Oct 1");
         _sut.ToWatch[1].Name.Should().Be("Stored Name Older", "a movie that can't be loaded still gets a card, from the title stored when it was added");
         _sut.ToWatch[1].ImageUrl.Should().BeNull();
     }

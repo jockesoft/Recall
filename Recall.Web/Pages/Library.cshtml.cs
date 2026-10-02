@@ -1,9 +1,9 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
+using Recall.Web.Infrastructure.Display;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
@@ -41,9 +41,13 @@ public sealed class LibraryModel(
     ITrackedMovieRepository trackedMovieRepository,
     ITheTvDbService theTvDbService,
     ILikeRepository likeRepository,
+    TimeProvider timeProvider,
     ILogger<LibraryModel> logger)
     : PageModel
 {
+    /// <summary>Today's date in UTC, for the card captions' date format.</summary>
+    public DateOnly Today => AirDate.Today(timeProvider);
+
     public IReadOnlyList<LibraryCardItem> Watching { get; private set; } = [];
 
     /// <summary>Movies on the watchlist — wanted, not yet watched. Most recently added first.</summary>
@@ -170,7 +174,7 @@ public sealed class LibraryModel(
                 WatchedEpisodes: 0,
                 ReleasedEpisodes: 0,
                 IsLiked: false,
-                Caption: $"Watched {watchedMovies[i].WatchedUtc.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"));
+                Caption: $"Watched {DisplayDate.Format(watchedMovies[i].WatchedUtc, Today)}"));
         }
     }
 
@@ -200,7 +204,7 @@ public sealed class LibraryModel(
                 WatchedEpisodes: 0,
                 ReleasedEpisodes: 0,
                 IsLiked: false,
-                Caption: $"Added {tracked.AddedUtc.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}"))
+                Caption: $"Added {DisplayDate.Format(tracked.AddedUtc, Today)}"))
             .ToList();
     }
 

@@ -14,7 +14,7 @@
     string FormatAirMoment(DateOnly date, string? airsTime)
     {
         var ci = System.Globalization.CultureInfo.InvariantCulture;
-        var text = date.ToString("ddd, MMM d", ci);
+        var text = DisplayDate.Format(date, Model.Today);
         if (!string.IsNullOrWhiteSpace(airsTime)
             && TimeOnly.TryParse(airsTime, ci, System.Globalization.DateTimeStyles.None, out var t))
         {
@@ -59,15 +59,23 @@
     var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
-@if (ep?.SeriesId is not null)
-{
-    <a class="tvdb-back-link" href="/Series/Details/@ep.SeriesId">&larr; Back to @Model.SeriesName</a>
-}
-
 <div class="tvdb-shell">
+    @if (ep?.SeriesId is not null)
+    {
+        <a class="tvdb-back-link" href="/Series/Details/@ep.SeriesId"><i class="@Icons.Back" aria-hidden="true"></i> Back to @(Model.SeriesName ?? "the series")</a>
+    }
+
     @if (ep is null)
     {
-        <p class="tvdb-prose">This episode could not be loaded.</p>
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.NotFound,
+                     Heading = "Episode not found",
+                     Text = "We couldn't load this episode. It may not exist, or TheTVDB may not be answering right now.",
+                     HeadingLevel = 1,
+                     ActionText = "Go to the home page",
+                     ActionPage = "/Index"
+                 })" />
     }
     else
     {
@@ -90,7 +98,7 @@
                         <a class="tvdb-extlink" href="https://www.imdb.com/title/@Model.ImdbId" target="_blank" rel="noopener">
                             <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
                             <span>View on IMDb</span>
-                            <span class="tvdb-extlink-arrow" aria-hidden="true">&#8599;</span>
+                            <i class="@Icons.External" aria-hidden="true"></i>
                         </a>
                     </div>
                 }
@@ -102,9 +110,9 @@
                     <a class="tvdb-episode-series-link" href="/Series/Details/@ep.SeriesId">@Model.SeriesName</a>
                 }
 
-                <h1 class="tvdb-display mb-2">@(ep.Name ?? "Untitled episode")</h1>
+                <h1 class="mb-2">@(ep.Name ?? "Untitled episode")</h1>
 
-                <div class="tvdb-meta-inline tvdb-mono text-muted mb-3 pb-2" style="border-bottom: 1px solid var(--tvdb-ink-line);">
+                <div class="tvdb-meta-inline tvdb-meta tvdb-rule-below mb-3 pb-2">
                     @if (Model.AiredDate is { } airDate)
                     {
                         <span>@(Model.HasAired ? "Aired" : "Airs")&nbsp;@FormatAirMoment(airDate, Model.AirsTime)</span>
@@ -119,7 +127,7 @@
                     @if (omdbRating is not null)
                     {
                         <span class="tvdb-rating">
-                            <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                            <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                             <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
                             <span class="tvdb-rating-votes">
                                 IMDb@(omdbVotes is not null ? $" · {omdbVotes} votes" : "")
@@ -129,7 +137,7 @@
                     @if (ep.Score is > 0)
                     {
                         <span class="tvdb-rating">
-                            <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                            <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                             <span class="tvdb-rating-score"><strong>@ep.Score!.Value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
                             <span class="tvdb-rating-votes">TVDB score</span>
                         </span>
@@ -137,7 +145,7 @@
                     @if (Model.RecallRatingCount > 0)
                     {
                         <span class="tvdb-rating">
-                            <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                            <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                             <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
                             <span class="tvdb-rating-votes">@Model.RecallRatingCount Recall rating@(Model.RecallRatingCount == 1 ? "" : "s")</span>
                         </span>
@@ -184,7 +192,7 @@
                     @if (!Model.HasAired)
                     {
                         <button type="button" class="btn btn-watch" disabled>
-                            <i class="fa-regular fa-clock me-2" aria-hidden="true"></i>
+                            <i class="@Icons.NotAiredYet me-1" aria-hidden="true"></i>
                             <span>Airs&nbsp;@FormatAirMoment(Model.AiredDate!.Value, Model.AirsTime)</span>
                         </button>
                     }
@@ -198,7 +206,7 @@
                                          RouteId = ep.Id!.Value,
                                          IsWatched = true,
                                          WatchedLabel = Model.WatchedOnUtc is { } w
-                                             ? $"Watched on {w.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)}"
+                                             ? $"Watched {DisplayDate.Format(w, Model.Today)}"
                                              : "Watched"
                                      })" />
                         }
@@ -221,8 +229,8 @@
                                 <div class="modal-dialog">
                                     <div class="modal-content">
                                         <div class="modal-header">
-                                            <h5 class="modal-title" id="markWatchedModalLabel">Catch up?</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            <h2 class="modal-title" id="markWatchedModalLabel">Catch up?</h2>
+                                            <button type="button" class="tvdb-close" data-bs-dismiss="modal" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
                                         </div>
                                         <div class="modal-body tvdb-prose">
                                             You have <strong>@Model.PriorUnwatchedCount</strong> earlier unwatched episode@(Model.PriorUnwatchedCount == 1 ? "" : "s") in this series.
@@ -266,7 +274,7 @@
                 @if (ep.Awards.Count > 0)
                 {
                     <div class="mt-4">
-                        <h4 class="mb-2">Awards</h4>
+                        <h2 class="tvdb-section-title">Awards</h2>
                         <ul class="list-unstyled mb-0">
                             @foreach (var award in ep.Awards)
                             {
@@ -279,7 +287,7 @@
                                     {
                                         <span class="tvdb-badge tvdb-badge--neutral flex-shrink-0">Nominated</span>
                                     }
-                                    <span class="tvdb-mono small">
+                                    <span class="tvdb-meta">
                                         @award.Name@(award.Year is not null ? $" ({award.Year})" : "")
                                         @if (!string.IsNullOrWhiteSpace(award.Category))
                                         {
@@ -292,18 +300,18 @@
                     </div>
                 }
 
-                <div class="tvdb-mono text-muted small mt-4 pt-2" style="border-top: 1px solid var(--tvdb-ink-line);">
+                <div class="tvdb-meta tvdb-rule-above mt-4 pt-2">
                     @if (!string.IsNullOrWhiteSpace(Model.SeriesSlug))
                     {
-                        <a class="tvdb-metalink" href="https://www.thetvdb.com/series/@Model.SeriesSlug/episodes/@ep.Id" target="_blank" rel="noopener">Episode ID @ep.Id</a>
+                        <a class="tvdb-metalink" href="https://www.thetvdb.com/series/@Model.SeriesSlug/episodes/@ep.Id" target="_blank" rel="noopener">TheTVDB episode <span class="tvdb-mono">@ep.Id</span></a>
                     }
                     else
                     {
-                        <text>Episode ID @ep.Id</text>
+                        <text>TheTVDB episode <span class="tvdb-mono">@ep.Id</span></text>
                     }
-                    @if (ep.LastUpdated is not null)
+                    @if (DisplayDate.Format(ep.LastUpdated, Model.Today) is { } updated)
                     {
-                        <span class="ms-3">Updated @ep.LastUpdated</span>
+                        <span class="ms-3">Updated @updated</span>
                     }
                 </div>
 
@@ -311,7 +319,7 @@
                     @if (Model.PreviousEpisode is { } prev)
                     {
                         <a class="tvdb-epnav tvdb-epnav--prev" href="/Episodes/Details/@prev.Id">
-                            <span class="tvdb-epnav-arrow" aria-hidden="true">&larr;</span>
+                            <i class="@Icons.Back tvdb-epnav-arrow" aria-hidden="true"></i>
                             <span class="tvdb-epnav-text">
                                 <strong class="tvdb-epnav-label">Prev episode</strong>
                                 @if (prev.SlateCode is { } prevCode)
@@ -324,7 +332,7 @@
                     else
                     {
                         <span class="tvdb-epnav tvdb-epnav--prev is-disabled" aria-disabled="true">
-                            <span class="tvdb-epnav-arrow" aria-hidden="true">&larr;</span>
+                            <i class="@Icons.Back tvdb-epnav-arrow" aria-hidden="true"></i>
                             <span class="tvdb-epnav-text">
                                 <strong class="tvdb-epnav-label">Prev episode</strong>
                             </span>
@@ -341,7 +349,7 @@
                                     <span class="tvdb-epnav-slate tvdb-mono">@nextCode</span>
                                 }
                             </span>
-                            <span class="tvdb-epnav-arrow" aria-hidden="true">&rarr;</span>
+                            <i class="@Icons.Next tvdb-epnav-arrow" aria-hidden="true"></i>
                         </a>
                     }
                     else
@@ -350,7 +358,7 @@
                             <span class="tvdb-epnav-text">
                                 <strong class="tvdb-epnav-label">Next episode</strong>
                             </span>
-                            <span class="tvdb-epnav-arrow" aria-hidden="true">&rarr;</span>
+                            <i class="@Icons.Next tvdb-epnav-arrow" aria-hidden="true"></i>
                         </span>
                     }
                 </div>

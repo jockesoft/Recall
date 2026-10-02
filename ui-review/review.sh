@@ -9,8 +9,8 @@
 #   ./review.sh teardown   stop, drop the clones, clear the Redis database used
 #   ./review.sh all        setup, start, capture, teardown
 #
-# Needs the local_postgres and my-redis containers from the README, TheTVDB
-# keys in user secrets, and a Debug build of Recall.Web (dotnet build).
+# Needs the local_postgres and my-redis containers from the README and TheTVDB
+# keys in user secrets. "start" builds Recall.Web (Debug) first.
 #
 # recall_db itself is only read (as the template for the clones). The apps use
 # Redis database 1, so the development cache in database 0 is left alone too.
@@ -78,6 +78,7 @@ row_counts() { # database
 
 setup() {
   mkdir -p "$RUN"
+  stop_apps   # instances from an earlier run would hold the ports and the clones
   row_counts "$SOURCE_DB" > "$RUN/source-counts-before.txt"
   echo "recall_db before: $(cat "$RUN/source-counts-before.txt")"
 
@@ -117,6 +118,7 @@ setup() {
 }
 
 start() {
+  dotnet build "$ROOT/Recall.Web" -c Debug --nologo -v quiet > /dev/null
   start_app signed-in "$SIGNED_IN_URL" "$SEEDED_DB" Development
   start_app empty "$EMPTY_URL" "$EMPTY_DB" Development
 

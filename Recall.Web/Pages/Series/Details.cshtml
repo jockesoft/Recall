@@ -27,15 +27,23 @@
     var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
-<a asp-page="/Search" class="tvdb-back-link"
-   onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">&larr; Back</a>
-
 @Html.AntiForgeryToken()
 
 <div class="tvdb-shell">
+    <a asp-page="/Search" class="tvdb-back-link"
+       onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> Back</a>
+
     @if (Model.Series is null || Model.Aggregate is null)
     {
-        <div class="alert alert-warning">Series not found.</div>
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.NotFound,
+                     Heading = "Series not found",
+                     Text = "We couldn't find this series. It may have been removed from TheTVDB, or TheTVDB may not be answering right now.",
+                     HeadingLevel = 1,
+                     ActionText = "Search for a series",
+                     ActionPage = "/Search"
+                 })" />
     }
     else
     {
@@ -61,14 +69,14 @@
                         <a class="tvdb-extlink" href="https://www.imdb.com/title/@Model.Series.ImdbId" target="_blank" rel="noopener">
                             <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
                             <span>View on IMDb</span>
-                            <span class="tvdb-extlink-arrow" aria-hidden="true">&#8599;</span>
+                            <i class="@Icons.External" aria-hidden="true"></i>
                         </a>
                     </div>
                 }
             </div>
 
             <div class="col-md-8">
-                <h1 class="tvdb-display mb-2">@Model.Series.Name</h1>
+                <h1 class="mb-2">@Model.Series.Name</h1>
 
                 @if (omdbGenres.Length > 0)
                 {
@@ -131,12 +139,12 @@
 
                 <dl class="row">
                     <dt class="col-sm-3">TVDB Id</dt>
-                    <dd class="col-sm-9"><a href="https://www.thetvdb.com/series/@Model.Series.Slug" target="_blank" rel="noopener">@Model.Series.TvdbId</a></dd>
+                    <dd class="col-sm-9"><a class="tvdb-mono" href="https://www.thetvdb.com/series/@Model.Series.Slug" target="_blank" rel="noopener">@Model.Series.TvdbId</a></dd>
 
                     @if (!string.IsNullOrWhiteSpace(Model.Series.FirstAired))
                     {
                         <dt class="col-sm-3">First aired</dt>
-                        <dd class="col-sm-9">@Model.Series.FirstAired</dd>
+                        <dd class="col-sm-9">@DisplayDate.Format(Model.Series.FirstAired, Model.Today)</dd>
                     }
 
                     @if (Model.IsTrackedByCurrentUser)
@@ -144,7 +152,7 @@
                         <dt class="col-sm-3">Last watched</dt>
                         <dd class="col-sm-9">
                             @(Model.WatchedDatesByEpisodeId.Count > 0
-                                ? Model.WatchedDatesByEpisodeId.Values.Max().ToString("yyyy-MM-dd")
+                                ? DisplayDate.Format(Model.WatchedDatesByEpisodeId.Values.Max(), Model.Today)
                                 : "Not started yet")
                         </dd>
                     }
@@ -154,7 +162,7 @@
                         <dt class="col-sm-3">IMDb rating</dt>
                         <dd class="col-sm-9">
                             <span class="tvdb-rating">
-                                <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
                                 @if (omdbVotes is not null)
                                 {
@@ -169,7 +177,7 @@
                         <dt class="col-sm-3">Recall rating</dt>
                         <dd class="col-sm-9">
                             <span class="tvdb-rating">
-                                <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
                                 <span class="tvdb-rating-votes">@Model.RecallRatingCount rating@(Model.RecallRatingCount == 1 ? "" : "s")</span>
                             </span>
@@ -179,14 +187,14 @@
 
                 @if (!string.IsNullOrWhiteSpace(Model.Series.Overview))
                 {
-                    <h5>Overview</h5>
+                    <h2 class="tvdb-section-title">Overview</h2>
                     <p class="tvdb-prose">@Model.Series.Overview</p>
                 }
 
                 @if (omdbAwards is not null)
                 {
                     <div class="tvdb-awards">
-                        <i class="fa-solid fa-award" aria-hidden="true"></i>
+                        <i class="@Icons.Award" aria-hidden="true"></i>
                         <div>
                             <p class="mb-0">@omdbAwards</p>
                             <span class="tvdb-awards-src">via OMDb</span>
@@ -205,7 +213,7 @@
         if (cast.Count > 0)
         {
             <hr class="my-4" />
-            <h4 class="mb-3">Cast &amp; Characters</h4>
+            <h2 class="mb-3">Cast &amp; Characters</h2>
 
             <div class="cast-container" id="castContainer">
                 <div class="row g-3" id="castGrid">
@@ -217,32 +225,24 @@
                         var hasLink = !string.IsNullOrWhiteSpace(ch.Url);
 
                         <div class="col-12 col-sm-6 col-lg-4 cast-item">
-                            <div class="h-100 d-flex p-3 gap-3 align-items-start form-control">
-                                <div class="flex-shrink-0">
-                                    @if (!string.IsNullOrWhiteSpace(imageUrl))
-                                    {
-                                        <img src="@imageUrl"
-                                             alt="@personDisplay"
-                                             class="rounded"
-                                             style="width:72px;height:72px;object-fit:cover;" />
-                                    }
-                                    else
-                                    {
-                                        <div class="rounded d-flex align-items-center justify-content-center tvdb-slate--inline"
-                                             style="width:72px;height:72px;">
-                                            No image
-                                        </div>
-                                    }
-                                </div>
+                            <div class="tvdb-cast-card">
+                                @if (!string.IsNullOrWhiteSpace(imageUrl))
+                                {
+                                    <img src="@imageUrl" alt="" class="tvdb-cast-card__photo" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <div class="tvdb-cast-card__photo is-empty" aria-hidden="true">
+                                        <i class="@Icons.Member"></i>
+                                    </div>
+                                }
 
-                                <div class="min-w-0">
-                                    <div class="fw-semibold text-truncate" style="color:var(--tvdb-text);">@personDisplay</div>
+                                <div class="tvdb-cast-card__body">
+                                    <div class="tvdb-cast-card__name">@personDisplay</div>
 
                                     @if (!string.IsNullOrWhiteSpace(characterDisplay))
                                     {
-                                        <div class="small text-break tvdb-mono" style="color:var(--tvdb-text-muted);">
-                                            as @characterDisplay
-                                        </div>
+                                        <div class="tvdb-meta text-break">as @characterDisplay</div>
                                     }
 
                                     <div class="mt-2 d-flex flex-wrap gap-2">
@@ -263,10 +263,7 @@
                                             <a href="@ch.Url"
                                                target="_blank"
                                                rel="noopener noreferrer"
-                                               class="tvdb-mono small"
-                                               style="color:var(--tvdb-signal);text-decoration:none;">
-                                                View on TheTVDB ↗
-                                            </a>
+                                               class="tvdb-metalink tvdb-meta">View on TheTVDB</a>
                                         </div>
                                     }
                                 </div>
@@ -278,46 +275,22 @@
                 @if (cast.Count > 6)
                 {
                     <div class="cast-expand-container mt-3">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn" onclick="toggleCast()">
-                            <span class="tvdb-mono">Show @(cast.Count - 6) more</span>
-                            <span class="ms-2" id="castToggleIcon">▼</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn"
+                                aria-expanded="false" aria-controls="castGrid" onclick="toggleCast()">
+                            <span id="castToggleLabel" data-more="Show @(cast.Count - 6) more" data-less="Show less">Show @(cast.Count - 6) more</span>
+                            <i class="@Icons.Expand ms-1" id="castToggleIcon" aria-hidden="true"></i>
                         </button>
                     </div>
                 }
             </div>
 
-            <style>
-                #castGrid .cast-item:nth-child(n+7) {
-                    display: none;
-                }
-                
-                #castContainer.is-expanded #castGrid .cast-item:nth-child(n+7) {
-                    display: block;
-                }
-                
-                #castToggleIcon {
-                    display: inline-block;
-                    transition: transform 0.3s ease;
-                }
-                
-                #castContainer.is-expanded #castToggleIcon {
-                    transform: rotate(180deg);
-                }
-            </style>
-
             <script>
                 function toggleCast() {
                     const container = document.getElementById('castContainer');
-                    const btn = document.getElementById('castToggleBtn');
-                    const isExpanded = container.classList.contains('is-expanded');
-                    
-                    if (isExpanded) {
-                        container.classList.remove('is-expanded');
-                        btn.innerHTML = '<span class="tvdb-mono">Show @(cast.Count - 6) more</span><span class="ms-2" id="castToggleIcon">▼</span>';
-                    } else {
-                        container.classList.add('is-expanded');
-                        btn.innerHTML = '<span class="tvdb-mono">Show less</span><span class="ms-2" id="castToggleIcon">▼</span>';
-                    }
+                    const label = document.getElementById('castToggleLabel');
+                    const expanded = container.classList.toggle('is-expanded');
+                    label.textContent = expanded ? label.dataset.less : label.dataset.more;
+                    document.getElementById('castToggleBtn').setAttribute('aria-expanded', expanded);
                 }
             </script>
         }
@@ -368,7 +341,7 @@
                 })
                 .ToHashSet();
 
-            <h4 class="mb-3">Seasons</h4>
+            <h2 class="mb-3">Seasons</h2>
             <div class="d-flex flex-wrap gap-2 mb-4">
                 @foreach (var seasonNumber in seasonNumbers)
                 {
@@ -381,7 +354,7 @@
                        title="@(isFullyWatched ? "All episodes watched" : null)">
                         @if (isFullyWatched)
                         {
-                            <span class="tvdb-season-check" aria-hidden="true">&#10003;</span>
+                            <i class="@Icons.Check tvdb-season-check" aria-hidden="true"></i><span class="visually-hidden">All watched: </span>
                         }
                         @Model.GetSeasonName(seasonNumber)
                     </a>
@@ -389,7 +362,7 @@
             </div>
 
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h5 class="mb-0 tvdb-eyebrow">Episodes &middot; @Model.GetSeasonName(selectedSeason)</h5>
+                <h3 class="mb-0 tvdb-eyebrow">Episodes &middot; @Model.GetSeasonName(selectedSeason)</h3>
 
                 @if (Model.IsAuthenticated && filteredEpisodes.Count > 0)
                 {
@@ -423,7 +396,7 @@
 
             @if (filteredEpisodes.Count == 0)
             {
-                <div class="alert alert-info">No episodes found for this season.</div>
+                <p class="tvdb-meta">No episodes found for this season.</p>
             }
             else
             {
@@ -432,24 +405,24 @@
                     {
                         var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
                         var hasAired = !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(ep.Aired, Model.Today);
-                        <div class="list-group-item @(isWatched ? "is-watched" : "")">
+                        <div class="list-group-item tvdb-episode-row @(isWatched ? "is-watched" : "")">
                             <div class="d-flex justify-content-between align-items-start gap-3">
-                                <div>
-                                    <div class="fw-semibold">
+                                <div class="tvdb-episode-row__main">
+                                    <div class="tvdb-episode-row__title">
                                         <span class="tvdb-mono">E@(ep.EpisodeNumber?.ToString() ?? "?")</span>
-                                        &mdash; <a asp-page="/Episodes/Details" asp-route-id="@ep.Id">@ep.Name</a>
+                                        <a asp-page="/Episodes/Details" asp-route-id="@ep.Id">@ep.Name</a>
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(ep.Overview))
                                     {
-                                        <div class="text-muted small mt-1">@ep.Overview</div>
+                                        <div class="tvdb-meta mt-1">@ep.Overview</div>
                                     }
                                 </div>
 
                                 <div class="d-flex align-items-center gap-3">
-                                    <div class="text-end small tvdb-mono text-muted">
+                                    <div class="tvdb-episode-row__facts tvdb-meta">
                                         @if (ep.Aired.HasValue)
                                         {
-                                            <div>@ep.Aired.Value.ToString("yyyy-MM-dd")</div>
+                                            <div>@DisplayDate.Format(ep.Aired.Value, Model.Today)</div>
                                         }
                                         @if (ep.RuntimeMinutes.HasValue)
                                         {
@@ -469,7 +442,7 @@
                                                         title="Mark as unwatched"
                                                         aria-pressed="true"
                                                         aria-label="Watched. Click to mark as unwatched.">
-                                                    <span aria-hidden="true">&#10003;</span>
+                                                    <i class="@Icons.Check" aria-hidden="true"></i>
                                                 </button>
                                             </form>
                                         }
@@ -502,8 +475,8 @@
 
                             @if (isWatched && Model.WatchedDatesByEpisodeId.TryGetValue(ep.Id, out var watchedOn))
                             {
-                                <div class="text-muted small tvdb-mono mt-2">
-                                    Watched on @watchedOn.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)
+                                <div class="tvdb-meta mt-2">
+                                    Watched @DisplayDate.Format(watchedOn, Model.Today)
                                 </div>
                             }
                         </div>
@@ -515,8 +488,8 @@
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title" id="seriesCatchUpModalLabel">Catch up?</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <h2 class="modal-title" id="seriesCatchUpModalLabel">Catch up?</h2>
+                            <button type="button" class="tvdb-close" data-bs-dismiss="modal" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
                         </div>
                         <div class="modal-body tvdb-prose">
                             You have <strong id="priorEpisodeCount">0</strong> earlier unwatched episode<span id="priorEpisodeCountPlural">s</span> in this season.

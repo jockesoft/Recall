@@ -20,7 +20,7 @@
         WatchedEpisodes = title.WatchedEpisodes,
         ReleasedEpisodes = title.ReleasedEpisodes,
         DetailsPage = title.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
-        BadgeIcon = title.Type == SearchResultType.Movie ? "fa-film" : "fa-tv",
+        BadgeIcon = title.Type == SearchResultType.Movie ? Icons.Movie : Icons.Series,
         BadgeLabel = title.Type == SearchResultType.Movie ? "Movie" : "Series",
         BadgeVariant = title.Type == SearchResultType.Movie ? "movie" : "series",
         LikeHandler = title.Type == SearchResultType.Movie ? "ToggleMovieLike" : "ToggleSeriesLike",
@@ -30,123 +30,116 @@
     };
 }
 
-<div class="tvdb-shell">
-    <div class="row justify-content-center">
-        <div class="col-sm-10 col-md-8 col-lg-6">
-            <div class="d-flex align-items-center gap-3 mb-4">
-                <img src="~/images/mysteryman.jpg" asp-append-version="true" width="64" height="64"
-                     class="profile-avatar" alt="" />
-                <div style="min-width:0;">
-                    <h1 class="tvdb-display mb-0 text-truncate">@Model.DisplayName</h1>
-                    <div class="tvdb-mono text-muted text-truncate">@Model.Email</div>
-                </div>
-            </div>
+<div class="tvdb-shell tvdb-shell--narrow">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <img src="~/images/mysteryman.jpg" asp-append-version="true" width="64" height="64"
+             class="profile-avatar" alt="" />
+        <div class="min-w-0">
+            <h1 class="mb-0 text-truncate">@Model.DisplayName</h1>
+            <div class="tvdb-meta text-truncate">@Model.Email</div>
+        </div>
+    </div>
 
-            @if (Model.WatchTime.HasData)
-            {
-                <div class="mb-4">
-                    <div class="tvdb-eyebrow mb-1">Total watch time</div>
-                    <div class="tvdb-watchtime-value">@Model.WatchTime.Formatted</div>
-                    <div class="tvdb-mono text-muted small mt-1">
-                        across @Model.WatchTime.EpisodeCount watched episode@(Model.WatchTime.EpisodeCount == 1 ? "" : "s")
-                    </div>
-                </div>
-            }
-
-            <dl class="row mb-4">
-                <dt class="col-sm-4">Username</dt>
-                <dd class="col-sm-8">
-                    <span class="d-inline-flex align-items-center gap-2 flex-wrap">
-                        @Model.DisplayName
-                        <a asp-page="/Account/EditProfile" class="tvdb-inline-edit">Edit</a>
-                    </span>
-                </dd>
-
-                <dt class="col-sm-4">Email</dt>
-                <dd class="col-sm-8">@Model.Email</dd>
-
-                <dt class="col-sm-4">Role</dt>
-                <dd class="col-sm-8">
-                    <span class="tvdb-role-badge @Model.RoleBadge.CssModifier">
-                        <i class="fa-solid @Model.RoleBadge.Icon"></i> @Model.RoleBadge.Label
-                    </span>
-                </dd>
-
-                <dt class="col-sm-4">Sign-in</dt>
-                <dd class="col-sm-8">Passwordless magic link &mdash; no password is stored.</dd>
-            </dl>
-
-            <section class="tvdb-fav-section mb-4">
-                <h2 class="tvdb-fav-title">Favorites</h2>
-
-                <a asp-page="/Account/Favorites" class="tvdb-fav-header"
-                   aria-label="View all liked titles">
-                    <span class="tvdb-fav-subtitle">Titles</span>
-                    <svg class="tvdb-fav-header-arrow" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"
-                              stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                </a>
-
-                <div class="mb-3">
-                    <partial name="_TypeFilterBar" model="showFilters" />
-                </div>
-
-                @if (Model.FavoriteTitles.Count == 0)
-                {
-                    <p class="tvdb-mono text-muted mb-0">No favorite titles yet.</p>
-                }
-                else
-                {
-                    <div data-library-section>
-                        <div class="tvdb-series-grid--favorites">
-                            @foreach (var title in Model.FavoriteTitles)
-                            {
-                                <partial name="_SeriesCard" model="@ToCardModel(title)" />
-                            }
-                        </div>
-                    </div>
-
-                    <div id="tvdb-library-empty-filter" class="tvdb-mono text-muted mb-0" role="alert" hidden>
-                        Nothing matches this filter.
-                    </div>
-                }
-            </section>
-
-            <section class="tvdb-fav-section mb-4">
-                <h2 class="tvdb-fav-title">Import from IMDb</h2>
-
-                @{
-                    var importJob = Model.LatestImportJob;
-                }
-                @if (importJob is null)
-                {
-                    <p class="tvdb-mono text-muted mb-2">Bring in your ratings or watchlist from an IMDb CSV export.</p>
-                }
-                else if (importJob.Status == Recall.Web.Infrastructure.Persistence.Entities.WatchlistImportJobStatus.Processing)
-                {
-                    <p class="tvdb-mono text-muted mb-2">
-                        Importing&hellip; @importJob.ProcessedCount / @importJob.TotalCount rows processed.
-                    </p>
-                }
-                else
-                {
-                    <p class="tvdb-mono text-muted mb-2">
-                        Last import: @importJob.ImportedCount imported, @importJob.NotFoundCount not found.
-                    </p>
-                }
-                <a asp-page="/Account/ImportWatchlist" class="btn btn-outline-primary btn-sm">
-                    @(importJob is null ? "Import watchlist" : "View import")
-                </a>
-            </section>
-
-            <div class="d-flex flex-wrap gap-2">
-                <a asp-page="/Account/EditProfile" class="btn btn-primary">Edit profile</a>
-                <form method="post" asp-page="/Account/Logout">
-                    <button type="submit" class="btn btn-outline-danger">Sign out</button>
-                </form>
+    @if (Model.WatchTime.HasData)
+    {
+        <div class="mb-4">
+            <div class="tvdb-eyebrow mb-1">Total watch time</div>
+            <div class="tvdb-watchtime-value">@Model.WatchTime.Formatted</div>
+            <div class="tvdb-meta mt-1">
+                across <span class="tvdb-mono">@Model.WatchTime.EpisodeCount</span> watched episode@(Model.WatchTime.EpisodeCount == 1 ? "" : "s")
             </div>
         </div>
+    }
+
+    <dl class="row mb-4">
+        <dt class="col-sm-4">Username</dt>
+        <dd class="col-sm-8">
+            <span class="d-inline-flex align-items-center gap-2 flex-wrap">
+                @Model.DisplayName
+                <a asp-page="/Account/EditProfile" class="tvdb-inline-edit">Edit</a>
+            </span>
+        </dd>
+
+        <dt class="col-sm-4">Email</dt>
+        <dd class="col-sm-8">@Model.Email</dd>
+
+        <dt class="col-sm-4">Role</dt>
+        <dd class="col-sm-8">
+            <span class="tvdb-role-badge @Model.RoleBadge.CssModifier">
+                <i class="@Model.RoleBadge.Icon" aria-hidden="true"></i> @Model.RoleBadge.Label
+            </span>
+        </dd>
+
+        <dt class="col-sm-4">Sign-in</dt>
+        <dd class="col-sm-8">Passwordless magic link &mdash; no password is stored.</dd>
+    </dl>
+
+    <section class="tvdb-fav-section mb-4">
+        <h2>Favorites</h2>
+
+        <a asp-page="/Account/Favorites" class="tvdb-fav-header"
+           aria-label="View all liked titles">
+            <span class="tvdb-fav-subtitle">Titles</span>
+            <i class="@Icons.Forward tvdb-fav-header-arrow" aria-hidden="true"></i>
+        </a>
+
+        <div class="mb-3">
+            <partial name="_TypeFilterBar" model="showFilters" />
+        </div>
+
+        @if (Model.FavoriteTitles.Count == 0)
+        {
+            <p class="tvdb-meta mb-0">No favorite titles yet. Tap the heart on a series or movie to add it.</p>
+        }
+        else
+        {
+            <div data-library-section>
+                <div class="tvdb-series-grid">
+                    @foreach (var title in Model.FavoriteTitles)
+                    {
+                        <partial name="_SeriesCard" model="@ToCardModel(title)" />
+                    }
+                </div>
+            </div>
+
+            <p id="tvdb-library-empty-filter" class="tvdb-meta mb-0" role="status" hidden>
+                Nothing matches this filter.
+            </p>
+        }
+    </section>
+
+    <section class="tvdb-fav-section mb-4">
+        <h2>Import from IMDb</h2>
+
+        @{
+            var importJob = Model.LatestImportJob;
+        }
+        @if (importJob is null)
+        {
+            <p class="tvdb-meta mb-2">Bring in your ratings or watchlist from an IMDb CSV export.</p>
+        }
+        else if (importJob.Status == Recall.Web.Infrastructure.Persistence.Entities.WatchlistImportJobStatus.Processing)
+        {
+            <p class="tvdb-meta mb-2">
+                Importing&hellip; @importJob.ProcessedCount / @importJob.TotalCount rows processed.
+            </p>
+        }
+        else
+        {
+            <p class="tvdb-meta mb-2">
+                Last import: @importJob.ImportedCount imported, @importJob.NotFoundCount not found.
+            </p>
+        }
+        <a asp-page="/Account/ImportWatchlist" class="btn btn-outline-primary btn-sm">
+            @(importJob is null ? "Import watchlist" : "View import")
+        </a>
+    </section>
+
+    <div class="d-flex flex-wrap gap-2">
+        <a asp-page="/Account/EditProfile" class="btn btn-primary">Edit profile</a>
+        <form method="post" asp-page="/Account/Logout">
+            <button type="submit" class="btn btn-outline-danger">Sign out</button>
+        </form>
     </div>
 </div>
 

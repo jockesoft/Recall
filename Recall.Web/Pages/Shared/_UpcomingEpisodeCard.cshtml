@@ -14,7 +14,7 @@
         }
         else
         {
-            <span>No art</span>
+            <span>No image</span>
         }
     </div>
 
@@ -53,7 +53,7 @@
     </div>
 
     <div class="tvdb-upcoming-aside">
-        <span class="tvdb-upcoming-date tvdb-mono">@Model.AiredDate.ToString("ddd, MMM d")</span>
+        <span class="tvdb-upcoming-date">@DisplayDate.Format(Model.AiredDate, Model.Today)</span>
 
         <span class="tvdb-upcoming-countdown">
             @if (Model.DaysUntilAired == 0)

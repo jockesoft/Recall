@@ -20,7 +20,7 @@
         WatchedEpisodes = title.WatchedEpisodes,
         ReleasedEpisodes = title.ReleasedEpisodes,
         DetailsPage = title.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
-        BadgeIcon = title.Type == SearchResultType.Movie ? "fa-film" : "fa-tv",
+        BadgeIcon = title.Type == SearchResultType.Movie ? Icons.Movie : Icons.Series,
         BadgeLabel = title.Type == SearchResultType.Movie ? "Movie" : "Series",
         BadgeVariant = title.Type == SearchResultType.Movie ? "movie" : "series",
         LikeHandler = title.Type == SearchResultType.Movie ? "ToggleMovieLike" : "ToggleSeriesLike",
@@ -31,71 +31,78 @@
 }
 
 <div class="tvdb-shell">
-    <div class="row justify-content-center">
-        <div class="col-lg-10">
-            <a asp-page="/Account/Profile"
-               class="tvdb-mono text-muted d-inline-flex align-items-center gap-1 mb-3"
-               style="text-decoration:none;">
-                <span aria-hidden="true">&larr;</span> Back to profile
-            </a>
+    <a asp-page="/Account/Profile" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Back to profile</a>
 
-            <h1 class="tvdb-display mb-4">Favorites</h1>
+    <h1 class="mb-4">Favorites</h1>
 
-            <section class="mb-5">
-                <h2 class="tvdb-fav-count">Titles <span>&middot; @Model.Titles.Count</span></h2>
+    @if (Model.Titles.Count == 0 && Model.Episodes.Count == 0)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Like,
+                     Heading = "No favorites yet",
+                     Text = "Tap the heart on a series, a movie or an episode and it is saved here.",
+                     ActionText = "Go to your library",
+                     ActionPage = "/Library"
+                 })" />
+    }
+    else
+    {
 
-                <div class="mb-3">
-                    <partial name="_TypeFilterBar" model="showFilters" />
-                </div>
+    <section class="mb-5">
+        <h2 class="tvdb-section-title">Titles <span class="tvdb-count">@Model.Titles.Count</span></h2>
 
-                @if (Model.Titles.Count == 0)
-                {
-                    <p class="tvdb-mono text-muted mb-0">You haven&rsquo;t liked any series or movies yet.</p>
-                }
-                else
-                {
-                    <div data-library-section>
-                        <div class="tvdb-series-grid">
-                            @foreach (var title in Model.Titles)
-                            {
-                                <partial name="_SeriesCard" model="@ToCardModel(title)" />
-                            }
-                        </div>
-                    </div>
-
-                    <div id="tvdb-library-empty-filter" class="alert alert-info" role="alert" hidden>
-                        Nothing matches this filter.
-                    </div>
-                }
-            </section>
-
-            <section>
-                <h2 class="tvdb-fav-count">Episodes <span>&middot; @Model.Episodes.Count</span></h2>
-
-                @if (Model.Episodes.Count == 0)
-                {
-                    <p class="tvdb-mono text-muted mb-0">You haven&rsquo;t liked any episodes yet.</p>
-                }
-                else
-                {
-                    <div class="tvdb-fav-episode-list">
-                        @foreach (var episode in Model.Episodes)
-                        {
-                            <partial name="_FavoriteEpisodeRow" model="@(new FavoriteEpisodeRowModel
-                                     {
-                                         EpisodeTvdbId = episode.TvdbId,
-                                         SeriesName = episode.SeriesName,
-                                         EpisodeName = episode.EpisodeName,
-                                         SeasonNumber = episode.SeasonNumber,
-                                         EpisodeNumber = episode.EpisodeNumber,
-                                         ImageUrl = episode.ImageUrl
-                                     })" />
-                        }
-                    </div>
-                }
-            </section>
+        <div class="mb-3">
+            <partial name="_TypeFilterBar" model="showFilters" />
         </div>
-    </div>
+
+        @if (Model.Titles.Count == 0)
+        {
+            <p class="tvdb-meta mb-0">You haven&rsquo;t liked any series or movies yet.</p>
+        }
+        else
+        {
+            <div data-library-section>
+                <div class="tvdb-series-grid">
+                    @foreach (var title in Model.Titles)
+                    {
+                        <partial name="_SeriesCard" model="@ToCardModel(title)" />
+                    }
+                </div>
+            </div>
+
+            <p id="tvdb-library-empty-filter" class="tvdb-meta" role="status" hidden>
+                Nothing matches this filter.
+            </p>
+        }
+    </section>
+
+    <section>
+        <h2 class="tvdb-section-title">Episodes <span class="tvdb-count">@Model.Episodes.Count</span></h2>
+
+        @if (Model.Episodes.Count == 0)
+        {
+            <p class="tvdb-meta mb-0">You haven&rsquo;t liked any episodes yet.</p>
+        }
+        else
+        {
+            <div class="tvdb-fav-episode-list">
+                @foreach (var episode in Model.Episodes)
+                {
+                    <partial name="_FavoriteEpisodeRow" model="@(new FavoriteEpisodeRowModel
+                             {
+                                 EpisodeTvdbId = episode.TvdbId,
+                                 SeriesName = episode.SeriesName,
+                                 EpisodeName = episode.EpisodeName,
+                                 SeasonNumber = episode.SeasonNumber,
+                                 EpisodeNumber = episode.EpisodeNumber,
+                                 ImageUrl = episode.ImageUrl
+                             })" />
+                }
+            </div>
+        }
+    </section>
+    }
 </div>
 
 @section Scripts {

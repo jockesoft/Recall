@@ -17,16 +17,19 @@
     }
 
     var badgeText = unread > 99 ? "99+" : unread.ToString();
+    var isCurrent = string.Equals(ViewContext.RouteData.Values["page"] as string, "/Account/Notifications", StringComparison.OrdinalIgnoreCase);
 }
 
 <li class="nav-item">
-    <a class="nav-link nav-bell position-relative @(unread > 0 ? "has-unread" : null)"
-       asp-page="/Account/Notifications" title="Notifications" aria-label="Notifications">
-        <i class="fa-regular fa-bell" aria-hidden="true"></i>
+    <a class="nav-link nav-bell @(unread > 0 ? "has-unread" : null)"
+       asp-page="/Account/Notifications" title="Notifications" aria-current="@(isCurrent ? "page" : null)"
+       aria-label="@(unread > 0 ? $"Notifications, {unread} unread" : "Notifications")">
+        <i class="@Icons.Bell" aria-hidden="true"></i>
+        @* Shown in the collapsed phone menu, where the bell is a row among rows. *@
+        <span class="nav-bell-label" aria-hidden="true">Notifications</span>
         @if (unread > 0)
         {
             <span class="nav-bell-badge" aria-hidden="true">@badgeText</span>
-            <span class="visually-hidden">@unread unread notifications</span>
         }
     </a>
 </li>

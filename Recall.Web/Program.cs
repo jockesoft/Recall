@@ -90,6 +90,11 @@ else
 
 app.UseForwardedHeaders();
 app.UseHttpsRedirection();
+
+// A response that ends with an error status and no body (an unknown URL, a
+// rejected form, a rate limit) is re-run as Pages/Status, so the visitor gets
+// a page inside the layout with the original status code instead of a blank one.
+app.UseStatusCodePagesWithReExecute("/Status/{0}");
 app.UseStaticFiles(); // important for runtime-created files
 app.UseRouting();
 

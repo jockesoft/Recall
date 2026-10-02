@@ -38,15 +38,23 @@
     var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
-<a asp-page="/Search" class="tvdb-back-link"
-   onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">&larr; Back</a>
-
 @Html.AntiForgeryToken()
 
 <div class="tvdb-shell">
+    <a asp-page="/Search" class="tvdb-back-link"
+       onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> Back</a>
+
     @if (movie is null)
     {
-        <div class="alert alert-warning">Movie not found.</div>
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.NotFound,
+                     Heading = "Movie not found",
+                     Text = "We couldn't find this movie. It may have been removed from TheTVDB, or TheTVDB may not be answering right now.",
+                     HeadingLevel = 1,
+                     ActionText = "Search for a movie",
+                     ActionPage = "/Search"
+                 })" />
     }
     else
     {
@@ -72,14 +80,14 @@
                         <a class="tvdb-extlink" href="https://www.imdb.com/title/@imdbId" target="_blank" rel="noopener">
                             <img src="~/images/attribution/IMDB_Logo.png" alt="IMDb" />
                             <span>View on IMDb</span>
-                            <span class="tvdb-extlink-arrow" aria-hidden="true">&#8599;</span>
+                            <i class="@Icons.External" aria-hidden="true"></i>
                         </a>
                     </div>
                 }
             </div>
 
             <div class="col-md-8">
-                <h1 class="tvdb-display mb-2">@movie.Name</h1>
+                <h1 class="mb-2">@movie.Name</h1>
 
                 @if (movie.Genres.Count > 0)
                 {
@@ -100,7 +108,7 @@
                                      RouteId = movie.TvdbId,
                                      IsWatched = Model.IsWatchedByCurrentUser,
                                      WatchedLabel = Model.WatchedOnUtc is { } w
-                                         ? $"Watched on {w.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)}"
+                                         ? $"Watched {DisplayDate.Format(w, Model.Today)}"
                                          : "Watched"
                                  })" />
 
@@ -140,13 +148,13 @@
                 <dl class="row">
                     <dt class="col-sm-3">TVDB Id</dt>
                     <dd class="col-sm-9">
-                        <a href="https://www.thetvdb.com/movies/@movie.Slug" target="_blank" rel="noopener">@movie.TvdbId</a>
+                        <a class="tvdb-mono" href="https://www.thetvdb.com/movies/@movie.Slug" target="_blank" rel="noopener">@movie.TvdbId</a>
                     </dd>
 
                     @if (movie.ReleaseDate.HasValue)
                     {
                         <dt class="col-sm-3">Release date</dt>
-                        <dd class="col-sm-9">@movie.ReleaseDate.Value.ToString("yyyy-MM-dd")</dd>
+                        <dd class="col-sm-9">@DisplayDate.Format(movie.ReleaseDate.Value, Model.Today)</dd>
                     }
 
                     @if (movie.RuntimeMinutes is > 0)
@@ -178,7 +186,7 @@
                         <dt class="col-sm-3">IMDb rating</dt>
                         <dd class="col-sm-9">
                             <span class="tvdb-rating">
-                                <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
                                 @if (omdbVotes is not null)
                                 {
@@ -193,7 +201,7 @@
                         <dt class="col-sm-3">Recall rating</dt>
                         <dd class="col-sm-9">
                             <span class="tvdb-rating">
-                                <span class="tvdb-rating-star" aria-hidden="true">&#9733;</span>
+                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
                                 <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
                                 <span class="tvdb-rating-votes">@Model.RecallRatingCount rating@(Model.RecallRatingCount == 1 ? "" : "s")</span>
                             </span>
@@ -203,14 +211,14 @@
 
                 @if (!string.IsNullOrWhiteSpace(movie.Overview))
                 {
-                    <h5>Overview</h5>
+                    <h2 class="tvdb-section-title">Overview</h2>
                     <p class="tvdb-prose">@movie.Overview</p>
                 }
 
                 @if (omdbAwards is not null)
                 {
                     <div class="tvdb-awards">
-                        <i class="fa-solid fa-award" aria-hidden="true"></i>
+                        <i class="@Icons.Award" aria-hidden="true"></i>
                         <div>
                             <p class="mb-0">@omdbAwards</p>
                             <span class="tvdb-awards-src">via OMDb</span>
@@ -227,7 +235,7 @@
         if (cast.Count > 0)
         {
             <hr class="my-4" />
-            <h4 class="mb-3">Cast &amp; Characters</h4>
+            <h2 class="mb-3">Cast &amp; Characters</h2>
 
             <div class="cast-container" id="castContainer">
                 <div class="row g-3" id="castGrid">
@@ -239,32 +247,24 @@
                         var hasLink = !string.IsNullOrWhiteSpace(ch.Url);
 
                         <div class="col-12 col-sm-6 col-lg-4 cast-item">
-                            <div class="h-100 d-flex p-3 gap-3 align-items-start form-control">
-                                <div class="flex-shrink-0">
-                                    @if (!string.IsNullOrWhiteSpace(imageUrl))
-                                    {
-                                        <img src="@imageUrl"
-                                             alt="@personDisplay"
-                                             class="rounded"
-                                             style="width:72px;height:72px;object-fit:cover;" />
-                                    }
-                                    else
-                                    {
-                                        <div class="rounded d-flex align-items-center justify-content-center tvdb-slate--inline"
-                                             style="width:72px;height:72px;">
-                                            No image
-                                        </div>
-                                    }
-                                </div>
+                            <div class="tvdb-cast-card">
+                                @if (!string.IsNullOrWhiteSpace(imageUrl))
+                                {
+                                    <img src="@imageUrl" alt="" class="tvdb-cast-card__photo" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <div class="tvdb-cast-card__photo is-empty" aria-hidden="true">
+                                        <i class="@Icons.Member"></i>
+                                    </div>
+                                }
 
-                                <div class="min-w-0">
-                                    <div class="fw-semibold text-truncate" style="color:var(--tvdb-text);">@personDisplay</div>
+                                <div class="tvdb-cast-card__body">
+                                    <div class="tvdb-cast-card__name">@personDisplay</div>
 
                                     @if (!string.IsNullOrWhiteSpace(characterDisplay))
                                     {
-                                        <div class="small text-break tvdb-mono" style="color:var(--tvdb-text-muted);">
-                                            as @characterDisplay
-                                        </div>
+                                        <div class="tvdb-meta text-break">as @characterDisplay</div>
                                     }
 
                                     <div class="mt-2 d-flex flex-wrap gap-2">
@@ -285,10 +285,7 @@
                                             <a href="@ch.Url"
                                                target="_blank"
                                                rel="noopener noreferrer"
-                                               class="tvdb-mono small"
-                                               style="color:var(--tvdb-signal);text-decoration:none;">
-                                                View on TheTVDB ↗
-                                            </a>
+                                               class="tvdb-metalink tvdb-meta">View on TheTVDB</a>
                                         </div>
                                     }
                                 </div>
@@ -300,46 +297,22 @@
                 @if (cast.Count > 6)
                 {
                     <div class="cast-expand-container mt-3">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn" onclick="toggleCast()">
-                            <span class="tvdb-mono">Show @(cast.Count - 6) more</span>
-                            <span class="ms-2" id="castToggleIcon">▼</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="castToggleBtn"
+                                aria-expanded="false" aria-controls="castGrid" onclick="toggleCast()">
+                            <span id="castToggleLabel" data-more="Show @(cast.Count - 6) more" data-less="Show less">Show @(cast.Count - 6) more</span>
+                            <i class="@Icons.Expand ms-1" id="castToggleIcon" aria-hidden="true"></i>
                         </button>
                     </div>
                 }
             </div>
 
-            <style>
-                #castGrid .cast-item:nth-child(n+7) {
-                    display: none;
-                }
-
-                #castContainer.is-expanded #castGrid .cast-item:nth-child(n+7) {
-                    display: block;
-                }
-
-                #castToggleIcon {
-                    display: inline-block;
-                    transition: transform 0.3s ease;
-                }
-
-                #castContainer.is-expanded #castToggleIcon {
-                    transform: rotate(180deg);
-                }
-            </style>
-
             <script>
                 function toggleCast() {
                     const container = document.getElementById('castContainer');
-                    const btn = document.getElementById('castToggleBtn');
-                    const isExpanded = container.classList.contains('is-expanded');
-
-                    if (isExpanded) {
-                        container.classList.remove('is-expanded');
-                        btn.innerHTML = '<span class="tvdb-mono">Show @(cast.Count - 6) more</span><span class="ms-2" id="castToggleIcon">▼</span>';
-                    } else {
-                        container.classList.add('is-expanded');
-                        btn.innerHTML = '<span class="tvdb-mono">Show less</span><span class="ms-2" id="castToggleIcon">▼</span>';
-                    }
+                    const label = document.getElementById('castToggleLabel');
+                    const expanded = container.classList.toggle('is-expanded');
+                    label.textContent = expanded ? label.dataset.less : label.dataset.more;
+                    document.getElementById('castToggleBtn').setAttribute('aria-expanded', expanded);
                 }
             </script>
         }

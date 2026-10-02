@@ -11,9 +11,6 @@
             aria-pressed="@(Model.IsLiked ? "true" : "false")"
             title="@(Model.IsLiked ? $"Unlike this {Model.TargetNoun}" : $"Like this {Model.TargetNoun}")"
             aria-label="@(Model.IsLiked ? $"Liked. Click to unlike this {Model.TargetNoun}." : $"Like this {Model.TargetNoun}")">
-        <svg class="tvdb-heart-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path d="M12 20.25C12 20.25 3.75 15.5 3.75 9.31A4.06 4.06 0 0 1 12 6.9a4.06 4.06 0 0 1 8.25 2.41C20.25 15.5 12 20.25 12 20.25Z"
-                  stroke-linejoin="round" />
-        </svg>
+        <i class="@(Model.IsLiked ? Icons.Liked : Icons.Like)" aria-hidden="true"></i>
     </button>
 </form>

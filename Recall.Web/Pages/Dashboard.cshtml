@@ -64,37 +64,40 @@
 }
 
 <div class="tvdb-shell">
-    <div class="tvdb-eyebrow mb-1">Your channel &middot; @Model.Today.ToString("dddd, MMMM d")</div>
+    <div class="tvdb-eyebrow mb-1">@DisplayDate.Format(Model.Today, Model.Today)</div>
+    <h1 class="mb-4">Your channel</h1>
 
     @if (!hasLibrary)
     {
-        <div class="tvdb-empty-state">
-            <div class="tvdb-slate--inline mb-3"><span class="tvdb-dot" aria-hidden="true"></span> NO SIGNAL</div>
-            <h2 class="tvdb-display">Nothing on your schedule yet</h2>
-            <p class="tvdb-prose text-muted">Add a few shows to your library and this page turns into your personal air-date guide.</p>
-            <a asp-page="/Search" class="btn btn-primary mt-2">Find series to track</a>
-        </div>
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.NoSchedule,
+                     Heading = "Nothing on your schedule yet",
+                     Text = "Add a few shows to your library and this page turns into your personal air-date guide.",
+                     ActionText = "Find series to track",
+                     ActionPage = "/Search"
+                 })" />
     }
     else
     {
-        <div class="tvdb-stat-row">
+        <div class="tvdb-stat-grid mb-4">
             <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.TrackedSeriesCount</div>
-                <div class="tvdb-stat-label">Tracked series</div>
+                <span class="tvdb-stat__value">@Model.TrackedSeriesCount</span>
+                <span class="tvdb-stat__label">Tracked series</span>
             </div>
             <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.UpcomingThisWeekCount</div>
-                <div class="tvdb-stat-label">Airing this week</div>
+                <span class="tvdb-stat__value">@Model.UpcomingThisWeekCount</span>
+                <span class="tvdb-stat__label">Airing this week</span>
             </div>
             <div class="tvdb-stat">
-                <div class="tvdb-stat-value">@Model.UnwatchedCount</div>
-                <div class="tvdb-stat-label">Unwatched episodes</div>
+                <span class="tvdb-stat__value">@Model.UnwatchedCount</span>
+                <span class="tvdb-stat__label">Unwatched episodes</span>
             </div>
         </div>
 
         @if (Model.CatchUpEpisodes.Count > 0)
         {
-            <h4 class="mb-3">Catch up</h4>
+            <h2 class="mb-3">Catch up</h2>
             <div class="tvdb-catchup-grid mb-4">
                 @foreach (var ep in Model.CatchUpEpisodes)
                 {
@@ -112,17 +115,17 @@
             </div>
         }
 
-        <h4 class="mb-0">Upcoming</h4>
+        <h2 class="mb-3">Upcoming</h2>
 
         @if (Model.UpcomingEpisodes.Count == 0)
         {
-            <div class="alert alert-info mt-3">Nothing airing soon for the series you track.</div>
+            <p class="tvdb-meta mb-0">Nothing airing in the next 30 days for the series you track.</p>
         }
         else
         {
             @foreach (var group in groupedUpcoming)
             {
-                <div class="tvdb-schedule-day">@group.Key</div>
+                <h3 class="tvdb-schedule-day">@group.Key</h3>
                 <div class="tvdb-upcoming-list">
                     @foreach (var row in group
                         .OrderBy(r => r.AiredDate)

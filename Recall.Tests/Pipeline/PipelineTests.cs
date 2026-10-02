@@ -114,6 +114,61 @@ public sealed class PipelineTests
     }
 
     [Test]
+    public async Task AnUnknownAddress_Should_Be404_WithAPageInsideTheLayout()
+    {
+        var response = await _client.GetAsync("/this-page-does-not-exist");
+        var html = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        html.Should().Contain("Page not found");
+        html.Should().Contain("<nav", "the status page is rendered inside the normal layout");
+        html.Should().Contain("Metadata provided by");
+    }
+
+    [Test]
+    public async Task ASeriesTheTvDbDoesNotKnow_Should_GetTheNotFoundPage()
+    {
+        var response = await _client.GetAsync("/Series/Details/999999");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("Page not found");
+    }
+
+    [Test]
+    public async Task ARejectedPost_Should_KeepItsStatus_AndExplainItself()
+    {
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["Email"] = "someone@example.com" });
+
+        var response = await _client.PostAsync("/Account/Login", form);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("go through", "the rejected form gets a page that explains what happened");
+    }
+
+    [Test]
+    public async Task ErrorPage_Should_Apologise_WithoutDevelopmentText()
+    {
+        var response = await _client.GetAsync("/Error");
+        var html = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        html.Should().Contain("Something went wrong");
+        html.Should().NotContain("Development");
+        html.Should().NotContain("ASPNETCORE_ENVIRONMENT");
+    }
+
+    [Test]
+    public async Task EveryPage_Should_OfferASkipLink_AndMarkTheCurrentNavigationItem()
+    {
+        var html = await (await _client.GetAsync("/Account/Login")).Content.ReadAsStringAsync();
+
+        html.Should().Contain("href=\"#main\"");
+        html.Should().Contain("id=\"main\"");
+        html.Should().Contain("aria-current=\"page\"");
+        html.Should().Contain("aria-controls=\"mainNav\"").And.Contain("id=\"mainNav\"");
+    }
+
+    [Test]
     public async Task HealthEndpoints_Should_AnswerAnonymously()
     {
         (await _client.GetAsync("/health/live")).StatusCode.Should().Be(HttpStatusCode.OK);
