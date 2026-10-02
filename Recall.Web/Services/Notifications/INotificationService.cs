@@ -31,6 +31,9 @@ public interface INotificationService
     /// </summary>
     Task<string?> OpenAsync(Guid userId, Guid notificationId, CancellationToken cancellationToken = default);
 
+    /// <summary>Marks one of the user's notifications read without opening it. Someone else's id does nothing.</summary>
+    Task MarkReadAsync(Guid userId, Guid notificationId, CancellationToken cancellationToken = default);
+
     /// <summary>Marks all of the user's notifications read.</summary>
     Task MarkAllReadAsync(Guid userId, CancellationToken cancellationToken = default);
 }

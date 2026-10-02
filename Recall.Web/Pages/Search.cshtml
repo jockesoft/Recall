@@ -3,6 +3,8 @@
 @model Recall.Web.Pages.SearchModel
 @{
     ViewData["Title"] = "Search";
+
+    var hiddenCount = Math.Max(0, Model.Results.Count - SearchModel.InitialResultCount);
 }
 
 <div class="tvdb-shell">
@@ -11,10 +13,14 @@
     <form method="get" class="row g-2 mb-4">
         <div class="col-md-8">
             <label asp-for="Query" class="form-label"></label>
-            <input asp-for="Query" class="form-control" placeholder="e.g. Dark, Oppenheimer..." />
+            <input asp-for="Query" class="form-control" placeholder="e.g. Dark, Oppenheimer..." aria-describedby="@(Model.HasSearched ? null : "searchHint")" />
             <span asp-validation-for="Query" class="text-danger"></span>
+            @if (!Model.HasSearched)
+            {
+                <div id="searchHint" class="form-text">Search TheTVDB for any series or movie.</div>
+            }
         </div>
-        <div class="col-md-4 d-flex align-items-end">
+        <div class="col-md-4 d-flex align-items-start tvdb-search-submit">
             <button type="submit" class="btn btn-primary w-100">
                 <i class="@Icons.Search me-1" aria-hidden="true"></i> Search
             </button>
@@ -23,12 +29,15 @@
 
     @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
     {
-        <div class="alert alert-danger" role="alert">
-            @Model.ErrorMessage
-        </div>
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Problem,
+                     Heading = "Search is not available right now",
+                     Text = Model.ErrorMessage,
+                     Inline = true
+                 })" />
     }
-
-    @if (Model.HasSearched && Model.Results.Count == 0 && string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    else if (Model.HasSearched && Model.Results.Count == 0 && ViewData.ModelState.IsValid)
     {
         <partial name="_EmptyState" model="@(new EmptyStateModel
                  {
@@ -45,12 +54,18 @@
             <span class="tvdb-mono">@Model.Results.Count</span> @(Model.Results.Count == 1 ? "result" : "results")
         </p>
 
-        <div class="list-group tvdb-result-list">
-            @foreach (var item in Model.Results)
+        <ul class="list-group tvdb-result-list" id="searchResults">
+            @for (var i = 0; i < Model.Results.Count; i++)
             {
+                var item = Model.Results[i];
                 var isSeries = item.Type == SearchResultType.Series;
+                var badge = Model.LibraryBadge(item);
+                var meta = string.IsNullOrWhiteSpace(item.Year)
+                    ? (isSeries ? "Series" : "Movie")
+                    : $"{(isSeries ? "Series" : "Movie")} \u00B7 {item.Year}";
 
-                <div class="list-group-item tvdb-result">
+                @* Results past the first page are rendered hidden; "Show more" reveals them. *@
+                <li class="list-group-item tvdb-result" hidden="@(i >= SearchModel.InitialResultCount)">
                     <div class="tvdb-thumb @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "is-empty" : "")">
                         @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
                         {
@@ -63,32 +78,59 @@
                     </div>
 
                     <div class="tvdb-result__body">
-                        <div class="tvdb-result__head">
-                            <h2 class="tvdb-result__title">
-                                @* The stretched link makes the whole row the target, and gives it a name. *@
-                                <a asp-page="@(isSeries ? "/Series/Details" : "/Movies/Details")" asp-route-id="@item.TvdbId" class="stretched-link">@item.Name</a>
-                            </h2>
-                            <span class="tvdb-badge @(isSeries ? "tvdb-badge--amber" : "tvdb-badge--info")">
-                                <i class="@(isSeries ? Icons.Series : Icons.Movie)" aria-hidden="true"></i>
-                                @(isSeries ? "Series" : "Movie")
-                            </span>
-                            @if (!string.IsNullOrWhiteSpace(item.Year))
+                        <h2 class="tvdb-result__title">
+                            @* The title is the link; stretched, it makes the whole row the target. *@
+                            <a asp-page="@(isSeries ? "/Series/Details" : "/Movies/Details")" asp-route-id="@item.TvdbId" class="stretched-link">@item.Name</a>
+                        </h2>
+
+                        <div class="tvdb-result__meta">
+                            <span class="tvdb-meta">@meta</span>
+                            @if (badge is not null)
                             {
-                                <span class="tvdb-result__year tvdb-meta">@item.Year</span>
+                                <span class="tvdb-badge tvdb-badge--ok"><i class="@Icons.Check" aria-hidden="true"></i> @badge</span>
                             }
                         </div>
 
                         @if (!string.IsNullOrWhiteSpace(item.Overview))
                         {
-                            <p class="tvdb-result__overview">@item.Overview</p>
+                            <p class="tvdb-result__overview" lang="@item.OverviewLanguage">@item.Overview</p>
                         }
                     </div>
-                </div>
+                </li>
             }
-        </div>
+        </ul>
+
+        @if (hiddenCount > 0)
+        {
+            <div class="tvdb-show-more">
+                <button type="button" class="btn btn-outline-dark" id="showMoreResults" aria-controls="searchResults">
+                    Show <span class="tvdb-mono">@hiddenCount</span> more
+                </button>
+            </div>
+        }
     }
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    @if (hiddenCount > 0)
+    {
+        <script>
+            // The rest of the results are already on the page: reveal them and
+            // put focus on the first new one, so keyboard users carry on from there.
+            (function () {
+                var button = document.getElementById('showMoreResults');
+                if (!button) return;
+
+                button.addEventListener('click', function () {
+                    var hidden = document.querySelectorAll('#searchResults > li[hidden]');
+                    hidden.forEach(function (item) { item.hidden = false; });
+                    button.parentElement.remove();
+
+                    var first = hidden.length > 0 ? hidden[0].querySelector('a') : null;
+                    if (first) first.focus();
+                });
+            })();
+        </script>
+    }
 }

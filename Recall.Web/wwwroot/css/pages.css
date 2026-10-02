@@ -175,14 +175,6 @@
     min-width: 0;
 }
 
-.tvdb-result__head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--tvdb-space-2);
-    margin-bottom: var(--tvdb-space-1);
-}
-
 .tvdb-result__title {
     margin: 0;
     font-size: var(--tvdb-text-xl);
@@ -210,16 +202,37 @@
     outline-offset: -2px;
 }
 
-.tvdb-result__year {
-    margin-left: auto;
-    font-family: var(--tvdb-font-mono);
+/* "Series · 2008", and the "In library" or "Watched" badge. */
+.tvdb-result__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    margin: var(--tvdb-space-1) 0;
 }
 
 .tvdb-result__overview {
+    display: -webkit-box;
     margin: 0;
+    overflow: hidden;
     font-size: var(--tvdb-text-sm);
     line-height: var(--tvdb-leading-body);
     color: var(--tvdb-text-muted);
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.tvdb-show-more {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--tvdb-space-4);
+}
+
+/* The button lines up with the field (below the label's line), not with the hint under it. */
+@media (min-width: 768px) {
+    .tvdb-search-submit {
+        padding-top: calc(var(--tvdb-text-sm) * var(--bs-body-line-height) + var(--tvdb-space-1));
+    }
 }
 
 /* ---- Details pages (series, episode, movie) ------------------------------------------ */
@@ -657,136 +670,180 @@
 .tvdb-notification-list {
     display: flex;
     flex-direction: column;
-    gap: var(--tvdb-space-2);
+    margin: 0;
 }
 
-/* Each row is a submit button: opening a notification marks it read. */
+/* A row: the part that opens the episode, and beside it "Mark read". Read and
+   unread rows look the same except for the one unread signal: a dot and a
+   bold title. */
 .tvdb-notification {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-notification:first-child {
+    border-top: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-notification__open-form {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* The row is a submit button: opening a notification marks it read. */
+.tvdb-notification__open {
+    display: flex;
+    align-items: center;
     gap: var(--tvdb-space-3);
     width: 100%;
-    padding: var(--tvdb-space-3) var(--tvdb-space-4);
-    background: var(--tvdb-paper);
-    border: 1px solid var(--tvdb-ink-line);
-    border-radius: var(--tvdb-radius-lg);
+    padding: var(--tvdb-space-3) var(--tvdb-space-2);
+    background: none;
+    border: 0;
+    border-radius: var(--tvdb-radius-md);
     color: var(--tvdb-text);
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition: border-color var(--tvdb-ease), background-color var(--tvdb-ease);
+    transition: background-color var(--tvdb-ease);
 }
 
-.tvdb-notification:hover,
-.tvdb-notification:focus-visible {
-    border-color: var(--tvdb-signal);
-    background: var(--tvdb-paper-dim);
+.tvdb-notification__open:hover,
+.tvdb-notification__open:focus-visible {
+    background: var(--tvdb-wash);
 }
 
-.tvdb-notification.is-unread {
-    border-left: 3px solid var(--tvdb-signal);
-    background: var(--tvdb-paper-dim);
+.tvdb-notification__thumb {
+    width: 40px;
+    height: 60px;
 }
 
-.tvdb-notification-icon {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: var(--tvdb-radius-round);
-    background: var(--tvdb-ink-2);
-    color: var(--tvdb-signal);
-    font-size: var(--tvdb-text-md);
+.tvdb-notification__thumb.is-empty {
+    font-size: var(--tvdb-text-lg);
+    color: var(--tvdb-on-ink-muted);
 }
 
-.tvdb-notification-body {
+.tvdb-notification__body {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
     min-width: 0;
 }
 
-.tvdb-notification-title {
-    font-weight: 600;
+.tvdb-notification__title {
     line-height: var(--tvdb-leading-snug);
 }
 
-.tvdb-notification.is-unread .tvdb-notification-title::after {
-    content: "";
-    display: inline-block;
-    width: 0.45rem;
-    height: 0.45rem;
-    margin-left: var(--tvdb-space-2);
-    border-radius: var(--tvdb-radius-round);
-    background: var(--tvdb-signal-text);
-    vertical-align: middle;
+.tvdb-notification.is-unread .tvdb-notification__title {
+    font-weight: 600;
 }
 
-.tvdb-notification-text {
+.tvdb-notification__dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: var(--tvdb-space-1);
+    border-radius: var(--tvdb-radius-round);
+    background: var(--tvdb-signal-text);
+    vertical-align: 0.1em;
+}
+
+.tvdb-notification__text {
     font-size: var(--tvdb-text-sm);
     color: var(--tvdb-text-muted);
 }
 
-.tvdb-notification-time {
+.tvdb-notification__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--tvdb-space-1) var(--tvdb-space-3);
     font-size: var(--tvdb-text-xs);
     color: var(--tvdb-text-muted);
 }
 
+/* Says what pressing the row does. */
+.tvdb-notification__cta {
+    font-weight: 600;
+    color: var(--tvdb-signal-text);
+}
+
+.tvdb-notification__open:hover .tvdb-notification__cta,
+.tvdb-notification__open:focus-visible .tvdb-notification__cta {
+    text-decoration: underline;
+}
+
+.tvdb-notification__mark {
+    flex: none;
+}
+
+.tvdb-notification__mark > .btn {
+    min-height: 36px;
+    white-space: nowrap;
+}
+
+/* Phones: the button keeps its tick and drops the words (its aria-label has them). */
+@media (max-width: 575.98px) {
+    .tvdb-notification__mark-label {
+        display: none;
+    }
+
+    .tvdb-notification__mark > .btn {
+        min-width: 36px;
+    }
+}
+
 /* ---- Profile ------------------------------------------------------------------------------ */
 
-.profile-avatar {
-    flex: none;
-    width: 64px;
-    height: 64px;
-    border-radius: var(--tvdb-radius-round);
-    object-fit: cover;
-    border: 1px solid var(--tvdb-ink-line);
-    background: var(--tvdb-paper-dim);
-}
-
-.tvdb-watchtime-value {
-    font-family: var(--tvdb-font-display);
-    font-size: clamp(var(--tvdb-text-2xl), 6vw, var(--tvdb-text-3xl));
-    font-weight: 800;
-    letter-spacing: 0.01em;
-    line-height: var(--tvdb-leading-tight);
-}
-
-/* "Titles ›": a row that links to the Favorites page. */
-.tvdb-fav-header {
+/* Avatar, who, and the watch time as a stat pushed to the right. */
+.tvdb-profile-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--tvdb-space-4);
-    margin-bottom: var(--tvdb-space-3);
-    padding: var(--tvdb-space-2) 0;
-    border-bottom: 1px solid var(--tvdb-ink-line);
-    color: var(--tvdb-text);
-    text-decoration: none;
+    gap: var(--tvdb-space-3) var(--tvdb-space-4);
+    margin-bottom: var(--tvdb-space-6);
 }
 
-.tvdb-fav-header:hover,
-.tvdb-fav-header:focus-visible {
-    color: var(--tvdb-text);
+.tvdb-profile-head__who {
+    flex: 1 1 12rem;
+    min-width: 0;
 }
 
-.tvdb-fav-subtitle {
-    font-size: var(--tvdb-text-lg);
-    font-weight: 600;
+.tvdb-profile-stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-paper-dim);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
 }
 
-.tvdb-fav-header-arrow {
-    flex: none;
+.tvdb-profile-stat__value {
+    font-family: var(--tvdb-font-display);
+    font-size: var(--tvdb-text-xl);
+    font-weight: 800;
+    line-height: 1;
+}
+
+.tvdb-profile-stat__label {
+    font-size: var(--tvdb-text-sm);
     color: var(--tvdb-text-muted);
-    transition: transform var(--tvdb-ease), color var(--tvdb-ease);
 }
 
-.tvdb-fav-header:hover .tvdb-fav-header-arrow,
-.tvdb-fav-header:focus-visible .tvdb-fav-header-arrow {
-    color: var(--tvdb-signal-text);
-    transform: translateX(3px);
+.tvdb-profile-section {
+    margin-bottom: var(--tvdb-space-6);
+}
+
+.tvdb-profile-section:last-child {
+    margin-bottom: 0;
+}
+
+@media (max-width: 575.98px) {
+    .tvdb-profile-stat {
+        flex-basis: 100%;
+    }
 }
 
 /* ---- Edit profile -------------------------------------------------------------------------- */
@@ -845,15 +902,71 @@
     overflow-wrap: anywhere;
 }
 
-/* ---- Motion -------------------------------------------------------------------------------------- */
+/* ---- Import from IMDb ---------------------------------------------------------- */
 
-@media (prefers-reduced-motion: reduce) {
-    .tvdb-fav-header-arrow {
-        transition: none;
-    }
+/* Three short numbered steps. */
+.tvdb-import-steps {
+    margin-bottom: var(--tvdb-space-3);
+    padding-left: var(--tvdb-space-5);
+}
 
-    .tvdb-fav-header:hover .tvdb-fav-header-arrow,
-    .tvdb-fav-header:focus-visible .tvdb-fav-header-arrow {
-        transform: none;
-    }
+.tvdb-import-steps > li + li {
+    margin-top: var(--tvdb-space-2);
+}
+
+.tvdb-import-steps > li::marker {
+    font-family: var(--tvdb-font-mono);
+    color: var(--tvdb-text-muted);
+}
+
+/* The outcome counts: one wrapping row of status-coloured chips. */
+.tvdb-import-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2);
+    margin: 0;
+}
+
+.tvdb-import-summary > .tvdb-badge {
+    font-size: var(--tvdb-text-sm);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* An outcome nothing ended in stays in the row, but steps back. */
+.tvdb-import-summary > .tvdb-badge.is-zero {
+    color: var(--tvdb-text-muted);
+    background: transparent;
+    border-color: var(--tvdb-ink-line);
+}
+
+/* One imported row: title, meta and detail on the left, the status on the right. */
+.tvdb-import-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--tvdb-space-3);
+}
+
+.tvdb-import-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.tvdb-import-row__title {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.tvdb-import-row__detail {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+    overflow-wrap: anywhere;
+}
+
+.tvdb-import-row > .tvdb-badge {
+    flex: none;
+    white-space: nowrap;
 }

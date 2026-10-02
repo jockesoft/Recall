@@ -381,7 +381,11 @@ h1.tvdb-empty-state__title {
     color: var(--tvdb-text-muted);
 }
 
-.tvdb-empty-state__action {
+.tvdb-empty-state__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--tvdb-space-2);
     margin-top: var(--tvdb-space-3);
 }
 
@@ -647,6 +651,12 @@ h1.tvdb-empty-state__title {
     color: var(--tvdb-text-muted);
     background: var(--tvdb-paper-dim);
     border-color: var(--tvdb-ink-line);
+}
+
+.tvdb-badge--danger {
+    color: var(--tvdb-danger-ink);
+    background: var(--tvdb-danger-tint);
+    border-color: var(--tvdb-danger-edge);
 }
 
 .tvdb-genre-list {
@@ -1061,6 +1071,27 @@ dl.row dd a.tvdb-inline-edit {
     }
 }
 
+/* A section heading with a quiet link at the far end ("See all"). */
+.tvdb-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--tvdb-space-3);
+    margin-bottom: var(--tvdb-space-3);
+}
+
+.tvdb-section-head__link {
+    flex: none;
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.tvdb-section-head__link:hover,
+.tvdb-section-head__link:focus-visible {
+    text-decoration: underline;
+}
+
 /* The filter's own line under the page head, set apart by a rule. */
 .tvdb-filter-row {
     margin-bottom: var(--tvdb-space-5);
@@ -1078,6 +1109,32 @@ dl.row dd a.tvdb-inline-edit {
 .tvdb-filter-btn--movie i { color: var(--tvdb-info); }
 
 /* ---- Poster card and grid (the _SeriesCard partial) --------------------------------- */
+
+/* One row of posters and no more: six across on a desktop; narrower, a row
+   that scrolls sideways with the next poster peeking in. */
+.tvdb-poster-row {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+@media (max-width: 991.98px) {
+    .tvdb-poster-row {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        margin-inline: calc(-1 * var(--tvdb-shell-pad));
+        padding-inline: var(--tvdb-shell-pad);
+        scroll-padding-inline: var(--tvdb-shell-pad);
+        /* Room for the cards' hover lift and focus ring inside the scroller. */
+        padding-block: var(--tvdb-space-1);
+    }
+
+    .tvdb-poster-row > .tvdb-series-card-wrap {
+        flex: 0 0 clamp(7rem, 30%, 9rem);
+        scroll-snap-align: start;
+    }
+}
 
 /* Two posters across on a phone: big enough to recognise, with room for the
    title and two short lines under each. */
@@ -1357,7 +1414,7 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 /* ---- Upcoming card (the _UpcomingEpisodeCard partial) ----------------------------------
-   Compact: a small poster, the date with its countdown, then the episode. Two
+   Compact: a small poster, the episode, then the date with its countdown. Two
    columns of cards from tablet width up. */
 
 .tvdb-upcoming-list {
@@ -1409,22 +1466,28 @@ dl.row dd a.tvdb-inline-edit {
     height: 60px;
 }
 
-/* The date, right beside the episode it belongs to. A fixed width, so the
-   episode text lines up from card to card. */
+/* The date comes after the episode it belongs to, as a secondary line:
+   right-aligned and stacked on wide cards, the last line of the text column
+   on a phone (see the media query below). */
 .tvdb-upcoming-when {
     flex: none;
     display: flex;
     flex-direction: column;
+    align-items: flex-end;
     gap: 0.15rem;
-    width: 5.75rem;
+    text-align: right;
     pointer-events: none;
 }
 
 .tvdb-upcoming-date {
     font-size: var(--tvdb-text-sm);
-    font-weight: 600;
     line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-text-muted);
     white-space: nowrap;
+}
+
+.tvdb-upcoming-sep {
+    display: none;
 }
 
 .tvdb-upcoming-countdown {
@@ -1496,55 +1559,87 @@ dl.row dd a.tvdb-inline-edit {
     padding-top: 0.15rem;
 }
 
-/* Phones: the episode name gets its own line instead of being cut to a word. */
+/* Phones: everything beside the poster is one text column, the date line last
+   ("Sun, Oct 4 · in 2 days"). */
 @media (max-width: 575.98px) {
-    .tvdb-upcoming-episode {
-        flex-wrap: wrap;
+    .tvdb-upcoming-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-content: center;
+        column-gap: var(--tvdb-space-3);
         row-gap: 0.15rem;
     }
 
-    .tvdb-upcoming-epname {
-        flex-basis: 100%;
+    .tvdb-upcoming-card .tvdb-thumb {
+        grid-row: 1 / span 2;
+        align-self: center;
+    }
+
+    .tvdb-upcoming-body {
+        align-self: end;
+    }
+
+    .tvdb-upcoming-card > .tvdb-upcoming-body:last-child {
+        grid-row: 1 / span 2;
+        align-self: center;
+    }
+
+    .tvdb-upcoming-when {
+        grid-column: 2;
+        align-self: start;
+        flex-direction: row;
+        align-items: baseline;
+        gap: var(--tvdb-space-1);
+        text-align: left;
+    }
+
+    .tvdb-upcoming-sep {
+        display: inline;
+        color: var(--tvdb-text-muted);
     }
 }
 
-/* ---- Liked-episode row (the _FavoriteEpisodeRow partial) -------------------------------- */
+/* ---- Liked-episode card (the _FavoriteEpisodeCard partial) ---------------------------- */
 
-.tvdb-fav-episode-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--tvdb-space-2);
+.tvdb-fav-episode-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--tvdb-space-4) clamp(0.75rem, 2vw, 1.25rem);
 }
+
+@media (min-width: 576px) { .tvdb-fav-episode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 992px) { .tvdb-fav-episode-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 .tvdb-fav-episode {
     display: flex;
-    align-items: center;
-    gap: var(--tvdb-space-4);
-    padding: var(--tvdb-space-2) var(--tvdb-space-3);
-    background: var(--tvdb-paper-dim);
-    border: 1px solid var(--tvdb-ink-line);
-    border-radius: var(--tvdb-radius-lg);
+    flex-direction: column;
+    min-width: 0;
     color: var(--tvdb-text);
     text-decoration: none;
-    transition: border-color var(--tvdb-ease), box-shadow var(--tvdb-ease);
 }
 
 .tvdb-fav-episode:hover,
 .tvdb-fav-episode:focus-visible {
     color: var(--tvdb-text);
-    border-color: var(--tvdb-signal-edge);
-    box-shadow: var(--tvdb-shadow-sm);
+    text-decoration: none;
 }
 
 .tvdb-fav-episode-art {
     position: relative;
-    flex: none;
-    width: 104px;
+    display: block;
     aspect-ratio: 16 / 9;
+    margin-bottom: var(--tvdb-space-2);
     overflow: hidden;
     background: var(--tvdb-media-bg);
     border: 1px solid var(--tvdb-ink-line);
     border-radius: var(--tvdb-radius-md);
+    transition: border-color var(--tvdb-ease), box-shadow var(--tvdb-ease);
+}
+
+.tvdb-fav-episode:hover .tvdb-fav-episode-art,
+.tvdb-fav-episode:focus-visible .tvdb-fav-episode-art {
+    border-color: var(--tvdb-signal-edge);
+    box-shadow: var(--tvdb-shadow-sm);
 }
 
 .tvdb-fav-episode-art img {
@@ -1554,32 +1649,35 @@ dl.row dd a.tvdb-inline-edit {
     object-fit: cover;
 }
 
-.tvdb-fav-episode-info {
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-}
-
-.tvdb-fav-episode-show,
-.tvdb-fav-episode-meta {
+.tvdb-fav-episode-show {
     overflow: hidden;
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.tvdb-fav-episode-show {
-    font-weight: 600;
+.tvdb-fav-episode:hover .tvdb-fav-episode-show,
+.tvdb-fav-episode:focus-visible .tvdb-fav-episode-show {
+    color: var(--tvdb-signal-text);
+    text-decoration: underline;
 }
 
 .tvdb-fav-episode-meta {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 0.15rem;
     font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
+    line-height: var(--tvdb-leading-snug);
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
-@media (max-width: 400px) {
-    .tvdb-fav-episode-art { width: 84px; }
+.tvdb-fav-episode-date {
+    margin-top: 0.15rem;
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-text-muted);
 }
 
 /* ---- Cast and crew (the _CastList partial) ---------------------------------------------

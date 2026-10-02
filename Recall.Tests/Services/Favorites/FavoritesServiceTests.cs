@@ -160,4 +160,60 @@ public sealed class FavoritesServiceTests
         movie.ReleasedEpisodes.Should().Be(0);
         movie.FirstAired.Should().Be(new DateOnly(2023, 7, 21));
     }
+
+    // ---- liked episodes ----------------------------------------------------
+
+    [Test]
+    public async Task GetAllFavoritesAsync_Should_GiveALikedEpisode_ItsAirDateFromTheAggregate()
+    {
+        SetUpLikes(seriesLikes: [], movieLikes: []);
+        _likeRepository
+            .Setup(x => x.GetLikesAsync(It.IsAny<Guid>(), LikeTargetType.Episode, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new UserLike(LikeTargetType.Episode, 101, 9, DateTime.UtcNow)]);
+        _theTvDbService
+            .Setup(x => x.GetSeriesAggregateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesAggregate
+            {
+                TvdbId = 9,
+                Name = "Show",
+                Episodes =
+                [
+                    new EpisodeSummary
+                    {
+                        Id = 101, SeasonNumber = 5, EpisodeNumber = 14, Name = "Ozymandias",
+                        Image = "https://img/101.jpg", Aired = new DateOnly(2013, 9, 15)
+                    }
+                ]
+            });
+
+        var view = await _sut.GetAllFavoritesAsync(Guid.NewGuid());
+
+        var episode = view.Episodes.Should().ContainSingle().Which;
+        episode.SeriesName.Should().Be("Show");
+        episode.EpisodeName.Should().Be("Ozymandias");
+        episode.Aired.Should().Be(new DateOnly(2013, 9, 15));
+        _theTvDbService.Verify(x => x.GetEpisodeDetailsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never,
+            "the aggregate had everything the card shows");
+    }
+
+    [Test]
+    public async Task GetAllFavoritesAsync_Should_ReadTheAirDateFromTheEpisodeRecord_WhenTheAggregateLacksTheEpisode()
+    {
+        SetUpLikes(seriesLikes: [], movieLikes: []);
+        _likeRepository
+            .Setup(x => x.GetLikesAsync(It.IsAny<Guid>(), LikeTargetType.Episode, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new UserLike(LikeTargetType.Episode, 202, 9, DateTime.UtcNow)]);
+        _theTvDbService
+            .Setup(x => x.GetSeriesAggregateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesAggregate { TvdbId = 9, Name = "Show" });
+        _theTvDbService
+            .Setup(x => x.GetEpisodeDetailsAsync(202, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Episode { Id = 202, SeriesId = 9, Name = "Special", SeasonNumber = 0, Number = 3, Aired = "2014-02-01" });
+
+        var view = await _sut.GetAllFavoritesAsync(Guid.NewGuid());
+
+        var episode = view.Episodes.Should().ContainSingle().Which;
+        episode.EpisodeName.Should().Be("Special");
+        episode.Aired.Should().Be(new DateOnly(2014, 2, 1));
+    }
 }

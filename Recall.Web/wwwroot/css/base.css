@@ -310,6 +310,39 @@ main:focus {
     }
 }
 
+/* The signed-in user's avatar (the _Avatar partial): initials on amber. */
+.tvdb-avatar {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--tvdb-radius-round);
+    background: var(--tvdb-signal);
+    color: var(--tvdb-on-signal);
+    font-family: var(--tvdb-font-ui);
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+
+.tvdb-avatar--md {
+    width: 40px;
+    height: 40px;
+    font-size: var(--tvdb-text-md);
+}
+
+.tvdb-avatar--lg {
+    width: 64px;
+    height: 64px;
+    font-family: var(--tvdb-font-display);
+    font-size: var(--tvdb-text-2xl);
+    font-weight: 800;
+}
+
 /* Phone menu: who is signed in, on one row; the account links follow as rows. */
 .nav-identity {
     display: flex;
@@ -318,12 +351,6 @@ main:focus {
     margin-top: var(--tvdb-space-2);
     padding: var(--tvdb-space-3) var(--tvdb-space-1) var(--tvdb-space-2);
     border-top: 1px solid var(--tvdb-line);
-}
-
-.nav-identity__avatar {
-    flex: none;
-    width: 40px;
-    height: 40px;
 }
 
 .nav-identity__text {
@@ -358,22 +385,14 @@ main:focus {
     padding: var(--tvdb-space-1);
 }
 
-.nav-avatar-img {
-    display: block;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--tvdb-radius-round);
-    object-fit: cover;
-    background: var(--tvdb-ink-3);
-    border: 1px solid var(--tvdb-line);
-    transition: border-color var(--tvdb-ease), box-shadow var(--tvdb-ease);
+.nav-avatar .tvdb-avatar {
+    transition: box-shadow var(--tvdb-ease);
 }
 
-.nav-avatar:hover .nav-avatar-img,
-.nav-avatar:focus-visible .nav-avatar-img,
-.nav-avatar.show .nav-avatar-img {
-    border-color: var(--tvdb-signal);
-    box-shadow: 0 0 0 2px var(--tvdb-signal-halo);
+.nav-avatar:hover .tvdb-avatar,
+.nav-avatar:focus-visible .tvdb-avatar,
+.nav-avatar.show .tvdb-avatar {
+    box-shadow: 0 0 0 2px var(--tvdb-ink-2), 0 0 0 4px var(--tvdb-signal);
 }
 
 /* The avatar is the affordance: no caret. */

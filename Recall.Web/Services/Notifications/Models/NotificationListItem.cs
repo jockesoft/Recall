@@ -15,7 +15,8 @@ public sealed record NotificationListItem(
     int EpisodeCount,
     bool IsRead,
     DateTime CreatedUtc,
-    string? TargetHref)
+    string? TargetHref,
+    int? SeriesTvdbId = null)
 {
     /// <summary>CSS class of the row's leading icon.</summary>
     public string IconClass => Type switch

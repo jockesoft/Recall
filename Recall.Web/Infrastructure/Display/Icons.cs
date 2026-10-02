@@ -29,6 +29,9 @@ public static class Icons
     public const string More = "ph ph-dots-three";
     public const string SignIn = "ph ph-sign-in";
     public const string NoImage = "ph ph-image";
+    public const string Unsupported = "ph ph-prohibit";
+    public const string Upload = "ph ph-upload-simple";
+    public const string SignOut = "ph ph-sign-out";
 
     // Navigation
     public const string Back = "ph ph-arrow-left";

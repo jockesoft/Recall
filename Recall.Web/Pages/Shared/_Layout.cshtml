@@ -114,8 +114,7 @@
                            name and email) and the account links as plain rows. The avatar
                            dropdown below is for wider screens only. *@
                         <li class="nav-identity d-sm-none">
-                            <img src="~/images/mysteryman.jpg" asp-append-version="true" width="40" height="40"
-                                 class="nav-avatar-img nav-identity__avatar" alt="" />
+                            <partial name="_Avatar" model="@(new AvatarModel(CurrentUser.DisplayName, "md"))" />
                             <span class="nav-identity__text">
                                 <span class="nav-identity__name text-truncate">@(CurrentUser.DisplayName ?? "Signed in")</span>
                                 @if (!string.IsNullOrEmpty(CurrentUser.Email))
@@ -126,6 +125,9 @@
                         </li>
                         <li class="nav-item d-sm-none">
                             <a class="nav-link" asp-page="/Account/Profile" aria-current="@CurrentIf("/Account/Profile")">Profile</a>
+                        </li>
+                        <li class="nav-item d-sm-none">
+                            <a class="nav-link" asp-page="/Account/Favorites" aria-current="@CurrentIf("/Account/Favorites")">Favorites</a>
                         </li>
                         <partial name="_NotificationBell" />
                         @if (CurrentUser.IsAdmin)
@@ -141,9 +143,8 @@
                         </li>
                         <li class="nav-item dropdown d-none d-sm-block">
                             <a class="nav-link nav-avatar dropdown-toggle" href="#" id="accountMenu" role="button"
-                               data-bs-toggle="dropdown" aria-expanded="false">
-                                <img src="~/images/mysteryman.jpg" asp-append-version="true" width="32" height="32"
-                                     class="nav-avatar-img" alt="Account menu" />
+                               data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account menu">
+                                <partial name="_Avatar" model="@(new AvatarModel(CurrentUser.DisplayName))" />
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenu">
                                 <li class="dropdown-header">
@@ -154,6 +155,7 @@
                                     }
                                 </li>
                                 <li><a class="dropdown-item" asp-page="/Account/Profile" aria-current="@CurrentIf("/Account/Profile")">Profile</a></li>
+                                <li><a class="dropdown-item" asp-page="/Account/Favorites" aria-current="@CurrentIf("/Account/Favorites")">Favorites</a></li>
                                 <li><a class="dropdown-item" asp-page="/Account/Notifications" aria-current="@CurrentIf("/Account/Notifications")">Notifications</a></li>
                                 @if (CurrentUser.IsAdmin)
                                 {

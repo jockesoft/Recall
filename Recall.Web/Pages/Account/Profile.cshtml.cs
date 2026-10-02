@@ -19,9 +19,13 @@ public sealed class ProfileModel(
     IFavoritesService favoritesService,
     ILikeRepository likeRepository,
     IWatchlistImportRepository importRepository,
+    TimeProvider timeProvider,
     ILogger<ProfileModel> logger) : PageModel
 {
-    /// <summary>How many liked titles the profile page previews before the "see all" arrow.</summary>
+    /// <summary>Today's date in UTC, for the date format of the last import.</summary>
+    public DateOnly Today => AirDate.Today(timeProvider);
+
+    /// <summary>How many liked titles the profile page previews (one row of posters) beside "See all".</summary>
     public const int FavoritesPreviewCount = 6;
 
     public string DisplayName => currentUser.DisplayName ?? "—";
@@ -45,6 +49,33 @@ public sealed class ProfileModel(
 
     /// <summary>The user's most recent IMDb import, if they've ever run one. No items — summary only.</summary>
     public WatchlistImportJob? LatestImportJob { get; private set; }
+
+    /// <summary>
+    /// One sentence about the latest IMDb import: an invitation when there has
+    /// never been one, progress while it runs, the outcome once it is done.
+    /// </summary>
+    public string ImportSummary
+    {
+        get
+        {
+            if (LatestImportJob is not { } job)
+                return "Bring in your ratings or your watchlist from an IMDb CSV export.";
+
+            if (job.Status == WatchlistImportJobStatus.Processing)
+                return $"Importing {job.FileName}: {job.ProcessedCount} of {job.TotalCount} rows matched so far.";
+
+            // The same words as the import page (ImportStatusDisplay). The job's
+            // "skipped" counter is two outcomes in one: already had it, and unsupported.
+            static string Words(WatchlistImportItemStatus status) => ImportStatusDisplay.For(status).Label.ToLowerInvariant();
+
+            var parts = new List<string> { $"{job.ImportedCount} {Words(WatchlistImportItemStatus.Imported)}" };
+            if (job.SkippedCount > 0) parts.Add($"{job.SkippedCount} skipped");
+            if (job.NotFoundCount > 0) parts.Add($"{job.NotFoundCount} {Words(WatchlistImportItemStatus.NotFound)}");
+            if (job.FailedCount > 0) parts.Add($"{job.FailedCount} {Words(WatchlistImportItemStatus.Failed)}");
+
+            return $"Last import: {job.FileName}, {DisplayDate.Format(job.CreatedUtc, Today)}. {string.Join(", ", parts)}.";
+        }
+    }
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {

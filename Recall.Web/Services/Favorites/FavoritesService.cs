@@ -1,3 +1,4 @@
+using System.Globalization;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
@@ -159,6 +160,7 @@ public sealed class FavoritesService(
             var seasonNumber = summary?.SeasonNumber;
             var episodeNumber = summary?.EpisodeNumber;
             var imageUrl = summary?.Image;
+            var aired = summary?.Aired;
 
             if (summary is null || string.IsNullOrWhiteSpace(imageUrl))
             {
@@ -179,6 +181,13 @@ public sealed class FavoritesService(
 
                 if (string.IsNullOrWhiteSpace(imageUrl))
                     imageUrl = episode?.Image;
+
+                // The episode's own record carries the date as text ("2013-09-29").
+                if (aired is null
+                    && DateOnly.TryParse(episode?.Aired, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+                {
+                    aired = parsed;
+                }
             }
 
             return new FavoriteEpisode(
@@ -187,7 +196,8 @@ public sealed class FavoritesService(
                 imageUrl,
                 seasonNumber,
                 episodeNumber,
-                episodeName);
+                episodeName,
+                aired);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -40,66 +40,94 @@
                      Icon = Icons.Like,
                      Heading = "No favorites yet",
                      Text = "Tap the heart on a series, a movie or an episode and it is saved here.",
-                     ActionText = "Go to your library",
-                     ActionPage = "/Library"
+                     ActionText = "Find series or movies",
+                     ActionPage = "/Search",
+                     SecondaryActionText = "Go to your library",
+                     SecondaryActionPage = "/Library"
                  })" />
     }
     else
     {
+        <section class="mb-5">
+            <h2 class="tvdb-section-title">Titles <span class="tvdb-count">@Model.Titles.Count</span></h2>
 
-    <section class="mb-5">
-        <h2 class="tvdb-section-title">Titles <span class="tvdb-count">@Model.Titles.Count</span></h2>
+            @if (Model.Titles.Count == 0)
+            {
+                <partial name="_EmptyState" model="@(new EmptyStateModel
+                         {
+                             Icon = Icons.Like,
+                             Heading = "No liked titles",
+                             Text = "Tap the heart on a series or a movie and it shows up here.",
+                             HeadingLevel = 3,
+                             Inline = true,
+                             ActionText = "Find series or movies",
+                             ActionPage = "/Search",
+                             SecondaryActionText = "Go to your library",
+                             SecondaryActionPage = "/Library"
+                         })" />
+            }
+            else
+            {
+                @if (showFilters)
+                {
+                    <div class="mb-3">
+                        <partial name="_TypeFilterBar" model="showFilters" />
+                    </div>
+                }
 
-        <div class="mb-3">
-            <partial name="_TypeFilterBar" model="showFilters" />
-        </div>
+                <div data-library-section>
+                    <div class="tvdb-series-grid">
+                        @foreach (var title in Model.Titles)
+                        {
+                            <partial name="_SeriesCard" model="@ToCardModel(title)" />
+                        }
+                    </div>
+                </div>
 
-        @if (Model.Titles.Count == 0)
-        {
-            <p class="tvdb-meta mb-0">You haven&rsquo;t liked any series or movies yet.</p>
-        }
-        else
-        {
-            <div data-library-section>
-                <div class="tvdb-series-grid">
-                    @foreach (var title in Model.Titles)
+                <p id="tvdb-library-empty-filter" class="tvdb-meta" role="status" hidden>
+                    Nothing matches this filter.
+                </p>
+            }
+        </section>
+
+        <section>
+            <h2 class="tvdb-section-title">Episodes <span class="tvdb-count">@Model.Episodes.Count</span></h2>
+
+            @if (Model.Episodes.Count == 0)
+            {
+                <partial name="_EmptyState" model="@(new EmptyStateModel
+                         {
+                             Icon = Icons.Like,
+                             Heading = "No liked episodes",
+                             Text = "Open an episode of a series you follow and tap its heart.",
+                             HeadingLevel = 3,
+                             Inline = true,
+                             ActionText = "Go to your library",
+                             ActionPage = "/Library",
+                             SecondaryActionText = "Find series or movies",
+                             SecondaryActionPage = "/Search"
+                         })" />
+            }
+            else
+            {
+                <div class="tvdb-fav-episode-grid">
+                    @foreach (var episode in Model.Episodes)
                     {
-                        <partial name="_SeriesCard" model="@ToCardModel(title)" />
+                        <partial name="_FavoriteEpisodeCard" model="@(new FavoriteEpisodeCardModel
+                                 {
+                                     EpisodeTvdbId = episode.TvdbId,
+                                     SeriesName = episode.SeriesName,
+                                     EpisodeName = episode.EpisodeName,
+                                     SeasonNumber = episode.SeasonNumber,
+                                     EpisodeNumber = episode.EpisodeNumber,
+                                     ImageUrl = episode.ImageUrl,
+                                     Aired = episode.Aired,
+                                     Today = Model.Today
+                                 })" />
                     }
                 </div>
-            </div>
-
-            <p id="tvdb-library-empty-filter" class="tvdb-meta" role="status" hidden>
-                Nothing matches this filter.
-            </p>
-        }
-    </section>
-
-    <section>
-        <h2 class="tvdb-section-title">Episodes <span class="tvdb-count">@Model.Episodes.Count</span></h2>
-
-        @if (Model.Episodes.Count == 0)
-        {
-            <p class="tvdb-meta mb-0">You haven&rsquo;t liked any episodes yet.</p>
-        }
-        else
-        {
-            <div class="tvdb-fav-episode-list">
-                @foreach (var episode in Model.Episodes)
-                {
-                    <partial name="_FavoriteEpisodeRow" model="@(new FavoriteEpisodeRowModel
-                             {
-                                 EpisodeTvdbId = episode.TvdbId,
-                                 SeriesName = episode.SeriesName,
-                                 EpisodeName = episode.EpisodeName,
-                                 SeasonNumber = episode.SeasonNumber,
-                                 EpisodeNumber = episode.EpisodeNumber,
-                                 ImageUrl = episode.ImageUrl
-                             })" />
-                }
-            </div>
-        }
-    </section>
+            }
+        </section>
     }
 </div>
 

@@ -19,7 +19,7 @@
         @if (Model.UnreadCount > 0)
         {
             <form method="post" asp-page-handler="MarkAllRead">
-                <button type="submit" class="btn btn-outline-secondary btn-sm">Mark all as read</button>
+                <button type="submit" class="btn btn-outline-dark btn-sm">Mark all as read</button>
             </form>
         }
     </div>
@@ -37,26 +37,58 @@
     }
     else
     {
-        <div class="tvdb-notification-list">
+        <ul class="tvdb-notification-list list-unstyled">
             @foreach (var n in Model.Notifications)
             {
-                @* A form, not a link: opening marks the notification read. *@
-                <form method="post" asp-page-handler="Open" asp-route-id="@n.Id">
-                <button type="submit" class="tvdb-notification @(n.IsRead ? null : "is-unread")">
-                    <span class="tvdb-notification-icon">
-                        <i class="@n.IconClass" aria-hidden="true"></i>
-                    </span>
-                    <span class="tvdb-notification-body">
-                        <span class="tvdb-notification-title">@n.Title</span>
-                        @if (!string.IsNullOrWhiteSpace(n.Body))
-                        {
-                            <span class="tvdb-notification-text">@n.Body</span>
-                        }
-                        <span class="tvdb-notification-time">@n.RelativeTime</span>
-                    </span>
-                </button>
-                </form>
+                var poster = Model.PosterFor(n);
+
+                <li class="tvdb-notification @(n.IsRead ? null : "is-unread")">
+                    @* A form, not a link: opening marks the notification read. *@
+                    <form method="post" asp-page-handler="Open" asp-route-id="@n.Id" class="tvdb-notification__open-form">
+                        <button type="submit" class="tvdb-notification__open">
+                            @if (poster is not null)
+                            {
+                                <img src="@poster" alt="" class="tvdb-thumb tvdb-notification__thumb" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span class="tvdb-thumb tvdb-notification__thumb is-empty"><i class="@n.IconClass" aria-hidden="true"></i></span>
+                            }
+
+                            <span class="tvdb-notification__body">
+                                <span class="tvdb-notification__title">
+                                    @if (!n.IsRead)
+                                    {
+                                        <span class="tvdb-notification__dot" aria-hidden="true"></span>
+                                        <span class="visually-hidden">Unread:</span>
+                                    }
+                                    @n.Title
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(n.Body))
+                                {
+                                    <span class="tvdb-notification__text">@n.Body</span>
+                                }
+                                <span class="tvdb-notification__foot">
+                                    <span class="tvdb-notification__time">@n.RelativeTime</span>
+                                    @if (!string.IsNullOrWhiteSpace(n.TargetHref))
+                                    {
+                                        <span class="tvdb-notification__cta">Open episode <i class="@Icons.Forward" aria-hidden="true"></i></span>
+                                    }
+                                </span>
+                            </span>
+                        </button>
+                    </form>
+
+                    @if (!n.IsRead)
+                    {
+                        <form method="post" asp-page-handler="MarkRead" asp-route-id="@n.Id" class="tvdb-notification__mark">
+                            <button type="submit" class="btn btn-outline-dark btn-sm" aria-label="Mark read: @n.Title">
+                                <i class="@Icons.Check" aria-hidden="true"></i><span class="tvdb-notification__mark-label"> Mark read</span>
+                            </button>
+                        </form>
+                    }
+                </li>
             }
-        </div>
+        </ul>
     }
 </div>

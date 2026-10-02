@@ -3,7 +3,7 @@ namespace Recall.Web.Pages.Shared;
 /// <summary>
 /// Input for <c>_EmptyState.cshtml</c>: the one way a page says "there is
 /// nothing here" — an icon, a heading, a sentence and, when there is an obvious
-/// next step, one button.
+/// next step, one button (and at most one quieter second one).
 /// </summary>
 public sealed class EmptyStateModel
 {
@@ -28,6 +28,12 @@ public sealed class EmptyStateModel
 
     /// <summary>The <c>id</c> route value for <see cref="ActionPage"/>, when it needs one ("/Series/Details").</summary>
     public int? ActionRouteId { get; init; }
+
+    /// <summary>Label of a second, quieter button beside the first; requires <see cref="SecondaryActionPage"/>.</summary>
+    public string? SecondaryActionText { get; init; }
+
+    /// <summary>Razor page the second button links to.</summary>
+    public string? SecondaryActionPage { get; init; }
 
     /// <summary>Smaller padding, for an empty section rather than an empty page.</summary>
     public bool Inline { get; init; }

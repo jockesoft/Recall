@@ -76,11 +76,14 @@ public sealed class NotificationService(
         return BuildTargetHref(notification);
     }
 
+    public Task MarkReadAsync(Guid userId, Guid notificationId, CancellationToken cancellationToken = default)
+        => notificationRepository.MarkReadAsync(userId, notificationId, cancellationToken);
+
     public Task MarkAllReadAsync(Guid userId, CancellationToken cancellationToken = default)
         => notificationRepository.MarkAllReadAsync(userId, cancellationToken);
 
     private static NotificationListItem ToListItem(Notification n) =>
-        new(n.Id, n.Type, n.Title, n.Body, n.EpisodeCount, n.IsRead, n.CreatedUtc, BuildTargetHref(n));
+        new(n.Id, n.Type, n.Title, n.Body, n.EpisodeCount, n.IsRead, n.CreatedUtc, BuildTargetHref(n), n.SeriesTvdbId);
 
     /// <summary>
     /// Local URL a notification links to. Kept here (not on the entity) so the

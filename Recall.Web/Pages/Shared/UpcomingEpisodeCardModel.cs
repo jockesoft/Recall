@@ -3,10 +3,10 @@ namespace Recall.Web.Pages.Shared;
 /// <summary>
 /// Drives the shared "_UpcomingEpisodeCard" partial — a compact card for one
 /// upcoming broadcast: a left accent stripe (green when the viewer is caught up
-/// on the series, amber otherwise), a small poster, the air date with a
-/// countdown under it, then the series name, the season/episode code with the
-/// episode title, and a PREMIERE / FINALE badge. The whole card links to the
-/// episode. Several episodes of one series on the same date
+/// on the series, amber otherwise), a small poster, the series name, the
+/// season/episode code with the episode title, a PREMIERE / FINALE badge, and
+/// last the air date with its countdown as a secondary line. The whole card
+/// links to the episode. Several episodes of one series on the same date
 /// collapse into a single card via <see cref="EpisodeFrom"/>/<see cref="EpisodeTo"/>.
 /// </summary>
 public sealed class UpcomingEpisodeCardModel

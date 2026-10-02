@@ -75,7 +75,7 @@ public class PostOnlyStateChangeTests
         notifications
             .Setup(x => x.OpenAsync(userId, notificationId, It.IsAny<CancellationToken>()))
             .ReturnsAsync("/Episodes/Details/123");
-        var sut = new NotificationsModel(currentUser.Object, notifications.Object, NullLogger<NotificationsModel>.Instance);
+        var sut = new NotificationsModel(currentUser.Object, notifications.Object, Mock.Of<ITheTvDbService>(), NullLogger<NotificationsModel>.Instance);
 
         var result = await sut.OnPostOpenAsync(notificationId, CancellationToken.None);
 

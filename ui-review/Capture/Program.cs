@@ -36,6 +36,13 @@ List<Shot> shots =
     new("dashboard", "populated", Site.SignedIn, "/Dashboard"),
     new("search", "empty", Site.SignedIn, "/Search"),
     new("search", "results", Site.SignedIn, "/Search?Query=dark"),
+    new("search", "show-more", Site.SignedIn, "/Search?Query=dark",
+        Prepare: async page =>
+        {
+            // The rest of the results are on the page, hidden; the button reveals them and goes away.
+            await page.Locator("#showMoreResults").ClickAsync();
+            await page.Locator("#showMoreResults").WaitForAsync(new() { State = WaitForSelectorState.Detached });
+        }),
     new("search", "no-results", Site.SignedIn, "/Search?Query=zzqqxxzzqq"),
     new("library", "populated", Site.SignedIn, "/Library"),
     new("series-details", "watching", Site.SignedIn, $"/Series/Details/{Watching}"),

@@ -7,6 +7,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Favorites.Models;
+using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages.Account;
 
@@ -15,8 +16,12 @@ public sealed class FavoritesModel(
     ICurrentUserService currentUser,
     IFavoritesService favoritesService,
     ILikeRepository likeRepository,
+    TimeProvider timeProvider,
     ILogger<FavoritesModel> logger) : PageModel
 {
+    /// <summary>Today's date in UTC, for the air dates on the episode cards.</summary>
+    public DateOnly Today => AirDate.Today(timeProvider);
+
     public IReadOnlyList<FavoriteTitle> Titles { get; private set; } = Array.Empty<FavoriteTitle>();
 
     public IReadOnlyList<FavoriteEpisode> Episodes { get; private set; } = Array.Empty<FavoriteEpisode>();

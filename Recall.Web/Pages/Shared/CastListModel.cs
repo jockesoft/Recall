@@ -1,4 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
+using Display = Recall.Web.Infrastructure.Display;
 
 namespace Recall.Web.Pages.Shared;
 
@@ -28,22 +29,7 @@ public sealed class CastListModel
 public sealed record CastPerson(string Name, string? Detail, string? ImageUrl, string? Url)
 {
     /// <summary>Up to two initials, for the avatar of a person without a photo.</summary>
-    public string Initials
-    {
-        get
-        {
-            var words = Name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(w => char.IsLetter(w[0]))
-                .ToArray();
-
-            return words.Length switch
-            {
-                0 => "?",
-                1 => char.ToUpperInvariant(words[0][0]).ToString(),
-                _ => $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[^1][0])}"
-            };
-        }
-    }
+    public string Initials => Display.Initials.Of(Name);
 }
 
 /// <summary>

@@ -28,8 +28,9 @@ public sealed record FavoriteTitle(
     int ReleasedEpisodes);
 
 /// <summary>
-/// A liked episode, shaped for the compact <c>_FavoriteEpisodeRow</c> partial:
-/// the parent <see cref="SeriesName"/> in bold, then "S02E03 · Episode title".
+/// A liked episode, shaped for the <c>_FavoriteEpisodeCard</c> partial: the
+/// still, the parent <see cref="SeriesName"/>, "S02E03 Episode title" and the
+/// air date.
 /// </summary>
 public sealed record FavoriteEpisode(
     int TvdbId,
@@ -37,4 +38,5 @@ public sealed record FavoriteEpisode(
     string? ImageUrl,
     int? SeasonNumber,
     int? EpisodeNumber,
-    string? EpisodeName);
+    string? EpisodeName,
+    DateOnly? Aired = null);

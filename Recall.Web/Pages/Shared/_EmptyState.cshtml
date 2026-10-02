@@ -7,8 +7,21 @@
     <span class="tvdb-empty-state__icon"><i class="@Model.Icon" aria-hidden="true"></i></span>
     @Html.Raw($"<{headingTag} class=\"tvdb-empty-state__title\">")@Model.Heading@Html.Raw($"</{headingTag}>")
     <p class="tvdb-empty-state__text">@Model.Text</p>
-    @if (!string.IsNullOrWhiteSpace(Model.ActionText) && !string.IsNullOrWhiteSpace(Model.ActionPage))
+    @{
+        var hasAction = !string.IsNullOrWhiteSpace(Model.ActionText) && !string.IsNullOrWhiteSpace(Model.ActionPage);
+        var hasSecondary = !string.IsNullOrWhiteSpace(Model.SecondaryActionText) && !string.IsNullOrWhiteSpace(Model.SecondaryActionPage);
+    }
+    @if (hasAction || hasSecondary)
     {
-        <a asp-page="@Model.ActionPage" asp-route-id="@Model.ActionRouteId" class="btn btn-primary tvdb-empty-state__action">@Model.ActionText</a>
+        <div class="tvdb-empty-state__actions">
+            @if (hasAction)
+            {
+                <a asp-page="@Model.ActionPage" asp-route-id="@Model.ActionRouteId" class="btn btn-primary">@Model.ActionText</a>
+            }
+            @if (hasSecondary)
+            {
+                <a asp-page="@Model.SecondaryActionPage" class="btn btn-outline-dark">@Model.SecondaryActionText</a>
+            }
+        </div>
     }
 </div>

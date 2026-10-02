@@ -1,0 +1,26 @@
+@model Recall.Web.Pages.Shared.FavoriteEpisodeCardModel
+
+<a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeTvdbId" class="tvdb-fav-episode">
+    <span class="tvdb-fav-episode-art @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="" loading="lazy" />
+        }
+    </span>
+
+    <span class="tvdb-fav-episode-show">@Model.SeriesName</span>
+    @if (Model.SlateCode is not null || !string.IsNullOrWhiteSpace(Model.EpisodeName))
+    {
+        <span class="tvdb-fav-episode-meta">
+            @if (Model.SlateCode is not null)
+            {
+                <span class="tvdb-mono">@Model.SlateCode</span>
+            }
+            @Model.EpisodeName
+        </span>
+    }
+    @if (Model.Aired is { } aired)
+    {
+        <span class="tvdb-fav-episode-date">@DisplayDate.Format(aired, Model.Today)</span>
+    }
+</a>

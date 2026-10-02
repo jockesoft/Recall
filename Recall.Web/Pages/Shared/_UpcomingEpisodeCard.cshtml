@@ -18,14 +18,6 @@
         }
     </div>
 
-    @if (Model.ShowDate)
-    {
-        <div class="tvdb-upcoming-when">
-            <span class="tvdb-upcoming-date">@DisplayDate.Format(Model.AiredDate, Model.Today)</span>
-            <span class="tvdb-upcoming-countdown">@Model.Countdown</span>
-        </div>
-    }
-
     <div class="tvdb-upcoming-body">
         <a asp-page="/Series/Details" asp-route-id="@Model.SeriesId" class="tvdb-upcoming-series">@Model.SeriesName</a>
 
@@ -61,4 +53,13 @@
             </div>
         }
     </div>
+
+    @if (Model.ShowDate)
+    {
+        <div class="tvdb-upcoming-when">
+            <span class="tvdb-upcoming-date">@DisplayDate.Format(Model.AiredDate, Model.Today)</span>
+            <span class="tvdb-upcoming-sep" aria-hidden="true">&middot;</span>
+            <span class="tvdb-upcoming-countdown">@Model.Countdown</span>
+        </div>
+    }
 </div>
