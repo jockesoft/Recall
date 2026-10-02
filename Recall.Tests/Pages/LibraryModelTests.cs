@@ -55,6 +55,9 @@ public class LibraryModelTests
         _movieWatches.Setup(x => x.GetWatchedMoviesAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         _watchlist.Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         SetUpWatched();
+        _watches
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<int, DateTime>());
 
         _sut = new LibraryModel(
             _currentUser.Object,
@@ -82,11 +85,18 @@ public class LibraryModelTests
         Episodes = episodes
     };
 
+    /// <summary>When a series was added to the library, for tests about the order; set before <see cref="SetUpSeries"/>.</summary>
+    private readonly Dictionary<int, DateTime> _addedUtc = [];
+
     private void SetUpSeries(params SeriesAggregate[] aggregates)
     {
         _tracked
             .Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(aggregates.Select(a => new TrackedSeries { Id = Guid.NewGuid(), UserId = UserId, TvdbId = a.TvdbId, Name = a.Name }).ToList());
+            .ReturnsAsync(aggregates.Select(a => new TrackedSeries
+            {
+                Id = Guid.NewGuid(), UserId = UserId, TvdbId = a.TvdbId, Name = a.Name,
+                CreatedUtc = _addedUtc.GetValueOrDefault(a.TvdbId)
+            }).ToList());
 
         foreach (var aggregate in aggregates)
             _tvDb.Setup(x => x.GetSeriesAggregateByIdAsync(aggregate.TvdbId, It.IsAny<CancellationToken>())).ReturnsAsync(aggregate);
@@ -196,7 +206,57 @@ public class LibraryModelTests
     }
 
     [Test]
-    public async Task OnGet_Should_OrderEachSectionByName_IgnoringCase()
+    public async Task Watching_Should_UseTheContinueWatchingOrder_RecentActivityFirst_ThenNewestAdded()
+    {
+        _addedUtc[1] = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        _addedUtc[4] = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc);
+        SetUpSeries(
+            Series(1, "Alpha, Never Watched, Added In August", "Continuing", Ep(10, 1, Today.AddDays(-5))),
+            Series(2, "Watched Last Week", "Continuing", Ep(20, 1, Today.AddDays(-9)), Ep(21, 2, Today.AddDays(-5))),
+            Series(3, "Watched Yesterday", "Continuing", Ep(30, 1, Today.AddDays(-9)), Ep(31, 2, Today.AddDays(-5))),
+            Series(4, "Zulu, Never Watched, Added This Week", "Continuing", Ep(40, 1, Today.AddDays(-5))));
+        SetUpWatched(20, 30);
+        _watches
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<int, DateTime>
+            {
+                [2] = new DateTime(2026, 9, 24, 0, 0, 0, DateTimeKind.Utc),
+                [3] = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Select(i => i.TvdbId).Should().Equal(
+            [3, 2, 4, 1], "the same order as the Dashboard's Continue watching");
+        _watches.Verify(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task OnGet_Should_KeepTheOtherSectionsInNameOrder_WhateverTheActivity()
+    {
+        SetUpSeries(
+            Series(1, "zebra", "Continuing", Ep(10, 1, Today.AddDays(-5))),
+            Series(2, "Alpha", "Continuing", Ep(20, 1, Today.AddDays(-5))),
+            Series(3, "beta", "Continuing", Ep(30, 1, Today.AddDays(-5))),
+            Series(4, "Zodiac", "Ended", Ep(40, 1, Today.AddDays(-500))),
+            Series(5, "apex", "Ended", Ep(50, 1, Today.AddDays(-500))));
+        SetUpWatched(10, 20, 30, 40, 50);
+        _watches
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<int, DateTime>
+            {
+                [1] = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc),
+                [4] = new DateTime(2026, 9, 29, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.UpToDate.Select(i => i.Name).Should().Equal("Alpha", "beta", "zebra");
+        _sut.Watched.Select(i => i.Name).Should().Equal("apex", "Zodiac");
+    }
+
+    [Test]
+    public async Task Watching_Should_FallBackToNameOrder_WhenNothingDistinguishesTheSeries()
     {
         SetUpSeries(
             Series(1, "zebra", "Continuing", Ep(10, 1, Today.AddDays(-5))),

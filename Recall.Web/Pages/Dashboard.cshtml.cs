@@ -158,19 +158,16 @@ public sealed class DashboardModel(
 
         UpcomingEpisodes = [.. upcoming.OrderBy(e => e.AiredDate)];
 
-        // Order "Catch up" by how recently the user last watched an episode of
-        // that series (most recent first) — the show you're mid-binge on floats
-        // to the top, where its next episode is the most likely thing you want.
-        // Series with nothing watched yet fall to the end, alphabetically.
-        var lastWatchedBySeries = await watchedRepository.GetLastWatchedUtcBySeriesAsync(
-            userId, catchUp.Select(c => c.SeriesId), cancellationToken);
+        // "Continue watching": what the user is in the middle of comes first
+        // (ContinueWatchingOrder has the rule, shared with the Library).
+        var lastWatchedBySeries = await watchedRepository.GetLastWatchedUtcBySeriesAsync(userId, cancellationToken);
 
-        var orderedCatchUp = catchUp
-            .OrderByDescending(c => lastWatchedBySeries.TryGetValue(c.SeriesId, out var watchedUtc)
-                ? watchedUtc
-                : DateTime.MinValue)
-            .ThenBy(c => c.SeriesName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var orderedCatchUp = ContinueWatchingOrder.Order(
+            catchUp,
+            c => c.SeriesId,
+            c => c.SeriesName,
+            lastWatchedBySeries,
+            ContinueWatchingOrder.AddedUtc(trackedSeriesIds)).ToList();
 
         CatchUpEpisodes = await EnrichCatchUpImagesAsync(orderedCatchUp, cancellationToken);
         UpcomingThisWeekCount = upcoming.Count(e => e.AiredDate <= thisWeekCutoff);
@@ -178,7 +175,7 @@ public sealed class DashboardModel(
     }
 
     /// <summary>
-    /// Fills in the still for "Catch up" cards whose aggregate didn't have one:
+    /// Fills in the still for "Continue watching" cards whose aggregate didn't have one:
     /// the episode's own (layered-cached) record — the same source
     /// Episodes/Details uses — sometimes does. A card that already has its
     /// episode's still is left alone, so a library whose next episodes all have

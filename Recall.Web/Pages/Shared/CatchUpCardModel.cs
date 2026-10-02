@@ -1,7 +1,7 @@
 namespace Recall.Web.Pages.Shared;
 
 /// <summary>
-/// Drives the shared "_CatchUpCard" partial — one tile in a "Catch up" grid.
+/// Drives the shared "_CatchUpCard" partial — one tile in the Dashboard's "Continue watching" grid.
 /// Shows the next episode's still image with the show title, season/episode
 /// code, and episode name overlaid bottom-left, plus a circular "mark watched"
 /// button bottom-right. Drop a run of these inside

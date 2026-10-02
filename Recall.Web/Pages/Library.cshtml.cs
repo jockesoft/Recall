@@ -131,7 +131,16 @@ public sealed class LibraryModel(
             await AddWatchedMoviesAsync(watchedMovies, watched, cancellationToken);
             ToWatch = await BuildWatchlistAsync(watchlistMovies, cancellationToken);
 
-            Watching = watching.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            // Watching is ordered like the Dashboard's "Continue watching": what
+            // was watched most recently first (ContinueWatchingOrder). The other
+            // sections stay alphabetical.
+            var lastWatchedBySeries = await episodeWatchRepository.GetLastWatchedUtcBySeriesAsync(userId, cancellationToken);
+            Watching = ContinueWatchingOrder.Order(
+                watching,
+                i => i.TvdbId,
+                i => i.Name,
+                lastWatchedBySeries,
+                ContinueWatchingOrder.AddedUtc(trackedSeries));
             UpToDate = upToDate.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
             Watched = watched.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
 

@@ -124,16 +124,14 @@ public sealed class EpisodeWatchRepository(
 
     public async Task<IReadOnlyDictionary<int, DateTime>> GetLastWatchedUtcBySeriesAsync(
         Guid userId,
-        IEnumerable<int> seriesTvdbIds,
         CancellationToken cancellationToken = default)
     {
-        var seriesIds = seriesTvdbIds as ICollection<int> ?? seriesTvdbIds.ToList();
-        if (seriesIds.Count == 0)
-            return new Dictionary<int, DateTime>();
-
+        // One query: GROUP BY series over the user's rows. The index on
+        // (user_id, series_tvdb_id) finds the rows and hands them over already
+        // grouped; see ContinueWatchingQueryTests for the plan.
         var rows = await dbContext.EpisodeWatches
             .AsNoTracking()
-            .Where(x => x.UserId == userId && seriesIds.Contains(x.SeriesTvdbId))
+            .Where(x => x.UserId == userId)
             .GroupBy(x => x.SeriesTvdbId)
             .Select(g => new { SeriesTvdbId = g.Key, LastWatchedUtc = g.Max(x => x.WatchedUtc) })
             .ToListAsync(cancellationToken);

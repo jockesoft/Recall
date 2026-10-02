@@ -45,7 +45,7 @@ public class DashboardModelTests
 
         SetUpWatched();
         _watches
-            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<int, DateTime>());
 
         _sut = new DashboardModel(
@@ -69,11 +69,18 @@ public class DashboardModelTests
         FinaleType = finale
     };
 
+    /// <summary>When a series was added to the library, for tests about the order; set before <see cref="SetUpSeries"/>.</summary>
+    private readonly Dictionary<int, DateTime> _addedUtc = [];
+
     private void SetUpSeries(params SeriesAggregate[] aggregates)
     {
         _library
             .Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(aggregates.Select(a => new TrackedSeries { Id = Guid.NewGuid(), UserId = UserId, TvdbId = a.TvdbId, Name = a.Name }).ToList());
+            .ReturnsAsync(aggregates.Select(a => new TrackedSeries
+            {
+                Id = Guid.NewGuid(), UserId = UserId, TvdbId = a.TvdbId, Name = a.Name,
+                CreatedUtc = _addedUtc.GetValueOrDefault(a.TvdbId)
+            }).ToList());
 
         foreach (var aggregate in aggregates)
         {
@@ -290,15 +297,19 @@ public class DashboardModelTests
     }
 
     [Test]
-    public async Task CatchUp_Should_PutTheMostRecentlyWatchedSeriesFirst_ThenTheRestByName()
+    public async Task ContinueWatching_Should_UseTheSharedOrder_RecentActivityFirst_ThenNewestAdded()
     {
+        _addedUtc[1] = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        _addedUtc[4] = new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc);
+        _addedUtc[5] = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
         SetUpSeries(
-            new SeriesAggregate { TvdbId = 1, Name = "Zulu (never watched)", Episodes = [Ep(10, 1, 1, Today.AddDays(-9))] },
+            new SeriesAggregate { TvdbId = 1, Name = "Alpha (never watched, added in August)", Episodes = [Ep(10, 1, 1, Today.AddDays(-9))] },
             new SeriesAggregate { TvdbId = 2, Name = "Watched Last Week", Episodes = [Ep(20, 1, 1, Today.AddDays(-9))] },
             new SeriesAggregate { TvdbId = 3, Name = "Watched Yesterday", Episodes = [Ep(30, 1, 1, Today.AddDays(-9))] },
-            new SeriesAggregate { TvdbId = 4, Name = "Alpha (never watched)", Episodes = [Ep(40, 1, 1, Today.AddDays(-9))] });
+            new SeriesAggregate { TvdbId = 4, Name = "Zulu (never watched, added this week)", Episodes = [Ep(40, 1, 1, Today.AddDays(-9))] },
+            new SeriesAggregate { TvdbId = 5, Name = "Beta (never watched, added in August)", Episodes = [Ep(50, 1, 1, Today.AddDays(-9))] });
         _watches
-            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<int, DateTime>
             {
                 [2] = new DateTime(2026, 9, 24, 0, 0, 0, DateTimeKind.Utc),
@@ -307,7 +318,37 @@ public class DashboardModelTests
 
         await _sut.OnGetAsync(CancellationToken.None);
 
-        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal(3, 2, 4, 1);
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal(
+            [3, 2, 4, 1, 5],
+            "watched most recently first; then the never-started ones, newest added first, and by name when added together");
+        _watches.Verify(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()), Times.Once,
+            "one grouped query for the whole page, not one per series");
+    }
+
+    [Test]
+    public async Task ContinueWatching_Should_CountAWatchedSpecialAsActivity_ButNotOfferItAsTheNextEpisode()
+    {
+        SetUpSeries(
+            new SeriesAggregate
+            {
+                TvdbId = 1, Name = "Special Watched Yesterday",
+                Episodes = [Ep(5, 0, 1, Today.AddDays(-40)), Ep(10, 1, 1, Today.AddDays(-30))]
+            },
+            new SeriesAggregate { TvdbId = 2, Name = "Episode Watched Last Week", Episodes = [Ep(20, 1, 1, Today.AddDays(-30)), Ep(21, 1, 2, Today.AddDays(-20))] });
+        SetUpWatched(5, 20);
+        _watches
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<int, DateTime>
+            {
+                [1] = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc),
+                [2] = new DateTime(2026, 9, 24, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Select(c => (c.SeriesId, c.EpisodeId)).Should().Equal(
+            [(1, 10), (2, 21)],
+            "the special is activity for the order, and S01E01 is still the episode to watch next");
     }
 
     [Test]

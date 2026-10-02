@@ -42,12 +42,13 @@ public interface IEpisodeWatchRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The most recent <c>WatchedUtc</c> per series for the given user, across the
-    /// supplied series. Series with no watched episodes are absent from the map.
+    /// The user's most recent <c>WatchedUtc</c> per series, for every series
+    /// they have watched anything of (specials included), in one grouped query.
+    /// A series with no watched episodes is absent from the map. This is the
+    /// "activity" that <c>ContinueWatchingOrder</c> sorts by.
     /// </summary>
     Task<IReadOnlyDictionary<int, DateTime>> GetLastWatchedUtcBySeriesAsync(
         Guid userId,
-        IEnumerable<int> seriesTvdbIds,
         CancellationToken cancellationToken = default);
 
     /// <summary>Distinct TVDB series ids the user has watched at least one episode of.</summary>
