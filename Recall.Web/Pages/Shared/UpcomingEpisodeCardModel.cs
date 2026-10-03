@@ -1,3 +1,5 @@
+using Recall.Web.Services.WatchTracking;
+
 namespace Recall.Web.Pages.Shared;
 
 /// <summary>
@@ -33,6 +35,9 @@ public sealed class UpcomingEpisodeCardModel
     public string? ImageUrl { get; init; }
 
     public required DateOnly AiredDate { get; init; }
+
+    /// <summary>When it is released: the card's date and time, and its countdown.</summary>
+    public required ReleaseMoment Release { get; init; }
 
     /// <summary>Season premiere (episode 1) — renders the PREMIERE badge.</summary>
     public bool IsPremiere { get; init; }
@@ -82,9 +87,12 @@ public sealed class UpcomingEpisodeCardModel
     /// </summary>
     public bool ShowDate { get; init; } = true;
 
-    /// <summary>Whole days from today until the episode airs (never negative).</summary>
+    /// <summary>
+    /// Whole days from today until the episode is released (never negative),
+    /// counted in UTC dates like the "Today" / "Tomorrow" headings.
+    /// </summary>
     public int DaysUntilAired =>
-        Math.Max(0, AiredDate.DayNumber - Today.DayNumber);
+        Math.Max(0, Release.GroupDate.DayNumber - Today.DayNumber);
 
     /// <summary>"in 3 days"; "today" and "tomorrow" for the first two.</summary>
     public string Countdown => DaysUntilAired switch

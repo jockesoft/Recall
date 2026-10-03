@@ -42,7 +42,8 @@ public static class StatsBuilder
     public static readonly IReadOnlySet<string> FormatLabels =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Mini-Series" };
 
-    public static UserStats Build(StatsInput input, DateOnly today, StatsWindow window)
+    /// <param name="nowUtc">The moment the stats are for: "series finished" counts what was released by then.</param>
+    public static UserStats Build(StatsInput input, DateTime nowUtc, StatsWindow window)
     {
         var months = Enumerable.Range(0, window.Months)
             .Select(i => window.FirstMonth.AddMonths(i))
@@ -166,7 +167,7 @@ public static class StatsBuilder
                 Clamp(totalMinutes),
                 input.EpisodeWatches.Count,
                 input.MovieWatches.Count,
-                CountFinishedSeries(input, today)),
+                CountFinishedSeries(input, nowUtc)),
             months
                 .OrderBy(kv => kv.Key)
                 .Select(kv => new StatsMonth(kv.Key, Clamp(kv.Value.Minutes), kv.Value.Episodes, kv.Value.Movies))
@@ -184,7 +185,7 @@ public static class StatsBuilder
     /// (<see cref="SeriesLibraryStateRule"/>): ended, started, and with no aired
     /// regular episode left. The same series the Library lists under Watched.
     /// </summary>
-    private static int CountFinishedSeries(StatsInput input, DateOnly today)
+    private static int CountFinishedSeries(StatsInput input, DateTime nowUtc)
     {
         if (input.TrackedSeriesIds.Count == 0)
             return 0;
@@ -197,7 +198,7 @@ public static class StatsBuilder
             if (!input.Series.TryGetValue(seriesId, out var series))
                 continue;
 
-            var progress = WatchProgressCalculator.Build(seriesId, series.ToWatchableEpisodes(), watchedIds, today);
+            var progress = WatchProgressCalculator.Build(seriesId, series.ToWatchableEpisodes(), watchedIds, nowUtc);
 
             if (SeriesLibraryStateRule.Of(series, progress) == SeriesLibraryState.Finished)
                 finished++;

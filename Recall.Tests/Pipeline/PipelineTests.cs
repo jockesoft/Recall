@@ -2,6 +2,8 @@ using System.Net;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using Recall.Web.Domain.TheTvDb;
 
 namespace Recall.Tests.Pipeline;
 
@@ -251,6 +253,48 @@ public sealed class PipelineTests
         html.Should().Contain("id=\"main\"");
         html.Should().Contain("aria-current=\"page\"");
         html.Should().Contain("aria-controls=\"mainNav\"").And.Contain("id=\"mainNav\"");
+    }
+
+    [Test]
+    public async Task EpisodeDetails_Should_WriteTheReleaseTime_AsATimeElementInUtc_ForTheBrowserToRewrite()
+    {
+        // Gold Rush S17E01: Friday 2026-10-02 at 20:00 in the US is 00:00 UTC on Saturday.
+        SetUpEpisode(episodeId: 9101, seriesId: 9100, aired: "2026-10-02", airsTime: "20:00", country: "usa");
+
+        var html = await (await _client.GetAsync("/Episodes/Details/9101")).Content.ReadAsStringAsync();
+
+        html.Should().Contain("<time datetime=\"2026-10-03T00:00:00Z\" data-local-release=\"datetime\">",
+            "the moment in UTC, marked for js/tvdb-local-time.js");
+        html.Should().MatchRegex(@"data-local-release=""datetime"">Fri, Oct 2(, 2026)? (·|&#xB7;) 8:00 PM ET</time>",
+            "without script the text is TheTVDB's date and the series' own time");
+        html.Should().Contain("/js/tvdb-local-time", "the layout loads the script that rewrites it");
+    }
+
+    [Test]
+    public async Task EpisodeDetails_Should_WriteADateOnly_WhenNoAirTimeIsKnown()
+    {
+        SetUpEpisode(episodeId: 9201, seriesId: 9200, aired: "2026-10-02", airsTime: null, country: "usa");
+
+        var html = await (await _client.GetAsync("/Episodes/Details/9201")).Content.ReadAsStringAsync();
+
+        html.Should().MatchRegex(@"<time datetime=""2026-10-02"">Fri, Oct 2(, 2026)?</time>",
+            "a fallback moment carries only its date, is never given a time and is not rewritten");
+        html.Should().NotContain("2026-10-03T", "the late fallback moment is never shown");
+        html.Should().NotContain("data-local-release", "nothing for the script to rewrite");
+    }
+
+    private void SetUpEpisode(int episodeId, int seriesId, string aired, string? airsTime, string? country)
+    {
+        _factory.TheTvDb
+            .Setup(x => x.GetEpisodeDetailsAsync(episodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Episode { Id = episodeId, SeriesId = seriesId, SeasonNumber = 17, Number = 1, Name = "The Most Gold Wins", Aired = aired });
+        _factory.TheTvDb
+            .Setup(x => x.GetSeriesAggregateByIdAsync(seriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesAggregate
+            {
+                TvdbId = seriesId, Name = "Gold Rush", Slug = "gold-rush", AirsTime = airsTime, OriginalCountry = country,
+                Episodes = [new EpisodeSummary { Id = episodeId, SeasonNumber = 17, EpisodeNumber = 1, Name = "The Most Gold Wins", Aired = DateOnly.Parse(aired) }]
+            });
     }
 
     [Test]

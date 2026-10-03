@@ -97,4 +97,56 @@ public sealed class EpisodeDetailsGetTests
 
         _sut.CameFromSeriesId.Should().Be(expected);
     }
+
+    // ---- Gold Rush S17E01: aired Friday 2026-10-02 at 20:00 ET = 00:00 UTC Saturday ----
+
+    private DetailsModel GoldRushPageAt(DateTimeOffset now)
+    {
+        _tvDb.Setup(x => x.GetEpisodeDetailsAsync(11961330, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Episode { Id = 11961330, SeriesId = 208111, SeasonNumber = 17, Number = 1, Name = "The Most Gold Wins", Aired = "2026-10-02" });
+        _tvDb.Setup(x => x.GetSeriesAggregateByIdAsync(208111, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesAggregate
+            {
+                TvdbId = 208111, Name = "Gold Rush", AirsTime = "20:00", OriginalCountry = "usa",
+                Episodes = [new EpisodeSummary { Id = 11961330, SeasonNumber = 17, EpisodeNumber = 1, Aired = new DateOnly(2026, 10, 2) }]
+            });
+
+        return new DetailsModel(
+            NullLogger<DetailsModel>.Instance,
+            _tvDb.Object,
+            Mock.Of<ICurrentUserService>(),
+            Mock.Of<IEpisodeWatchRepository>(),
+            Mock.Of<IWatchProgressService>(),
+            Mock.Of<ILikeRepository>(),
+            Mock.Of<IRatingRepository>(),
+            Mock.Of<IOmdbApiClient>(),
+            Mock.Of<IEpisodeOmdbSnapshotStore>(),
+            Mock.Of<IOmdbRequestBudget>(),
+            Options.Create(new OmdbOptions()),
+            new FixedTimeProvider(now)).WithTempData().WithHttpContext();
+    }
+
+    [Test]
+    public async Task GoldRush_At2200UtcOnOctoberSecond_Should_NotHaveAiredYet_ButMayBeMarked()
+    {
+        var sut = GoldRushPageAt(new DateTimeOffset(2026, 10, 2, 22, 0, 0, TimeSpan.Zero));
+
+        await sut.OnGetAsync(11961330, CancellationToken.None);
+
+        sut.Release!.Utc.Should().Be(new DateTime(2026, 10, 3, 0, 0, 0, DateTimeKind.Utc));
+        sut.Release.DateTimeAttribute.Should().Be("2026-10-03T00:00:00Z", "the <time> element's datetime");
+        sut.HasAired.Should().BeFalse("it says \"Airs\" until the release moment");
+        sut.MayBeMarked.Should().BeTrue("marking goes by the air date, for viewers in any zone");
+    }
+
+    [Test]
+    public async Task GoldRush_AtMidnightUtcOnOctoberThird_Should_HaveAired()
+    {
+        var sut = GoldRushPageAt(new DateTimeOffset(2026, 10, 3, 0, 0, 0, TimeSpan.Zero));
+
+        await sut.OnGetAsync(11961330, CancellationToken.None);
+
+        sut.HasAired.Should().BeTrue();
+        sut.MayBeMarked.Should().BeTrue();
+    }
 }

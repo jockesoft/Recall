@@ -231,7 +231,7 @@ public sealed class LibraryModel(
                     if (progress.NextUnwatchedEpisode is null)
                         nothingToWatch.Add(aggregate.TvdbId);
 
-                    if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
+                    if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, AirDate.Now(timeProvider), libraryOptions.Value.PremiereReturnDays))
                         recentPremieres.Add(aggregate.TvdbId);
                     break;
 

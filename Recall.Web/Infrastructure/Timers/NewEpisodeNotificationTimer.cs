@@ -15,10 +15,12 @@ using Recall.Web.Services.Notifications.Models;
 namespace Recall.Web.Infrastructure.Timers;
 
 /// <summary>
-/// Raises "a new episode aired" notifications. Scheduled every six hours in
-/// <c>AddScheduledJobs</c>. Each run walks every series at least one user tracks,
-/// reads its (layered-cached) aggregate, and for each episode that aired within
-/// <see cref="Lookback"/> notifies every tracking user who hasn't already marked
+/// Raises "a new episode aired" notifications. Scheduled every hour in
+/// <c>AddScheduledJobs</c>, so a notification follows an episode's release
+/// moment (<see cref="EpisodeRelease"/>) within the hour. Each run walks every
+/// series at least one user tracks, reads its aggregate from the caches only
+/// (no TheTVDB or OMDb request, which is what makes the hourly cadence free),
+/// and for each episode released within <see cref="Lookback"/> notifies every tracking user who hasn't already marked
 /// that episode watched. All of a series' new episodes for one user collapse
 /// into a single notification, so a full-season drop is one alert, not eight.
 /// The <c>notified_episode</c> ledger makes reruns idempotent, so there is no
@@ -42,8 +44,10 @@ public sealed class NewEpisodeNotificationTimer(
 
     public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        var today = AirDate.Today(timeProvider);
-        var earliestAired = today.AddDays(-(int)Lookback.TotalDays);
+        // Released (EpisodeRelease) within the look-back: a US evening episode is
+        // notified once it has aired there, not from midnight UTC of its air date.
+        var now = AirDate.Now(timeProvider);
+        var earliestRelease = now - Lookback;
 
         var seriesIds = await trackedSeriesRepository.GetDistinctTrackedTvdbIdsAsync(cancellationToken);
         if (seriesIds.Count == 0)
@@ -68,15 +72,19 @@ public sealed class NewEpisodeNotificationTimer(
 
             try
             {
-                var aggregate = await theTvDbService.GetSeriesAggregateByIdAsync(seriesId, cancellationToken);
+                // From the caches only (Redis, then the Postgres snapshot), never
+                // TheTVDB: the job makes no external request, which is what lets
+                // it run every hour. A series that is not cached waits for the
+                // refresh job (or a page) to cache it.
+                var aggregate = await theTvDbService.GetCachedSeriesAggregateAsync(seriesId, cancellationToken);
                 if (aggregate is null)
                     continue;
 
                 var recentEpisodes = aggregate.Episodes
                     .Where(e => e.IsMovie != true
-                                && e.Aired is { } aired
-                                && aired >= earliestAired
-                                && aired <= today)
+                                && EpisodeRelease.MomentUtc(e.Aired, aggregate.AirsTime, aggregate.OriginalCountry) is { } release
+                                && release.IsReleasedBy(now)
+                                && release.Utc > earliestRelease)
                     .ToList();
 
                 if (recentEpisodes.Count == 0)

@@ -1,0 +1,23 @@
+@model Recall.Web.Pages.Shared.ReleaseTimeModel
+@{
+    // A timed moment carries its UTC instant and data-local-release, which
+    // js/tvdb-local-time.js rewrites into the viewer's own date and time. A
+    // fallback moment (no air time known) carries only its date and is never
+    // rewritten or given a time.
+    var release = Model.Release;
+    var text = Model.TimeOnly
+        ? ReleaseText.TimeOnly(release)
+        : ReleaseText.DateAndTime(release, Model.Today);
+}
+@if (text is null)
+{
+    return;
+}
+@if (release.IsTimeKnown)
+{
+    <time datetime="@release.DateTimeAttribute" data-local-release="@(Model.TimeOnly ? "time" : "datetime")">@text</time>
+}
+else
+{
+    <time datetime="@release.DateTimeAttribute">@text</time>
+}

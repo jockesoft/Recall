@@ -34,8 +34,8 @@ public class DigestPreviewModelTests
 
         _composer = new Mock<IDigestComposer>();
         _composer
-            .Setup(x => x.ComposeAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id, string name, DateOnly _, string baseUrl, IDictionary<int, SeriesAggregate?>? _, CancellationToken _) =>
+            .Setup(x => x.ComposeAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, string name, DateTime _, string baseUrl, IDictionary<int, SeriesAggregate?>? _, CancellationToken _) =>
                 new ComposedDigest(
                     new DigestContent(DigestSection<DigestPremiere>.Empty, DigestSection<DigestEpisodeLine>.Empty, DigestSection<DigestEpisodeLine>.Empty),
                     new DigestEmail($"For {name}", "text", "<p>html</p>"),
@@ -58,7 +58,7 @@ public class DigestPreviewModelTests
 
     private void VerifyComposedFor(AppUserEntity user, Times times) =>
         _composer.Verify(
-            x => x.ComposeAsync(user.Id, user.Username, It.IsAny<DateOnly>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()),
+            x => x.ComposeAsync(user.Id, user.Username, It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()),
             times);
 
     // ---- Development: any user ----------------------------------------------------
@@ -137,7 +137,8 @@ public class DigestPreviewModelTests
         await sut.OnGetAsync(CancellationToken.None);
 
         _composer.Verify(
-            x => x.ComposeAsync(Admin.Id, "admin", new DateOnly(2026, 9, 18), "https://recall.example", It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()),
+            // The chosen date at the hour the digest goes out (Digest:HourUtc, 15 by default).
+            x => x.ComposeAsync(Admin.Id, "admin", new DateTime(2026, 9, 18, 15, 0, 0, DateTimeKind.Utc), "https://recall.example", It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()),
             Times.Once);
         sut.UnsubscribeUrl.Should().Be("https://recall.example/Digest/Unsubscribe?token=for-admin");
     }
@@ -153,7 +154,7 @@ public class DigestPreviewModelTests
         await sut.OnGetAsync(CancellationToken.None);
 
         _composer.Verify(
-            x => x.ComposeAsync(Admin.Id, "admin", Today, "https://preview.test", It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()),
+            x => x.ComposeAsync(Admin.Id, "admin", Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc), "https://preview.test", It.IsAny<IDictionary<int, SeriesAggregate?>?>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

@@ -14,7 +14,8 @@ internal static class WatchTrackingMappings
                 e.SeasonNumber,
                 e.Number,
                 ParseDate(e.Aired),
-                e.Name ?? string.Empty));
+                e.Name ?? string.Empty,
+                EpisodeRelease.MomentUtc(ParseDate(e.Aired), airsTime: null, series.OriginalCountry)));
 
     /// <summary>Non-movie episodes from a series aggregate, projected for watch tracking.</summary>
     public static IEnumerable<WatchableEpisode> ToWatchableEpisodes(this SeriesAggregate aggregate) =>
@@ -25,7 +26,9 @@ internal static class WatchTrackingMappings
                 e.SeasonNumber,
                 e.EpisodeNumber,
                 e.Aired,
-                e.Name));
+                e.Name,
+                // The release moment: the air date at the series' air time in its country (EpisodeRelease).
+                EpisodeRelease.MomentUtc(e.Aired, aggregate.AirsTime, aggregate.OriginalCountry)));
 
     private static DateOnly? ParseDate(string? value) =>
         DateOnly.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)

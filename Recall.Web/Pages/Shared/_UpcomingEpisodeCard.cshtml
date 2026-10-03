@@ -54,12 +54,20 @@
         }
     </div>
 
+    @* The release date and time, rewritten into the viewer's zone in the browser
+       (_ReleaseTime). Under "Today" / "Tomorrow" only the time is shown, if known. *@
     @if (Model.ShowDate)
     {
         <div class="tvdb-upcoming-when">
-            <span class="tvdb-upcoming-date">@DisplayDate.Format(Model.AiredDate, Model.Today)</span>
+            <span class="tvdb-upcoming-date"><partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release, Model.Today))" /></span>
             <span class="tvdb-upcoming-sep" aria-hidden="true">&middot;</span>
             <span class="tvdb-upcoming-countdown">@Model.Countdown</span>
+        </div>
+    }
+    else if (Model.Release.IsTimeKnown)
+    {
+        <div class="tvdb-upcoming-when">
+            <span class="tvdb-upcoming-date"><partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release, Model.Today, TimeOnly: true))" /></span>
         </div>
     }
 </div>

@@ -15,6 +15,8 @@ namespace Recall.Tests.Services.Digest;
 public sealed class DigestComposerTests
 {
     private static readonly DateOnly Today = new(2026, 10, 2);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
     private static readonly Guid UserId = Guid.NewGuid();
     private const string BaseUrl = "https://recall.example";
 
@@ -59,7 +61,7 @@ public sealed class DigestComposerTests
         Tracks(1);
         Cached(1, Ep(10, 1, 1, -30), Ep(11, 1, 2, -1));
 
-        var digest = await _sut.ComposeAsync(UserId, "saga", Today, BaseUrl);
+        var digest = await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl);
 
         digest.Email.Should().NotBeNull();
         digest.Content.ReadyToWatch.Items.Should().ContainSingle();
@@ -77,7 +79,7 @@ public sealed class DigestComposerTests
         _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(2, It.IsAny<CancellationToken>())).ReturnsAsync((SeriesAggregate?)null);
         _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(3, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("redis down"));
 
-        var digest = await _sut.ComposeAsync(UserId, "saga", Today, BaseUrl);
+        var digest = await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl);
 
         digest.Content.ReadyToWatch.Items.Select(l => l.SeriesId).Should().Equal(1);
     }
@@ -89,8 +91,8 @@ public sealed class DigestComposerTests
         Cached(1, Ep(10, 1, 1, -30), Ep(11, 1, 2, -1));
         var shared = new Dictionary<int, SeriesAggregate?>();
 
-        await _sut.ComposeAsync(UserId, "saga", Today, BaseUrl, shared);
-        await _sut.ComposeAsync(UserId, "saga", Today, BaseUrl, shared);
+        await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl, shared);
+        await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl, shared);
 
         _tvDb.Verify(x => x.GetCachedSeriesAggregateAsync(1, It.IsAny<CancellationToken>()), Times.Once,
             "many users track the same series; one run reads each once");
@@ -102,7 +104,7 @@ public sealed class DigestComposerTests
         Tracks(1);
         Cached(1, Ep(10, 1, 1, -30));
 
-        var digest = await _sut.ComposeAsync(UserId, "saga", Today, BaseUrl);
+        var digest = await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl);
 
         digest.Content.IsEmpty.Should().BeTrue();
         digest.Email.Should().BeNull();
@@ -114,7 +116,7 @@ public sealed class DigestComposerTests
         Tracks(1);
         Cached(1, Ep(10, 1, 1, -30), Ep(11, 1, 2, -1));
 
-        var digest = await _sut.ComposeAsync(UserId, "saga", Today, BaseUrl);
+        var digest = await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl);
 
         digest.OneClickUnsubscribeUrl.Should().StartWith("https://recall.example/Digest/OneClick?token=");
         var token = digest.OneClickUnsubscribeUrl.Split("token=")[1];

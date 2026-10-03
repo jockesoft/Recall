@@ -427,8 +427,10 @@ public static class InfrastructureServiceCollectionExtensions
             Schedule<NewEpisodeNotificationTimer>(trigger => trigger
                 .WithIdentity("NewEpisodeNotificationTimer-trigger")
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(45))
-                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(6)).RepeatForever())
-                .WithDescription("Notify users when a series they track has an episode that aired in the last few days."));
+                // Hourly: it reads only cached data, so a run costs no external
+                // request, and a notification follows a release within the hour.
+                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(1)).RepeatForever())
+                .WithDescription("Notify users when a series they track has an episode released in the last few days (cached data only)."));
 
             Schedule<WatchlistImportTimer>(trigger => trigger
                 .WithIdentity("WatchlistImportTimer-trigger")

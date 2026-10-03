@@ -10,6 +10,8 @@ public sealed class DigestBuilderTests
 {
     // A Friday.
     private static readonly DateOnly Today = new(2026, 10, 2);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
 
     private static EpisodeSummary Ep(int id, int season, int number, int daysFromToday, string? name = null) => new()
     {
@@ -27,7 +29,7 @@ public sealed class DigestBuilderTests
         Dictionary<int, DateTime>? lastWatched = null,
         Dictionary<int, DateTime>? added = null,
         LibraryOptions? options = null) =>
-        DigestBuilder.Build(tracked, (watched ?? []).ToHashSet(), lastWatched ?? [], added ?? [], Today, options ?? new LibraryOptions());
+        DigestBuilder.Build(tracked, (watched ?? []).ToHashSet(), lastWatched ?? [], added ?? [], Now, options ?? new LibraryOptions());
 
     // ---- ready to watch ----------------------------------------------------------
 
@@ -39,12 +41,16 @@ public sealed class DigestBuilderTests
             watched: [10, 11, 12],
             lastWatched: new() { [1] = DaysAgo(2) });
 
+        // These series have no air time or country, so an episode is released at
+        // noon UTC the day after its air date (EpisodeRelease's fallback); now is
+        // noon on Today. Yesterday's is released (at noon today); today's is not.
         var line = content.ReadyToWatch.Items.Should().ContainSingle().Subject;
         line.SeriesName.Should().Be("Show");
-        line.Code.Should().Be("S01 · E04–E05", "yesterday's and today's; tomorrow's has not aired and the watched ones are done");
-        line.EpisodeCount.Should().Be(2);
+        line.Code.Should().Be("S01 · E04", "yesterday's; today's is not released yet and the watched ones are done");
+        line.EpisodeCount.Should().Be(1);
         line.LinkEpisodeId.Should().Be(13);
-        content.ReadyEpisodeCount.Should().Be(2);
+        content.ReadyEpisodeCount.Should().Be(1);
+        content.ComingUp.Items.Should().ContainSingle().Which.Code.Should().Be("S01 · E05–E06", "today's and tomorrow's are coming up");
     }
 
     [Test]
@@ -180,11 +186,73 @@ public sealed class DigestBuilderTests
             ],
             watched: [10, 20, 30, 31]);
 
+        // Released at noon UTC the day after the air date (no air time or country), now is noon today:
+        // the day-six episode is released exactly seven days from now (inside), the day-seven one after.
         content.ComingUp.Items.Select(l => (l.SeriesId, l.Code)).Should().Equal(
-            [(2, "S01 · E02"), (1, "S01 · E02–E03")],
-            "tomorrow before next week; day eight is outside the window; today is not coming up");
+            [(2, "S01 · E02"), (1, "S01 · E02")],
+            "tomorrow's before next week's; the rest is outside the window; today's is already marked watched");
         content.ComingUp.Items[1].FirstAired.Should().Be(Today.AddDays(6));
-        content.ComingEpisodeCount.Should().Be(3);
+        content.ComingEpisodeCount.Should().Be(2);
+    }
+
+    // ---- Gold Rush S17E01: aired Friday 2026-10-02 at 20:00 Eastern, released 00:00 UTC Saturday ----
+
+    private static SeriesAggregate GoldRush() => new()
+    {
+        TvdbId = 208111, Name = "Gold Rush", AirsTime = "20:00", OriginalCountry = "usa",
+        Episodes =
+        [
+            new EpisodeSummary { Id = 1, SeasonNumber = 16, EpisodeNumber = 9, Name = "Finale", Aired = new DateOnly(2026, 5, 1) },
+            new EpisodeSummary { Id = 11961330, SeasonNumber = 17, EpisodeNumber = 1, Name = "The Most Gold Wins", Aired = new DateOnly(2026, 10, 2) }
+        ]
+    };
+
+    [Test]
+    public void GoldRushS17E01_Should_BeComingUp_InFridayOctoberSecondsDigest()
+    {
+        // The digest goes out at 15:00 UTC: five hours before it airs in the US.
+        var content = DigestBuilder.Build(
+            [GoldRush()], new HashSet<int> { 1 }, new Dictionary<int, DateTime> { [208111] = DaysAgo(3) }, new Dictionary<int, DateTime>(),
+            new DateTime(2026, 10, 2, 15, 0, 0, DateTimeKind.Utc), new LibraryOptions());
+
+        content.ReadyToWatch.Items.Should().BeEmpty();
+        content.NewSeasons.Items.Should().BeEmpty("it has not premiered yet");
+        var line = content.ComingUp.Items.Should().ContainSingle().Subject;
+        line.Code.Should().Be("S17 · E01");
+        line.FirstAired.Should().Be(new DateOnly(2026, 10, 2), "the date shown stays TheTVDB's");
+    }
+
+    [Test]
+    public void GoldRushS17E01_Should_BeANewSeason_InFridayOctoberNinthsDigest()
+    {
+        // A week later it was released (Saturday 00:00 UTC) and is unwatched: as the
+        // first episode of a season it is listed under New seasons, which takes
+        // the series out of Ready to watch, and it is no longer coming up.
+        var content = DigestBuilder.Build(
+            [GoldRush()], new HashSet<int> { 1 }, new Dictionary<int, DateTime> { [208111] = DaysAgo(3) }, new Dictionary<int, DateTime>(),
+            new DateTime(2026, 10, 9, 15, 0, 0, DateTimeKind.Utc), new LibraryOptions());
+
+        var premiere = content.NewSeasons.Items.Should().ContainSingle().Subject;
+        premiere.SeriesName.Should().Be("Gold Rush");
+        premiere.SeasonNumber.Should().Be(17);
+        content.ComingUp.Items.Should().BeEmpty();
+    }
+
+    [Test]
+    public void GoldRushS17E02_Should_BeReadyToWatch_TheFridayAfterItAired()
+    {
+        // S17E02 aired Friday Oct 9 (released Saturday Oct 10 00:00 UTC): ready in the Oct 16 digest.
+        var series = GoldRush() with
+        {
+            Episodes = [.. GoldRush().Episodes,
+                new EpisodeSummary { Id = 11997727, SeasonNumber = 17, EpisodeNumber = 2, Name = "Two", Aired = new DateOnly(2026, 10, 9) }]
+        };
+
+        var content = DigestBuilder.Build(
+            [series], new HashSet<int> { 1, 11961330 }, new Dictionary<int, DateTime> { [208111] = new DateTime(2026, 10, 14, 20, 0, 0, DateTimeKind.Utc) }, new Dictionary<int, DateTime>(),
+            new DateTime(2026, 10, 16, 15, 0, 0, DateTimeKind.Utc), new LibraryOptions());
+
+        content.ReadyToWatch.Items.Should().ContainSingle().Which.Code.Should().Be("S17 · E02");
     }
 
     // ---- nothing to say, and too much to say --------------------------------------

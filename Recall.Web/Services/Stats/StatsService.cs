@@ -54,11 +54,12 @@ public sealed class StatsService(
         var moviesTask = ReadAllAsync(movieIds, gate, theTvDbService.GetCachedMovieAggregateAsync, "movie", cancellationToken);
         await Task.WhenAll(seriesTask, moviesTask);
 
-        var today = AirDate.Today(timeProvider);
+        var now = AirDate.Now(timeProvider);
+        var today = DateOnly.FromDateTime(now);
 
         return StatsBuilder.Build(
             new StatsInput(episodeWatches, movieWatches, seriesTask.Result, moviesTask.Result, trackedIds, ratingCounts),
-            today,
+            now,
             StatsWindow.LastTwelveMonths(today));
     }
 

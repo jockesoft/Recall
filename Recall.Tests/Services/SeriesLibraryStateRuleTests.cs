@@ -12,6 +12,8 @@ namespace Recall.Tests.Services;
 public sealed class SeriesLibraryStateRuleTests
 {
     private static readonly DateOnly Today = new(2026, 10, 2);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
 
     private static EpisodeSummary Ep(int id, int season, int number, int daysFromToday) => new()
     {
@@ -24,7 +26,7 @@ public sealed class SeriesLibraryStateRuleTests
         {
             TvdbId = 1, Name = "Show", Status = new SeriesStatus { Name = status }, Episodes = episodes
         };
-        var progress = WatchProgressCalculator.Build(1, Watchable(episodes), watched.ToHashSet(), Today);
+        var progress = WatchProgressCalculator.Build(1, Watchable(episodes), watched.ToHashSet(), Now);
 
         return SeriesLibraryStateRule.Of(aggregate, progress);
     }
@@ -99,8 +101,8 @@ public sealed class SeriesLibraryStateRuleTests
     {
         var episodes = Watchable(TwoAiredAndASpecial);
 
-        WatchProgressCalculator.Build(1, episodes, new HashSet<int>(), Today).HasStarted.Should().BeFalse();
-        WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 5 }, Today).HasStarted.Should().BeFalse();
-        WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10 }, Today).HasStarted.Should().BeTrue();
+        WatchProgressCalculator.Build(1, episodes, new HashSet<int>(), Now).HasStarted.Should().BeFalse();
+        WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 5 }, Now).HasStarted.Should().BeFalse();
+        WatchProgressCalculator.Build(1, episodes, new HashSet<int> { 10 }, Now).HasStarted.Should().BeTrue();
     }
 }

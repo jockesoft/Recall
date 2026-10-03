@@ -104,6 +104,8 @@ public sealed class ContinueWatchingOrderTests
     // ---- grouping: "haven't watched in a while" --------------------------------
 
     private static readonly DateOnly Today = new(2026, 10, 1);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
 
     private static DateTime DaysAgo(int days) => Today.AddDays(-days).ToDateTime(new TimeOnly(20, 0), DateTimeKind.Utc);
 
@@ -247,7 +249,9 @@ public sealed class ContinueWatchingOrderTests
 
     // ---- what counts as a season premiere --------------------------------------
 
-    private static WatchableEpisode Ep(int id, int? season, int? number, DateOnly? aired) => new(id, season, number, aired, $"E{id}");
+    // A US series at 20:00 Eastern: an episode aired on D is released at 00:00 UTC on D+1.
+    private static WatchableEpisode Ep(int id, int? season, int? number, DateOnly? aired) =>
+        new(id, season, number, aired, $"E{id}", EpisodeRelease.MomentUtc(aired, "20:00", "usa"));
 
     [Test]
     public void HasRecentPremiere_Should_BeTrue_WhenARegularSeasonsFirstEpisodeAiredWithinTheWindow()
@@ -260,8 +264,9 @@ public sealed class ContinueWatchingOrderTests
             Ep(4, 2, 2, Today.AddDays(-7))
         ];
 
-        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeTrue("fourteen days ago is still inside a fourteen-day window");
-        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 13).Should().BeFalse();
+        // Released 13.5 days before now (Today 12:00 UTC).
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Now, days: 14).Should().BeTrue("inside a fourteen-day window");
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Now, days: 13).Should().BeFalse();
     }
 
     [Test]
@@ -275,7 +280,7 @@ public sealed class ContinueWatchingOrderTests
             Ep(3, 22, 18, Today.AddDays(-1))
         ];
 
-        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeFalse(
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Now, days: 14).Should().BeFalse(
             "an abandoned weekly show airs all the time and must be able to go dormant");
     }
 
@@ -288,7 +293,7 @@ public sealed class ContinueWatchingOrderTests
             Ep(2, 1, 1, Today.AddDays(-500))
         ];
 
-        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeFalse();
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Now, days: 14).Should().BeFalse();
     }
 
     [Test]
@@ -302,14 +307,17 @@ public sealed class ContinueWatchingOrderTests
             Ep(4, 5, null, Today.AddDays(-1))    // no episode number
         ];
 
-        ContinueWatchingOrder.HasRecentPremiere(episodes, Today, days: 14).Should().BeFalse();
-        ContinueWatchingOrder.HasRecentPremiere([Ep(9, 3, 1, Today)], Today, days: 14).Should().BeTrue("airing today counts");
+        ContinueWatchingOrder.HasRecentPremiere(episodes, Now, days: 14).Should().BeFalse();
+        ContinueWatchingOrder.HasRecentPremiere([Ep(9, 3, 1, Today.AddDays(-1))], Now, days: 14)
+            .Should().BeTrue("released at 00:00 UTC today");
+        ContinueWatchingOrder.HasRecentPremiere([Ep(9, 3, 1, Today)], Now, days: 14)
+            .Should().BeFalse("it airs tonight in the US: not released yet, so it brings nothing back");
     }
 
     [TestCase(0)]
     [TestCase(-1)]
     public void HasRecentPremiere_Should_BeOff_WhenTheWindowIsZeroOrLess(int days)
     {
-        ContinueWatchingOrder.HasRecentPremiere([Ep(1, 2, 1, Today)], Today, days).Should().BeFalse();
+        ContinueWatchingOrder.HasRecentPremiere([Ep(1, 2, 1, Today)], Now, days).Should().BeFalse();
     }
 }

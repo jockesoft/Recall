@@ -11,18 +11,6 @@
         : $"Details and ratings for {(ep?.Name ?? "this episode")}{(Model.SeriesName is not null ? $" from {Model.SeriesName}" : "")} on Recall.nu.";
     ViewData["Robots"] = ep is not null ? "index, follow" : "noindex, nofollow";
 
-    string FormatAirMoment(DateOnly date, string? airsTime)
-    {
-        var ci = System.Globalization.CultureInfo.InvariantCulture;
-        var text = DisplayDate.Format(date, Model.Today);
-        if (!string.IsNullOrWhiteSpace(airsTime)
-            && TimeOnly.TryParse(airsTime, ci, System.Globalization.DateTimeStyles.None, out var t))
-        {
-            text += " · " + DisplayDate.Time(t);
-        }
-        return text;
-    }
-
     string? FormatRuntime(int? minutes)
     {
         if (minutes is null or <= 0) return null;
@@ -130,7 +118,7 @@
                 @if (Model.AiredDate is { } airedForSummary)
                 {
                     <p class="tvdb-title__summary d-md-none">
-                        @(Model.HasAired ? "Aired" : "Airs") @FormatAirMoment(airedForSummary, Model.AirsTime)@(runtimeText is null ? "" : $" \u00B7 {runtimeText}")
+                        @(Model.HasAired ? "Aired" : "Airs") <partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release!, Model.Today))" />@(runtimeText is null ? "" : $" \u00B7 {runtimeText}")
                     </p>
                 }
 
@@ -182,11 +170,11 @@
                         <span class="tvdb-badge tvdb-badge--amber">@finaleText</span>
                     }
 
-                    @if (!Model.HasAired)
+                    @if (!Model.MayBeMarked)
                     {
                         <button type="button" class="btn btn-outline-dark" disabled>
                             <i class="@Icons.NotAiredYet me-1" aria-hidden="true"></i>
-                            <span>Airs&nbsp;@FormatAirMoment(Model.AiredDate!.Value, Model.AirsTime)</span>
+                            <span>Airs&nbsp;<partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release!, Model.Today))" /></span>
                         </button>
                     }
                     else if (Model.IsAuthenticated)
@@ -345,7 +333,7 @@
             <dl class="tvdb-episode-page__facts tvdb-facts-quiet">
                 @if (Model.AiredDate is { } airDate)
                 {
-                    <div><dt>@(Model.HasAired ? "Aired" : "Airs")</dt><dd>@FormatAirMoment(airDate, Model.AirsTime)</dd></div>
+                    <div><dt>@(Model.HasAired ? "Aired" : "Airs")</dt><dd><partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release!, Model.Today))" /></dd></div>
                 }
                 @if (runtimeText is not null)
                 {

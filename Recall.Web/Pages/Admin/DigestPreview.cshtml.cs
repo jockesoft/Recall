@@ -44,6 +44,14 @@ public sealed class DigestPreviewModel(
 
     public DateOnly Today => AirDate.Today(timeProvider);
 
+    /// <summary>
+    /// The moment the preview is built for: now, or the chosen date at the
+    /// hour the digest goes out (Digest:HourUtc), which is when its windows are judged.
+    /// </summary>
+    public DateTime AsOfMoment => AsOf is { } date
+        ? date.ToDateTime(new TimeOnly(digestOptions.Value.HourUtc, 0), DateTimeKind.Utc)
+        : AirDate.Now(timeProvider);
+
     /// <summary>The user whose digest is shown; null when there is nobody to show.</summary>
     public AppUserEntity? Subject { get; private set; }
 
@@ -90,7 +98,7 @@ public sealed class DigestPreviewModel(
         // Without Site:BaseUrl (it has no default) the links point back at this request's own address.
         var baseUrl = siteOptions.Value.NormalizedBaseUrl ?? $"{Request.Scheme}://{Request.Host}";
 
-        Digest = await composer.ComposeAsync(subject.Id, subject.Username, AsOf ?? Today, baseUrl, null, cancellationToken);
+        Digest = await composer.ComposeAsync(subject.Id, subject.Username, AsOfMoment, baseUrl, null, cancellationToken);
         UnsubscribeUrl = Digest.OneClickUnsubscribeUrl.Replace("/Digest/OneClick?", "/Digest/Unsubscribe?", StringComparison.Ordinal);
 
         return Page();

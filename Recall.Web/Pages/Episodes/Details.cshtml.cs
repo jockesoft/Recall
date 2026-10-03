@@ -87,12 +87,21 @@ public sealed class DetailsModel(
     /// <summary>Series broadcast time in its home timezone, e.g. "20:00". May be null.</summary>
     public string? AirsTime { get; private set; }
 
+    /// <summary>The series' country of origin, for the release moment's time zone.</summary>
+    public string? SeriesCountry { get; private set; }
+
+    /// <summary>When the episode is released (<see cref="EpisodeRelease"/>); null without an air date.</summary>
+    public ReleaseMoment? Release => EpisodeRelease.MomentUtc(AiredDate, AirsTime, SeriesCountry);
+
+    /// <summary>Released by now: "Aired" rather than "Airs". An episode with no air date counts as released.</summary>
+    public bool HasAired => Release is not { } release || release.IsReleasedBy(AirDate.Now(timeProvider));
+
     /// <summary>
-    /// True unless the episode has a known air date that is still in the future.
-    /// Drives "Aired" vs "Airs" wording and whether the watched button is enabled.
+    /// Whether the watched button is offered: from the air date anywhere on
+    /// Earth, so it can be marked as soon as it has been seen, even a few hours
+    /// before it counts as released here (<see cref="AirDate.MayBeMarked"/>).
     /// </summary>
-    public bool HasAired =>
-        !AirDate.IsInFuture(AiredDate, Today);
+    public bool MayBeMarked => AirDate.MayBeMarked(AiredDate, AirDate.Now(timeProvider));
 
     /// <summary>Today's date in UTC, for the air-date check and the view's date format.</summary>
     public DateOnly Today => AirDate.Today(timeProvider);
@@ -392,6 +401,7 @@ public sealed class DetailsModel(
             SeriesName = aggregate?.Name;
             SeriesSlug = aggregate?.Slug;
             AirsTime = aggregate?.AirsTime;
+            SeriesCountry = aggregate?.OriginalCountry;
             return aggregate;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

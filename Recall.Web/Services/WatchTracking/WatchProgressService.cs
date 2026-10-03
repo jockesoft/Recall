@@ -14,13 +14,13 @@ public sealed class WatchProgressService(
     ILogger<WatchProgressService> logger)
     : IWatchProgressService
 {
-    private DateOnly Today => AirDate.Today(timeProvider);
+    private DateTime Now => AirDate.Now(timeProvider);
 
     public SeriesWatchProgress BuildProgress(
         int seriesTvdbId,
         IEnumerable<WatchableEpisode> episodes,
         IReadOnlySet<int> watchedEpisodeIds)
-        => WatchProgressCalculator.Build(seriesTvdbId, episodes, watchedEpisodeIds, Today);
+        => WatchProgressCalculator.Build(seriesTvdbId, episodes, watchedEpisodeIds, Now);
 
     public async Task<SeriesWatchProgress> GetSeriesProgressAsync(
         Guid userId,
@@ -29,7 +29,7 @@ public sealed class WatchProgressService(
     {
         var (episodes, watched) = await LoadEpisodesAndWatchedAsync(userId, seriesTvdbId, cancellationToken);
 
-        return WatchProgressCalculator.Build(seriesTvdbId, episodes, watched, Today);
+        return WatchProgressCalculator.Build(seriesTvdbId, episodes, watched, Now);
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ public sealed class WatchProgressService(
             return new MarkWatchedThroughResult(EpisodeFound: false, MarkedCount: 0);
         }
 
-        if (AirDate.IsInFuture(target.Aired, Today))
+        if (!AirDate.MayBeMarked(target.Aired, Now))
             return new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 0, HasAired: false);
 
         // "Everything earlier" can include an episode that hasn't aired yet (a
@@ -135,9 +135,9 @@ public sealed class WatchProgressService(
         if (season.Count == 0)
             return new SeasonWatchResult(SeasonFound: false, WatchedBatch.Empty);
 
-        var today = Today;
+        var now = Now;
         var idsToMark = season
-            .Where(e => !AirDate.IsInFuture(e.Aired, today))
+            .Where(e => AirDate.MayBeMarked(e.Aired, now))
             .Select(e => e.Id)
             .ToList();
 
@@ -278,7 +278,7 @@ public sealed class WatchProgressService(
                 return null;
 
             var watched = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesTvdbId, cancellationToken);
-            var progress = WatchProgressCalculator.Build(seriesTvdbId, series.ToWatchableEpisodes(), watched, Today);
+            var progress = WatchProgressCalculator.Build(seriesTvdbId, series.ToWatchableEpisodes(), watched, Now);
 
             return progress.IsUpToDate ? null : new BeforeMark(userId, series, watched);
         }
@@ -305,12 +305,12 @@ public sealed class WatchProgressService(
         try
         {
             var series = before.Series;
-            var today = Today;
+            var now = Now;
 
             var watchedAfter = new HashSet<int>(before.WatchedIds);
             watchedAfter.UnionWith(markedIds);
 
-            var after = WatchProgressCalculator.Build(series.TvdbId, series.ToWatchableEpisodes(), watchedAfter, today);
+            var after = WatchProgressCalculator.Build(series.TvdbId, series.ToWatchableEpisodes(), watchedAfter, now);
             var state = SeriesLibraryStateRule.Of(series, after);
 
             if (state == SeriesLibraryState.Watching)
@@ -326,8 +326,8 @@ public sealed class WatchProgressService(
 
             // Up to date with a series that continues: when is the next one?
             var next = after.OrderedEpisodes
-                .Where(e => !e.IsSpecial && e.Aired is { } aired && aired > today)
-                .OrderBy(e => e.Aired)
+                .Where(e => !e.IsSpecial && e.Release is { } release && !release.IsReleasedBy(now))
+                .OrderBy(e => e.Release!.Utc)
                 .FirstOrDefault();
 
             return new SeriesCaughtUp(series.TvdbId, series.Name, Finished: false, NextEpisode: next);
@@ -357,7 +357,7 @@ public sealed class WatchProgressService(
             return EpisodeWatchOutcome.EpisodeNotInSeries;
         }
 
-        return AirDate.IsInFuture(lookup.Aired, Today) ? EpisodeWatchOutcome.NotAired : null;
+        return AirDate.MayBeMarked(lookup.Aired, Now) ? null : EpisodeWatchOutcome.NotAired;
     }
 
     public async Task<EpisodeWatchResult> ToggleEpisodeWatchedAsync(
@@ -405,7 +405,7 @@ public sealed class WatchProgressService(
 
     private IReadOnlyList<WatchableEpisode> WithoutUnaired(IReadOnlyList<WatchableEpisode> ordered)
     {
-        var today = Today;
-        return ordered.Where(e => !AirDate.IsInFuture(e.Aired, today)).ToList();
+        var now = Now;
+        return ordered.Where(e => AirDate.MayBeMarked(e.Aired, now)).ToList();
     }
 }

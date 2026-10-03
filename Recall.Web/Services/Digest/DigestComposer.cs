@@ -13,7 +13,7 @@ public sealed record ComposedDigest(DigestContent Content, DigestEmail? Email, s
 public interface IDigestComposer
 {
     /// <summary>
-    /// Builds a user's digest as of <paramref name="today"/>. Reads the user's
+    /// Builds a user's digest as of <paramref name="nowUtc"/>. Reads the user's
     /// library and watches from the database and series data from the caches
     /// only; it never calls TheTVDB or OMDb, and it sends and stores nothing.
     /// </summary>
@@ -25,7 +25,7 @@ public interface IDigestComposer
     Task<ComposedDigest> ComposeAsync(
         Guid userId,
         string username,
-        DateOnly today,
+        DateTime nowUtc,
         string baseUrl,
         IDictionary<int, SeriesAggregate?>? aggregates = null,
         CancellationToken cancellationToken = default);
@@ -42,7 +42,7 @@ public sealed class DigestComposer(
     public async Task<ComposedDigest> ComposeAsync(
         Guid userId,
         string username,
-        DateOnly today,
+        DateTime nowUtc,
         string baseUrl,
         IDictionary<int, SeriesAggregate?>? aggregates = null,
         CancellationToken cancellationToken = default)
@@ -72,7 +72,7 @@ public sealed class DigestComposer(
         var lastWatched = await episodeWatchRepository.GetLastWatchedUtcBySeriesAsync(userId, cancellationToken);
 
         var content = DigestBuilder.Build(
-            cached, watchedIds, lastWatched, ContinueWatchingOrder.AddedUtc(tracked), today, libraryOptions.Value);
+            cached, watchedIds, lastWatched, ContinueWatchingOrder.AddedUtc(tracked), nowUtc, libraryOptions.Value);
 
         var token = unsubscribeTokens.Create(userId);
         var oneClickUrl = $"{baseUrl}/Digest/OneClick?token={token}";
@@ -81,7 +81,7 @@ public sealed class DigestComposer(
             return new ComposedDigest(content, null, oneClickUrl);
 
         var links = new DigestLinks(baseUrl, $"{baseUrl}/Digest/Unsubscribe?token={token}");
-        return new ComposedDigest(content, DigestEmailRenderer.Render(content, username, today, links), oneClickUrl);
+        return new ComposedDigest(content, DigestEmailRenderer.Render(content, username, DateOnly.FromDateTime(nowUtc), links), oneClickUrl);
     }
 
     /// <summary>A series that cannot be read from the caches is left out of this digest; it must not cost an API call or the whole email.</summary>

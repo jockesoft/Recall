@@ -45,7 +45,8 @@ $$;
 -- The Dashboard lists episodes airing in the next 30 days, and the cached data
 -- has none. Two schedules are moved, in the clone only:
 --   Silo: its announced future episodes air weekly, starting in two days.
---   Deadliest Catch: episodes from the last 14 days air 14 days later.
+--   Deadliest Catch: episodes from the last 14 days air 14 days later, the
+--   first of them today ("airs tonight", below).
 
 UPDATE cached_series_aggregate a
 SET payload = jsonb_set(a.payload, '{episodes}', (
@@ -67,6 +68,21 @@ SET payload = jsonb_set(a.payload, '{episodes}', (
     SELECT jsonb_agg(
                CASE WHEN (e ->> 'aired')::date BETWEEN current_date - 14 AND current_date
                     THEN jsonb_set(e, '{aired}', to_jsonb(to_char((e ->> 'aired')::date + 14, 'YYYY-MM-DD')))
+                    ELSE e
+               END ORDER BY ord)
+    FROM jsonb_array_elements(a.payload -> 'episodes') WITH ORDINALITY t(e, ord)))
+WHERE a.tvdb_id = 78957;
+
+-- "Airs tonight": the first of those moved episodes airs today instead. Deadliest
+-- Catch airs at 20:00 in the US, so it is released at midnight UTC (or one in
+-- the morning in winter) and is the card with a time under "Tomorrow" (the
+-- groups are UTC dates), which the browser rewrites into the viewer's own time.
+UPDATE cached_series_aggregate a
+SET payload = jsonb_set(a.payload, '{episodes}', (
+    SELECT jsonb_agg(
+               CASE WHEN ord = (SELECT min(o) FROM jsonb_array_elements(a.payload -> 'episodes') WITH ORDINALITY u(f, o)
+                                WHERE (f ->> 'aired')::date > current_date)
+                    THEN jsonb_set(e, '{aired}', to_jsonb(to_char(current_date, 'YYYY-MM-DD')))
                     ELSE e
                END ORDER BY ord)
     FROM jsonb_array_elements(a.payload -> 'episodes') WITH ORDINALITY t(e, ord)))

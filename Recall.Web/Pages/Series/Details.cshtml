@@ -1,4 +1,5 @@
 @page "{id:int}"
+@using Recall.Web.Services.WatchTracking
 @model Recall.Web.Pages.Series.DetailsModel
 @functions {
     // OMDb uses the literal string "N/A" for missing values.
@@ -48,9 +49,12 @@
         var today = Model.Today;
         // From the episode list rather than the aggregate's own "next aired" field,
         // which is only as fresh as the last refresh.
+        var now = Model.Now;
+        // The next episode not yet released (EpisodeRelease), shown by TheTVDB's date.
         var nextAirDate = series.Episodes
-            .Where(e => e.Aired is { } aired && aired >= today)
-            .Select(e => e.Aired)
+            .Select(e => EpisodeRelease.MomentUtc(e.Aired, series.AirsTime, series.OriginalCountry))
+            .Where(r => r is not null && !r.IsReleasedBy(now))
+            .Select(r => (DateOnly?)r!.AirDate)
             .Min();
         var hasEnded = series.Status?.KeepUpdated != true && series.LastAired.HasValue;
 
@@ -159,7 +163,7 @@
                 .ToHashSet();
 
             var seasonHasMarkable = seasonEpisodes.Any(e =>
-                !Model.WatchedEpisodeIds.Contains(e.Id) && !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(e.Aired, today));
+                !Model.WatchedEpisodeIds.Contains(e.Id) && AirDate.MayBeMarked(e.Aired, now));
             var seasonWatchedCount = seasonEpisodes.Count(e => Model.WatchedEpisodeIds.Contains(e.Id));
             var showSeasonMenu = Model.IsAuthenticated && (seasonHasMarkable || seasonWatchedCount > 0);
 
@@ -234,7 +238,10 @@
                         @foreach (var ep in seasonEpisodes)
                         {
                             var isWatched = Model.WatchedEpisodeIds.Contains(ep.Id);
-                            var hasAired = !Recall.Web.Services.WatchTracking.AirDate.IsInFuture(ep.Aired, today);
+                            // "Airs" until released; markable from the air date anywhere (AirDate.MayBeMarked).
+                            var release = EpisodeRelease.MomentUtc(ep.Aired, series.AirsTime, series.OriginalCountry);
+                            var isReleased = release is null || release.IsReleasedBy(now);
+                            var hasAired = AirDate.MayBeMarked(ep.Aired, now);
                             var airedText = ep.Aired.HasValue ? DisplayDate.Format(ep.Aired.Value, today) : null;
 
                             <li class="list-group-item tvdb-episode @(isWatched ? "is-watched" : "") @(Model.IsAuthenticated ? "has-control" : "")">
@@ -246,7 +253,7 @@
                                 <div class="tvdb-episode__facts">
                                     @if (airedText is not null)
                                     {
-                                        <span>@(hasAired ? "" : "Airs ")@airedText</span>
+                                        <span>@(isReleased ? "" : "Airs ")@airedText</span>
                                     }
                                     @if (ep.RuntimeMinutes.HasValue)
                                     {

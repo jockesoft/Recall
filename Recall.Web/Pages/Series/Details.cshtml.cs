@@ -37,6 +37,9 @@ public sealed class DetailsModel(
     /// <summary>Today's date in UTC, for the view's "has this episode aired" checks.</summary>
     public DateOnly Today => AirDate.Today(timeProvider);
 
+    /// <summary>Now in UTC, for "released" (EpisodeRelease) and "may be marked" (AirDate.MayBeMarked).</summary>
+    public DateTime Now => AirDate.Now(timeProvider);
+
     public TvSeriesDetails? Series { get; private set; }
     public SeriesAggregate? Aggregate { get; private set; }
 

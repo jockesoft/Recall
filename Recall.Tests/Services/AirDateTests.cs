@@ -30,11 +30,27 @@ public class AirDateTests
     }
 
     [Test]
-    public void IsInFuture_Should_BeTrue_OnlyForAKnownDateAfterToday()
+    public void Now_Should_BeTheClocksMomentInUtc()
     {
-        AirDate.IsInFuture(Oct1.AddDays(1), Oct1).Should().BeTrue();
-        AirDate.IsInFuture(Oct1, Oct1).Should().BeFalse("an episode airing today counts as aired");
-        AirDate.IsInFuture(Oct1.AddDays(-1), Oct1).Should().BeFalse();
-        AirDate.IsInFuture(null, Oct1).Should().BeFalse("an unknown air date is not treated as unaired");
+        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 10, 2, 1, 0, 0, TimeSpan.FromHours(2)));
+
+        var now = AirDate.Now(clock);
+
+        now.Should().Be(new DateTime(2026, 10, 1, 23, 0, 0, DateTimeKind.Utc));
+        now.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Test]
+    public void MayBeMarked_Should_AllowAnEpisode_OnceItsAirDateHasBegunAnywhereOnEarth()
+    {
+        // UTC+14 reaches Oct 2 at 10:00 UTC on Oct 1.
+        var oct2 = new DateOnly(2026, 10, 2);
+
+        AirDate.MayBeMarked(oct2, new DateTime(2026, 10, 1, 9, 59, 0, DateTimeKind.Utc)).Should().BeFalse();
+        AirDate.MayBeMarked(oct2, new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc)).Should().BeTrue();
+        AirDate.MayBeMarked(oct2.AddDays(-30), new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc)).Should().BeTrue();
+        AirDate.MayBeMarked(oct2.AddDays(2), new DateTime(2026, 10, 1, 23, 0, 0, DateTimeKind.Utc)).Should().BeFalse();
+        AirDate.MayBeMarked(null, new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc))
+            .Should().BeTrue("an unknown air date may always be marked");
     }
 }

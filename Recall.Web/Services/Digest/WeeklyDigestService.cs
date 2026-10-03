@@ -59,7 +59,7 @@ public sealed class WeeklyDigestService(
         if (recipients.Count == 0)
             return new DigestRunResult(period, 0, 0, 0);
 
-        var today = AirDate.Today(timeProvider);
+        var now = AirDate.Now(timeProvider);
         var aggregates = new Dictionary<int, SeriesAggregate?>();
         var (queued, skipped, failed) = (0, 0, 0);
 
@@ -69,7 +69,7 @@ public sealed class WeeklyDigestService(
 
             try
             {
-                var digest = await composer.ComposeAsync(recipient.UserId, recipient.Username, today, baseUrl, aggregates, cancellationToken);
+                var digest = await composer.ComposeAsync(recipient.UserId, recipient.Username, now, baseUrl, aggregates, cancellationToken);
 
                 if (digest.Email is null)
                 {

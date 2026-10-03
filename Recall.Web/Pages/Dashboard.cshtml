@@ -46,6 +46,7 @@
                 head.ImageUrl,
                 head.SeasonNumber,
                 head.AiredDate,
+                head.Release,
                 head.SeriesCaughtUp,
                 LinkEpisodeId = head.EpisodeId,
                 Count = ordered.Count,
@@ -59,7 +60,8 @@
         .ToList();
 
     var groupedUpcoming = upcomingRows
-        .GroupBy(r => DayGroup(r.AiredDate))
+        // In UTC, by the release moment's date (the air date when no time is known).
+        .GroupBy(r => DayGroup(r.Release.GroupDate))
         .OrderBy(g => g.Key switch { "Today" => 0, "Tomorrow" => 1, "This week" => 2, _ => 3 });
 }
 
@@ -180,7 +182,7 @@
                 <h3 class="tvdb-schedule-day">@group.Key</h3>
                 <div class="tvdb-upcoming-list">
                     @foreach (var row in group
-                        .OrderBy(r => r.AiredDate)
+                        .OrderBy(r => r.Release.Utc)
                         .ThenBy(r => r.SeriesName)
                         .ThenBy(r => r.SeasonNumber ?? int.MaxValue))
                     {
@@ -195,6 +197,7 @@
                                      EpisodeName = row.SingleName,
                                      ImageUrl = row.ImageUrl,
                                      AiredDate = row.AiredDate,
+                                     Release = row.Release,
                                      Today = Model.Today,
                                      ShowDate = showDate,
                                      IsPremiere = row.IsPremiere,

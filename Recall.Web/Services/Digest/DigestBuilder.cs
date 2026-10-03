@@ -71,7 +71,8 @@ public sealed record DigestContent(
 /// <see cref="ContinueWatchingOrder.Arrange"/>'s call. A dormant series appears
 /// only under "new season".</item>
 /// </list>
-/// Three sections, each about a 7-day window in UTC dates:
+/// Three sections, each about the 7 days before or after the moment it is
+/// built for, judged by release moment (<see cref="EpisodeRelease"/>):
 /// <list type="number">
 /// <item><b>New seasons</b>: any tracked series whose regular season's first
 /// episode aired in the past week and is not watched.</item>
@@ -99,17 +100,20 @@ public static class DigestBuilder
         IReadOnlySet<int> watchedEpisodeIds,
         IReadOnlyDictionary<int, DateTime> lastWatchedUtc,
         IReadOnlyDictionary<int, DateTime> addedUtc,
-        DateOnly today,
+        DateTime nowUtc,
         LibraryOptions libraryOptions)
     {
-        var weekAgo = today.AddDays(-WindowDays);
-        var weekAhead = today.AddDays(WindowDays);
+        // Windows of seven days either side of the send, by release moment
+        // (EpisodeRelease): a US evening episode is "coming up" until it airs.
+        var today = DateOnly.FromDateTime(nowUtc);
+        var weekAgo = nowUtc.AddDays(-WindowDays);
+        var weekAhead = nowUtc.AddDays(WindowDays);
 
         var series = tracked
             .Select(aggregate => new
             {
                 Aggregate = aggregate,
-                Progress = WatchProgressCalculator.Build(aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedEpisodeIds, today)
+                Progress = WatchProgressCalculator.Build(aggregate.TvdbId, aggregate.ToWatchableEpisodes(), watchedEpisodeIds, nowUtc)
             })
             .ToList();
 
@@ -119,7 +123,7 @@ public static class DigestBuilder
         // next episode and is never dormant, so its premiere stays in "coming up".
         var queue = series.Where(s => !s.Progress.IsUpToDate).ToList();
         var recentPremieres = queue
-            .Where(s => ContinueWatchingOrder.HasRecentPremiere(s.Progress.OrderedEpisodes, today, libraryOptions.PremiereReturnDays))
+            .Where(s => ContinueWatchingOrder.HasRecentPremiere(s.Progress.OrderedEpisodes, nowUtc, libraryOptions.PremiereReturnDays))
             .Select(s => s.Aggregate.TvdbId)
             .ToHashSet();
 
@@ -130,7 +134,7 @@ public static class DigestBuilder
 
         // 1. New seasons: every tracked series, dormant ones included.
         var newSeasons = series
-            .Select(s => new { s.Aggregate, Premiere = UnwatchedPremiere(s.Progress.OrderedEpisodes, watchedEpisodeIds, weekAgo, today) })
+            .Select(s => new { s.Aggregate, Premiere = UnwatchedPremiere(s.Progress.OrderedEpisodes, watchedEpisodeIds, weekAgo, nowUtc) })
             .Where(s => s.Premiere is not null)
             .Select(s => new DigestPremiere(
                 s.Aggregate.TvdbId, s.Aggregate.Name, s.Premiere!.SeasonNumber!.Value, s.Premiere.Id, s.Premiere.Aired!.Value))
@@ -147,16 +151,21 @@ public static class DigestBuilder
             .SelectMany(s => Lines(
                 s.Aggregate,
                 s.Progress.OrderedEpisodes.Where(e => IsRegular(e)
-                                                      && e.Aired is { } aired && aired >= weekAgo && aired <= today
+                                                      && ReleasedBetween(e, weekAgo, nowUtc)
                                                       && !watchedEpisodeIds.Contains(e.Id))))
             .ToList();
 
-        // 3. Coming up: everything tracked that is not dormant.
+        // 3. Coming up: everything tracked that is not dormant. An episode the
+        // user has already marked (allowed from its air date, in any zone)
+        // is not news, even before its release moment.
         var coming = series
             .Where(s => !dormantIds.Contains(s.Aggregate.TvdbId))
             .SelectMany(s => Lines(
                 s.Aggregate,
-                s.Progress.OrderedEpisodes.Where(e => IsRegular(e) && e.Aired is { } aired && aired > today && aired <= weekAhead)))
+                s.Progress.OrderedEpisodes.Where(e => IsRegular(e)
+                                                      && e.Release is { } release
+                                                      && release.Utc > nowUtc && release.Utc <= weekAhead
+                                                      && !watchedEpisodeIds.Contains(e.Id))))
             .OrderBy(line => line.FirstAired)
             .ThenBy(line => line.SeriesName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(line => line.SeriesId)
@@ -168,17 +177,21 @@ public static class DigestBuilder
 
     private static bool IsRegular(WatchableEpisode episode) => episode.SeasonNumber is > 0;
 
+    /// <summary>Released after <paramref name="from"/> and by <paramref name="to"/> (both moments in UTC).</summary>
+    private static bool ReleasedBetween(WatchableEpisode episode, DateTime from, DateTime to) =>
+        episode.Release is { } release && release.Utc > from && release.Utc <= to;
+
     /// <summary>The first episode of a regular season, if it aired within the window and is not watched; the newest such season.</summary>
     private static WatchableEpisode? UnwatchedPremiere(
         IEnumerable<WatchableEpisode> episodes,
         IReadOnlySet<int> watchedEpisodeIds,
-        DateOnly from,
-        DateOnly to) =>
+        DateTime from,
+        DateTime to) =>
         episodes
             .Where(e => IsRegular(e) && e.EpisodeNumber.HasValue)
             .GroupBy(e => e.SeasonNumber)
             .Select(season => season.OrderBy(e => e.EpisodeNumber).ThenBy(e => e.Id).First())
-            .Where(first => first.Aired is { } aired && aired >= from && aired <= to && !watchedEpisodeIds.Contains(first.Id))
+            .Where(first => ReleasedBetween(first, from, to) && !watchedEpisodeIds.Contains(first.Id))
             .OrderByDescending(first => first.SeasonNumber)
             .FirstOrDefault();
 

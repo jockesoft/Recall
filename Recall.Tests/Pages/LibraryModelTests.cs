@@ -18,6 +18,8 @@ namespace Recall.Tests.Pages;
 public class LibraryModelTests
 {
     private static readonly DateOnly Today = new(2026, 10, 1);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
     private static readonly Guid UserId = Guid.NewGuid();
 
     private Mock<ICurrentUserService> _currentUser = null!;
@@ -53,7 +55,7 @@ public class LibraryModelTests
         progress
             .Setup(x => x.BuildProgress(It.IsAny<int>(), It.IsAny<IEnumerable<WatchableEpisode>>(), It.IsAny<IReadOnlySet<int>>()))
             .Returns((int id, IEnumerable<WatchableEpisode> episodes, IReadOnlySet<int> watched) =>
-                WatchProgressCalculator.Build(id, episodes, watched, Today));
+                WatchProgressCalculator.Build(id, episodes, watched, Now));
 
         // An empty library unless a test says otherwise.
         _tracked.Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>())).ReturnsAsync([]);

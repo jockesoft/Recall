@@ -62,7 +62,7 @@ public sealed class WeeklyDigestServiceTests
 
     private void Composes(DigestRecipient recipient, bool somethingToSay) =>
         _composer
-            .Setup(x => x.ComposeAsync(recipient.UserId, recipient.Username, Period, "https://recall.example", It.IsAny<IDictionary<int, SeriesAggregate?>>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ComposeAsync(recipient.UserId, recipient.Username, Now.UtcDateTime, "https://recall.example", It.IsAny<IDictionary<int, SeriesAggregate?>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(somethingToSay
                 ? new ComposedDigest(SomethingToSay, new DigestEmail("Your week on Recall: 1 to watch", "text", "<p>html</p>"), $"https://recall.example/Digest/OneClick?token={recipient.Username}")
                 : new ComposedDigest(NothingToSay, null, "unused"));
@@ -120,7 +120,7 @@ public sealed class WeeklyDigestServiceTests
         Composes(first, somethingToSay: true);
         Composes(last, somethingToSay: true);
         _composer
-            .Setup(x => x.ComposeAsync(broken.UserId, It.IsAny<string>(), It.IsAny<DateOnly>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ComposeAsync(broken.UserId, It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("boom"));
 
         var result = await CreateSut().RunAsync();

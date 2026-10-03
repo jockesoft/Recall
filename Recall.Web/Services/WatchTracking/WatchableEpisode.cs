@@ -10,10 +10,23 @@ public sealed record WatchableEpisode(
     int? SeasonNumber,
     int? EpisodeNumber,
     DateOnly? Aired,
-    string Name)
+    string Name,
+    ReleaseMoment? KnownRelease = null)
 {
-    /// <summary>True when the episode has an air date on or before <paramref name="date"/>.</summary>
-    public bool HasAiredBy(DateOnly date) => Aired is { } aired && aired <= date;
+    /// <summary>
+    /// When the episode is released (<see cref="EpisodeRelease"/>): the moment
+    /// the projection from the series worked out from its air time and country,
+    /// or, for an episode built without them, the no-country fallback (noon UTC
+    /// the day after the air date). Null without an air date.
+    /// </summary>
+    public ReleaseMoment? Release => KnownRelease ?? EpisodeRelease.MomentUtc(Aired, airsTime: null, country: null);
+
+    /// <summary>
+    /// True when the episode has been released by <paramref name="nowUtc"/>.
+    /// An episode with no air date is never "released": progress leaves it out,
+    /// though it may still be marked watched (<see cref="AirDate.MayBeMarked"/>).
+    /// </summary>
+    public bool IsReleasedBy(DateTime nowUtc) => Release?.IsReleasedBy(nowUtc) == true;
 
     /// <summary>
     /// A special (TheTVDB's season 0): listed and markable, but never part of

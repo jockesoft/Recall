@@ -494,32 +494,72 @@ public class WatchProgressServiceTests
         unwatched.Should().BeEquivalentTo([1, 2]);
     }
 
-    [Test]
-    public async Task AiredToday_Should_CountAsAired_AndTomorrowAsNot()
-    {
-        // The clock reads 2026-10-01 12:00 UTC.
-        SetupSeries(
-            Ep(1, 1, 1, "2026-10-01"),
-            Ep(2, 1, 2, "2026-10-02"));
-        SetupWatched();
+    // A US series at 20:00 Eastern, like Gold Rush: aired on D, released at 00:00 UTC on D+1.
+    private void SetupUsSeries(params EpisodeSummary[] episodes) =>
+        _tvDbService
+            .Setup(x => x.GetSeriesAggregateByIdAsync(SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeriesAggregate
+            {
+                TvdbId = SeriesId, Name = "Gold Rush", AirsTime = "20:00", OriginalCountry = "usa",
+                Status = new SeriesStatus { Name = "Continuing" }, Episodes = episodes
+            });
 
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
+    [Test]
+    public async Task GoldRushS17E01_At22UtcOnOctoberSecond_Should_BeMarkable_ButNotReleased()
+    {
+        _time.Now = new DateTimeOffset(2026, 10, 2, 22, 0, 0, TimeSpan.Zero);
+        SetupUsSeries(Ep(1, 16, 9, "2026-05-01"), Ep(11961330, 17, 1, "2026-10-02"));
+        SetupWatched(1);
 
         var progress = await _sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId);
-        progress.ReleasedCount.Should().Be(1);
+        progress.ReleasedCount.Should().Be(1, "it airs at 20:00 Eastern, 00:00 UTC on Oct 3");
+        progress.IsUpToDate.Should().BeTrue("not under Watching, and no Continue watching card, before it airs");
+
+        // Someone who has just watched it (in the US, say) can mark it already.
+        var marked = await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 11961330);
+        marked.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        marked.CaughtUp.Should().BeNull("the series was up to date before the mark (nothing released was unwatched)");
     }
 
     [Test]
-    public async Task AirDates_Should_BeJudgedByTheUtcDate_NotTheMachinesLocalDate()
+    public async Task GoldRushS17E01_AtMidnightUtcOnOctoberThird_Should_BeReleased()
     {
-        // 23:30 UTC on Oct 1. On a machine fourteen hours ahead it is already
-        // Oct 2 — and on one twelve hours behind it is still Oct 1 at 11:30.
-        // Either way "today" is Oct 1, so an Oct 2 episode has not aired.
-        var lateEvening = new DateTimeOffset(2026, 10, 1, 23, 30, 0, TimeSpan.Zero);
-        SetupSeries(
+        _time.Now = new DateTimeOffset(2026, 10, 3, 0, 0, 0, TimeSpan.Zero);
+        SetupUsSeries(Ep(1, 16, 9, "2026-05-01"), Ep(11961330, 17, 1, "2026-10-02"));
+        SetupWatched(1);
+
+        var progress = await _sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId);
+
+        progress.ReleasedCount.Should().Be(2);
+        progress.NextUnwatchedEpisode!.Id.Should().Be(11961330);
+    }
+
+    [Test]
+    public async Task AnEpisode_Should_BeMarkable_OnceItsAirDateHasBegunAnywhere_AndNotBefore()
+    {
+        // The clock reads 2026-10-01 12:00 UTC: Oct 2 has begun at UTC+14 (02:00), Oct 3 has not.
+        SetupUsSeries(
             Ep(1, 1, 1, "2026-10-01"),
-            Ep(2, 1, 2, "2026-10-02"));
+            Ep(2, 1, 2, "2026-10-02"),
+            Ep(3, 1, 3, "2026-10-03"));
+        SetupWatched();
+
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 1)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 3)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
+
+        (await _sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId)).ReleasedCount
+            .Should().Be(0, "none has aired in the US yet: Oct 1's is released at 00:00 UTC on Oct 2");
+    }
+
+    [Test]
+    public async Task ReleaseAndMarking_Should_NotDependOnTheMachinesTimeZone()
+    {
+        // 23:30 UTC on Oct 1, on machines fourteen hours ahead, twelve behind, and at UTC.
+        var lateEvening = new DateTimeOffset(2026, 10, 1, 23, 30, 0, TimeSpan.Zero);
+        SetupUsSeries(
+            Ep(1, 1, 1, "2026-09-30"),
+            Ep(2, 1, 2, "2026-10-03"));
         SetupWatched();
 
         foreach (var offsetHours in new[] { 14, -12, 0 })
@@ -527,20 +567,21 @@ public class WatchProgressServiceTests
             var zone = TimeZoneInfo.CreateCustomTimeZone($"test{offsetHours}", TimeSpan.FromHours(offsetHours), "test", "test");
             var sut = CreateSut(new FixedTimeProvider(lateEvening, zone));
 
-            (await sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired, $"with the machine at UTC{offsetHours:+0;-0}");
+            (await sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome
+                .Should().Be(EpisodeWatchOutcome.NotAired, $"with the machine at UTC{offsetHours:+0;-0}");
             (await sut.GetSeriesProgressAsync(Guid.NewGuid(), SeriesId)).ReleasedCount.Should().Be(1);
         }
     }
 
     [Test]
-    public async Task TheSameEpisode_Should_BecomeMarkable_OnceTheUtcDateReachesItsAirDate()
+    public async Task TheSameEpisode_Should_BecomeMarkable_WhenItsAirDateBeginsAtUtcPlus14()
     {
-        SetupSeries(Ep(2, 1, 2, "2026-10-02"));
+        SetupUsSeries(Ep(3, 1, 3, "2026-10-03"));
 
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
+        _time.Now = new DateTimeOffset(2026, 10, 2, 9, 59, 0, TimeSpan.Zero);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 3)).Outcome.Should().Be(EpisodeWatchOutcome.NotAired);
 
-        _time.Now = new DateTimeOffset(2026, 10, 2, 0, 0, 1, TimeSpan.Zero);
-
-        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 2)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
+        _time.Now = new DateTimeOffset(2026, 10, 2, 10, 0, 0, TimeSpan.Zero);
+        (await _sut.MarkEpisodeWatchedAsync(Guid.NewGuid(), SeriesId, 3)).Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
     }
 }

@@ -20,6 +20,8 @@ public class DashboardModelTests
 {
     // The clock reads 2026-10-01 (UTC).
     private static readonly DateOnly Today = new(2026, 10, 1);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
     private static readonly Guid UserId = Guid.NewGuid();
 
     private Mock<ITheTvDbService> _tvDb = null!;
@@ -49,7 +51,7 @@ public class DashboardModelTests
         _progress
             .Setup(x => x.BuildProgress(It.IsAny<int>(), It.IsAny<IEnumerable<WatchableEpisode>>(), It.IsAny<IReadOnlySet<int>>()))
             .Returns((int id, IEnumerable<WatchableEpisode> episodes, IReadOnlySet<int> watched) =>
-                WatchProgressCalculator.Build(id, episodes, watched, Today));
+                WatchProgressCalculator.Build(id, episodes, watched, Now));
 
         var currentUser = new Mock<ICurrentUserService>();
         currentUser.SetupGet(x => x.IsAuthenticated).Returns(true);
@@ -285,6 +287,65 @@ public class DashboardModelTests
         first.ImageUrl.Should().Be("https://img/b.jpg");
         first.FinaleType.Should().Be("season");
         first.AiredDate.Should().Be(Today);
+    }
+
+    // ---- Gold Rush S17E01: aired Friday 2026-10-02 at 20:00 ET = 00:00 UTC Saturday ----
+
+    private static SeriesAggregate GoldRush() => new()
+    {
+        TvdbId = 208111, Name = "Gold Rush", AirsTime = "20:00", OriginalCountry = "usa",
+        Episodes = [Ep(1, 16, 9, new DateOnly(2026, 5, 1)), Ep(11961330, 17, 1, new DateOnly(2026, 10, 2))]
+    };
+
+    /// <summary>The Dashboard with its clock (and the progress rules) at <paramref name="now"/>.</summary>
+    private DashboardModel DashboardAt(DateTimeOffset now)
+    {
+        var progress = new Mock<IWatchProgressService>();
+        progress
+            .Setup(x => x.BuildProgress(It.IsAny<int>(), It.IsAny<IEnumerable<WatchableEpisode>>(), It.IsAny<IReadOnlySet<int>>()))
+            .Returns((int id, IEnumerable<WatchableEpisode> episodes, IReadOnlySet<int> watched) =>
+                WatchProgressCalculator.Build(id, episodes, watched, now.UtcDateTime));
+
+        var currentUser = new Mock<ICurrentUserService>();
+        currentUser.SetupGet(x => x.IsAuthenticated).Returns(true);
+        currentUser.SetupGet(x => x.UserId).Returns(UserId);
+
+        return new DashboardModel(
+            _tvDb.Object, _library.Object, _watches.Object, progress.Object,
+            NullLogger<DashboardModel>.Instance, currentUser.Object,
+            new FixedTimeProvider(now), Options.Create(_libraryOptions), _users.Object,
+            Options.Create(_digestOptions)).WithTempData();
+    }
+
+    [Test]
+    public async Task GoldRush_At2200UtcOnOctoberSecond_Should_BeUpcomingTomorrow_NotACatchUpCard()
+    {
+        SetUpSeries(GoldRush());
+        SetUpWatched(1);
+        var sut = DashboardAt(new DateTimeOffset(2026, 10, 2, 22, 0, 0, TimeSpan.Zero));
+
+        await sut.OnGetAsync(CancellationToken.None);
+
+        sut.CatchUpEpisodes.Should().BeEmpty("it is released at 00:00 UTC");
+        var upcoming = sut.UpcomingEpisodes.Should().ContainSingle().Subject;
+        upcoming.EpisodeId.Should().Be(11961330);
+        upcoming.Release.Utc.Should().Be(new DateTime(2026, 10, 3, 0, 0, 0, DateTimeKind.Utc));
+        upcoming.Release.GroupDate.Should().Be(sut.Today.AddDays(1), "grouped by the UTC date of the moment: Tomorrow");
+        upcoming.AiredDate.Should().Be(new DateOnly(2026, 10, 2), "the date shown without script stays TheTVDB's");
+        sut.UpcomingThisWeekCount.Should().Be(1);
+    }
+
+    [Test]
+    public async Task GoldRush_AtMidnightUtcOnOctoberThird_Should_BeACatchUpCard_AndNoLongerUpcoming()
+    {
+        SetUpSeries(GoldRush());
+        SetUpWatched(1);
+        var sut = DashboardAt(new DateTimeOffset(2026, 10, 3, 0, 0, 0, TimeSpan.Zero));
+
+        await sut.OnGetAsync(CancellationToken.None);
+
+        sut.CatchUpEpisodes.Should().ContainSingle().Which.EpisodeId.Should().Be(11961330);
+        sut.UpcomingEpisodes.Should().BeEmpty();
     }
 
     [Test]

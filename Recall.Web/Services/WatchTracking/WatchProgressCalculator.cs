@@ -2,7 +2,7 @@ namespace Recall.Web.Services.WatchTracking;
 
 /// <summary>
 /// Pure watch-progress logic. Everything here is deterministic given its inputs
-/// (including an explicit <c>today</c>), so it can be unit-tested without mocking
+/// (including an explicit "now"), so it can be unit-tested without mocking
 /// time or TheTVDB.
 /// </summary>
 public static class WatchProgressCalculator
@@ -28,10 +28,12 @@ public static class WatchProgressCalculator
         int seriesTvdbId,
         IEnumerable<WatchableEpisode> episodes,
         IReadOnlySet<int> watchedEpisodeIds,
-        DateOnly today)
+        DateTime nowUtc)
     {
         var ordered = Order(episodes);
-        var released = ordered.Where(e => !e.IsSpecial && e.HasAiredBy(today)).ToList();
+        // Released by now (EpisodeRelease): a US evening episode is not
+        // released on its air date in UTC until its broadcast has happened.
+        var released = ordered.Where(e => !e.IsSpecial && e.IsReleasedBy(nowUtc)).ToList();
         var watchedReleased = released.Count(e => watchedEpisodeIds.Contains(e.Id));
         var next = released.FirstOrDefault(e => !watchedEpisodeIds.Contains(e.Id));
 

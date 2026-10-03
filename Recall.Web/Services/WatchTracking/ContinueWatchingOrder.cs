@@ -128,13 +128,14 @@ public static class ContinueWatchingOrder
         && today.DayNumber - DateOnly.FromDateTime(date).DayNumber > dormantAfterDays;
 
     /// <summary>
-    /// True when the first episode of a regular season aired within the last
-    /// <paramref name="days"/> days (today included, the future excluded).
+    /// True when the first episode of a regular season was released
+    /// (<see cref="EpisodeRelease"/>) within the <paramref name="days"/> days
+    /// before <paramref name="nowUtc"/>; not before its release moment.
     /// Specials (season 0) have no premiere in this sense, and an ordinary
     /// episode airing is not one: a weekly show the user abandoned airs all the
     /// time and must be able to go dormant.
     /// </summary>
-    public static bool HasRecentPremiere(IEnumerable<WatchableEpisode> episodes, DateOnly today, int days)
+    public static bool HasRecentPremiere(IEnumerable<WatchableEpisode> episodes, DateTime nowUtc, int days)
     {
         if (days <= 0)
             return false;
@@ -143,9 +144,9 @@ public static class ContinueWatchingOrder
             .Where(e => e.SeasonNumber is > 0 && e.EpisodeNumber.HasValue)
             .GroupBy(e => e.SeasonNumber)
             .Select(season => season.OrderBy(e => e.EpisodeNumber).ThenBy(e => e.Id).First())
-            .Any(first => first.Aired is { } aired
-                          && aired <= today
-                          && today.DayNumber - aired.DayNumber <= days);
+            .Any(first => first.Release is { } release
+                          && release.IsReleasedBy(nowUtc)
+                          && nowUtc - release.Utc <= TimeSpan.FromDays(days));
     }
 
     /// <summary>When each tracked series was added to the library, keyed by its TheTVDB id.</summary>

@@ -10,6 +10,8 @@ namespace Recall.Tests.Services.Stats;
 public sealed class StatsBuilderTests
 {
     private static readonly DateOnly Today = new(2026, 10, 15);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
     private static readonly StatsWindow Window = StatsWindow.LastTwelveMonths(Today);
 
     private readonly List<EpisodeWatchRecord> _episodeWatches = [];
@@ -31,7 +33,7 @@ public sealed class StatsBuilderTests
     }
 
     private UserStats Build() => StatsBuilder.Build(
-        new StatsInput(_episodeWatches, _movieWatches, _series, _movies, _tracked, _ratings), Today, Window);
+        new StatsInput(_episodeWatches, _movieWatches, _series, _movies, _tracked, _ratings), Now, Window);
 
     private static DateTime Utc(int year, int month, int day, int hour = 20) => new(year, month, day, hour, 0, 0, DateTimeKind.Utc);
 
@@ -286,7 +288,7 @@ public sealed class StatsBuilderTests
 
         var stats = StatsBuilder.Build(
             new StatsInput(_episodeWatches, _movieWatches, _series, _movies, _tracked, _ratings),
-            Today,
+            Now,
             StatsWindow.CalendarYear(2026));
 
         stats.Months.Select(m => m.Month.Month).Should().Equal(Enumerable.Range(1, 12));

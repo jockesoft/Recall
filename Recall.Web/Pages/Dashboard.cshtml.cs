@@ -26,6 +26,9 @@ public sealed class UpcomingEpisodeItem
     public string? ImageUrl { get; init; }
     public DateOnly AiredDate { get; init; }
 
+    /// <summary>When it is released (<see cref="EpisodeRelease"/>): what the Upcoming groups and the card's time come from.</summary>
+    public required ReleaseMoment Release { get; init; }
+
     /// <summary>TheTVDB finale marker ("season", "series", "midseason"), if any.</summary>
     public string? FinaleType { get; init; }
 
@@ -118,6 +121,7 @@ public sealed class DashboardModel(
         var watchedIds = await watchedRepository.GetWatchedEpisodeIdsAsync(userId, seriesIds, cancellationToken);
 
         var today = Today;
+        var now = AirDate.Now(timeProvider);
         var upcomingCutoff = today.AddDays(UpcomingWindowDays);
         var thisWeekCutoff = today.AddDays(ThisWeekWindowDays);
 
@@ -135,7 +139,11 @@ public sealed class DashboardModel(
 
             var seriesCaughtUp = progress.UnwatchedReleasedCount == 0;
 
-            foreach (var ep in aggregate.Episodes.Where(e => e.Aired is { } aired && aired >= today && aired <= upcomingCutoff))
+            // Upcoming: not released yet (EpisodeRelease), airing within the window.
+            // An episode airing tonight in the US is here until it airs.
+            foreach (var (ep, release) in aggregate.Episodes
+                         .Select(e => (Episode: e, Release: EpisodeRelease.MomentUtc(e.Aired, aggregate.AirsTime, aggregate.OriginalCountry)))
+                         .Where(x => x.Release is { } r && !r.IsReleasedBy(now) && r.AirDate <= upcomingCutoff))
             {
                 upcoming.Add(new UpcomingEpisodeItem
                 {
@@ -147,6 +155,7 @@ public sealed class DashboardModel(
                     Name = ep.Name,
                     ImageUrl = aggregate.ImageUrl,
                     AiredDate = ep.Aired!.Value,
+                    Release = release!,
                     FinaleType = ep.FinaleType,
                     SeriesCaughtUp = seriesCaughtUp
                 });
@@ -154,7 +163,7 @@ public sealed class DashboardModel(
 
             if (progress.NextUnwatchedEpisode is { } next)
             {
-                if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, today, libraryOptions.Value.PremiereReturnDays))
+                if (ContinueWatchingOrder.HasRecentPremiere(progress.OrderedEpisodes, now, libraryOptions.Value.PremiereReturnDays))
                     recentPremieres.Add(aggregate.TvdbId);
 
                 // The image is filled in below, for the cards that are shown.
@@ -170,7 +179,7 @@ public sealed class DashboardModel(
             }
         }
 
-        UpcomingEpisodes = [.. upcoming.OrderBy(e => e.AiredDate)];
+        UpcomingEpisodes = [.. upcoming.OrderBy(e => e.Release.Utc)];
 
         // "Continue watching": what the user is in the middle of comes first,
         // and what they haven't touched in a while is left to the Library
@@ -192,7 +201,7 @@ public sealed class DashboardModel(
         DormantSeriesCount = queue.Dormant.Count;
 
         CatchUpEpisodes = await WithArtAsync(orderedCatchUp, aggregates.ToDictionary(a => a.TvdbId), cancellationToken);
-        UpcomingThisWeekCount = upcoming.Count(e => e.AiredDate <= thisWeekCutoff);
+        UpcomingThisWeekCount = upcoming.Count(e => e.Release.GroupDate <= thisWeekCutoff);
         UnwatchedCount = unwatchedTotal;
     }
 

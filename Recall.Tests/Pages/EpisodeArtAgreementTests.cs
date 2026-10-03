@@ -33,6 +33,8 @@ public sealed class EpisodeArtAgreementTests
 
     private static readonly Guid UserId = Guid.NewGuid();
     private static readonly DateOnly Today = new(2026, 10, 2);
+    // "Now" for the release-moment rules: noon UTC on Today.
+    private static readonly DateTime Now = Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
 
     private Mock<ITheTvDbService> _tvDb = null!;
 
@@ -53,7 +55,7 @@ public sealed class EpisodeArtAgreementTests
                     new EpisodeSummary
                     {
                         Id = EpisodeId, SeasonNumber = 17, EpisodeNumber = 1, Name = "The Most Gold Wins",
-                        Aired = Today, Image = stillInAggregate
+                        Aired = Today.AddDays(-2), Image = stillInAggregate
                     }
                 ],
                 RemoteIds = []
@@ -104,7 +106,7 @@ public sealed class EpisodeArtAgreementTests
         progress
             .Setup(x => x.BuildProgress(It.IsAny<int>(), It.IsAny<IEnumerable<WatchableEpisode>>(), It.IsAny<IReadOnlySet<int>>()))
             .Returns((int id, IEnumerable<WatchableEpisode> episodes, IReadOnlySet<int> watched) =>
-                WatchProgressCalculator.Build(id, episodes, watched, Today));
+                WatchProgressCalculator.Build(id, episodes, watched, Now));
 
         var currentUser = new Mock<ICurrentUserService>();
         currentUser.SetupGet(x => x.IsAuthenticated).Returns(true);
