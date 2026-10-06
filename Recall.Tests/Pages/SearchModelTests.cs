@@ -120,4 +120,29 @@ public class SearchModelTests
         _sut.ErrorMessage.Should().Contain("TheTVDB");
         _sut.Results.Should().BeEmpty();
     }
+
+    [Test]
+    public async Task AStoppedSeries_Should_BeMarkedStopped_InsteadOfInLibrary()
+    {
+        var stoppedSeries = TrackedSeries with { TvdbId = 7, Name = "Put Aside" };
+        _series.Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new TrackedSeries { Id = Guid.NewGuid(), UserId = UserId, TvdbId = 1, Name = "Tracked" },
+                new TrackedSeries { Id = Guid.NewGuid(), UserId = UserId, TvdbId = 7, Name = "Put Aside", StoppedUtc = new DateTime(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc) }
+            ]);
+        // A movie that shares the stopped series' id is not stopped: only series can be.
+        var movieWithTheSameId = WatchlistMovie with { TvdbId = 7 };
+        SearchReturns(TrackedSeries, stoppedSeries, movieWithTheSameId);
+        _sut.Query = "dark";
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.LibraryBadge(stoppedSeries).Should().Be("Stopped");
+        _sut.IsStopped(stoppedSeries).Should().BeTrue();
+        _sut.LibraryBadge(TrackedSeries).Should().Be("In library");
+        _sut.IsStopped(TrackedSeries).Should().BeFalse();
+        _sut.LibraryBadge(movieWithTheSameId).Should().BeNull();
+        _sut.IsStopped(movieWithTheSameId).Should().BeFalse();
+    }
 }

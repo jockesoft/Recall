@@ -6,6 +6,8 @@
     // Set by SetSuccessToastWithWatchedUndo after a bulk "mark watched".
     var undoSeriesId = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedSeriesKey] as string;
     var undoStamp = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedStampKey] as string;
+    // Also set when that mark resumed a stopped series: the Undo stops it again as it was.
+    var undoStoppedStamp = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedStoppedKey] as string;
     var offerUndo = !string.IsNullOrWhiteSpace(success)
                     && int.TryParse(undoSeriesId, out _)
                     && long.TryParse(undoStamp, out _);
@@ -44,6 +46,10 @@
             {
                 <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undoSeriesId" class="d-inline-flex">
                     <input type="hidden" name="stamp" value="@undoStamp" />
+                    @if (long.TryParse(undoStoppedStamp, out _))
+                    {
+                        <input type="hidden" name="stoppedStamp" value="@undoStoppedStamp" />
+                    }
                     <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                     <button type="submit" class="tvdb-toast-action">Undo</button>
                 </form>

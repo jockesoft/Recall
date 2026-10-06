@@ -44,6 +44,13 @@
         @* A primary button with a second control (a movie's watchlist button, or
            its "On your watchlist" state) stacks the two full-width on phones. *@
         <div class="tvdb-action-row @(Model.Primary is not null && (Model.Secondary.Count > 0 || Model.State is not null) ? "tvdb-action-row--stack" : "")">
+            @* A neutral state explains the button that follows it ("You stopped
+               watching on Fri, Sep 4", then "Resume watching"), so it comes first. *@
+            @if (Model.State is { Neutral: true } explained)
+            {
+                <span class="tvdb-title-state tvdb-title-state--neutral"><i class="@explained.Icon" aria-hidden="true"></i> @explained.Text</span>
+            }
+
             @if (Model.Primary is { } primary)
             {
                 <form method="post" asp-page-handler="@primary.Handler" asp-route-id="@primary.RouteId">
@@ -62,9 +69,9 @@
                 </form>
             }
 
-            @if (Model.State is { } state)
+            @if (Model.State is { Neutral: false } state)
             {
-                <span class="tvdb-title-state @(state.Neutral ? "tvdb-title-state--neutral" : null)"><i class="@state.Icon" aria-hidden="true"></i> @state.Text</span>
+                <span class="tvdb-title-state"><i class="@state.Icon" aria-hidden="true"></i> @state.Text</span>
             }
 
             @foreach (var action in Model.Secondary)

@@ -782,4 +782,119 @@ public class SeriesDetailsPostTests
         _progress.Verify(x => x.ResumeWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
         _progress.Verify(x => x.StopWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    // ---- undoing a mark that resumed a stopped series -----------------------------------
+
+    private static readonly DateTime StoppedOn = new(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc);
+
+    private void VerifyRestored(Times times) =>
+        _progress.Verify(
+            x => x.RestoreStoppedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), times);
+
+    [Test]
+    public async Task AMarkThatResumed_Should_PutTheStoppedDateInItsUndo()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(
+                EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: StoppedOn));
+        _progress
+            .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeasonWatchResult(
+                SeasonFound: true, new WatchedBatch(7, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: StoppedOn));
+
+        await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStoppedKey].Should().Be(StoppedOn.Ticks.ToString());
+
+        _sut.TempData.Clear();
+        await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStoppedKey].Should().Be(StoppedOn.Ticks.ToString());
+    }
+
+    [Test]
+    public async Task UndoWatched_Should_StopTheSeriesAgain_WithItsOriginalDate_WhenTheMarkHadResumedIt()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(3);
+        _progress
+            .Setup(x => x.RestoreStoppedAsync(UserId, SeriesId, StoppedOn, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp: StoppedOn.Ticks);
+
+        AssertRedirectsBackToTheSeason(result);
+        _sut.InfoToast().Should().Be("Undone — 3 episodes marked as not watched. You've stopped watching the series again.");
+        _progress.Verify(x => x.RestoreStoppedAsync(UserId, SeriesId, StoppedOn, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task UndoWatched_Should_NotTouchTheStoppedState_ForAnOrdinaryMark()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(3);
+
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default);
+
+        _sut.InfoToast().Should().Be("Undone — 3 episodes marked as not watched.");
+        VerifyRestored(Times.Never());
+    }
+
+    [TestCase(0L)]
+    [TestCase(-5L)]
+    [TestCase(long.MaxValue)]
+    public async Task UndoWatched_Should_IgnoreAStoppedStampThatIsNotADate(long stoppedStamp)
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp);
+
+        _sut.InfoToast().Should().Be("Undone — 1 episode marked as not watched.");
+        VerifyRestored(Times.Never());
+    }
+
+    [Test]
+    public async Task UndoWatched_Should_NotStopAgain_WhenNothingWasLeftToUndo_OrTheSeriesWasStoppedSince()
+    {
+        SignIn();
+        _progress
+            .SetupSequence(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0)
+            .ReturnsAsync(2);
+
+        // A second press of the same Undo: nothing removed, so nothing restored.
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp: StoppedOn.Ticks);
+        _sut.InfoToast().Should().Be("Nothing left to undo.");
+        VerifyRestored(Times.Never());
+
+        // The restore changed nothing (already stopped again): the toast does not claim it did.
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp: StoppedOn.Ticks);
+        _sut.InfoToast().Should().Be("Undone — 2 episodes marked as not watched.");
+    }
+
+    [Test]
+    public async Task PlainUnmarking_Should_NeverRestoreOrChangeTheStoppedState()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EpisodeWatchOutcome.MarkedUnwatched);
+        _progress
+            .Setup(x => x.MarkSeasonUnwatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(4);
+
+        await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+        await _sut.OnPostMarkSeasonUnwatchedAsync(SeriesId, default);
+
+        VerifyRestored(Times.Never());
+        _progress.Verify(x => x.StopWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _progress.Verify(x => x.ResumeWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

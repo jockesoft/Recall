@@ -356,27 +356,4 @@ public sealed class LibraryModel(
 
         return RedirectToPage(BackToView);
     }
-
-    public async Task<IActionResult> OnPostRemoveAsync(Guid id, CancellationToken cancellationToken)
-    {
-        if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
-        {
-            this.SetErrorToast("You need to be signed in to modify your library.");
-            return await OnGetAsync(cancellationToken);
-        }
-
-        try
-        {
-            var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
-
-            await trackedSeriesRepository.RemoveAsync(userId, id, cancellationToken);
-            return RedirectToPage(BackToView);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed removing tracked series {TrackedSeriesId} for external user id {ExternalUserId}.", id, currentUserService.ExternalUserId);
-            this.SetErrorToast("Could not remove the series right now.");
-            return await OnGetAsync(cancellationToken);
-        }
-    }
 }

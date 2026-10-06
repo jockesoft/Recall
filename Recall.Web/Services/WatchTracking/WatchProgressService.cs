@@ -124,7 +124,8 @@ public sealed class WatchProgressService(
 
         return new MarkWatchedThroughResult(
             EpisodeFound: true, idsToMark.Count, Batch: batch,
-            CaughtUp: caughtUp, AddedToLibrary: library.AddedToLibrary, ResumedWatching: library.ResumedWatching);
+            CaughtUp: caughtUp, AddedToLibrary: library.AddedToLibrary, ResumedWatching: library.ResumedWatching,
+            ResumedFromStoppedUtc: library.ResumedFromStoppedUtc);
     }
 
     public async Task<SeasonWatchResult> MarkSeasonWatchedAsync(
@@ -157,7 +158,7 @@ public sealed class WatchProgressService(
             : MarkLibraryEffect.None;
 
         return new SeasonWatchResult(
-            SeasonFound: true, batch, caughtUp, library.AddedToLibrary, library.ResumedWatching);
+            SeasonFound: true, batch, caughtUp, library.AddedToLibrary, library.ResumedWatching, library.ResumedFromStoppedUtc);
     }
 
     public async Task<int> MarkSeasonUnwatchedAsync(
@@ -232,7 +233,8 @@ public sealed class WatchProgressService(
         var library = await EnsureWatchingAsync(userId, seriesTvdbId, cancellationToken);
 
         return new UndoableEpisodeWatch(
-            EpisodeWatchOutcome.MarkedWatched, batch, caughtUp, library.AddedToLibrary, library.ResumedWatching);
+            EpisodeWatchOutcome.MarkedWatched, batch, caughtUp, library.AddedToLibrary, library.ResumedWatching,
+            library.ResumedFromStoppedUtc);
     }
 
     // ---- the library --------------------------------------------------------------
@@ -251,8 +253,8 @@ public sealed class WatchProgressService(
         {
             if (await trackedSeriesRepository.ExistsAsync(userId, seriesTvdbId, cancellationToken))
             {
-                return new MarkLibraryEffect(
-                    ResumedWatching: await trackedSeriesRepository.ResumeAsync(userId, seriesTvdbId, cancellationToken));
+                var resumed = await trackedSeriesRepository.ResumeAsync(userId, seriesTvdbId, cancellationToken);
+                return new MarkLibraryEffect(ResumedWatching: resumed?.Name, ResumedFromStoppedUtc: resumed?.StoppedUtc);
             }
 
             var details = await theTvDbService.GetSeriesByIdAsync(seriesTvdbId, cancellationToken);
@@ -293,11 +295,20 @@ public sealed class WatchProgressService(
             : new StopWatchingResult(StopWatchingOutcome.AlreadyStopped, tracked.Name);
     }
 
-    public Task<string?> ResumeWatchingAsync(
+    public async Task<string?> ResumeWatchingAsync(
         Guid userId,
         int seriesTvdbId,
         CancellationToken cancellationToken = default)
-        => trackedSeriesRepository.ResumeAsync(userId, seriesTvdbId, cancellationToken);
+        => (await trackedSeriesRepository.ResumeAsync(userId, seriesTvdbId, cancellationToken))?.Name;
+
+    // The same atomic "stop if not stopped" as a stop, with the old date: a
+    // series stopped again in the meantime keeps its newer date.
+    public Task<bool> RestoreStoppedAsync(
+        Guid userId,
+        int seriesTvdbId,
+        DateTime stoppedUtc,
+        CancellationToken cancellationToken = default)
+        => trackedSeriesRepository.StopAsync(userId, seriesTvdbId, stoppedUtc, cancellationToken);
 
     /// <summary>
     /// Whether the series is finished by the Library's rule, which is when

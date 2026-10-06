@@ -458,7 +458,8 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 /* Phones, two buttons: the primary takes its own row, the second fills the
    next one with the heart beside it. */
 @media (max-width: 575.98px) {
-    .tvdb-action-row--stack > form:first-child {
+    .tvdb-action-row--stack > form:first-child,
+    .tvdb-action-row--stack > .tvdb-title-state:first-child {
         flex: 0 0 100%;
     }
 

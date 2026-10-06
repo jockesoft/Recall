@@ -53,7 +53,8 @@ public sealed class StopWatchingTests : PostgresFixture
         await using var db = NewContext();
         var repository = NewRepository(db);
 
-        (await repository.ResumeAsync(user, seriesId)).Should().Be("Silo");
+        (await repository.ResumeAsync(user, seriesId)).Should().Be(
+            new ResumedSeries("Silo", StoppedAt), "the caller gets the date back, to restore it if the resume is undone");
         (await repository.ResumeAsync(user, seriesId)).Should().BeNull("there is nothing left to resume");
         (await repository.GetByUserAndTvdbIdAsync(user, seriesId))!.StoppedUtc.Should().BeNull();
     }
@@ -86,7 +87,7 @@ public sealed class StopWatchingTests : PostgresFixture
         (await repository.StopAsync(user, seriesId, StoppedAt.AddDays(1))).Should().BeTrue();
         (await repository.GetByUserAndTvdbIdAsync(other, seriesId))!.StoppedUtc.Should().Be(StoppedAt);
 
-        (await repository.ResumeAsync(user, seriesId)).Should().Be("Shared");
+        (await repository.ResumeAsync(user, seriesId))!.Name.Should().Be("Shared");
         (await repository.GetByUserAndTvdbIdAsync(other, seriesId))!.StoppedUtc.Should().Be(StoppedAt, "the other user is still stopped");
     }
 
@@ -148,5 +149,23 @@ public sealed class StopWatchingTests : PostgresFixture
         await db.SaveChangesAsync();
 
         return id;
+    }
+
+    [Test]
+    public async Task TheDateAResumeHandsBack_Should_RestoreTheStopExactly()
+    {
+        // The Undo of a mark that resumed a series sends this date round as ticks and stops the series again with it.
+        var user = await SeedUserAsync();
+        var stoppedAt = new DateTime(2026, 9, 4, 18, 30, 12, DateTimeKind.Utc).AddTicks(3_456_780);   // microseconds, as PostgreSQL keeps them
+        var seriesId = await SeedTrackedAsync(user, "Silo", stoppedAt);
+
+        await using var db = NewContext();
+        var repository = NewRepository(db);
+
+        var resumed = await repository.ResumeAsync(user, seriesId);
+        var roundTripped = new DateTime(long.Parse(resumed!.StoppedUtc.Ticks.ToString()), DateTimeKind.Utc);
+
+        (await repository.StopAsync(user, seriesId, roundTripped)).Should().BeTrue();
+        (await repository.GetByUserAndTvdbIdAsync(user, seriesId))!.StoppedUtc.Should().Be(stoppedAt);
     }
 }

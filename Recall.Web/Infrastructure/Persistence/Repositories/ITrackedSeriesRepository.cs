@@ -34,9 +34,14 @@ public interface ITrackedSeriesRepository
     Task<bool> StopAsync(Guid userId, int tvdbId, DateTime stoppedUtc, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Clears the stopped date of a series. Returns the series' name when this
-    /// call resumed it, and null when there was nothing to resume (not in the
-    /// library, or not stopped), so a caller can tell whether to say so.
+    /// Clears the stopped date of a series. Returns the series' name and the
+    /// date it had been stopped on when this call resumed it, and null when
+    /// there was nothing to resume (not in the library, or not stopped), so a
+    /// caller can tell whether to say so, and can put the date back
+    /// (<see cref="StopAsync"/>) if the user undoes what resumed it.
     /// </summary>
-    Task<string?> ResumeAsync(Guid userId, int tvdbId, CancellationToken cancellationToken = default);
+    Task<ResumedSeries?> ResumeAsync(Guid userId, int tvdbId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>A series that was just resumed: its name, and when the user had stopped watching it.</summary>
+public sealed record ResumedSeries(string Name, DateTime StoppedUtc);

@@ -309,7 +309,8 @@ public sealed class DashboardModel(
                         batch,
                         undoSingle: true,
                         caughtUp: result.CaughtUp,
-                        today: Today);
+                        today: Today,
+                        resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
                     break;
                 case EpisodeWatchOutcome.EpisodeNotInSeries:
                     this.SetErrorToast("That episode doesn't belong to this series.");

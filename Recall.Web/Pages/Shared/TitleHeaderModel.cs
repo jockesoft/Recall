@@ -60,5 +60,9 @@ public sealed class TitleAction
 }
 
 /// <summary>A quiet, non-interactive status in the action row.</summary>
-/// <param name="Neutral">True for a state that is not an achievement ("You stopped watching on …"): drawn plain instead of green.</param>
+/// <param name="Neutral">
+/// True for a state that is not an achievement ("You stopped watching on …"):
+/// drawn plain instead of green, and placed before the primary button, which
+/// it explains (on a phone, on its own row above it).
+/// </param>
 public sealed record TitleState(string Text, string Icon, bool Neutral = false);

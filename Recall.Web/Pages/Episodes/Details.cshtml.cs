@@ -320,7 +320,8 @@ public sealed class DetailsModel(
                     seriesId,
                     result.Batch,
                     caughtUp: result.CaughtUp,
-                    today: Today);
+                    today: Today,
+                    resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
             }
         }
         catch (Exception ex)

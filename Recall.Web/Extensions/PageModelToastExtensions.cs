@@ -16,6 +16,10 @@ public static class PageModelToastExtensions
     public const string UndoWatchedSeriesKey = "Toast.UndoWatched.SeriesId";
     public const string UndoWatchedStampKey = "Toast.UndoWatched.Stamp";
 
+    // With the two above, when the mark resumed a series the user had stopped
+    // watching: the stopped date (ticks) the Undo puts back.
+    public const string UndoWatchedStoppedKey = "Toast.UndoWatched.StoppedStamp";
+
     // Read back by _ToastMessages.cshtml, which renders an "Undo" POST form
     // (resume the series) inside the "Stopped watching …" toast.
     public const string UndoStoppedSeriesKey = "Toast.UndoStopped.SeriesId";
@@ -101,11 +105,14 @@ public static class PageModelToastExtensions
         /// no tick left to click. When the mark caught the user up
         /// (<paramref name="caughtUp"/>), that sentence is added to the same
         /// toast, after what was marked: "Marked 8 episodes as watched. You've
-        /// finished Chernobyl." The Undo stays.
+        /// finished Chernobyl." The Undo stays. When the mark resumed a series
+        /// the user had stopped watching, pass the result's
+        /// <c>ResumedFromStoppedUtc</c> as <paramref name="resumedFromStoppedUtc"/>:
+        /// the Undo then also stops the series again, with that date.
         /// </summary>
         public void SetSuccessToastWithWatchedUndo(
             string message, int seriesTvdbId, WatchedBatch? batch, bool undoSingle = false,
-            SeriesCaughtUp? caughtUp = null, DateOnly today = default)
+            SeriesCaughtUp? caughtUp = null, DateOnly today = default, DateTime? resumedFromStoppedUtc = null)
         {
             pageModel.TempData[SuccessKey] = caughtUp is null ? message : $"{message} {caughtUp.Sentence(today)}";
             pageModel.MarkCaughtUp(caughtUp);
@@ -116,6 +123,9 @@ public static class PageModelToastExtensions
             // Strings: the cookie TempData serializer only round-trips a few primitive types.
             pageModel.TempData[UndoWatchedSeriesKey] = seriesTvdbId.ToString(CultureInfo.InvariantCulture);
             pageModel.TempData[UndoWatchedStampKey] = batch.WatchedUtc.Ticks.ToString(CultureInfo.InvariantCulture);
+
+            if (resumedFromStoppedUtc is { } stoppedUtc)
+                pageModel.TempData[UndoWatchedStoppedKey] = stoppedUtc.Ticks.ToString(CultureInfo.InvariantCulture);
         }
     }
 }

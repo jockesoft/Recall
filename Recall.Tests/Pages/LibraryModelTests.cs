@@ -565,32 +565,6 @@ public class LibraryModelTests
         _sut.ErrorToast().Should().Be("You need to be signed in to like a series.");
     }
 
-    [Test]
-    public async Task Remove_Should_RemoveTheUsersOwnTrackedSeries_AndRedirect()
-    {
-        var trackedId = Guid.NewGuid();
-
-        var result = await _sut.OnPostRemoveAsync(trackedId, CancellationToken.None);
-
-        result.Should().BeOfType<RedirectToPageResult>();
-        _tracked.Verify(x => x.RemoveAsync(UserId, trackedId, It.IsAny<CancellationToken>()), Times.Once,
-            "the repository is given the user id, so one user can't remove another's row");
-    }
-
-    [Test]
-    public async Task Remove_Should_ShowAnErrorToast_AndReRenderThePage_WhenTheRepositoryThrows()
-    {
-        var trackedId = Guid.NewGuid();
-        _tracked
-            .Setup(x => x.RemoveAsync(UserId, trackedId, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("db down"));
-
-        var result = await _sut.OnPostRemoveAsync(trackedId, CancellationToken.None);
-
-        result.Should().BeOfType<PageResult>();
-        _sut.ErrorToast().Should().Be("Could not remove the series right now.");
-    }
-
     // ---- stopped -----------------------------------------------------------------
 
     [Test]

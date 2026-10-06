@@ -86,7 +86,9 @@
                             <span class="tvdb-meta">@meta</span>
                             @if (badge is not null)
                             {
-                                <span class="tvdb-badge tvdb-badge--ok"><i class="@Icons.Check" aria-hidden="true"></i> @badge</span>
+                                @* Something the user has is green; a series they stopped watching is plain. *@
+                                var stopped = Model.IsStopped(item);
+                                <span class="tvdb-badge @(stopped ? "tvdb-badge--neutral" : "tvdb-badge--ok")"><i class="@(stopped ? Icons.Stopped : Icons.Check)" aria-hidden="true"></i> @badge</span>
                             }
                         </div>
 

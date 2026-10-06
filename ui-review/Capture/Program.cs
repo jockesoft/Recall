@@ -45,6 +45,8 @@ List<Shot> shots =
             await page.Locator("#searchResults > li:not([hidden])").Nth(39).WaitForAsync();
         }),
     new("search", "no-results", Site.SignedIn, "/Search?Query=zzqqxxzzqq"),
+    // The Gentlemen is a series the seed stops: its badge says "Stopped", not "In library".
+    new("search", "stopped", Site.SignedIn, "/Search?Query=the+gentlemen", ViewportOnly: true),
     new("library", "populated", Site.SignedIn, "/Library"),
     new("library", "section-watched", Site.SignedIn, "/Library?section=watched"),
     new("library", "section-dormant", Site.SignedIn, "/Library?section=dormant"),

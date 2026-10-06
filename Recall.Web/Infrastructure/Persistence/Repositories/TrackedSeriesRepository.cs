@@ -107,15 +107,15 @@ public sealed class TrackedSeriesRepository(
         return updated > 0;
     }
 
-    public async Task<string?> ResumeAsync(Guid userId, int tvdbId, CancellationToken cancellationToken = default)
+    public async Task<ResumedSeries?> ResumeAsync(Guid userId, int tvdbId, CancellationToken cancellationToken = default)
     {
-        var name = await dbContext.TrackedSeries
+        var stopped = await dbContext.TrackedSeries
             .AsNoTracking()
             .Where(x => x.UserId == userId && x.TvdbId == tvdbId && x.StoppedUtc != null)
-            .Select(x => x.Name)
+            .Select(x => new { x.Name, x.StoppedUtc })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (name is null)
+        if (stopped is null)
             return null;
 
         var updated = await dbContext.TrackedSeries
@@ -127,6 +127,6 @@ public sealed class TrackedSeriesRepository(
                 cancellationToken);
 
         // Zero rows: another request resumed it in between, and said so itself.
-        return updated > 0 ? name : null;
+        return updated > 0 ? new ResumedSeries(stopped.Name, stopped.StoppedUtc!.Value) : null;
     }
 }

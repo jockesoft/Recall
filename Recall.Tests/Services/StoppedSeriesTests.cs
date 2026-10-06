@@ -81,11 +81,11 @@ public sealed class StoppedSeriesTests
                 return true;
             });
         _library.Setup(x => x.ResumeAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() =>
+            .ReturnsAsync(ResumedSeries? () =>
             {
-                if (_tracked?.StoppedUtc is null) return null;
+                if (_tracked?.StoppedUtc is not { } stoppedUtc) return null;
                 _tracked = Tracked(stoppedUtc: null);
-                return "Silo";
+                return new ResumedSeries("Silo", stoppedUtc);
             });
 
         _watches.Setup(x => x.GetWatchedEpisodeIdsAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
@@ -433,5 +433,75 @@ public sealed class StoppedSeriesTests
         MarkLibraryEffect.Clause(null, null).Should().BeNull();
         MarkLibraryEffect.Clause("Silo", null).Should().Be(" and added Silo to your library");
         MarkLibraryEffect.Clause(null, "Silo").Should().Be(" and resumed watching Silo");
+    }
+
+    // ---- undoing the mark that resumed -------------------------------------------------
+
+    [Test]
+    public async Task EveryUndoableMark_Should_ReportTheStoppedDateItCleared()
+    {
+        Stopped();
+        var oneTap = await _sut.MarkEpisodeWatchedUndoablyAsync(UserId, SeriesId, 1);
+
+        Stopped();
+        var through = await _sut.MarkWatchedThroughAsync(UserId, SeriesId, 2);
+
+        Stopped();
+        var season = await _sut.MarkSeasonWatchedAsync(UserId, SeriesId, 1);
+
+        oneTap.ResumedFromStoppedUtc.Should().Be(StoppedEarlier);
+        through.ResumedFromStoppedUtc.Should().Be(StoppedEarlier);
+        season.ResumedFromStoppedUtc.Should().Be(StoppedEarlier);
+    }
+
+    [Test]
+    public async Task AMarkThatResumedNothing_Should_ReportNoStoppedDate()
+    {
+        var through = await _sut.MarkWatchedThroughAsync(UserId, SeriesId, 2);
+
+        through.ResumedWatching.Should().BeNull();
+        through.ResumedFromStoppedUtc.Should().BeNull("the Undo of this mark must not stop anything");
+    }
+
+    [Test]
+    public async Task UndoingTheMarkThatResumed_Should_StopTheSeriesAgain_WithItsOriginalDate()
+    {
+        Stopped();
+        var marked = await _sut.MarkWatchedThroughAsync(UserId, SeriesId, 3);
+        _tracked!.StoppedUtc.Should().BeNull("the mark resumed it");
+
+        // What the Undo in the toast does: remove the batch, then put the date back.
+        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, marked.Batch!.WatchedUtc);
+        var restored = await _sut.RestoreStoppedAsync(UserId, SeriesId, marked.ResumedFromStoppedUtc!.Value);
+
+        restored.Should().BeTrue();
+        _tracked!.StoppedUtc.Should().Be(StoppedEarlier, "the original date, not the time of the undo");
+    }
+
+    [Test]
+    public async Task RestoreStopped_Should_KeepANewerStop_AndDoNothingForASeriesNoLongerInTheLibrary()
+    {
+        Stopped();
+        var marked = await _sut.MarkEpisodeWatchedUndoablyAsync(UserId, SeriesId, 1);
+
+        // Stopped again before the Undo was pressed: the newer date stands.
+        await _sut.StopWatchingAsync(UserId, SeriesId);
+        (await _sut.RestoreStoppedAsync(UserId, SeriesId, marked.ResumedFromStoppedUtc!.Value)).Should().BeFalse();
+        _tracked!.StoppedUtc.Should().Be(Now);
+
+        _tracked = null;
+        (await _sut.RestoreStoppedAsync(UserId, SeriesId, StoppedEarlier)).Should().BeFalse();
+        _tracked.Should().BeNull("restoring never adds the series back");
+    }
+
+    [Test]
+    public async Task UndoingABatch_Should_NotStopByItself()
+    {
+        _watched.UnionWith([1, 2]);
+
+        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, Now);
+
+        _tracked!.StoppedUtc.Should().BeNull("only the page's Undo of a resuming mark restores a stop, and it says so explicitly");
+        VerifyStopped(Times.Never());
     }
 }

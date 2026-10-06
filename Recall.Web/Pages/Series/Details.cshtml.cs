@@ -403,7 +403,8 @@ public sealed class DetailsModel(
                     id,
                     result.Batch,
                     caughtUp: result.CaughtUp,
-                    today: Today);
+                    today: Today,
+                    resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
             }
         }
         catch (Exception ex)
@@ -443,7 +444,8 @@ public sealed class DetailsModel(
                     id,
                     result.Batch,
                     caughtUp: result.CaughtUp,
-                    today: Today);
+                    today: Today,
+                    resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
             }
         }
         catch (Exception ex)
@@ -487,13 +489,17 @@ public sealed class DetailsModel(
     /// Episodes/Details. <paramref name="stamp"/> is the batch's
     /// <c>WatchedUtc</c> in ticks; only the current user's own rows carrying
     /// exactly that timestamp are removed, so a forged value can at worst
-    /// un-watch the sender's own episodes.
+    /// un-watch the sender's own episodes. When the mark had resumed a series
+    /// the user stopped watching, <paramref name="stoppedStamp"/> is the
+    /// stopped date it cleared (ticks) and the undo puts it back; a forged one
+    /// can at worst stop the sender's own series.
     /// </summary>
     public async Task<IActionResult> OnPostUndoWatchedAsync(
         [FromRoute] int id,
         [FromForm] long stamp,
         [FromForm] string? returnUrl,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromForm] long? stoppedStamp = null)
     {
         IActionResult Back() =>
             !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
@@ -514,12 +520,21 @@ public sealed class DetailsModel(
             var removed = await watchProgressService.UndoWatchedBatchAsync(
                 userId, id, new DateTime(stamp, DateTimeKind.Utc), cancellationToken);
 
-            this.SetInfoToast(removed switch
+            // Undoing the mark that resumed a stopped series stops it again, as it
+            // was. Only then: an ordinary unmark never touches the stopped state.
+            var stoppedAgain = removed > 0
+                               && stoppedStamp is > 0 and var ticks && ticks <= DateTime.MaxValue.Ticks
+                               && await watchProgressService.RestoreStoppedAsync(
+                                   userId, id, new DateTime(ticks, DateTimeKind.Utc), cancellationToken);
+
+            var undone = removed switch
             {
                 0 => "Nothing left to undo.",
                 1 => "Undone — 1 episode marked as not watched.",
                 _ => $"Undone — {removed} episodes marked as not watched."
-            });
+            };
+
+            this.SetInfoToast(stoppedAgain ? $"{undone} You've stopped watching the series again." : undone);
         }
         catch (Exception ex)
         {

@@ -881,4 +881,19 @@ public class DashboardModelTests
         _sut.DormantSeriesCount.Should().Be(0);
         _tvDb.Verify(x => x.GetSeriesAggregateByIdAsync(9, It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Test]
+    public async Task MarkWatched_Should_PutTheStoppedDateInItsUndo_WhenTheMarkResumedTheSeries()
+    {
+        var stoppedOn = new DateTime(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc);
+        SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Silo", Episodes = [Ep(11, 3, 4, Today.AddDays(-7))] });
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: stoppedOn));
+
+        await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
+
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStoppedKey].Should().Be(stoppedOn.Ticks.ToString());
+    }
 }

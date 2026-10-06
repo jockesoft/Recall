@@ -476,4 +476,20 @@ public class EpisodeDetailsPostTests
         await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
         _sut.SuccessToast().Should().Be("Marked S03E04 as watched and resumed watching Silo.");
     }
+
+    [Test]
+    public async Task MarkWatchedThrough_Should_PutTheStoppedDateInItsUndo_WhenTheMarkResumedTheSeries()
+    {
+        var stoppedOn = new DateTime(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc);
+        SignIn();
+        EpisodeIs(3, 4);
+        _progress
+            .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(
+                EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: stoppedOn));
+
+        await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
+
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStoppedKey].Should().Be(stoppedOn.Ticks.ToString());
+    }
 }
