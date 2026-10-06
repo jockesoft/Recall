@@ -60,4 +60,5 @@ public sealed class TitleAction
 }
 
 /// <summary>A quiet, non-interactive status in the action row.</summary>
-public sealed record TitleState(string Text, string Icon);
+/// <param name="Neutral">True for a state that is not an achievement ("You stopped watching on …"): drawn plain instead of green.</param>
+public sealed record TitleState(string Text, string Icon, bool Neutral = false);

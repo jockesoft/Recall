@@ -29,6 +29,7 @@
         ReleasedEpisodes = item.ReleasedEpisodes,
         Caption = item.Caption,
         ProgressText = item.ProgressText,
+        MetaText = item.MetaLine,
         DetailsPage = item.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
         IsMovie = item.Type == SearchResultType.Movie,
         ShowLike = item.Type == SearchResultType.Series,
@@ -121,9 +122,13 @@
                 }
 
                 // Watching is what the page is for: always the full grid. On a
-                // phone the other three are one scrolling row each, with a link
+                // phone the others are one scrolling row each, with a link
                 // to the section on its own; from 576px they are grids too.
                 var isRow = part.Section != LibrarySection.Watching;
+
+                // Stopped is what the user put aside: from 576px it stays
+                // closed behind a "Show N" button, like the dormant group.
+                var isCollapsed = part.Section == LibrarySection.Stopped;
 
                 <section class="tvdb-page-section" id="@part.Slug" data-library-section>
                     <div class="tvdb-section-head">
@@ -133,9 +138,29 @@
                             <a asp-page="/Library" asp-route-section="@part.Slug" class="tvdb-section-head__link d-sm-none"
                                aria-label="See all @part.Items.Count in @part.Title">See all @part.Items.Count <i class="@Icons.Forward" aria-hidden="true"></i></a>
                         }
+                        @if (isCollapsed)
+                        {
+                            <button type="button" class="btn btn-outline-dark btn-sm d-none d-sm-inline-flex align-items-center tvdb-subgroup__toggle"
+                                    data-bs-toggle="collapse" data-bs-target="#@(part.Slug)Series"
+                                    aria-expanded="false" aria-controls="@(part.Slug)Series">
+                                <span data-toggle-label data-more="Show @part.Items.Count" data-less="Hide">Show @part.Items.Count</span>
+                                <i class="@Icons.Expand ms-1" aria-hidden="true"></i>
+                            </button>
+                        }
                     </div>
 
-                    @if (part.Items.Count > 0)
+                    @if (isCollapsed)
+                    {
+                        <div class="collapse tvdb-subgroup__body" id="@(part.Slug)Series">
+                            <div class="tvdb-series-grid tvdb-series-grid--row-on-phone">
+                                @foreach (var item in part.Items)
+                                {
+                                    <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (part.Items.Count > 0)
                     {
                         <div class="tvdb-series-grid @(isRow ? "tvdb-series-grid--row-on-phone" : null)">
                             @foreach (var item in part.Items)
@@ -190,14 +215,15 @@
 @section Scripts {
     <script src="~/js/tvdb-type-filter.js" asp-append-version="true"></script>
     <script>
-        // The "haven't watched in a while" group: its button says what pressing it does.
-        (function () {
-            var body = document.getElementById('dormantSeries');
-            var label = document.querySelector('.tvdb-subgroup__toggle [data-toggle-label]');
+        // The collapsed groups ("haven't watched in a while", Stopped): each
+        // button says what pressing it does.
+        document.querySelectorAll('.tvdb-subgroup__toggle').forEach(function (toggle) {
+            var body = document.getElementById(toggle.getAttribute('aria-controls'));
+            var label = toggle.querySelector('[data-toggle-label]');
             if (!body || !label) return;
 
             body.addEventListener('show.bs.collapse', function () { label.textContent = label.dataset.less; });
             body.addEventListener('hide.bs.collapse', function () { label.textContent = label.dataset.more; });
-        })();
+        });
     </script>
 }

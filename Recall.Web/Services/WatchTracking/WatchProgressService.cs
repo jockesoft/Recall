@@ -119,10 +119,12 @@ public sealed class WatchProgressService(
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, idsToMark, WatchSource.Bulk, clickedEpisodeTvdbId: episodeTvdbId, cancellationToken);
 
+        var caughtUp = await CaughtUpByAsync(before, idsToMark, cancellationToken);
+        var library = await EnsureWatchingAsync(userId, seriesTvdbId, cancellationToken);
+
         return new MarkWatchedThroughResult(
             EpisodeFound: true, idsToMark.Count, Batch: batch,
-            CaughtUp: await CaughtUpByAsync(before, idsToMark, cancellationToken),
-            AddedToLibrary: await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken));
+            CaughtUp: caughtUp, AddedToLibrary: library.AddedToLibrary, ResumedWatching: library.ResumedWatching);
     }
 
     public async Task<SeasonWatchResult> MarkSeasonWatchedAsync(
@@ -147,11 +149,15 @@ public sealed class WatchProgressService(
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, idsToMark, WatchSource.Bulk, cancellationToken: cancellationToken);
 
+        var caughtUp = await CaughtUpByAsync(before, idsToMark, cancellationToken);
+
+        // A season with nothing left to mark wrote nothing, so it neither adds nor resumes.
+        var library = batch.InsertedCount > 0
+            ? await EnsureWatchingAsync(userId, seriesTvdbId, cancellationToken)
+            : MarkLibraryEffect.None;
+
         return new SeasonWatchResult(
-            SeasonFound: true, batch,
-            await CaughtUpByAsync(before, idsToMark, cancellationToken),
-            // A season with nothing left to mark wrote nothing, so it adds nothing either.
-            batch.InsertedCount > 0 ? await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken) : null);
+            SeasonFound: true, batch, caughtUp, library.AddedToLibrary, library.ResumedWatching);
     }
 
     public async Task<int> MarkSeasonUnwatchedAsync(
@@ -201,10 +207,11 @@ public sealed class WatchProgressService(
         var before = await BeforeMarkAsync(userId, seriesTvdbId, cancellationToken);
         await episodeWatchRepository.MarkWatchedAsync(userId, seriesTvdbId, episodeTvdbId, cancellationToken);
 
+        var caughtUp = await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken);
+        var library = await EnsureWatchingAsync(userId, seriesTvdbId, cancellationToken);
+
         return new EpisodeWatchResult(
-            EpisodeWatchOutcome.MarkedWatched,
-            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken),
-            await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken));
+            EpisodeWatchOutcome.MarkedWatched, caughtUp, library.AddedToLibrary, library.ResumedWatching);
     }
 
     public async Task<UndoableEpisodeWatch> MarkEpisodeWatchedUndoablyAsync(
@@ -221,40 +228,99 @@ public sealed class WatchProgressService(
         // A range of one: it gets the batch timestamp the undo looks for.
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, [episodeTvdbId], WatchSource.Single, cancellationToken: cancellationToken);
+        var caughtUp = await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken);
+        var library = await EnsureWatchingAsync(userId, seriesTvdbId, cancellationToken);
+
         return new UndoableEpisodeWatch(
-            EpisodeWatchOutcome.MarkedWatched, batch,
-            await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken),
-            await EnsureInLibraryAsync(userId, seriesTvdbId, cancellationToken));
+            EpisodeWatchOutcome.MarkedWatched, batch, caughtUp, library.AddedToLibrary, library.ResumedWatching);
     }
 
     // ---- the library --------------------------------------------------------------
 
     /// <summary>
-    /// Puts the series in the user's library if it is not there, after a mark.
-    /// Returns the series' name when this call added it, null when it was
-    /// already there (or was added by a concurrent request, or could not be
-    /// added: the watch is recorded either way, and the next mark tries again).
-    /// Only ever adds: nothing here removes a series from the library.
+    /// After a mark, makes the series one the user is watching: puts it in the
+    /// library if it is not there, and resumes it if they had stopped watching
+    /// it. Says which of the two this call did, if either (a concurrent request
+    /// that got there first says so itself). Best-effort: the watch is recorded
+    /// either way, and the next mark tries again. It only ever adds and
+    /// resumes: nothing here removes a series from the library or stops it.
     /// </summary>
-    private async Task<string?> EnsureInLibraryAsync(Guid userId, int seriesTvdbId, CancellationToken cancellationToken)
+    private async Task<MarkLibraryEffect> EnsureWatchingAsync(Guid userId, int seriesTvdbId, CancellationToken cancellationToken)
     {
         try
         {
             if (await trackedSeriesRepository.ExistsAsync(userId, seriesTvdbId, cancellationToken))
-                return null;
+            {
+                return new MarkLibraryEffect(
+                    ResumedWatching: await trackedSeriesRepository.ResumeAsync(userId, seriesTvdbId, cancellationToken));
+            }
 
             var details = await theTvDbService.GetSeriesByIdAsync(seriesTvdbId, cancellationToken);
             if (details is null)
-                return null;
+                return MarkLibraryEffect.None;
 
             return await trackedSeriesRepository.AddAsync(TrackedSeriesMappings.FromTvDbDetails(userId, details), cancellationToken)
-                ? details.Name
-                : null;
+                ? new MarkLibraryEffect(AddedToLibrary: details.Name)
+                : MarkLibraryEffect.None;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Could not add series {SeriesId} to the library after a mark.", seriesTvdbId);
-            return null;
+            logger.LogWarning(ex, "Could not add series {SeriesId} to the library, or resume it, after a mark.", seriesTvdbId);
+            return MarkLibraryEffect.None;
+        }
+    }
+
+    // ---- stopped watching ----------------------------------------------------------
+
+    public async Task<StopWatchingResult> StopWatchingAsync(
+        Guid userId,
+        int seriesTvdbId,
+        CancellationToken cancellationToken = default)
+    {
+        var tracked = await trackedSeriesRepository.GetByUserAndTvdbIdAsync(userId, seriesTvdbId, cancellationToken);
+        if (tracked is null)
+            return new StopWatchingResult(StopWatchingOutcome.NotInLibrary);
+
+        if (SeriesLibraryStateRule.IsStopped(tracked))
+            return new StopWatchingResult(StopWatchingOutcome.AlreadyStopped, tracked.Name);
+
+        if (await IsFinishedAsync(userId, seriesTvdbId, cancellationToken))
+            return new StopWatchingResult(StopWatchingOutcome.Finished, tracked.Name);
+
+        // False here means a concurrent request stopped it in between.
+        return await trackedSeriesRepository.StopAsync(userId, seriesTvdbId, Now, cancellationToken)
+            ? new StopWatchingResult(StopWatchingOutcome.Stopped, tracked.Name)
+            : new StopWatchingResult(StopWatchingOutcome.AlreadyStopped, tracked.Name);
+    }
+
+    public Task<string?> ResumeWatchingAsync(
+        Guid userId,
+        int seriesTvdbId,
+        CancellationToken cancellationToken = default)
+        => trackedSeriesRepository.ResumeAsync(userId, seriesTvdbId, cancellationToken);
+
+    /// <summary>
+    /// Whether the series is finished by the Library's rule, which is when
+    /// "Stop watching" is not offered. A series whose state cannot be read is
+    /// not called finished: the user asked to stop, and stopping loses nothing.
+    /// </summary>
+    private async Task<bool> IsFinishedAsync(Guid userId, int seriesTvdbId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var series = await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
+            if (series is null)
+                return false;
+
+            var watched = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesTvdbId, cancellationToken);
+            var progress = WatchProgressCalculator.Build(seriesTvdbId, series.ToWatchableEpisodes(), watched, Now);
+
+            return !SeriesLibraryStateRule.CanStop(SeriesLibraryStateRule.Of(series, progress));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not read the state of series {SeriesId} before stopping it.", seriesTvdbId);
+            return false;
         }
     }
 

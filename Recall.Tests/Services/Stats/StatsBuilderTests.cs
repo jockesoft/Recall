@@ -19,6 +19,7 @@ public sealed class StatsBuilderTests
     private readonly Dictionary<int, SeriesAggregate> _series = [];
     private readonly Dictionary<int, MovieAggregate> _movies = [];
     private readonly HashSet<int> _tracked = [];
+    private readonly HashSet<int> _stopped = [];
     private readonly Dictionary<int, int> _ratings = [];
 
     [SetUp]
@@ -29,11 +30,12 @@ public sealed class StatsBuilderTests
         _series.Clear();
         _movies.Clear();
         _tracked.Clear();
+        _stopped.Clear();
         _ratings.Clear();
     }
 
     private UserStats Build() => StatsBuilder.Build(
-        new StatsInput(_episodeWatches, _movieWatches, _series, _movies, _tracked, _ratings), Now, Window);
+        new StatsInput(_episodeWatches, _movieWatches, _series, _movies, _tracked, _ratings, _stopped), Now, Window);
 
     private static DateTime Utc(int year, int month, int day, int hour = 20) => new(year, month, day, hour, 0, 0, DateTimeKind.Utc);
 
@@ -494,5 +496,40 @@ public sealed class StatsBuilderTests
 
         stats.IsEmpty.Should().BeFalse();
         stats.Totals.Should().Be(new StatsTotals(0, 0, 0, 0));
+    }
+
+    // ---- stopped series ----
+
+    [Test]
+    public void AStoppedSeries_Should_KeepItsWatchTime_ButNotCountAsFinished()
+    {
+        Series(1, "Finished", 60, status: "Ended", episodes: [Ep(11, 1, 1)]);
+        Series(2, "Finished, Then Stopped", 45, genres: ["Drama"], status: "Ended", episodes: [Ep(21, 1, 1), Ep(22, 1, 2)]);
+        _tracked.UnionWith([1, 2]);
+        _stopped.Add(2);
+
+        WatchEpisode(1, 11, Utc(2026, 9, 1));
+        WatchEpisode(2, 21, Utc(2026, 9, 2));
+        WatchEpisode(2, 22, Utc(2026, 9, 3));
+
+        var stats = Build();
+
+        stats.Totals.SeriesFinished.Should().Be(1, "the stopped series is under Stopped in the Library, not under Watched");
+        stats.Totals.Episodes.Should().Be(3);
+        stats.Totals.Minutes.Should().Be(150, "time is time: 60 + 45 + 45");
+        stats.TopSeries.Select(s => s.Name).Should().Contain("Finished, Then Stopped");
+        stats.Months.Sum(m => m.Episodes).Should().Be(3, "its watches stay on the chart");
+    }
+
+    [Test]
+    public void SeriesFinished_Should_CountAsBefore_WhenNoStoppedIdsAreGiven()
+    {
+        Series(1, "Finished", 60, status: "Ended", episodes: [Ep(11, 1, 1)]);
+        _tracked.Add(1);
+        WatchEpisode(1, 11, Utc(2026, 9, 1));
+
+        StatsBuilder.Build(
+                new StatsInput(_episodeWatches, _movieWatches, _series, _movies, _tracked, _ratings), Now, Window)
+            .Totals.SeriesFinished.Should().Be(1);
     }
 }

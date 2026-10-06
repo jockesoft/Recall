@@ -220,6 +220,11 @@ public sealed class AccountDeletionTests : PostgresFixture
         await using var db = NewContext();
 
         db.TrackedSeries.Add(new TrackedSeriesEntity { Id = Guid.NewGuid(), UserId = userId, TvdbId = seriesId, Name = "Series" });
+        // A series the user stopped watching is a library row like any other: it goes too.
+        db.TrackedSeries.Add(new TrackedSeriesEntity
+        {
+            Id = Guid.NewGuid(), UserId = userId, TvdbId = NextId(), Name = "Stopped series", StoppedUtc = now
+        });
         db.TrackedMovies.Add(new TrackedMovieEntity { Id = Guid.NewGuid(), UserId = userId, TvdbId = movieId, Name = "Movie" });
         db.EpisodeWatches.Add(new EpisodeWatchEntity
         {

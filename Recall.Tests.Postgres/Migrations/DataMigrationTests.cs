@@ -20,6 +20,7 @@ public sealed class DataMigrationTests
     private const string WatchSource = "20261002085341_WatchSource";
     private const string SeriesMappingVersion = "20261002095341_SeriesMappingVersion";
     private const string BeforeSeriesStillCounts = "20261002122531_DropEpisodeRefreshAttempts";
+    private const string BeforeSeriesStoppedUtc = "20261002125224_SeriesStillCounts";
 
     private static readonly DateTime ImportedUtc = new(2026, 9, 14, 8, 30, 0, DateTimeKind.Utc);
 
@@ -506,6 +507,39 @@ public sealed class DataMigrationTests
         (await StillCountsAsync(database, 1)).Should().Be((4, 2), "episodes 1, 2, 3 and 8 have aired and are regular; 1 and 8 have a still");
         (await StillCountsAsync(database, 2)).Should().Be((0, 0));
         (await StillCountsAsync(database, 3)).Should().Be((0, 0));
+    }
+
+    // ---- SeriesStoppedUtc: the library rows that exist are all "watching" ----
+
+    [Test]
+    public async Task SeriesStoppedUtc_Should_LeaveEveryExistingLibraryRowWatching()
+    {
+        await using var database = await MigrationDatabase.CreateAsync();
+        await database.MigrateToAsync(BeforeSeriesStoppedUtc);
+
+        var user = await database.InsertUserAsync();
+        foreach (var tvdbId in new[] { 1, 2 })
+        {
+            await database.ExecuteAsync(
+                """
+                INSERT INTO tracked_series (id, user_id, tvdb_id, name, created_utc, updated_utc)
+                VALUES ($1, $2, $3, 'Series', now(), now());
+                """,
+                Guid.NewGuid(), user, tvdbId);
+        }
+
+        await database.MigrateToLatestAsync();
+
+        (await database.ScalarAsync<long>("SELECT count(*) FROM tracked_series WHERE user_id = $1", user))
+            .Should().Be(2, "the migration only adds a column");
+        (await database.ScalarAsync<long>("SELECT count(*) FROM tracked_series WHERE stopped_utc IS NOT NULL"))
+            .Should().Be(0, "nobody had stopped watching anything before the column existed");
+
+        // And the column takes a date: stopping is an ordinary update of the row.
+        await database.ExecuteAsync(
+            "UPDATE tracked_series SET stopped_utc = now() WHERE user_id = $1 AND tvdb_id = 1", user);
+        (await database.ScalarAsync<long>("SELECT count(*) FROM tracked_series WHERE stopped_utc IS NOT NULL"))
+            .Should().Be(1);
     }
 
     private static async Task<(int Aired, int WithStill)> StillCountsAsync(MigrationDatabase database, int tvdbId) =>

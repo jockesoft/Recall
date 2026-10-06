@@ -21,7 +21,7 @@ namespace Recall.Web.Infrastructure.Timers;
 /// series at least one user tracks, reads its aggregate from the caches only
 /// (no TheTVDB or OMDb request, which is what makes the hourly cadence free),
 /// and for each episode released within <see cref="Lookback"/> notifies every tracking user who hasn't already marked
-/// that episode watched. All of a series' new episodes for one user collapse
+/// that episode watched. A user who stopped watching the series is not notified. All of a series' new episodes for one user collapse
 /// into a single notification, so a full-season drop is one alert, not eight.
 /// The <c>notified_episode</c> ledger makes reruns idempotent, so there is no
 /// watermark to keep and no historical backfill — only the last few days ever
@@ -90,6 +90,7 @@ public sealed class NewEpisodeNotificationTimer(
                 if (recentEpisodes.Count == 0)
                     continue;
 
+                // Not the users who stopped watching it: a new episode is no news to them.
                 var userIds = await trackedSeriesRepository.GetUserIdsTrackingAsync(seriesId, cancellationToken);
                 if (userIds.Count == 0)
                     continue;

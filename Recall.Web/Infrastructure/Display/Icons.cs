@@ -27,6 +27,8 @@ public static class Icons
     public const string Watchlist = "ph ph-bookmark-simple";
     public const string OnWatchlist = "ph-fill ph-bookmark-simple";
     public const string More = "ph ph-dots-three";
+    public const string Stopped = "ph ph-pause-circle";
+    public const string Resume = "ph ph-play";
     public const string SignIn = "ph ph-sign-in";
     public const string NoImage = "ph ph-image";
     public const string Unsupported = "ph ph-prohibit";

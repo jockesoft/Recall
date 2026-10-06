@@ -33,6 +33,7 @@ public sealed class DigestComposerTests
         _watches = new Mock<IEpisodeWatchRepository>();
         _tvDb = new Mock<ITheTvDbService>(MockBehavior.Strict);
         _tokens = new DigestUnsubscribeTokens(new EphemeralDataProtectionProvider());
+        _stopped.Clear();
 
         _watches.Setup(x => x.GetWatchedEpisodeIdsAsync(UserId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HashSet<int> { 10 });
@@ -44,9 +45,16 @@ public sealed class DigestComposerTests
             Options.Create(new LibraryOptions()), NullLogger<DigestComposer>.Instance);
     }
 
+    /// <summary>Ids of the tracked series the user stopped watching; set before <see cref="Tracks"/>.</summary>
+    private readonly HashSet<int> _stopped = [];
+
     private void Tracks(params int[] seriesIds) =>
         _tracked.Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(seriesIds.Select(id => new TrackedSeries { Id = Guid.NewGuid(), UserId = UserId, TvdbId = id, Name = $"Series {id}" }).ToList());
+            .ReturnsAsync(seriesIds.Select(id => new TrackedSeries
+            {
+                Id = Guid.NewGuid(), UserId = UserId, TvdbId = id, Name = $"Series {id}",
+                StoppedUtc = _stopped.Contains(id) ? Now.AddDays(-40) : null
+            }).ToList());
 
     private void Cached(int seriesId, params EpisodeSummary[] episodes) =>
         _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(seriesId, It.IsAny<CancellationToken>()))
@@ -126,5 +134,45 @@ public sealed class DigestComposerTests
         digest.Email!.TextBody.Should().Contain($"https://recall.example/Digest/Unsubscribe?token={token}",
             "the link in the body goes to the page with the button; the header address is for mail clients");
         digest.Email.HtmlBody.Should().Contain("/Digest/Unsubscribe?token=");
+    }
+
+    [Test]
+    public async Task Compose_Should_LeaveAStoppedSeriesOutOfAllThreeSections_WithoutReadingIt()
+    {
+        // The same series twice: a new season out this week, another episode of it, and one coming.
+        EpisodeSummary[] Episodes(int offset) =>
+        [
+            Ep(offset, 1, 1, -30), Ep(offset + 1, 2, 1, -3), Ep(offset + 2, 2, 2, -1), Ep(offset + 3, 2, 3, 4)
+        ];
+        _watches.Setup(x => x.GetWatchedEpisodeIdsAsync(UserId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<int> { 100, 200 });
+        _watches.Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<int, DateTime> { [1] = Now.AddDays(-2), [2] = Now.AddDays(-2) });
+
+        Cached(1, Episodes(100));
+        Cached(2, Episodes(200));
+        _stopped.Add(2);
+        Tracks(1, 2);
+
+        var digest = await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl);
+
+        digest.Content.NewSeasons.Items.Select(p => p.SeriesId).Should().Equal(1);
+        digest.Content.ComingUp.Items.Select(l => l.SeriesId).Should().Equal(1);
+        digest.Content.ReadyToWatch.Items.Select(l => l.SeriesId).Should().NotContain(2);
+        digest.Email!.TextBody.Should().NotContain("Series 2");
+        _tvDb.Verify(x => x.GetCachedSeriesAggregateAsync(2, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Compose_Should_HaveNothingToSay_WhenEverythingNewIsInAStoppedSeries()
+    {
+        Cached(1, Ep(10, 1, 1, -30), Ep(11, 1, 2, -1), Ep(12, 1, 3, 3));
+        _stopped.Add(1);
+        Tracks(1);
+
+        var digest = await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl);
+
+        digest.Content.IsEmpty.Should().BeTrue();
+        digest.Email.Should().BeNull("no email is sent about a series the user stopped watching");
     }
 }

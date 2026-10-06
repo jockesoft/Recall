@@ -1081,6 +1081,20 @@ dl.row dd a.tvdb-inline-edit {
     outline-offset: -4px;
 }
 
+/* The same round button holding a "⋯" menu: it opens something, it does not
+   mark anything, so it does not turn green. */
+.tvdb-watch-badge--menu {
+    font-size: var(--tvdb-text-lg);
+}
+
+.tvdb-watch-badge--menu:hover,
+.tvdb-watch-badge--menu:focus-visible,
+.tvdb-watch-badge--menu.show {
+    background: var(--tvdb-scrim-strong);
+    border-color: var(--tvdb-on-ink);
+    color: var(--tvdb-on-ink);
+}
+
 /* ---- Filter bar --------------------------------------------------------------------- */
 
 /* A page heading with its one action on the same line, right-aligned. */
@@ -1158,7 +1172,8 @@ dl.row dd a.tvdb-inline-edit {
 
 /* A group inside a section, under an h3 (the Library's "Haven't watched in a
    while" inside Watching). From 576px its body is a Bootstrap collapse behind
-   the "Show N" button; on a phone it is always there, as a scrolling row. */
+   the "Show N" button; on a phone it is always there, as a scrolling row.
+   The Library's Stopped section uses the same toggle and body under its h2. */
 .tvdb-subgroup {
     margin-top: var(--tvdb-space-5);
     padding-top: var(--tvdb-space-4);
@@ -1574,6 +1589,15 @@ dl.row dd a.tvdb-inline-edit {
     bottom: var(--tvdb-space-3);
     z-index: 3;
     margin: 0;
+}
+
+/* The card's "⋯" menu, in the corner opposite the caption. One step above the
+   other controls so its open menu covers the next card's button too. */
+.tvdb-catchup-menu {
+    position: absolute;
+    top: var(--tvdb-space-3);
+    right: var(--tvdb-space-3);
+    z-index: 4;
 }
 
 /* ---- Upcoming card (the _UpcomingEpisodeCard partial) ----------------------------------

@@ -53,6 +53,19 @@ public sealed class DetailsModel(
 
     public bool IsTrackedByCurrentUser { get; private set; }
 
+    /// <summary>
+    /// When the current user stopped watching this series; null while they are
+    /// watching it (or it is not in their library).
+    /// </summary>
+    public DateTime? StoppedUtc { get; private set; }
+
+    /// <summary>
+    /// Whether "Stop watching" is offered (<see cref="SeriesLibraryStateRule.CanStop"/>):
+    /// for a series in the library that is being watched or up to date. Not
+    /// for a finished one, and not for one already stopped.
+    /// </summary>
+    public bool CanStopWatching { get; private set; }
+
     /// <summary>Whether the current user has hearted this series.</summary>
     public bool IsLikedByCurrentUser { get; private set; }
 
@@ -97,7 +110,9 @@ public sealed class DetailsModel(
     /// <summary>
     /// The top of the page (see <c>_TitleHeader.cshtml</c>). For a series in
     /// the library the one primary button is the next episode to watch, or a
-    /// quiet "Up to date"; for any other series it is "Add to library".
+    /// quiet "Up to date"; for any other series it is "Add to library". A
+    /// series the user stopped watching says so, and its one button is
+    /// "Resume watching" in place of the next episode.
     /// </summary>
     /// <param name="omdbGenres">
     /// OMDb's genres, shown only while the series has none of TheTVDB's (a row
@@ -121,6 +136,18 @@ public sealed class DetailsModel(
                 RouteId = series.TvdbId,
                 HiddenFields = seasonField,
                 Icon = Icons.Add
+            };
+        }
+        else if (StoppedUtc is { } stoppedUtc)
+        {
+            state = new TitleState($"You stopped watching on {DisplayDate.Format(stoppedUtc, Today)}", Icons.Stopped, Neutral: true);
+            primary = new TitleAction
+            {
+                Label = "Resume watching",
+                Handler = "ResumeWatching",
+                RouteId = series.TvdbId,
+                HiddenFields = seasonField,
+                Icon = Icons.Resume
             };
         }
         else if (WatchProgress is { HasEpisodes: true, NextUnwatchedEpisode: { } next })
@@ -315,12 +342,12 @@ public sealed class DetailsModel(
                     this.SetInfoToast("Episode marked as not watched.");
                     break;
                 case EpisodeWatchOutcome.MarkedWatched:
-                    // The service put the series in the library if it wasn't there; say so.
+                    // The service put the series in the library if it wasn't there,
+                    // and resumed it if the user had stopped watching it; say so.
                     this.SetWatchedToast(
-                        toggled.AddedToLibrary is { } added
-                            ? $"Marked the episode as watched and added {added} to your library."
-                            : "Episode marked as watched.",
-                        toggled.CaughtUp, Today, keepMessage: toggled.AddedToLibrary is not null);
+                        WatchedMessage(1, toggled.AddedToLibrary, toggled.ResumedWatching),
+                        toggled.CaughtUp, Today,
+                        keepMessage: toggled.AddedToLibrary is not null || toggled.ResumedWatching is not null);
                     break;
                 case EpisodeWatchOutcome.NotAired:
                     this.SetErrorToast("You can't mark an episode as watched before it has aired.");
@@ -372,7 +399,7 @@ public sealed class DetailsModel(
             else
             {
                 this.SetSuccessToastWithWatchedUndo(
-                    WatchedMessage(result.MarkedCount, result.AddedToLibrary),
+                    WatchedMessage(result.MarkedCount, result.AddedToLibrary, result.ResumedWatching),
                     id,
                     result.Batch,
                     caughtUp: result.CaughtUp,
@@ -412,7 +439,7 @@ public sealed class DetailsModel(
             else
             {
                 this.SetSuccessToastWithWatchedUndo(
-                    WatchedMessage(result.Batch.InsertedCount, result.AddedToLibrary, one: "Marked 1 episode as watched."),
+                    WatchedMessage(result.Batch.InsertedCount, result.AddedToLibrary, result.ResumedWatching, one: "Marked 1 episode as watched."),
                     id,
                     result.Batch,
                     caughtUp: result.CaughtUp,
@@ -504,6 +531,73 @@ public sealed class DetailsModel(
     }
 
     /// <summary>
+    /// "Stop watching": the series stays in the library with its history, and
+    /// leaves everything that says there is something to watch. No
+    /// confirmation; the toast carries an Undo (a POST to
+    /// <see cref="OnPostResumeWatchingAsync"/>).
+    /// </summary>
+    public async Task<IActionResult> OnPostStopWatchingAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "manage your library");
+
+        try
+        {
+            this.SetStopWatchingToast(await watchProgressService.StopWatchingAsync(userId, id, cancellationToken), id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed stopping series {SeriesId}.", id);
+            this.SetErrorToast("Could not update your library right now.");
+        }
+
+        return RedirectToPage(new { id, season = Season });
+    }
+
+    /// <summary>
+    /// "Resume watching" in the header of a stopped series, and the Undo in the
+    /// "Stopped watching …" toast (<paramref name="undo"/>, posted from this
+    /// page or from the Dashboard, which is where <paramref name="returnUrl"/>
+    /// leads back to).
+    /// </summary>
+    public async Task<IActionResult> OnPostResumeWatchingAsync(
+        [FromRoute] int id,
+        [FromForm] bool undo,
+        [FromForm] string? returnUrl,
+        CancellationToken cancellationToken)
+    {
+        IActionResult Back() =>
+            !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
+                ? LocalRedirect(returnUrl)
+                : RedirectToPage(new { id, season = Season });
+
+        if (!currentUserService.TryGetUserId(out var userId))
+        {
+            this.SetErrorToast("You need to be signed in to manage your library.");
+            return Back();
+        }
+
+        try
+        {
+            var resumed = await watchProgressService.ResumeWatchingAsync(userId, id, cancellationToken);
+
+            if (resumed is null)
+                this.SetInfoToast(undo ? "Nothing left to undo." : "You are already watching this series.");
+            else if (undo)
+                this.SetInfoToast($"Undone — you're still watching {resumed}.");
+            else
+                this.SetSuccessToast($"Resumed watching {resumed}.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed resuming series {SeriesId}.", id);
+            this.SetErrorToast(undo ? "Could not undo that right now." : "Could not update your library right now.");
+        }
+
+        return Back();
+    }
+
+    /// <summary>
     /// What every POST handler here returns to an anonymous caller: the page is
     /// public, so <c>[Authorize]</c> can't guard its handlers.
     /// </summary>
@@ -567,7 +661,9 @@ public sealed class DetailsModel(
                 return Page();
             }
 
-            IsTrackedByCurrentUser = await trackedSeriesRepository.ExistsAsync(userId, id, cancellationToken);
+            var tracked = await trackedSeriesRepository.GetByUserAndTvdbIdAsync(userId, id, cancellationToken);
+            IsTrackedByCurrentUser = tracked is not null;
+            StoppedUtc = tracked?.StoppedUtc;
             IsLikedByCurrentUser = await likeRepository.IsLikedAsync(userId, LikeTargetType.Series, id, cancellationToken);
             CurrentUserRating = await ratingRepository.GetRatingAsync(userId, RatingTargetType.Series, id, cancellationToken);
             WatchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, [id], cancellationToken);
@@ -575,6 +671,9 @@ public sealed class DetailsModel(
 
             // Reuse the aggregate already loaded above — no extra TheTVDB call.
             WatchProgress = watchProgressService.BuildProgress(id, Aggregate.ToWatchableEpisodes(), WatchedEpisodeIds);
+            CanStopWatching = tracked is not null
+                              && SeriesLibraryStateRule.CanStop(
+                                  SeriesLibraryStateRule.Of(Aggregate, WatchProgress, SeriesLibraryStateRule.IsStopped(tracked)));
             SelectSeason(WatchProgress);
             return Page();
         }
@@ -625,14 +724,19 @@ public sealed class DetailsModel(
     /// the library (the watch service does that), "Marked 8 episodes as watched
     /// and added Silo to your library."
     /// </summary>
-    private static string WatchedMessage(int count, string? addedToLibrary, string one = "Episode marked as watched.")
+    /// <remarks>
+    /// The same goes for a series the user had stopped watching, which a mark
+    /// resumes: "Marked the episode as watched and resumed watching Silo."
+    /// </remarks>
+    private static string WatchedMessage(
+        int count, string? addedToLibrary, string? resumedWatching, string one = "Episode marked as watched.")
     {
-        if (addedToLibrary is null)
+        if (MarkLibraryEffect.Clause(addedToLibrary, resumedWatching) is not { } clause)
             return count > 1 ? $"Marked {count} episodes as watched." : one;
 
         return count > 1
-            ? $"Marked {count} episodes as watched and added {addedToLibrary} to your library."
-            : $"Marked the episode as watched and added {addedToLibrary} to your library.";
+            ? $"Marked {count} episodes as watched{clause}."
+            : $"Marked the episode as watched{clause}.";
     }
 
     /// <summary>

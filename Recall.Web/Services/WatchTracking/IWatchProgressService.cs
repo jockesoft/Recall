@@ -12,6 +12,13 @@ namespace Recall.Web.Services.WatchTracking;
 /// whatever page the mark came; the result says so (<c>AddedToLibrary</c>).
 /// Unmarking, and undoing a bulk mark, never take a series out of the library.
 /// </para>
+/// <para>
+/// It also owns "stopped watching" (<see cref="StopWatchingAsync"/>,
+/// <see cref="ResumeWatchingAsync"/>). Marking anything watched in a stopped
+/// series resumes it, and the result says so (<c>ResumedWatching</c>): watching
+/// an episode is the clearest way of saying you are watching again. Unmarking,
+/// and undoing a bulk mark, never change the stopped state either way.
+/// </para>
 /// </summary>
 public interface IWatchProgressService
 {
@@ -123,6 +130,43 @@ public interface IWatchProgressService
         int seriesTvdbId,
         DateTime batchWatchedUtc,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records that the user stopped watching a series in their library. The
+    /// series keeps its place in the library and all its history; it is left
+    /// out of what says "something to watch" (<see cref="SeriesLibraryStateRule"/>).
+    /// Refused for a finished series: there is nothing left to stop.
+    /// </summary>
+    Task<StopWatchingResult> StopWatchingAsync(
+        Guid userId,
+        int seriesTvdbId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resumes a stopped series. Returns its name when this call resumed it,
+    /// null when there was nothing to resume (not in the library, or not stopped).
+    /// </summary>
+    Task<string?> ResumeWatchingAsync(
+        Guid userId,
+        int seriesTvdbId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <param name="SeriesName">The series' name as the library has it; null when it is not in the library.</param>
+public sealed record StopWatchingResult(StopWatchingOutcome Outcome, string? SeriesName = null);
+
+public enum StopWatchingOutcome
+{
+    Stopped,
+
+    /// <summary>The series is not in the user's library; nothing was written.</summary>
+    NotInLibrary,
+
+    /// <summary>It was stopped already; the earlier date is kept.</summary>
+    AlreadyStopped,
+
+    /// <summary>The series has ended and everything aired is watched; nothing was written.</summary>
+    Finished
 }
 
 /// <param name="EpisodeFound">False when the episode isn't part of the series' episode list.</param>
@@ -131,33 +175,41 @@ public interface IWatchProgressService
 /// <param name="Batch">What was actually inserted, for an undo; null when nothing was written.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
 /// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there.</param>
+/// <param name="ResumedWatching">The series' name when the user had stopped watching it and this mark resumed it; null otherwise.</param>
 public sealed record MarkWatchedThroughResult(
     bool EpisodeFound,
     int MarkedCount,
     bool HasAired = true,
     WatchedBatch? Batch = null,
     SeriesCaughtUp? CaughtUp = null,
-    string? AddedToLibrary = null);
+    string? AddedToLibrary = null,
+    string? ResumedWatching = null);
 
 /// <param name="SeasonFound">False when the series has no episodes in that season.</param>
 /// <param name="Batch">What was actually inserted; <see cref="WatchedBatch.InsertedCount"/> is 0 when the season was already fully marked.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
 /// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there.</param>
+/// <param name="ResumedWatching">The series' name when the user had stopped watching it and this mark resumed it; null otherwise.</param>
 public sealed record SeasonWatchResult(
-    bool SeasonFound, WatchedBatch Batch, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null);
+    bool SeasonFound, WatchedBatch Batch, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null,
+    string? ResumedWatching = null);
 
 /// <param name="Outcome">What happened; a refusal wrote nothing.</param>
 /// <param name="Batch">What was inserted, for an undo; null on a refusal.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it.</param>
 /// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there.</param>
+/// <param name="ResumedWatching">The series' name when the user had stopped watching it and this mark resumed it; null otherwise.</param>
 public sealed record UndoableEpisodeWatch(
-    EpisodeWatchOutcome Outcome, WatchedBatch? Batch = null, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null);
+    EpisodeWatchOutcome Outcome, WatchedBatch? Batch = null, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null,
+    string? ResumedWatching = null);
 
 /// <summary>What a single mark or toggle did.</summary>
 /// <param name="Outcome">What happened; a refusal wrote nothing.</param>
 /// <param name="CaughtUp">Set when this mark brought the user up to date with the series, or finished it. Never on an unmark.</param>
 /// <param name="AddedToLibrary">The series' name when this mark also put it in the user's library; null when it was already there. Never on an unmark.</param>
-public sealed record EpisodeWatchResult(EpisodeWatchOutcome Outcome, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null)
+/// <param name="ResumedWatching">The series' name when the user had stopped watching it and this mark resumed it; null otherwise. Never on an unmark.</param>
+public sealed record EpisodeWatchResult(
+    EpisodeWatchOutcome Outcome, SeriesCaughtUp? CaughtUp = null, string? AddedToLibrary = null, string? ResumedWatching = null)
 {
     public static implicit operator EpisodeWatchResult(EpisodeWatchOutcome outcome) => new(outcome);
 }
@@ -172,4 +224,25 @@ public enum EpisodeWatchOutcome
 
     /// <summary>The episode's air date is still in the future — nothing was written.</summary>
     NotAired
+}
+
+/// <summary>
+/// What a mark did to the series' place in the library, besides the watch
+/// itself. At most one of the two is set: a series just added was not stopped.
+/// </summary>
+/// <param name="AddedToLibrary">The series' name when the mark put it in the library.</param>
+/// <param name="ResumedWatching">The series' name when the mark resumed a series the user had stopped watching.</param>
+public sealed record MarkLibraryEffect(string? AddedToLibrary = null, string? ResumedWatching = null)
+{
+    public static MarkLibraryEffect None { get; } = new();
+
+    /// <summary>
+    /// The clause a "Marked … as watched" sentence continues with, or null when
+    /// the mark did neither: " and added Silo to your library", " and resumed
+    /// watching Silo". The one wording, for every page that marks.
+    /// </summary>
+    public static string? Clause(string? addedToLibrary, string? resumedWatching) =>
+        addedToLibrary is not null ? $" and added {addedToLibrary} to your library"
+        : resumedWatching is not null ? $" and resumed watching {resumedWatching}"
+        : null;
 }

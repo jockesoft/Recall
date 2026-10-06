@@ -423,4 +423,57 @@ public class EpisodeDetailsPostTests
 
         _sut.SuccessToast().Should().BeNull();
     }
+
+    // ---- a mark resumes a stopped series ------------------------------------------------
+
+    [Test]
+    public async Task ToggleWatched_Should_SayTheSeriesWasResumed_WhenTheUserHadStoppedWatchingIt()
+    {
+        SignIn();
+        EpisodeIs(3, 4);
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, ResumedWatching: "Silo"));
+
+        await _sut.OnPostToggleWatchedAsync(EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be("Marked S03E04 as watched and resumed watching Silo.");
+    }
+
+    [Test]
+    public async Task ToggleWatched_Should_CombineResumed_WithTheCaughtUpSentence_InOneToast()
+    {
+        SignIn();
+        EpisodeIs(3, 4);
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(
+                EpisodeWatchOutcome.MarkedWatched,
+                new SeriesCaughtUp(SeriesId, "Silo", Finished: false),
+                ResumedWatching: "Silo"));
+
+        await _sut.OnPostToggleWatchedAsync(EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be(
+            "Marked S03E04 as watched and resumed watching Silo. You're up to date with Silo. We'll let you know when a new episode airs.");
+        _sut.InfoToast().Should().BeNull("one toast per action");
+    }
+
+    [Test]
+    public async Task MarkWatchedThrough_Should_SayTheSeriesWasResumed_AndKeepTheUndo()
+    {
+        SignIn();
+        EpisodeIs(3, 4);
+        _progress
+            .SetupSequence(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp), ResumedWatching: "Silo"))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchStamp), ResumedWatching: "Silo"));
+
+        await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked 3 episodes as watched and resumed watching Silo.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be(SeriesId.ToString());
+
+        await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked S03E04 as watched and resumed watching Silo.");
+    }
 }

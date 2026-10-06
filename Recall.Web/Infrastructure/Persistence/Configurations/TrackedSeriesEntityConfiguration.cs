@@ -44,6 +44,10 @@ public sealed class TrackedSeriesEntityConfiguration : IEntityTypeConfiguration<
 
         builder.Property(x => x.FirstAired).HasColumnName("first_aired");
 
+        builder.Property(x => x.StoppedUtc)
+            .HasColumnName("stopped_utc")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")

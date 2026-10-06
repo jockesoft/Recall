@@ -21,6 +21,23 @@
             <span class="tvdb-catchup-ep">@Model.EpisodeName</span>
         </div>
 
+        @* Rarely used actions for the series. The menu is positioned "fixed" so
+           the frame's rounded clipping does not cut it off. *@
+        <div class="dropdown tvdb-catchup-menu">
+            <button type="button" class="tvdb-watch-badge tvdb-watch-badge--menu" id="@Model.MenuId"
+                    data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
+                    aria-label="More actions for @Model.SeriesName" title="More actions">
+                <i class="@Icons.More" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="@Model.MenuId">
+                <li>
+                    <form method="post" asp-page-handler="@Model.StopWatchingHandler" asp-route-seriesId="@Model.SeriesId">
+                        <button type="submit" class="dropdown-item">Stop watching</button>
+                    </form>
+                </li>
+            </ul>
+        </div>
+
         <form method="post" asp-page-handler="@Model.MarkWatchedHandler"
               asp-route-seriesId="@Model.SeriesId" asp-route-episodeId="@Model.EpisodeId"
               class="tvdb-catchup-check">

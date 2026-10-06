@@ -111,8 +111,14 @@ public sealed class DashboardModel(
 
         ShowDigestPrompt = await ShouldOfferDigestAsync(userId, cancellationToken);
 
+        // Everything below is about what there is to watch, so a series the
+        // user stopped watching is left out of all of it: Continue watching,
+        // Upcoming and the two counts beside "Tracked series" (which still
+        // counts it: it is in the library).
+        var followed = SeriesLibraryStateRule.Followed(trackedSeriesIds);
+
         var aggregates = (await Task.WhenAll(
-                trackedSeriesIds.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id.TvdbId, logger, nameof(DashboardModel), cancellationToken))))
+                followed.Select(id => theTvDbService.TryGetSeriesAggregateAsync(id.TvdbId, logger, nameof(DashboardModel), cancellationToken))))
             .Where(a => a is not null)
             .Select(a => a!)
             .ToList();
@@ -192,7 +198,7 @@ public sealed class DashboardModel(
             c => c.SeriesId,
             c => c.SeriesName,
             lastWatchedBySeries,
-            ContinueWatchingOrder.AddedUtc(trackedSeriesIds),
+            ContinueWatchingOrder.AddedUtc(followed),
             recentPremieres,
             today,
             libraryOptions.Value);
@@ -298,7 +304,7 @@ public sealed class DashboardModel(
             {
                 case EpisodeWatchOutcome.MarkedWatched when result.Batch is { InsertedCount: > 0 } batch:
                     this.SetSuccessToastWithWatchedUndo(
-                        await DescribeMarkedAsync(seriesId, episodeId, cancellationToken),
+                        await DescribeMarkedAsync(seriesId, episodeId, result.ResumedWatching, cancellationToken),
                         seriesId,
                         batch,
                         undoSingle: true,
@@ -322,14 +328,42 @@ public sealed class DashboardModel(
         return RedirectToPage();
     }
 
-    /// <summary>"Marked Severance S02E06 as watched." — from the (cached) aggregate; a plain sentence when it can't be read.</summary>
-    private async Task<string> DescribeMarkedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
+    /// <summary>
+    /// "Marked Severance S02E06 as watched." — from the (cached) aggregate; a plain sentence when it can't be read.
+    /// A stopped series has no card here, so <paramref name="resumedWatching"/> is only ever set by a
+    /// page loaded before the series was stopped; the toast still says the mark resumed it.
+    /// </summary>
+    private async Task<string> DescribeMarkedAsync(
+        int seriesId, int episodeId, string? resumedWatching, CancellationToken cancellationToken)
     {
         var aggregate = await theTvDbService.TryGetSeriesAggregateAsync(seriesId, logger, nameof(DashboardModel), cancellationToken);
         var episode = aggregate?.ToWatchableEpisodes().FirstOrDefault(e => e.Id == episodeId);
+        var clause = MarkLibraryEffect.Clause(null, resumedWatching);
 
         return aggregate is null || episode is null
-            ? "Marked as watched."
-            : $"Marked {aggregate.Name} {episode.SlateCode()} as watched.";
+            ? $"Marked as watched{clause}."
+            : $"Marked {aggregate.Name} {episode.SlateCode()} as watched{clause}.";
+    }
+
+    /// <summary>
+    /// "Stop watching" in a Continue watching card's menu. No confirmation: the
+    /// card is gone after the redirect and the toast carries an Undo, and
+    /// nothing is lost either way (the series stays in the Library, under Stopped).
+    /// </summary>
+    public async Task<IActionResult> OnPostStopWatchingAsync(int seriesId, CancellationToken cancellationToken)
+    {
+        var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+
+        try
+        {
+            this.SetStopWatchingToast(await watchProgressService.StopWatchingAsync(userId, seriesId, cancellationToken), seriesId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed stopping series {SeriesId} from the dashboard.", seriesId);
+            this.SetErrorToast("Could not update your library right now.");
+        }
+
+        return RedirectToPage();
     }
 }

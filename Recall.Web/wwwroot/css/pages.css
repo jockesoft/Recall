@@ -486,6 +486,13 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     color: var(--tvdb-ok-ink);
 }
 
+/* A state that is not good news ("You stopped watching on Fri, Sep 4"): plain, not green. */
+.tvdb-title-state--neutral {
+    border-color: var(--tvdb-ink-line-strong);
+    background: var(--tvdb-paper-dim);
+    color: var(--tvdb-text-muted);
+}
+
 /* Shown to a visitor in place of the action row. */
 .tvdb-signin-card {
     display: flex;
@@ -508,7 +515,8 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     margin-top: var(--tvdb-space-5);
 }
 
-.tvdb-title__details .tvdb-quiet-action {
+.tvdb-title__details > .tvdb-quiet-action,
+.tvdb-title__details > .tvdb-quiet-actions {
     margin-top: var(--tvdb-space-5);
 }
 

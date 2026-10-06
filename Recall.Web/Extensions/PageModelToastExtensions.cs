@@ -16,6 +16,10 @@ public static class PageModelToastExtensions
     public const string UndoWatchedSeriesKey = "Toast.UndoWatched.SeriesId";
     public const string UndoWatchedStampKey = "Toast.UndoWatched.Stamp";
 
+    // Read back by _ToastMessages.cshtml, which renders an "Undo" POST form
+    // (resume the series) inside the "Stopped watching …" toast.
+    public const string UndoStoppedSeriesKey = "Toast.UndoStopped.SeriesId";
+
     // Set when the success toast is the "you're up to date" / "you've finished"
     // one: which of the two (its icon), and the series to offer "Rate it" for.
     public const string CaughtUpKindKey = "Toast.CaughtUp.Kind";
@@ -33,6 +37,31 @@ public static class PageModelToastExtensions
 
         public void SetInfoToast(string message)
             => pageModel.TempData[InfoKey] = message;
+
+        /// <summary>
+        /// The toast for a "Stop watching", from whichever page it was pressed
+        /// on: "Stopped watching Silo." with an Undo (a POST that resumes the
+        /// series), or why nothing was stopped.
+        /// </summary>
+        public void SetStopWatchingToast(StopWatchingResult result, int seriesTvdbId)
+        {
+            switch (result.Outcome)
+            {
+                case StopWatchingOutcome.Stopped:
+                    pageModel.TempData[SuccessKey] = $"Stopped watching {result.SeriesName}.";
+                    pageModel.TempData[UndoStoppedSeriesKey] = seriesTvdbId.ToString(CultureInfo.InvariantCulture);
+                    break;
+                case StopWatchingOutcome.AlreadyStopped:
+                    pageModel.TempData[InfoKey] = $"You had already stopped watching {result.SeriesName}.";
+                    break;
+                case StopWatchingOutcome.Finished:
+                    pageModel.TempData[InfoKey] = $"You've finished {result.SeriesName}, so there is nothing to stop.";
+                    break;
+                default:
+                    pageModel.TempData[ErrorKey] = "That series isn't in your library.";
+                    break;
+            }
+        }
 
         /// <summary>
         /// Success toast for marking one episode watched. When the mark brought

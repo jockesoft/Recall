@@ -2,7 +2,8 @@
 -- against recall_db. It tops up what the dev user already has so every page
 -- has something to show: about 15 tracked series in different states, movies
 -- on the watchlist and watched, likes, ratings, read and unread notifications,
--- a completed import, and a few series not watched in a while.
+-- a completed import, a few series not watched in a while, and two the user
+-- stopped watching.
 --
 -- Everything is derived from the cached aggregates, so it depends on the
 -- titles review.sh fetched (EXTRA_SERIES / EXTRA_MOVIES) and on the ones the
@@ -218,6 +219,19 @@ WHERE user_id = :dev AND series_tvdb_id = 417223;   -- Baby Reindeer
 
 UPDATE tracked_series SET created_utc = now() - interval '120 days'
 WHERE user_id = :dev AND tvdb_id = 370112;          -- Mare of Easttown, nothing watched
+
+-- ---- Stopped watching -------------------------------------------------------
+-- Two series the dev user stopped watching, for the Library's Stopped section
+-- and the stopped header on Series Details: one in progress (it would be in
+-- the dormant group above otherwise: stopped comes first), one up to date.
+-- The stopped_utc column is there by now: the instance that fetched the extra
+-- titles applied the pending migrations to this clone.
+
+UPDATE tracked_series SET stopped_utc = now() - interval '32 days'
+WHERE user_id = :dev AND tvdb_id = 417223;          -- Baby Reindeer, 3 of 7 watched
+
+UPDATE tracked_series SET stopped_utc = now() - interval '12 days'
+WHERE user_id = :dev AND tvdb_id = 426845;          -- The Gentlemen, up to date
 
 -- ---- Stats: a year of watching ----------------------------------------------
 -- The Stats page charts only watches whose date can be trusted: source Single,

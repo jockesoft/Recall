@@ -159,4 +159,24 @@ public sealed class StatsServiceTests
         stats.Ratings.Average.Should().Be(8);
         stats.IsEmpty.Should().BeFalse();
     }
+
+    [Test]
+    public async Task GetAsync_Should_NotCountAStoppedSeriesAsFinished_ButKeepItsWatchTime()
+    {
+        Watched([Episode(1, 11)], []);
+        _tracked.Setup(x => x.GetByUserAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TrackedSeries { TvdbId = 1, UserId = UserId, Name = "Show 1", StoppedUtc = new DateTime(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc) }]);
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Series(1, 40) with
+            {
+                Status = new SeriesStatus { Name = "Ended" },
+                Episodes = [new EpisodeSummary { Id = 11, SeasonNumber = 1, EpisodeNumber = 1, Aired = new DateOnly(2020, 1, 1) }]
+            });
+
+        var stats = await _sut.GetAsync(UserId);
+
+        stats.Totals.SeriesFinished.Should().Be(0);
+        stats.Totals.Episodes.Should().Be(1);
+        stats.Totals.Minutes.Should().Be(40);
+    }
 }

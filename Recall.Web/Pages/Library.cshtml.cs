@@ -13,14 +13,15 @@ using Recall.Web.Services.WatchTracking;
 namespace Recall.Web.Pages;
 
 /// <summary>
-/// One card per (tracked) series or (watched) movie, sorted into three
-/// buckets:
+/// One card per (tracked) series or (watched) movie, sorted into buckets:
 /// <list type="bullet">
 /// <item><b>Watching</b> — has at least one released episode not yet watched.</item>
 /// <item><b>Up to date</b> — caught up on every released episode, and the series hasn't ended.</item>
 /// <item><b>Watched</b> — caught up AND ended (series), or marked watched (movies).</item>
+/// <item><b>Stopped</b> — a series the user stopped watching, whatever its progress.</item>
 /// </list>
 /// </summary>
+/// <param name="MetaLine">Replaces the card's whole meta line ("Stopped Sep 4"); null gives the usual "Series · 2008".</param>
 public sealed record LibraryCardItem(
     SearchResultType Type,
     int TvdbId,
@@ -31,7 +32,8 @@ public sealed record LibraryCardItem(
     int ReleasedEpisodes,
     bool IsLiked,
     string? Caption,
-    string? ProgressText = null);
+    string? ProgressText = null,
+    string? MetaLine = null);
 
 /// <summary>The Library's sections, in the order the page shows them.</summary>
 public enum LibrarySection
@@ -42,7 +44,10 @@ public enum LibrarySection
     Dormant,
     ToWatch,
     UpToDate,
-    Watched
+    Watched,
+
+    /// <summary>Series the user stopped watching: last, and collapsed, since it is what they put aside.</summary>
+    Stopped
 }
 
 /// <summary>
@@ -85,8 +90,15 @@ public sealed class LibraryModel(
     public IReadOnlyList<LibraryCardItem> UpToDate { get; private set; } = [];
     public IReadOnlyList<LibraryCardItem> Watched { get; private set; } = [];
 
+    /// <summary>
+    /// Series the user stopped watching (<see cref="SeriesLibraryState.Stopped"/>),
+    /// most recently stopped first. They are in no other section.
+    /// </summary>
+    public IReadOnlyList<LibraryCardItem> Stopped { get; private set; } = [];
+
     public bool IsEmpty =>
-        Watching.Count == 0 && Dormant.Count == 0 && ToWatch.Count == 0 && UpToDate.Count == 0 && Watched.Count == 0;
+        Watching.Count == 0 && Dormant.Count == 0 && ToWatch.Count == 0 && UpToDate.Count == 0 && Watched.Count == 0
+        && Stopped.Count == 0;
 
     /// <summary>
     /// <c>/Library?section=watched</c> shows one section on its own, with its
@@ -104,7 +116,8 @@ public sealed class LibraryModel(
         new(LibrarySection.Dormant, "dormant", "Haven't watched in a while", Dormant),
         new(LibrarySection.ToWatch, "to-watch", "To Watch", ToWatch),
         new(LibrarySection.UpToDate, "up-to-date", "Up to Date", UpToDate),
-        new(LibrarySection.Watched, "watched", "Watched", Watched)
+        new(LibrarySection.Watched, "watched", "Watched", Watched),
+        new(LibrarySection.Stopped, "stopped", "Stopped", Stopped)
     ];
 
     /// <summary>The section asked for with <see cref="Section"/>; null for the full library.</summary>
@@ -141,11 +154,12 @@ public sealed class LibraryModel(
             var watching = new List<LibraryCardItem>();
             var upToDate = new List<LibraryCardItem>();
             var watched = new List<LibraryCardItem>();
+            var stopped = new List<(DateTime StoppedUtc, LibraryCardItem Item)>();
             var recentPremieres = new HashSet<int>();
             var nothingToWatch = new HashSet<int>();
 
             await ClassifyTrackedSeriesAsync(
-                userId, trackedSeries, likedSeriesIds, watching, upToDate, watched, recentPremieres, nothingToWatch, cancellationToken);
+                userId, trackedSeries, likedSeriesIds, watching, upToDate, watched, stopped, recentPremieres, nothingToWatch, cancellationToken);
             await AddWatchedMoviesAsync(watchedMovies, watched, cancellationToken);
             ToWatch = await BuildWatchlistAsync(watchlistMovies, cancellationToken);
 
@@ -169,6 +183,11 @@ public sealed class LibraryModel(
             Dormant = queue.Dormant;
             UpToDate = upToDate.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
             Watched = watched.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            Stopped = stopped
+                .OrderByDescending(s => s.StoppedUtc)
+                .ThenBy(s => s.Item.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(s => s.Item)
+                .ToList();
 
             return Page();
         }
@@ -187,6 +206,7 @@ public sealed class LibraryModel(
         List<LibraryCardItem> watching,
         List<LibraryCardItem> upToDate,
         List<LibraryCardItem> watched,
+        List<(DateTime StoppedUtc, LibraryCardItem Item)> stopped,
         HashSet<int> recentPremieres,
         HashSet<int> nothingToWatch,
         CancellationToken cancellationToken)
@@ -204,6 +224,9 @@ public sealed class LibraryModel(
 
         var seriesIds = aggregates.Select(a => a.TvdbId).ToList();
         var watchedEpisodeIds = await episodeWatchRepository.GetWatchedEpisodeIdsAsync(userId, seriesIds, cancellationToken);
+        var stoppedUtcBySeries = trackedSeries
+            .Where(SeriesLibraryStateRule.IsStopped)
+            .ToDictionary(s => s.TvdbId, s => s.StoppedUtc!.Value);
 
         foreach (var aggregate in aggregates)
         {
@@ -221,8 +244,16 @@ public sealed class LibraryModel(
                 Caption: null);
 
             // The section comes from the rule Stats also counts "series finished" by.
-            switch (SeriesLibraryStateRule.Of(aggregate, progress))
+            // A stopped series is Stopped whatever its progress, so it reaches
+            // neither the queue below (never dormant, no premiere) nor Watched.
+            var isStopped = stoppedUtcBySeries.TryGetValue(aggregate.TvdbId, out var stoppedUtc);
+
+            switch (SeriesLibraryStateRule.Of(aggregate, progress, isStopped))
             {
+                case SeriesLibraryState.Stopped:
+                    stopped.Add((stoppedUtc, item with { MetaLine = $"Stopped {DisplayDate.Short(stoppedUtc, today)}" }));
+                    break;
+
                 case SeriesLibraryState.Watching:
                     watching.Add(item with { ProgressText = progress.CurrentSeason?.Label });
 

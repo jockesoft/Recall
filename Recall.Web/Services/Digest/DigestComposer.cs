@@ -50,7 +50,10 @@ public sealed class DigestComposer(
         aggregates ??= new Dictionary<int, SeriesAggregate?>();
 
         // The repositories share the scoped DbContext, so these stay sequential.
-        var tracked = await trackedSeriesRepository.GetByUserAsync(userId, cancellationToken);
+        // A series the user stopped watching is in none of the three sections,
+        // so it is not read at all (SeriesLibraryStateRule has the rule).
+        var tracked = SeriesLibraryStateRule.Followed(
+            await trackedSeriesRepository.GetByUserAsync(userId, cancellationToken));
 
         var cached = new List<SeriesAggregate>(tracked.Count);
         foreach (var series in tracked)

@@ -25,6 +25,7 @@ const int Watching = 81189;      // Breaking Bad
 const int UpToDate = 403245;     // Silo
 const int AllWatched = 334824;   // Dark
 const int NotStarted = 370112;   // Mare of Easttown
+const int Stopped = 417223;      // Baby Reindeer
 const int WatchedMovie = 287533; // Oppenheimer
 const int WatchlistMovie = 1305; // Heat
 
@@ -51,7 +52,7 @@ List<Shot> shots =
         Prepare: async page =>
         {
             // From 576px the "haven't watched in a while" group is collapsed behind a button; on a phone it is a row.
-            var toggle = page.Locator(".tvdb-subgroup__toggle");
+            var toggle = page.Locator("#dormant .tvdb-subgroup__toggle");
             if (await toggle.IsVisibleAsync())
             {
                 await toggle.ClickAsync();
@@ -59,6 +60,35 @@ List<Shot> shots =
             }
 
             await page.Locator("#dormant").ScrollIntoViewIfNeededAsync();
+        }),
+    // Series the user stopped watching: the last section, collapsed from 576px and a row on a phone.
+    new("library", "section-stopped", Site.SignedIn, "/Library?section=stopped"),
+    new("library", "stopped-expanded", Site.SignedIn, "/Library",
+        Prepare: async page =>
+        {
+            var toggle = page.Locator("#stopped .tvdb-subgroup__toggle");
+            if (await toggle.IsVisibleAsync())
+            {
+                await toggle.ClickAsync();
+                await page.Locator("#stoppedSeries.show").WaitForAsync();
+            }
+
+            await page.Locator("#stopped").ScrollIntoViewIfNeededAsync();
+        }),
+    // "You stopped watching on …" and "Resume watching" in place of the next episode.
+    new("series-details", "stopped", Site.SignedIn, $"/Series/Details/{Stopped}"),
+    new("series-details", "toast-stopped-undo", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // No confirmation: the toast carries the Undo.
+            await page.GetByRole(AriaRole.Button, new() { Name = "Stop watching" }).ClickAsync();
+            await page.Locator(".tvdb-toast-stack .alert-success .tvdb-toast-action").WaitForAsync();
+        },
+        // Undo, so the series is being watched again for the shots that follow.
+        Cleanup: async page =>
+        {
+            await page.Locator(".tvdb-toast-stack").GetByRole(AriaRole.Button, new() { Name = "Undo" }).ClickAsync();
+            await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
         }),
     new("series-details", "watching", Site.SignedIn, $"/Series/Details/{Watching}"),
     new("series-details", "up-to-date", Site.SignedIn, $"/Series/Details/{UpToDate}"),
@@ -195,6 +225,30 @@ List<Shot> shots =
             // One tap on a catch-up card marks the episode watched; the toast offers the undo.
             await page.Locator(".tvdb-catchup-check button").First.ClickAsync();
             await page.Locator(".tvdb-toast-action").WaitForAsync();
+        },
+        Cleanup: async page =>
+        {
+            await page.Locator(".tvdb-toast-action").ClickAsync();
+            await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
+        }),
+
+    new("dashboard", "card-menu", Site.SignedIn, "/Dashboard", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // The "⋯" menu of a Continue watching card, opened with the keyboard.
+            var menu = page.Locator(".tvdb-catchup-menu button").First;
+            await menu.ScrollIntoViewIfNeededAsync();
+            await menu.FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await page.Locator(".tvdb-catchup-menu .dropdown-menu.show").WaitForAsync();
+        }),
+    new("dashboard", "stop-undo", Site.SignedIn, "/Dashboard", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // "Stop watching" in the card's menu: the card goes and the toast offers the undo.
+            await page.Locator(".tvdb-catchup-menu button").First.ClickAsync();
+            await page.Locator(".tvdb-catchup-menu .dropdown-menu.show").GetByRole(AriaRole.Button, new() { Name = "Stop watching" }).ClickAsync();
+            await page.Locator(".tvdb-toast-stack .alert-success .tvdb-toast-action").WaitForAsync();
         },
         Cleanup: async page =>
         {

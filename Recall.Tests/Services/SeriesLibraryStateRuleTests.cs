@@ -20,7 +20,10 @@ public sealed class SeriesLibraryStateRuleTests
         Id = id, SeasonNumber = season, EpisodeNumber = number, Name = $"S{season}E{number}", Aired = Today.AddDays(daysFromToday)
     };
 
-    private static SeriesLibraryState StateOf(string status, EpisodeSummary[] episodes, params int[] watched)
+    private static SeriesLibraryState StateOf(string status, EpisodeSummary[] episodes, params int[] watched) =>
+        StateOf(status, episodes, stopped: false, watched);
+
+    private static SeriesLibraryState StateOf(string status, EpisodeSummary[] episodes, bool stopped, params int[] watched)
     {
         var aggregate = new SeriesAggregate
         {
@@ -28,7 +31,39 @@ public sealed class SeriesLibraryStateRuleTests
         };
         var progress = WatchProgressCalculator.Build(1, Watchable(episodes), watched.ToHashSet(), Now);
 
-        return SeriesLibraryStateRule.Of(aggregate, progress);
+        return SeriesLibraryStateRule.Of(aggregate, progress, stopped);
+    }
+
+    // ---- stopped ---------------------------------------------------------------------
+
+    [Test]
+    public void AStoppedSeries_Should_BeStopped_WhateverItsProgress()
+    {
+        StateOf("Continuing", TwoAiredAndASpecial, stopped: true).Should().Be(SeriesLibraryState.Stopped, "never started");
+        StateOf("Continuing", TwoAiredAndASpecial, stopped: true, 10).Should().Be(SeriesLibraryState.Stopped, "in progress");
+        StateOf("Continuing", TwoAiredAndASpecial, stopped: true, 10, 11).Should().Be(SeriesLibraryState.Stopped, "up to date");
+        StateOf("Ended", TwoAiredAndASpecial, stopped: true, 10, 11).Should().Be(SeriesLibraryState.Stopped,
+            "stopped beats finished: it is not counted as a series finished");
+    }
+
+    [Test]
+    public void Stopped_Should_BeDecidedByTheStoppedDate_AndFollowedShouldLeaveThoseOut()
+    {
+        var watching = new TrackedSeries { TvdbId = 1, Name = "Watching" };
+        var stopped = new TrackedSeries { TvdbId = 2, Name = "Stopped", StoppedUtc = Now.AddDays(-28) };
+
+        SeriesLibraryStateRule.IsStopped(watching).Should().BeFalse();
+        SeriesLibraryStateRule.IsStopped(stopped).Should().BeTrue();
+        SeriesLibraryStateRule.Followed([watching, stopped]).Should().Equal(watching);
+    }
+
+    [TestCase(SeriesLibraryState.Watching, true)]
+    [TestCase(SeriesLibraryState.UpToDate, true)]
+    [TestCase(SeriesLibraryState.Finished, false)]
+    [TestCase(SeriesLibraryState.Stopped, false)]
+    public void StopWatching_Should_BeOfferedWhileThereIsSomethingToStop(SeriesLibraryState state, bool offered)
+    {
+        SeriesLibraryStateRule.CanStop(state).Should().Be(offered);
     }
 
     private static List<WatchableEpisode> Watchable(IEnumerable<EpisodeSummary> episodes) =>

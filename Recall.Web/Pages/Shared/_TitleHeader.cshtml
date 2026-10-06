@@ -64,7 +64,7 @@
 
             @if (Model.State is { } state)
             {
-                <span class="tvdb-title-state"><i class="@state.Icon" aria-hidden="true"></i> @state.Text</span>
+                <span class="tvdb-title-state @(state.Neutral ? "tvdb-title-state--neutral" : null)"><i class="@state.Icon" aria-hidden="true"></i> @state.Text</span>
             }
 
             @foreach (var action in Model.Secondary)

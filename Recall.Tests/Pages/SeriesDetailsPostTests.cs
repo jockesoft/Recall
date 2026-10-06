@@ -91,6 +91,8 @@ public class SeriesDetailsPostTests
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostMarkSeasonWatchedAsync(SeriesId, default)), "track watched episodes").SetName("Guard_MarkSeasonWatched");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostMarkSeasonUnwatchedAsync(SeriesId, default)), "track watched episodes").SetName("Guard_MarkSeasonUnwatched");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default)), "track watched episodes").SetName("Guard_UndoWatched");
+        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostStopWatchingAsync(SeriesId, default)), "manage your library").SetName("Guard_StopWatching");
+        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostResumeWatchingAsync(SeriesId, false, null, default)), "manage your library").SetName("Guard_ResumeWatching");
     }
 
     [TestCaseSource(nameof(GuardedHandlers))]
@@ -605,5 +607,179 @@ public class SeriesDetailsPostTests
 
         local.Should().BeOfType<LocalRedirectResult>().Which.Url.Should().Be("/Episodes/Details/4201");
         AssertRedirectsBackToTheSeason(foreign);
+    }
+
+    // ---- stop watching / resume watching ----------------------------------------------
+
+    [Test]
+    public async Task StopWatching_Should_StopTheSeries_AndOfferAnUndo_WithNoConfirmation()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.StopWatchingAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StopWatchingResult(StopWatchingOutcome.Stopped, "Silo"));
+
+        var result = await _sut.OnPostStopWatchingAsync(SeriesId, default);
+
+        AssertRedirectsBackToTheSeason(result);
+        _sut.SuccessToast().Should().Be("Stopped watching Silo.");
+        _sut.TempData[PageModelToastExtensions.UndoStoppedSeriesKey].Should().Be(SeriesId.ToString());
+        _tracked.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task StopWatching_Should_SayWhy_WhenTheSeriesIsFinished_OrAlreadyStopped()
+    {
+        SignIn();
+        _progress
+            .SetupSequence(x => x.StopWatchingAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StopWatchingResult(StopWatchingOutcome.Finished, "Chernobyl"))
+            .ReturnsAsync(new StopWatchingResult(StopWatchingOutcome.AlreadyStopped, "Silo"));
+
+        await _sut.OnPostStopWatchingAsync(SeriesId, default);
+        _sut.InfoToast().Should().Be("You've finished Chernobyl, so there is nothing to stop.");
+
+        await _sut.OnPostStopWatchingAsync(SeriesId, default);
+        _sut.InfoToast().Should().Be("You had already stopped watching Silo.");
+
+        _sut.SuccessToast().Should().BeNull();
+        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoStoppedSeriesKey).Should().BeFalse();
+    }
+
+    [Test]
+    public async Task StopWatching_Should_ShowAnErrorToast_WhenTheServiceThrows()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.StopWatchingAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("database down"));
+
+        var result = await _sut.OnPostStopWatchingAsync(SeriesId, default);
+
+        AssertRedirectsBackToTheSeason(result);
+        _sut.ErrorToast().Should().Be("Could not update your library right now.");
+    }
+
+    [Test]
+    public async Task ResumeWatching_Should_ResumeTheSeries_WithAPlainSuccessToast()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ResumeWatchingAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Silo");
+
+        var result = await _sut.OnPostResumeWatchingAsync(SeriesId, undo: false, returnUrl: null, default);
+
+        AssertRedirectsBackToTheSeason(result);
+        _sut.SuccessToast().Should().Be("Resumed watching Silo.");
+        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoStoppedSeriesKey).Should().BeFalse("resuming has no Undo");
+    }
+
+    [Test]
+    public async Task ResumeWatching_AsTheUndoOfAStop_Should_SayUndone_AndGoBackToWhereItWasPressed()
+    {
+        SignIn();
+        var url = new Mock<IUrlHelper>();
+        url.Setup(x => x.IsLocalUrl("/Dashboard")).Returns(true);
+        url.Setup(x => x.IsLocalUrl("https://evil.example/")).Returns(false);
+        _sut.Url = url.Object;
+        _progress
+            .Setup(x => x.ResumeWatchingAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Silo");
+
+        var local = await _sut.OnPostResumeWatchingAsync(SeriesId, undo: true, returnUrl: "/Dashboard", default);
+
+        local.Should().BeOfType<LocalRedirectResult>().Which.Url.Should().Be("/Dashboard");
+        _sut.InfoToast().Should().Be("Undone — you're still watching Silo.");
+        _sut.SuccessToast().Should().BeNull();
+
+        var foreign = await _sut.OnPostResumeWatchingAsync(SeriesId, undo: true, returnUrl: "https://evil.example/", default);
+        AssertRedirectsBackToTheSeason(foreign);
+    }
+
+    [Test]
+    public async Task ResumeWatching_Should_SayNothingWasLeftToDo_WhenTheSeriesWasNotStopped()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ResumeWatchingAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+
+        await _sut.OnPostResumeWatchingAsync(SeriesId, undo: false, returnUrl: null, default);
+        _sut.InfoToast().Should().Be("You are already watching this series.");
+
+        await _sut.OnPostResumeWatchingAsync(SeriesId, undo: true, returnUrl: null, default);
+        _sut.InfoToast().Should().Be("Nothing left to undo.");
+        _sut.SuccessToast().Should().BeNull();
+    }
+
+    [Test]
+    public async Task ResumeWatching_Should_ShowAnErrorToast_WhenTheServiceThrows()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ResumeWatchingAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("database down"));
+
+        await _sut.OnPostResumeWatchingAsync(SeriesId, undo: false, returnUrl: null, default);
+
+        _sut.ErrorToast().Should().Be("Could not update your library right now.");
+    }
+
+    [Test]
+    public async Task AMarkThatResumedAStoppedSeries_Should_SaySo_InTheSameToast()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, ResumedWatching: "Silo"));
+        _progress
+            .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchStamp), ResumedWatching: "Silo"));
+        _progress
+            .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchStamp), UpToDate, ResumedWatching: "Silo"));
+
+        await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked the episode as watched and resumed watching Silo.");
+
+        await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
+        _sut.SuccessToast().Should().Be("Marked 5 episodes as watched and resumed watching Silo.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+
+        await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
+        _sut.SuccessToast().Should().Be(
+            "Marked 7 episodes as watched and resumed watching Silo. You're up to date with Silo. We'll let you know when a new episode airs.");
+        _sut.InfoToast().Should().BeNull("still one toast");
+        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoStoppedSeriesKey).Should().BeFalse("the Undo is the mark's, not a stop's");
+    }
+
+    [Test]
+    public async Task AToggleThatResumedAndCaughtUp_Should_KeepBothSentences()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, UpToDate, ResumedWatching: "Silo"));
+
+        await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+
+        _sut.SuccessToast().Should().Be(
+            "Marked the episode as watched and resumed watching Silo. You're up to date with Silo. We'll let you know when a new episode airs.");
+    }
+
+    [Test]
+    public async Task Unmarking_Should_SayNothingAboutTheStoppedState()
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EpisodeWatchOutcome.MarkedUnwatched);
+
+        await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+
+        _sut.InfoToast().Should().Be("Episode marked as not watched.");
+        _progress.Verify(x => x.ResumeWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _progress.Verify(x => x.StopWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

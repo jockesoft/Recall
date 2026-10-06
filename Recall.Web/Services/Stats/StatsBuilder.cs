@@ -10,13 +10,18 @@ namespace Recall.Web.Services.Stats;
 /// <param name="Movies">Cached aggregates by TheTVDB id; a movie that is not cached is simply absent.</param>
 /// <param name="TrackedSeriesIds">The series in the user's library (for "series finished").</param>
 /// <param name="RatingCounts">How many titles got each rating, keyed by the rating (1–10).</param>
+/// <param name="StoppedSeriesIds">
+/// The tracked series the user stopped watching. Their watches count like any
+/// other (time is time), but a stopped series is never "finished".
+/// </param>
 public sealed record StatsInput(
     IReadOnlyList<EpisodeWatchRecord> EpisodeWatches,
     IReadOnlyList<MovieWatch> MovieWatches,
     IReadOnlyDictionary<int, SeriesAggregate> Series,
     IReadOnlyDictionary<int, MovieAggregate> Movies,
     IReadOnlyCollection<int> TrackedSeriesIds,
-    IReadOnlyDictionary<int, int> RatingCounts);
+    IReadOnlyDictionary<int, int> RatingCounts,
+    IReadOnlyCollection<int>? StoppedSeriesIds = null);
 
 /// <summary>
 /// Computes the Stats page. Pure: no clock, no database, no cache.
@@ -183,7 +188,8 @@ public static class StatsBuilder
     /// <summary>
     /// Tracked series that are finished by the Library's rule
     /// (<see cref="SeriesLibraryStateRule"/>): ended, started, and with no aired
-    /// regular episode left. The same series the Library lists under Watched.
+    /// regular episode left. The same series the Library lists under Watched:
+    /// one the user stopped watching is under Stopped there, and not counted here.
     /// </summary>
     private static int CountFinishedSeries(StatsInput input, DateTime nowUtc)
     {
@@ -200,7 +206,9 @@ public static class StatsBuilder
 
             var progress = WatchProgressCalculator.Build(seriesId, series.ToWatchableEpisodes(), watchedIds, nowUtc);
 
-            if (SeriesLibraryStateRule.Of(series, progress) == SeriesLibraryState.Finished)
+            var stopped = input.StoppedSeriesIds?.Contains(seriesId) == true;
+
+            if (SeriesLibraryStateRule.Of(series, progress, stopped) == SeriesLibraryState.Finished)
                 finished++;
         }
 

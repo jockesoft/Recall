@@ -16,6 +16,7 @@ public static class TrackedSeriesMappings
             Overview = entity.Overview,
             ImageUrl = entity.ImageUrl,
             FirstAired = entity.FirstAired,
+            StoppedUtc = entity.StoppedUtc,
             CreatedUtc = entity.CreatedUtc,
             UpdatedUtc = entity.UpdatedUtc,
             Version = entity.Version
@@ -33,6 +34,7 @@ public static class TrackedSeriesMappings
             Overview = domain.Overview,
             ImageUrl = domain.ImageUrl,
             FirstAired = domain.FirstAired,
+            StoppedUtc = domain.StoppedUtc,
             CreatedUtc = domain.CreatedUtc == default ? DateTime.UtcNow : domain.CreatedUtc,
             UpdatedUtc = domain.UpdatedUtc == default ? DateTime.UtcNow : domain.UpdatedUtc,
             Version = domain.Version

@@ -13,6 +13,14 @@ public sealed class TrackedSeriesEntity : IHasAuditTimestamps
     public string? ImageUrl { get; set; }
     public DateOnly? FirstAired { get; set; }
 
+    /// <summary>
+    /// When the user stopped watching the series; null while they are watching
+    /// it. A stopped series stays in the library with its history, but is left
+    /// out of everything that says "there is something for you to watch" (see
+    /// <c>SeriesLibraryStateRule</c>).
+    /// </summary>
+    public DateTime? StoppedUtc { get; set; }
+
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
 

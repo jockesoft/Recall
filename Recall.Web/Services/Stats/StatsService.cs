@@ -41,6 +41,7 @@ public sealed class StatsService(
 
         var tracked = await trackedSeriesRepository.GetByUserAsync(userId, cancellationToken);
         var trackedIds = tracked.Select(t => t.TvdbId).ToHashSet();
+        var stoppedIds = tracked.Where(SeriesLibraryStateRule.IsStopped).Select(t => t.TvdbId).ToHashSet();
 
         // Only series something was watched of: a tracked series with no
         // watches cannot be "finished" and adds nothing else.
@@ -58,7 +59,7 @@ public sealed class StatsService(
         var today = DateOnly.FromDateTime(now);
 
         return StatsBuilder.Build(
-            new StatsInput(episodeWatches, movieWatches, seriesTask.Result, moviesTask.Result, trackedIds, ratingCounts),
+            new StatsInput(episodeWatches, movieWatches, seriesTask.Result, moviesTask.Result, trackedIds, ratingCounts, stoppedIds),
             now,
             StatsWindow.LastTwelveMonths(today));
     }

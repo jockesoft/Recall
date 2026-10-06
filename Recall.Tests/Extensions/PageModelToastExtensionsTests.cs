@@ -134,4 +134,33 @@ public class PageModelToastExtensionsTests
         page.TempData["Toast.Success"].Should().Be("Marked 3 episodes as watched.");
         page.TempData.ContainsKey(PageModelToastExtensions.CaughtUpKindKey).Should().BeFalse();
     }
+
+    // ---- "Stop watching" ----------------------------------------------------------
+
+    [Test]
+    public void SetStopWatchingToast_Should_NameTheSeries_AndOfferAnUndo_WhenItStopped()
+    {
+        var page = CreatePage();
+
+        page.SetStopWatchingToast(new StopWatchingResult(StopWatchingOutcome.Stopped, "Silo"), seriesTvdbId: 42);
+
+        page.TempData["Toast.Success"].Should().Be("Stopped watching Silo.");
+        page.TempData[PageModelToastExtensions.UndoStoppedSeriesKey].Should().Be("42", "the Undo resumes this series");
+        page.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStampKey).Should().BeFalse("it is not a watch to undo");
+    }
+
+    [TestCase(StopWatchingOutcome.AlreadyStopped, "Toast.Info", "You had already stopped watching Silo.")]
+    [TestCase(StopWatchingOutcome.Finished, "Toast.Info", "You've finished Silo, so there is nothing to stop.")]
+    [TestCase(StopWatchingOutcome.NotInLibrary, "Toast.Error", "That series isn't in your library.")]
+    public void SetStopWatchingToast_Should_ExplainWhyNothingStopped_WithoutAnUndo(
+        StopWatchingOutcome outcome, string key, string expected)
+    {
+        var page = CreatePage();
+
+        page.SetStopWatchingToast(new StopWatchingResult(outcome, "Silo"), seriesTvdbId: 42);
+
+        page.TempData[key].Should().Be(expected);
+        page.TempData.ContainsKey("Toast.Success").Should().BeFalse();
+        page.TempData.ContainsKey(PageModelToastExtensions.UndoStoppedSeriesKey).Should().BeFalse();
+    }
 }

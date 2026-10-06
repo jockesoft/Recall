@@ -15,6 +15,9 @@ public sealed class TrackedSeries
     public string? ImageUrl { get; init; }
     public DateOnly? FirstAired { get; init; }
 
+    /// <summary>When the user stopped watching the series; null while they are watching it.</summary>
+    public DateTime? StoppedUtc { get; init; }
+
     public DateTime CreatedUtc { get; init; }
     public DateTime UpdatedUtc { get; init; }
 

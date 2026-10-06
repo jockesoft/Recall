@@ -34,9 +34,13 @@ public sealed class SeriesDetailsGetTests
     private Mock<IRatingRepository> _ratings = null!;
     private DetailsModel _sut = null!;
 
+    /// <summary>TheTVDB's status of the series <see cref="SeriesExists(EpisodeSummary[])"/> sets up.</summary>
+    private string _status = "Continuing";
+
     [SetUp]
     public void SetUp()
     {
+        _status = "Continuing";
         _tvDb = new Mock<ITheTvDbService>();
         _currentUser = new Mock<ICurrentUserService>();
         _tracked = new Mock<ITrackedSeriesRepository>();
@@ -80,7 +84,7 @@ public sealed class SeriesDetailsGetTests
             {
                 TvdbId = SeriesId,
                 Name = "Show",
-                Status = new SeriesStatus { Name = "Continuing", KeepUpdated = true },
+                Status = new SeriesStatus { Name = _status, KeepUpdated = _status != "Ended" },
                 Genres = genres,
                 Seasons = episodes.Select(e => e.SeasonNumber).Distinct()
                     .Select((n, i) => new SeasonSummary { Id = i + 1, Number = n }).ToList(),
@@ -89,11 +93,16 @@ public sealed class SeriesDetailsGetTests
             });
     }
 
-    private void SignedIn(bool tracked, params int[] watched)
+    private void SignedIn(bool tracked, params int[] watched) => SignedIn(tracked, stoppedUtc: null, watched);
+
+    private void SignedIn(bool tracked, DateTime? stoppedUtc, params int[] watched)
     {
         _currentUser.SetupGet(x => x.IsAuthenticated).Returns(true);
         _currentUser.SetupGet(x => x.UserId).Returns(UserId);
-        _tracked.Setup(x => x.ExistsAsync(UserId, SeriesId, It.IsAny<CancellationToken>())).ReturnsAsync(tracked);
+        _tracked.Setup(x => x.GetByUserAndTvdbIdAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(tracked
+                ? new TrackedSeries { Id = Guid.NewGuid(), UserId = UserId, TvdbId = SeriesId, Name = "Show", StoppedUtc = stoppedUtc }
+                : null);
         _watches
             .Setup(x => x.GetWatchedEpisodeIdsAsync(UserId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(watched.ToHashSet());
@@ -311,5 +320,103 @@ public sealed class SeriesDetailsGetTests
         _sut.Response.StatusCode.Should().Be(StatusCodes.Status503ServiceUnavailable);
         _sut.Series.Should().BeNull();
         _sut.Aggregate.Should().BeNull();
+    }
+
+    // ---- stop watching / resume watching ----------------------------------------------
+
+    private static readonly DateTime StoppedOn = new(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc);
+
+    [Test]
+    public async Task StopWatching_Should_BeOffered_ForASeriesBeingWatched()
+    {
+        SeriesExists(Ep(11, 1, 1), Ep(12, 1, 2));
+        SignedIn(tracked: true, watched: [11]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+
+        _sut.CanStopWatching.Should().BeTrue();
+        _sut.StoppedUtc.Should().BeNull();
+    }
+
+    [Test]
+    public async Task StopWatching_Should_BeOffered_ForAnUpToDateSeriesThatContinues()
+    {
+        SeriesExists(Ep(11, 1, 1), Ep(12, 1, 2, Today.AddDays(7)));
+        SignedIn(tracked: true, watched: [11]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+
+        _sut.BuildHeader([]).State!.Text.Should().Be("Up to date");
+        _sut.CanStopWatching.Should().BeTrue("more episodes are coming, and the user may not want them");
+    }
+
+    [Test]
+    public async Task StopWatching_Should_NotBeOffered_ForAFinishedSeries()
+    {
+        _status = "Ended";
+        SeriesExists(Ep(1, 0, 1), Ep(11, 1, 1), Ep(12, 1, 2));
+        SignedIn(tracked: true, watched: [11, 12]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+
+        _sut.CanStopWatching.Should().BeFalse("ended and every aired regular episode watched: there is nothing to stop");
+        _sut.IsTrackedByCurrentUser.Should().BeTrue("\"Remove from library\" is still there");
+    }
+
+    [Test]
+    public async Task StopWatching_Should_BeOffered_ForAnEndedSeriesThatIsNotFullyWatched()
+    {
+        _status = "Ended";
+        SeriesExists(Ep(11, 1, 1), Ep(12, 1, 2));
+        SignedIn(tracked: true, watched: [11]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+
+        _sut.CanStopWatching.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task StopWatching_Should_NotBeOffered_ForASeriesThatIsNotInTheLibrary_OrToAVisitor()
+    {
+        SeriesExists();
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        _sut.CanStopWatching.Should().BeFalse("a visitor");
+
+        SignedIn(tracked: false);
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        _sut.CanStopWatching.Should().BeFalse("not in the library");
+    }
+
+    [Test]
+    public async Task AStoppedSeries_Should_SayWhenItWasStopped_AndOfferResumeInPlaceOfTheNextEpisode()
+    {
+        SeriesExists(Ep(11, 1, 1), Ep(12, 1, 2));
+        SignedIn(tracked: true, stoppedUtc: StoppedOn, watched: [11]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        var header = _sut.BuildHeader([]);
+
+        _sut.StoppedUtc.Should().Be(StoppedOn);
+        header.State!.Text.Should().Be("You stopped watching on Fri, Sep 4");
+        header.State.Neutral.Should().BeTrue("it is not an achievement");
+        header.Primary!.Label.Should().Be("Resume watching");
+        header.Primary.Handler.Should().Be("ResumeWatching");
+        header.Primary.RouteId.Should().Be(SeriesId);
+        header.Secondary.Should().BeEmpty("the one primary button: no \"Mark S01E02 watched\" beside it");
+        _sut.CanStopWatching.Should().BeFalse("it is stopped already");
+    }
+
+    [Test]
+    public async Task AStoppedSeries_Should_OfferResume_EvenWhenNothingIsLeftToWatch()
+    {
+        SeriesExists(Ep(11, 1, 1), Ep(12, 1, 2, Today.AddDays(7)));
+        SignedIn(tracked: true, stoppedUtc: StoppedOn, watched: [11]);
+
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        var header = _sut.BuildHeader([]);
+
+        header.State!.Text.Should().StartWith("You stopped watching on");
+        header.Primary!.Label.Should().Be("Resume watching");
     }
 }

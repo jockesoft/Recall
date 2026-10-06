@@ -76,11 +76,21 @@ public sealed class SeriesCardModel
     /// </summary>
     public string? Caption { get; init; }
 
-    /// <summary>"Series · 2008", "Movie · watched Sep 25", or just the type when there is nothing to add.</summary>
+    /// <summary>
+    /// The whole meta line, in place of the type and what follows it: "Stopped
+    /// Sep 4" for a series the user stopped watching. Null gives the usual line.
+    /// </summary>
+    public string? MetaText { get; init; }
+
+    /// <summary>"Series · 2008", "Movie · watched Sep 25", "Stopped Sep 4", or just the type when there is nothing to add.</summary>
     public string MetaLine
     {
         get
         {
+            if (!string.IsNullOrWhiteSpace(MetaText))
+                return MetaText;
+
+
             var type = IsMovie ? "Movie" : "Series";
             var detail = !string.IsNullOrWhiteSpace(Caption) ? Caption : FirstAired?.Year.ToString();
             return string.IsNullOrWhiteSpace(detail) ? type : $"{type} · {detail}";

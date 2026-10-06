@@ -10,6 +10,10 @@
                     && int.TryParse(undoSeriesId, out _)
                     && long.TryParse(undoStamp, out _);
 
+    // Set by SetStopWatchingToast after "Stop watching": the Undo resumes the series.
+    var undoStoppedSeriesId = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoStoppedSeriesKey] as string;
+    var offerResume = !string.IsNullOrWhiteSpace(success) && int.TryParse(undoStoppedSeriesId, out _);
+
     // Set by the watched toasts when the mark brought the user up to date with
     // a series, or finished it: a different icon, and "Rate it" for a finished
     // series the user has not rated.
@@ -28,7 +32,7 @@
     @if (!string.IsNullOrWhiteSpace(success))
     {
         @* A toast offering an action stays until dismissed (data-toast-persist skips the auto-close below). *@
-        <div class="alert alert-success fade show" role="alert" data-toast-persist="@(offerUndo || offerRating ? "true" : null)"
+        <div class="alert alert-success fade show" role="alert" data-toast-persist="@(offerUndo || offerRating || offerResume ? "true" : null)"
              data-toast-kind="@caughtUpKind">
             <i class="@successIcon tvdb-toast-icon" aria-hidden="true"></i>
             <span class="tvdb-toast-text">@success</span>
@@ -40,6 +44,14 @@
             {
                 <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undoSeriesId" class="d-inline-flex">
                     <input type="hidden" name="stamp" value="@undoStamp" />
+                    <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                    <button type="submit" class="tvdb-toast-action">Undo</button>
+                </form>
+            }
+            @if (offerResume)
+            {
+                <form method="post" asp-page="/Series/Details" asp-page-handler="ResumeWatching" asp-route-id="@undoStoppedSeriesId" class="d-inline-flex">
+                    <input type="hidden" name="undo" value="true" />
                     <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                     <button type="submit" class="tvdb-toast-action">Undo</button>
                 </form>

@@ -39,6 +39,7 @@ public class DashboardModelTests
         // A fresh instance per test: some tests change the settings.
         _libraryOptions = new LibraryOptions();
         _addedUtc.Clear();
+        _stoppedUtc.Clear();
         _users = new Mock<IAppUserRepository>();
         _digestOptions = new DigestOptions { Enabled = true };
 
@@ -89,6 +90,9 @@ public class DashboardModelTests
     /// <summary>When a series was added to the library, for tests about the order; set before <see cref="SetUpSeries"/>.</summary>
     private readonly Dictionary<int, DateTime> _addedUtc = [];
 
+    /// <summary>The series the user stopped watching, and when; set before <see cref="SetUpSeries"/>.</summary>
+    private readonly Dictionary<int, DateTime> _stoppedUtc = [];
+
     private void SetUpSeries(params SeriesAggregate[] aggregates)
     {
         _library
@@ -96,7 +100,8 @@ public class DashboardModelTests
             .ReturnsAsync(aggregates.Select(a => new TrackedSeries
             {
                 Id = Guid.NewGuid(), UserId = UserId, TvdbId = a.TvdbId, Name = a.Name,
-                CreatedUtc = _addedUtc.GetValueOrDefault(a.TvdbId)
+                CreatedUtc = _addedUtc.GetValueOrDefault(a.TvdbId),
+                StoppedUtc = _stoppedUtc.TryGetValue(a.TvdbId, out var stoppedUtc) ? stoppedUtc : null
             }).ToList());
 
         foreach (var aggregate in aggregates)
@@ -734,5 +739,146 @@ public class DashboardModelTests
 
         result.Should().BeOfType<RedirectToPageResult>();
         _sut.ErrorToast().Should().Be("Could not update watched status right now.");
+    }
+
+    // ---- stopped series ------------------------------------------------------------
+
+    [Test]
+    public async Task AStoppedSeries_Should_GetNoCard_NoUpcomingEpisode_AndNotCountAsUnwatched_ButStayInTheLibraryCount()
+    {
+        _stoppedUtc[2] = DaysAgo(10);
+        SetUpSeries(
+            new SeriesAggregate
+            {
+                TvdbId = 1, Name = "Watching",
+                Episodes = [Ep(10, 1, 1, Today.AddDays(-20)), Ep(11, 1, 2, Today.AddDays(-10)), Ep(12, 1, 3, Today.AddDays(3))]
+            },
+            new SeriesAggregate
+            {
+                TvdbId = 2, Name = "Stopped",
+                Episodes = [Ep(20, 1, 1, Today.AddDays(-20)), Ep(21, 1, 2, Today.AddDays(-10)), Ep(22, 1, 3, Today.AddDays(3))]
+            });
+        SetUpWatched(10, 20);
+        SetUpLastWatched((1, 1), (2, 1));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal(1);
+        _sut.DormantSeriesCount.Should().Be(0);
+        _sut.UpcomingEpisodes.Select(e => e.SeriesId).Should().Equal([1], "nothing about a stopped series is on the schedule");
+        _sut.UpcomingThisWeekCount.Should().Be(1);
+        _sut.UnwatchedCount.Should().Be(1, "only the series being watched");
+        _sut.TrackedSeriesCount.Should().Be(2, "a stopped series is still in the library");
+        _tvDb.Verify(x => x.GetSeriesAggregateByIdAsync(2, It.IsAny<CancellationToken>()), Times.Never, "it is not even loaded");
+    }
+
+    [Test]
+    public async Task Stopped_Should_BeatDormant_AndASeasonPremiere_OnTheDashboard()
+    {
+        _stoppedUtc[2] = DaysAgo(200);
+        _stoppedUtc[3] = DaysAgo(200);
+        SetUpSeries(
+            new SeriesAggregate { TvdbId = 1, Name = "Watched Yesterday", Episodes = [Ep(10, 1, 1, Today.AddDays(-400)), Ep(11, 1, 2, Today.AddDays(-390))] },
+            new SeriesAggregate
+            {
+                TvdbId = 2, Name = "Stopped, New Season Last Week",
+                Episodes = [Ep(20, 1, 1, Today.AddDays(-400)), Ep(21, 1, 2, Today.AddDays(-390)), Ep(22, 2, 1, Today.AddDays(-6))]
+            },
+            new SeriesAggregate { TvdbId = 3, Name = "Stopped Long Ago", Episodes = [Ep(30, 1, 1, Today.AddDays(-400)), Ep(31, 1, 2, Today.AddDays(-390))] },
+            new SeriesAggregate { TvdbId = 4, Name = "Just Not Watched", Episodes = [Ep(40, 1, 1, Today.AddDays(-400)), Ep(41, 1, 2, Today.AddDays(-390))] });
+        SetUpWatched(10, 20, 30, 40);
+        SetUpLastWatched((1, 1), (2, 300), (3, 300), (4, 300));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal([1], "a premiere never brings a stopped series back");
+        _sut.DormantSeriesCount.Should().Be(1, "only series 4: a stopped series is not in the dormant group");
+    }
+
+    [Test]
+    public async Task ALibraryOfOnlyStoppedSeries_Should_StillRenderTheDashboard_WithNothingToWatch()
+    {
+        _stoppedUtc[1] = DaysAgo(10);
+        SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Stopped", Episodes = [Ep(10, 1, 1, Today.AddDays(-20))] });
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.TrackedSeriesCount.Should().Be(1);
+        _sut.CatchUpEpisodes.Should().BeEmpty();
+        _sut.UpcomingEpisodes.Should().BeEmpty();
+        _sut.UnwatchedCount.Should().Be(0);
+    }
+
+    [Test]
+    public async Task StopWatching_Should_GoThroughTheProgressService_AndOfferAnUndo()
+    {
+        _progress
+            .Setup(x => x.StopWatchingAsync(UserId, 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StopWatchingResult(StopWatchingOutcome.Stopped, "Silo"));
+
+        var result = await _sut.OnPostStopWatchingAsync(seriesId: 7, CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>();
+        _sut.SuccessToast().Should().Be("Stopped watching Silo.");
+        _sut.TempData[PageModelToastExtensions.UndoStoppedSeriesKey].Should().Be("7", "the card is gone: the toast is the way back");
+        _library.Verify(
+            x => x.StopAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never, "the page does not write the library itself");
+    }
+
+    [Test]
+    public async Task StopWatching_Should_ExplainARefusal_AndShowAnErrorToast_WhenTheServiceThrows()
+    {
+        _progress
+            .Setup(x => x.StopWatchingAsync(UserId, 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StopWatchingResult(StopWatchingOutcome.NotInLibrary));
+
+        await _sut.OnPostStopWatchingAsync(7, CancellationToken.None);
+
+        _sut.ErrorToast().Should().Be("That series isn't in your library.");
+        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoStoppedSeriesKey).Should().BeFalse();
+
+        _progress
+            .Setup(x => x.StopWatchingAsync(UserId, 8, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("database down"));
+
+        var result = await _sut.OnPostStopWatchingAsync(8, CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>();
+        _sut.ErrorToast().Should().Be("Could not update your library right now.");
+    }
+
+    [Test]
+    public async Task MarkWatched_Should_SayItResumedTheSeries_WhenAStalePageMarksAStoppedOne()
+    {
+        SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Silo", Episodes = [Ep(11, 3, 4, Today.AddDays(-7))] });
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp), ResumedWatching: "Silo"));
+
+        await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
+
+        _sut.SuccessToast().Should().Be("Marked Silo S03E04 as watched and resumed watching Silo.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString(), "the Undo of the mark stays");
+    }
+
+    // ---- a series removed from the library keeps its watch history ---------------------
+
+    [Test]
+    public async Task WatchesOfASeriesNoLongerInTheLibrary_Should_GiveNoCard_AndNotChangeTheCounts()
+    {
+        // Series 9 was removed from the library; its watches (90, 91) and its activity remain.
+        SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Watching", Episodes = [Ep(10, 1, 1, Today.AddDays(-20)), Ep(11, 1, 2, Today.AddDays(-10))] });
+        SetUpWatched(10, 90, 91);
+        SetUpLastWatched((1, 2), (9, 1));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal(1);
+        _sut.TrackedSeriesCount.Should().Be(1);
+        _sut.UnwatchedCount.Should().Be(1);
+        _sut.DormantSeriesCount.Should().Be(0);
+        _tvDb.Verify(x => x.GetSeriesAggregateByIdAsync(9, It.IsAny<CancellationToken>()), Times.Never);
     }
 }

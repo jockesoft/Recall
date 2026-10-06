@@ -245,12 +245,14 @@ public sealed class DetailsModel(
                     this.SetInfoToast("Episode marked as not watched.");
                     break;
                 case EpisodeWatchOutcome.MarkedWatched:
-                    // Marking from here puts the series in the library too, as on the series page; say so.
+                    // Marking from here puts the series in the library too, as on the series
+                    // page, and resumes a series the user had stopped watching; say so.
                     this.SetWatchedToast(
-                        toggled.AddedToLibrary is { } added
-                            ? $"Marked {SlateCode(episode)} as watched and added {added} to your library."
+                        MarkLibraryEffect.Clause(toggled.AddedToLibrary, toggled.ResumedWatching) is { } clause
+                            ? $"Marked {SlateCode(episode)} as watched{clause}."
                             : "Episode marked as watched.",
-                        toggled.CaughtUp, Today, keepMessage: toggled.AddedToLibrary is not null);
+                        toggled.CaughtUp, Today,
+                        keepMessage: toggled.AddedToLibrary is not null || toggled.ResumedWatching is not null);
                     break;
                 case EpisodeWatchOutcome.NotAired:
                     this.SetErrorToast("You can't mark an episode as watched before it has aired.");
@@ -312,8 +314,8 @@ public sealed class DetailsModel(
             {
                 var marked = result.MarkedCount > 1 ? $"Marked {result.MarkedCount} episodes" : $"Marked {SlateCode(episode)}";
                 this.SetSuccessToastWithWatchedUndo(
-                    result.AddedToLibrary is { } added
-                        ? $"{marked} as watched and added {added} to your library."
+                    MarkLibraryEffect.Clause(result.AddedToLibrary, result.ResumedWatching) is { } clause
+                        ? $"{marked} as watched{clause}."
                         : result.MarkedCount > 1 ? $"{marked} as watched." : "Episode marked as watched.",
                     seriesId,
                     result.Batch,
