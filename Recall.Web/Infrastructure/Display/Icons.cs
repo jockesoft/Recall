@@ -51,6 +51,7 @@ public static class Icons
     public const string BellFilled = "ph-fill ph-bell";
     public const string Success = "ph ph-check-circle";
     public const string Error = "ph ph-warning";
+    public const string Warning = "ph ph-warning-circle";
     public const string Info = "ph ph-info";
     public const string Invalid = "ph ph-x";
 

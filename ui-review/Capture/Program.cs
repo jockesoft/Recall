@@ -12,6 +12,10 @@ using Microsoft.Playwright;
 // Normally started by ../review.sh capture, which also explains the three
 // instances. Optional: --only <text> captures just the shots whose name
 // contains the text; --install downloads the Chromium build Playwright needs.
+//
+// After the shots it times the toasts in a real browser (RunToastChecksAsync,
+// results in toast-checks.json): how long each kind stays, pausing, Escape.
+// A failed check fails the run. --only toast-checks runs just those.
 
 var options = Options.Parse(args);
 
@@ -258,6 +262,28 @@ List<Shot> shots =
             await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
         }),
 
+    // The countdown bar partly run down: a plain toast (5 seconds) after two, and one
+    // with an Undo (10 seconds) after four. The capture freezes the bar where it is.
+    new("toasts", "countdown-success", Site.SignedIn, $"/Series/Details/{NotStarted}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await RateAsync(page);
+            await page.WaitForTimeoutAsync(2000);
+        },
+        Cleanup: ClearRatingAsync),
+    new("toasts", "countdown-undo", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await page.GetByRole(AriaRole.Button, new() { Name = "Stop watching" }).ClickAsync();
+            await page.Locator(".tvdb-toast-stack .alert-success .tvdb-toast-action").WaitForAsync();
+            await page.WaitForTimeoutAsync(4000);
+        },
+        Cleanup: async page =>
+        {
+            await page.Locator(".tvdb-toast-stack").GetByRole(AriaRole.Button, new() { Name = "Undo" }).ClickAsync();
+            await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
+        }),
+
     // ---- Signed in, nothing tracked: the empty states ------------------------
     new("dashboard", "empty", Site.Empty, "/Dashboard"),
     new("library", "empty", Site.Empty, "/Library"),
@@ -330,6 +356,8 @@ Viewport[] viewports =
     new(390, 844, DeviceScaleFactor: 2, IsMobile: true),
 ];
 
+const string ToastChecksName = "toast-checks";
+
 if (options.Only is { } only)
     shots = shots.Where(s => s.Name.Contains(only, StringComparison.OrdinalIgnoreCase)).ToList();
 
@@ -365,7 +393,249 @@ await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(results, new J
 
 Console.WriteLine();
 Console.WriteLine($"{results.Count(r => r.Error is null)} screenshots recorded in {options.OutputDirectory}; details in {reportPath}");
-return results.Any(r => r.Error is not null) ? 1 : 0;
+
+// The toasts' timing, which a screenshot cannot show. Part of a full run, or asked for by name.
+var toastChecks = new List<ToastCheck>();
+if (options.Only is null || ToastChecksName.Contains(options.Only, StringComparison.OrdinalIgnoreCase))
+{
+    toastChecks = await RunToastChecksAsync();
+    foreach (var check in toastChecks)
+        Console.WriteLine($"{ToastChecksName}: {(check.Passed ? "ok    " : "FAILED")} {check.Name}: {check.Detail}");
+
+    await File.WriteAllTextAsync(
+        Path.Combine(options.OutputDirectory, "toast-checks.json"),
+        JsonSerializer.Serialize(toastChecks, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine($"{toastChecks.Count(c => c.Passed)} of {toastChecks.Count} toast checks passed");
+}
+
+return results.Any(r => r.Error is not null) || toastChecks.Any(c => !c.Passed) ? 1 : 0;
+
+// Times the toasts on the signed-in instance, at the desktop width (hovering
+// needs a mouse; the behaviour does not depend on the width). Every check
+// leaves the clone as it found it. The windows are generous on purpose: the
+// point is "about five seconds", not a stopwatch.
+async Task<List<ToastCheck>> RunToastChecksAsync()
+{
+    var checks = new List<ToastCheck>();
+    var baseUrl = options.BaseUrl(Site.SignedIn);
+
+    async Task CheckAsync(string name, Func<IPage, Task<string>> body, ReducedMotion motion = ReducedMotion.NoPreference)
+    {
+        await using var context = await browser.NewContextAsync(new()
+        {
+            ViewportSize = new() { Width = 1280, Height = 800 },
+            Locale = "en-US",
+            ReducedMotion = motion,
+        });
+        var page = await context.NewPageAsync();
+
+        try
+        {
+            checks.Add(new ToastCheck(name, true, await body(page)));
+        }
+        catch (Exception ex)
+        {
+            checks.Add(new ToastCheck(name, false, ex.Message.Split('\n')[0]));
+        }
+    }
+
+    // How long the toast stays from the moment the page that shows it has loaded.
+    // Fails when it is gone before `stillThereMs`, or still there at `goneByMs`.
+    static async Task<string> ExpectClosesAsync(ILocator toast, System.Diagnostics.Stopwatch shown, int stillThereMs, int goneByMs)
+    {
+        var wait = stillThereMs - (int)shown.ElapsedMilliseconds;
+        if (wait > 0)
+            await toast.Page.WaitForTimeoutAsync(wait);
+
+        if (!await toast.IsVisibleAsync())
+            throw new InvalidOperationException($"gone after {shown.ElapsedMilliseconds} ms, expected to still be there at {stillThereMs} ms");
+
+        try
+        {
+            await toast.WaitForAsync(new() { State = WaitForSelectorState.Detached, Timeout = goneByMs - (int)shown.ElapsedMilliseconds });
+        }
+        catch (TimeoutException)
+        {
+            throw new InvalidOperationException($"still there after {goneByMs} ms");
+        }
+
+        return $"there at {stillThereMs} ms, gone after {shown.ElapsedMilliseconds} ms";
+    }
+
+    static async Task<string> DurationOfAsync(ILocator toast) =>
+        await toast.GetAttributeAsync("data-toast-duration") ?? "none";
+
+    // Away from the toast stack (bottom right), so nothing is hovered by accident.
+    static Task MouseAwayAsync(IPage page) => page.Mouse.MoveAsync(5, 5);
+
+    await CheckAsync("a success toast is gone after about 5 seconds", async page =>
+    {
+        await page.GotoAsync($"{baseUrl}/Series/Details/{NotStarted}");
+        await MouseAwayAsync(page);
+        await RateAsync(page);
+        var shown = System.Diagnostics.Stopwatch.StartNew();
+        var toast = page.Locator(".tvdb-toast.alert-success");
+
+        try
+        {
+            if (await DurationOfAsync(toast) != "5000")
+                throw new InvalidOperationException($"data-toast-duration is {await DurationOfAsync(toast)}, expected 5000");
+            if (await toast.Locator(".tvdb-toast-timer").CountAsync() != 1)
+                throw new InvalidOperationException("no countdown bar");
+
+            return await ExpectClosesAsync(toast, shown, stillThereMs: 3500, goneByMs: 7000);
+        }
+        finally
+        {
+            await ClearRatingAsync(page);
+        }
+    });
+
+    await CheckAsync("an Undo toast is still there after 5 seconds and gone after about 10", async page =>
+    {
+        await page.GotoAsync($"{baseUrl}/Series/Details/{Watching}");
+        await MouseAwayAsync(page);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Stop watching" }).ClickAsync();
+        var toast = page.Locator(".tvdb-toast.alert-success");
+        await toast.Locator(".tvdb-toast-action").WaitForAsync();
+        var shown = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            if (await DurationOfAsync(toast) != "10000")
+                throw new InvalidOperationException($"data-toast-duration is {await DurationOfAsync(toast)}, expected 10000");
+
+            await page.WaitForTimeoutAsync(5500);
+            if (!await toast.IsVisibleAsync())
+                throw new InvalidOperationException("gone after 5.5 seconds: it must outlast a plain toast");
+
+            return await ExpectClosesAsync(toast, shown, stillThereMs: 8500, goneByMs: 12500);
+        }
+        finally
+        {
+            // The Undo went with the toast: resume from the header instead.
+            await page.GetByRole(AriaRole.Button, new() { Name = "Resume watching" }).ClickAsync();
+            await page.Locator(".tvdb-toast.alert-success").WaitForAsync();
+        }
+    });
+
+    await CheckAsync("hovering pauses the countdown, and leaving resumes it", async page =>
+    {
+        await page.GotoAsync($"{baseUrl}/Series/Details/{NotStarted}");
+        await MouseAwayAsync(page);
+        await RateAsync(page);
+        var toast = page.Locator(".tvdb-toast.alert-success");
+
+        try
+        {
+            await toast.Locator(".tvdb-toast-text").HoverAsync();
+            var hovered = System.Diagnostics.Stopwatch.StartNew();
+            await page.WaitForTimeoutAsync(7500);
+
+            if (!await toast.IsVisibleAsync())
+                throw new InvalidOperationException("closed while hovered");
+
+            var playState = await toast.Locator(".tvdb-toast-timer").EvaluateAsync<string>("bar => getComputedStyle(bar).animationPlayState");
+            if (playState != "paused")
+                throw new InvalidOperationException($"the bar is {playState} while hovered");
+
+            await MouseAwayAsync(page);
+            var left = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                await toast.WaitForAsync(new() { State = WaitForSelectorState.Detached, Timeout = 6500 });
+            }
+            catch (TimeoutException)
+            {
+                throw new InvalidOperationException("still there 6.5 seconds after the mouse left");
+            }
+
+            return $"there after {hovered.ElapsedMilliseconds - left.ElapsedMilliseconds} ms hovered (bar paused), gone {left.ElapsedMilliseconds} ms after leaving";
+        }
+        finally
+        {
+            await ClearRatingAsync(page);
+        }
+    });
+
+    await CheckAsync("keyboard focus inside the toast pauses it too", async page =>
+    {
+        await page.GotoAsync($"{baseUrl}/Series/Details/{NotStarted}");
+        await MouseAwayAsync(page);
+        await RateAsync(page);
+        var toast = page.Locator(".tvdb-toast.alert-success");
+
+        try
+        {
+            var focusedOnArrival = await page.EvaluateAsync<bool>("() => !!document.activeElement.closest('.tvdb-toast')");
+            if (focusedOnArrival)
+                throw new InvalidOperationException("the toast took focus when it appeared");
+
+            await toast.Locator(".tvdb-close").FocusAsync();
+            await page.WaitForTimeoutAsync(7000);
+            if (!await toast.IsVisibleAsync())
+                throw new InvalidOperationException("closed while its close button had focus");
+
+            // Escape closes the toast that has focus.
+            await page.Keyboard.PressAsync("Escape");
+            await toast.WaitForAsync(new() { State = WaitForSelectorState.Detached, Timeout = 2000 });
+            return "there after 7000 ms with focus inside, closed by Escape";
+        }
+        finally
+        {
+            await ClearRatingAsync(page);
+        }
+    });
+
+    await CheckAsync("an error toast is still there after 15 seconds, and Escape closes it", async page =>
+    {
+        // "Stop watching" for a series that is not in the library is refused with an error toast.
+        await page.GotoAsync($"{baseUrl}/Dashboard");
+        await MouseAwayAsync(page);
+        await page.Locator(".tvdb-catchup-menu form").First.EvaluateAsync(
+            "form => { form.action = form.action.replace(/seriesId=\\d+/, 'seriesId=999999999'); form.submit(); }");
+        var toast = page.Locator(".tvdb-toast.alert-danger");
+        await toast.WaitForAsync();
+
+        if (await DurationOfAsync(toast) != "none")
+            throw new InvalidOperationException($"data-toast-duration is {await DurationOfAsync(toast)}, expected none");
+        if (await toast.Locator(".tvdb-toast-timer").CountAsync() != 0)
+            throw new InvalidOperationException("an error toast has a countdown bar");
+
+        await page.WaitForTimeoutAsync(15000);
+        if (!await toast.IsVisibleAsync())
+            throw new InvalidOperationException("gone within 15 seconds");
+
+        // Nothing has focus in it: Escape closes the newest toast.
+        await page.Keyboard.PressAsync("Escape");
+        await toast.WaitForAsync(new() { State = WaitForSelectorState.Detached, Timeout = 2000 });
+        return "there after 15000 ms, no duration and no bar, closed by Escape";
+    });
+
+    await CheckAsync("with reduced motion the bar is hidden and the toast still closes after about 5 seconds", async page =>
+    {
+        await page.GotoAsync($"{baseUrl}/Series/Details/{NotStarted}");
+        await MouseAwayAsync(page);
+        await RateAsync(page);
+        var shown = System.Diagnostics.Stopwatch.StartNew();
+        var toast = page.Locator(".tvdb-toast.alert-success");
+
+        try
+        {
+            var opacity = await toast.Locator(".tvdb-toast-timer").EvaluateAsync<string>("bar => getComputedStyle(bar).opacity");
+            if (opacity != "0")
+                throw new InvalidOperationException($"the bar's opacity is {opacity}");
+
+            return "bar hidden; " + await ExpectClosesAsync(toast, shown, stillThereMs: 3500, goneByMs: 7000);
+        }
+        finally
+        {
+            await ClearRatingAsync(page);
+        }
+    }, ReducedMotion.Reduce);
+
+    return checks;
+}
 
 async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
 {
@@ -411,6 +681,8 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
         if (!shot.ViewportOnly)
             await LoadLazyImagesAsync(page);
 
+        await FreezeToastCountdownsAsync(page);
+
         await page.ScreenshotAsync(new()
         {
             Path = Path.Combine(options.OutputDirectory, file),
@@ -429,6 +701,34 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
     }
 
     return result;
+}
+
+// A toast now closes itself, and a screenshot with animations disabled runs
+// every finite animation to its end, which is exactly what closes one. So the
+// countdown bars are stopped where they are first: the shot shows the bar as
+// it was, and the toast is still there for the shot's cleanup to press Undo.
+static Task FreezeToastCountdownsAsync(IPage page) =>
+    page.EvaluateAsync(
+        """
+        () => document.querySelectorAll('.tvdb-toast-timer').forEach(bar => {
+            const transform = getComputedStyle(bar).transform;
+            bar.style.animation = 'none';
+            bar.style.transform = transform;
+        })
+        """);
+
+// A rating is the simplest toast without an action: "Rating saved."
+static async Task RateAsync(IPage page)
+{
+    await page.GetByRole(AriaRole.Button, new() { Name = "Rate this series 7 out of 10" }).ClickAsync();
+    await page.Locator(".tvdb-toast.alert-success").WaitForAsync();
+}
+
+// Takes the rating away again, so the series is as the seed left it.
+static async Task ClearRatingAsync(IPage page)
+{
+    await page.Locator("button.tvdb-rating-clear").ClickAsync();
+    await page.Locator(".tvdb-toast.alert-info").WaitForAsync();
 }
 
 static async Task SettleAsync(IPage page)
@@ -603,6 +903,8 @@ record Shot(
 }
 
 record Viewport(int Width, int Height, float DeviceScaleFactor, bool IsMobile);
+
+record ToastCheck(string Name, bool Passed, string Detail);
 
 record Violation(string Rule, string? Impact, string Help, int Nodes, List<string> Examples, List<string> Messages);
 

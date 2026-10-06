@@ -1,107 +1,71 @@
+@using Recall.Web.Extensions
+@using Recall.Web.Pages.Shared
 @{
-    var success = TempData["Toast.Success"] as string;
-    var error = TempData["Toast.Error"] as string;
-    var info = TempData["Toast.Info"] as string;
+    // Every toast in the app is drawn here, from TempData. How long each stays
+    // is ToastDurations' call; js/tvdb-toasts.js (loaded by the layout) runs
+    // the countdown, the pausing and Escape.
+    var toasts = ToastMessagesModel.From(TempData).Toasts;
+}
 
-    // Set by SetSuccessToastWithWatchedUndo after a bulk "mark watched".
-    var undoSeriesId = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedSeriesKey] as string;
-    var undoStamp = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedStampKey] as string;
-    // Also set when that mark resumed a stopped series: the Undo stops it again as it was.
-    var undoStoppedStamp = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoWatchedStoppedKey] as string;
-    var offerUndo = !string.IsNullOrWhiteSpace(success)
-                    && int.TryParse(undoSeriesId, out _)
-                    && long.TryParse(undoStamp, out _);
-
-    // Set by SetStopWatchingToast after "Stop watching": the Undo resumes the series.
-    var undoStoppedSeriesId = TempData[Recall.Web.Extensions.PageModelToastExtensions.UndoStoppedSeriesKey] as string;
-    var offerResume = !string.IsNullOrWhiteSpace(success) && int.TryParse(undoStoppedSeriesId, out _);
-
-    // Set by the watched toasts when the mark brought the user up to date with
-    // a series, or finished it: a different icon, and "Rate it" for a finished
-    // series the user has not rated.
-    var caughtUpKind = TempData[Recall.Web.Extensions.PageModelToastExtensions.CaughtUpKindKey] as string;
-    var rateSeriesId = TempData[Recall.Web.Extensions.PageModelToastExtensions.RateSeriesKey] as string;
-    var offerRating = !string.IsNullOrWhiteSpace(success) && int.TryParse(rateSeriesId, out _);
-    var successIcon = caughtUpKind switch
+@functions {
+    // Razor writes a data-* attribute even when its value is null (as data-x=""),
+    // and the script and the stylesheet go by whether the attribute is there. So
+    // the three are written by hand, each only when it applies. The values are a
+    // number and two fixed words, never text from a page.
+    static Microsoft.AspNetCore.Html.IHtmlContent DataAttributes(ToastView toast)
     {
-        Recall.Web.Extensions.PageModelToastExtensions.CaughtUpFinished => Icons.Finished + " tvdb-toast-icon--finished",
-        Recall.Web.Extensions.PageModelToastExtensions.CaughtUpUpToDate => Icons.UpToDate,
-        _ => Icons.Success
-    };
+        var attributes = new List<string>();
+
+        if (toast.DurationMilliseconds is { } milliseconds)
+            attributes.Add($"data-toast-duration=\"{milliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}\"");
+
+        if (toast.HasAction)
+            attributes.Add("data-toast-actions=\"true\"");
+
+        if (toast.CaughtUpKind is PageModelToastExtensions.CaughtUpFinished or PageModelToastExtensions.CaughtUpUpToDate)
+            attributes.Add($"data-toast-kind=\"{toast.CaughtUpKind}\"");
+
+        return new Microsoft.AspNetCore.Html.HtmlString(string.Join(' ', attributes));
+    }
 }
 
 <div class="tvdb-toast-stack">
-    @if (!string.IsNullOrWhiteSpace(success))
+    @foreach (var toast in toasts)
     {
-        @* A toast offering an action stays until dismissed (data-toast-persist skips the auto-close below). *@
-        <div class="alert alert-success fade show" role="alert" data-toast-persist="@(offerUndo || offerRating || offerResume ? "true" : null)"
-             data-toast-kind="@caughtUpKind">
-            <i class="@successIcon tvdb-toast-icon" aria-hidden="true"></i>
-            <span class="tvdb-toast-text">@success</span>
-            @if (offerRating)
+        @* data-toast-duration (milliseconds) is absent on a toast that never closes itself,
+           and so is its countdown bar. role="alert" announces it; it never takes focus. *@
+        <div class="alert @toast.CssClass fade show tvdb-toast" role="alert" @DataAttributes(toast)>
+            <i class="@toast.Icon tvdb-toast-icon" aria-hidden="true"></i>
+            <span class="tvdb-toast-text">@toast.Text</span>
+            @if (toast.RateSeriesId is not null)
             {
-                <a asp-page="/Series/Details" asp-route-id="@rateSeriesId" asp-fragment="rating" class="tvdb-toast-action">Rate it</a>
+                <a asp-page="/Series/Details" asp-route-id="@toast.RateSeriesId" asp-fragment="rating" class="tvdb-toast-action">Rate it</a>
             }
-            @if (offerUndo)
+            @if (toast.UndoWatched is { } undo)
             {
-                <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undoSeriesId" class="d-inline-flex">
-                    <input type="hidden" name="stamp" value="@undoStamp" />
-                    @if (long.TryParse(undoStoppedStamp, out _))
+                <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undo.SeriesId" class="d-inline-flex">
+                    <input type="hidden" name="stamp" value="@undo.Stamp" />
+                    @if (undo.StoppedStamp is not null)
                     {
-                        <input type="hidden" name="stoppedStamp" value="@undoStoppedStamp" />
+                        <input type="hidden" name="stoppedStamp" value="@undo.StoppedStamp" />
                     }
                     <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                     <button type="submit" class="tvdb-toast-action">Undo</button>
                 </form>
             }
-            @if (offerResume)
+            @if (toast.UndoStoppedSeriesId is not null)
             {
-                <form method="post" asp-page="/Series/Details" asp-page-handler="ResumeWatching" asp-route-id="@undoStoppedSeriesId" class="d-inline-flex">
+                <form method="post" asp-page="/Series/Details" asp-page-handler="ResumeWatching" asp-route-id="@toast.UndoStoppedSeriesId" class="d-inline-flex">
                     <input type="hidden" name="undo" value="true" />
                     <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
                     <button type="submit" class="tvdb-toast-action">Undo</button>
                 </form>
             }
             <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
-        </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(error))
-    {
-        <div class="alert alert-danger fade show" role="alert">
-            <i class="@Icons.Error tvdb-toast-icon" aria-hidden="true"></i>
-            <span class="tvdb-toast-text">@error</span>
-            <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
-        </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(info))
-    {
-        <div class="alert alert-info fade show" role="alert">
-            <i class="@Icons.Info tvdb-toast-icon" aria-hidden="true"></i>
-            <span class="tvdb-toast-text">@info</span>
-            <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
+            @if (toast.DurationMilliseconds is not null)
+            {
+                <span class="tvdb-toast-timer" aria-hidden="true"></span>
+            }
         </div>
     }
 </div>
-
-@if (!string.IsNullOrWhiteSpace(success) || !string.IsNullOrWhiteSpace(error) || !string.IsNullOrWhiteSpace(info))
-{
-    <script>
-        // Auto-dismiss toasts after a few seconds. Registered on DOMContentLoaded
-        // rather than run immediately, since this partial renders near the top
-        // of <body> — before bootstrap.bundle.min.js loads at the bottom — so
-        // `bootstrap` wouldn't exist yet if this ran inline.
-        document.addEventListener('DOMContentLoaded', function () {
-            var toasts = document.querySelectorAll('.tvdb-toast-stack .alert');
-            toasts.forEach(function (toastEl) {
-                if (toastEl.hasAttribute('data-toast-persist')) return;
-                setTimeout(function () {
-                    if (typeof bootstrap === 'undefined') return;
-                    var alert = bootstrap.Alert.getOrCreateInstance(toastEl);
-                    alert.close();
-                }, 5000);
-            });
-        });
-    </script>
-}

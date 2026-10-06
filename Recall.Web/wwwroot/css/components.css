@@ -2017,7 +2017,9 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 /* ---- Toasts (the _ToastMessages partial) --------------------------------------------------
-   A fixed stack at the bottom right, dark so it reads over any page. */
+   A fixed stack at the bottom right, dark so it reads over any page. A toast
+   that closes itself has a countdown bar along its bottom edge; the bar's
+   animation is the timer (js/tvdb-toasts.js closes the toast when it ends). */
 
 .tvdb-toast-stack {
     position: fixed;
@@ -2049,6 +2051,39 @@ dl.row dd a.tvdb-inline-edit {
     box-shadow: var(--tvdb-shadow-lg);
     pointer-events: auto;
     animation: tvdb-toast-in 0.25s ease-out;
+
+    /* The countdown bar is clipped to the rounded corners. */
+    overflow: hidden;
+    border-left-color: var(--tvdb-toast-accent);
+}
+
+/* The countdown: full width at the start, nothing when the time is up. It only
+   runs once the script has taken charge (data-toast-running), so a page
+   without script keeps its toasts. */
+.tvdb-toast-timer {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--tvdb-toast-accent);
+    transform-origin: left center;
+}
+
+.tvdb-toast[data-toast-running] .tvdb-toast-timer {
+    animation: tvdb-toast-countdown var(--tvdb-toast-duration) linear forwards;
+}
+
+/* Paused while the toast is being read or used, and while the tab is hidden. */
+.tvdb-toast:hover .tvdb-toast-timer,
+.tvdb-toast:focus-within .tvdb-toast-timer,
+.tvdb-toast-stack[data-toast-paused] .tvdb-toast-timer {
+    animation-play-state: paused;
+}
+
+@keyframes tvdb-toast-countdown {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
 }
 
 .tvdb-toast-icon {
@@ -2061,13 +2096,16 @@ dl.row dd a.tvdb-inline-edit {
     min-width: 0;
 }
 
-.tvdb-toast-stack .alert-success { border-left-color: var(--tvdb-ok); }
+/* The accent of each kind: its left edge and its countdown bar. */
+.tvdb-toast-stack .alert-success { --tvdb-toast-accent: var(--tvdb-ok); }
 .tvdb-toast-stack .alert-success .tvdb-toast-icon { color: var(--tvdb-ok); }
 /* "You've finished ..." gets the trophy in amber. */
 .tvdb-toast-stack .alert-success .tvdb-toast-icon--finished { color: var(--tvdb-signal); }
-.tvdb-toast-stack .alert-danger { border-left-color: var(--tvdb-danger); }
+.tvdb-toast-stack .alert-danger { --tvdb-toast-accent: var(--tvdb-danger); }
 .tvdb-toast-stack .alert-danger .tvdb-toast-icon { color: var(--tvdb-danger-on-ink); }
-.tvdb-toast-stack .alert-info { border-left-color: var(--tvdb-info); }
+.tvdb-toast-stack .alert-warning { --tvdb-toast-accent: var(--tvdb-signal); }
+.tvdb-toast-stack .alert-warning .tvdb-toast-icon { color: var(--tvdb-signal); }
+.tvdb-toast-stack .alert-info { --tvdb-toast-accent: var(--tvdb-info); }
 .tvdb-toast-stack .alert-info .tvdb-toast-icon { color: var(--tvdb-info-on-ink); }
 
 /* "Undo" and friends: amber, so it stands out on the dark toast. */
@@ -2106,15 +2144,15 @@ dl.row dd a.tvdb-inline-edit {
     /* A caught-up toast with actions ("Rate it", "Undo") says more than fits
        beside them on a phone: the sentence gets the first line to itself and
        the actions go under it. */
-    .tvdb-toast-stack .alert[data-toast-kind][data-toast-persist] {
+    .tvdb-toast-stack .alert[data-toast-kind][data-toast-actions] {
         flex-wrap: wrap;
     }
 
-    .tvdb-toast-stack .alert[data-toast-kind][data-toast-persist] .tvdb-toast-text {
+    .tvdb-toast-stack .alert[data-toast-kind][data-toast-actions] .tvdb-toast-text {
         flex-basis: calc(100% - 3rem);
     }
 
-    .tvdb-toast-stack .alert[data-toast-kind][data-toast-persist] .tvdb-close {
+    .tvdb-toast-stack .alert[data-toast-kind][data-toast-actions] .tvdb-close {
         margin-left: auto;
     }
 }
@@ -2125,6 +2163,12 @@ dl.row dd a.tvdb-inline-edit {
     .tvdb-dot,
     .tvdb-toast-stack .alert {
         animation: none;
+    }
+
+    /* The bar is not shown, but it still keeps the time: its animation runs
+       (and pauses) as usual, and the toast closes when it ends. */
+    .tvdb-toast-timer {
+        opacity: 0;
     }
 
     .tvdb-series-poster,

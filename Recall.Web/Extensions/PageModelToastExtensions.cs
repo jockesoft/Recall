@@ -7,9 +7,11 @@ namespace Recall.Web.Extensions;
 
 public static class PageModelToastExtensions
 {
-    private const string SuccessKey = "Toast.Success";
-    private const string ErrorKey = "Toast.Error";
-    private const string InfoKey = "Toast.Info";
+    // Read back by ToastMessagesModel, which also decides how long each toast stays.
+    public const string SuccessKey = "Toast.Success";
+    public const string ErrorKey = "Toast.Error";
+    public const string InfoKey = "Toast.Info";
+    public const string WarningKey = "Toast.Warning";
 
     // Read back by _ToastMessages.cshtml, which renders an "Undo" POST form
     // inside the success toast when both are present.
@@ -41,6 +43,13 @@ public static class PageModelToastExtensions
 
         public void SetInfoToast(string message)
             => pageModel.TempData[InfoKey] = message;
+
+        /// <summary>
+        /// Something the user should know went less than right, short of an
+        /// error. Like an error it stays until it is closed.
+        /// </summary>
+        public void SetWarningToast(string message)
+            => pageModel.TempData[WarningKey] = message;
 
         /// <summary>
         /// The toast for a "Stop watching", from whichever page it was pressed
