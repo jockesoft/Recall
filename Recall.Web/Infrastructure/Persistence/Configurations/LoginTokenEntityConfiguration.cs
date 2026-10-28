@@ -30,6 +30,15 @@ public sealed class LoginTokenEntityConfiguration : IEntityTypeConfiguration<Log
 
         builder.HasIndex(x => x.TokenHash).IsUnique();
 
+        builder.Property(x => x.CodeHash)
+            .HasColumnName("code_hash")
+            .HasMaxLength(44); // base64 of a 32-byte SHA-256 digest
+
+        builder.Property(x => x.CodeAttempts)
+            .HasColumnName("code_attempts")
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property(x => x.ExpiresUtc)
             .HasColumnName("expires_utc")
             .HasColumnType("timestamp with time zone")

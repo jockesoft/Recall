@@ -13,6 +13,12 @@ public sealed class LoginToken
     /// <summary>Base64 SHA-256 of the raw token that was emailed.</summary>
     public string TokenHash { get; init; } = string.Empty;
 
+    /// <summary>Base64 SHA-256 of the emailed sign-in code, salted with the token id; null on older rows.</summary>
+    public string? CodeHash { get; init; }
+
+    /// <summary>Wrong codes entered against this token so far.</summary>
+    public int CodeAttempts { get; init; }
+
     public DateTime ExpiresUtc { get; init; }
 
     public DateTime? ConsumedUtc { get; init; }

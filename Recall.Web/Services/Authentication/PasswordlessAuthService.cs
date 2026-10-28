@@ -86,26 +86,34 @@ public sealed class PasswordlessAuthService(
             await tokenRepository.InvalidateActiveForUserAsync(user.Id, cancellationToken);
 
         var rawToken = GenerateRawToken();
+        var tokenId = Guid.NewGuid();
+        // The same token, a second way in: for a Home Screen app, where the link opens Safari instead.
+        var code = SignInCode.Generate();
 #if DEBUG
         logger.LogDebug(rawToken);
+        logger.LogDebug("Sign-in code {Code}", code);
 #endif
         await tokenRepository.AddAsync(
             new LoginToken
             {
-                Id = Guid.NewGuid(),
+                Id = tokenId,
                 UserId = user.Id,
                 TokenHash = Hash(rawToken),
+                CodeHash = SignInCode.Hash(code, tokenId),
                 ExpiresUtc = nowUtc.AddMinutes(_options.TokenLifetimeMinutes)
             },
             cancellationToken);
+
+        // A new email, a new allowance of wrong codes.
+        abuseGuard.ResetWrongCodes(normalizedEmail);
 
         var link = loginLinkFactory(rawToken);
 
         await mailService.QueueEmailAsync(
             user.Email,
             "Your Recall sign-in link",
-            BuildTextBody(link, _options.TokenLifetimeMinutes),
-            BuildHtmlBody(link, _options.TokenLifetimeMinutes),
+            BuildTextBody(link, code, _options.TokenLifetimeMinutes),
+            BuildHtmlBody(link, code, _options.TokenLifetimeMinutes),
             MailService.NormalPriority,
             cancellationToken);
 
@@ -148,6 +156,50 @@ public sealed class PasswordlessAuthService(
         return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
     }
 
+    public async Task<LoginRedemptionResult> RedeemCodeAsync(
+        string? email, string? code, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return LoginRedemptionResult.Invalid();
+
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+
+        // Already locked out for this address: no lookup at all until a new email is requested.
+        if (abuseGuard.WrongCodeCount(normalizedEmail) >= SignInCode.MaxWrongAttempts)
+            return LoginRedemptionResult.TooManyAttempts();
+
+        var typed = SignInCode.Normalize(code);
+        var user = await userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
+        var token = user is null
+            ? null
+            : await tokenRepository.GetNewestActiveWithCodeAsync(user.Id, DateTime.UtcNow, cancellationToken);
+
+        if (token is not null && typed is not null && SignInCode.Matches(typed, token.Id, token.CodeHash!))
+        {
+            // The token's one consumption: the link in the same email stops working too.
+            if (!await tokenRepository.MarkConsumedAsync(token.Id, cancellationToken))
+            {
+                logger.LogWarning("Sign-in code failed: token {TokenId} was consumed by a concurrent request.", token.Id);
+                return LoginRedemptionResult.Invalid();
+            }
+
+            abuseGuard.ResetWrongCodes(normalizedEmail);
+            logger.LogInformation("Sign-in with a code succeeded for user {UserId} (role {Role}).", user!.Id, user.Role);
+            return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
+        }
+
+        // Wrong, expired, no code, or no such account: all counted and answered alike.
+        if (token is not null)
+            await tokenRepository.RecordWrongCodeAsync(token.Id, SignInCode.MaxWrongAttempts, cancellationToken);
+
+        var wrong = abuseGuard.RecordWrongCode(normalizedEmail);
+        logger.LogWarning("Sign-in code failed ({Count} of {Max} for this address).", wrong, SignInCode.MaxWrongAttempts);
+
+        return wrong >= SignInCode.MaxWrongAttempts
+            ? LoginRedemptionResult.TooManyAttempts()
+            : LoginRedemptionResult.Invalid();
+    }
+
     private bool IsEmailAllowed(string normalizedEmail)
     {
         if (_options.AllowedEmails is not { Length: > 0 } allowed)
@@ -171,13 +223,16 @@ public sealed class PasswordlessAuthService(
     private static string Hash(string rawToken) =>
         Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
 
-    private static string BuildTextBody(string link, int lifetimeMinutes) =>
+    private static string BuildTextBody(string link, string code, int lifetimeMinutes) =>
         $"""
          Sign in to Recall
 
          Open the link below to finish signing in. It works once and expires in {lifetimeMinutes} minutes.
 
          {link}
+
+         Or enter this code on the sign-in page: {SignInCode.Grouped(code)}
+         Use the code where the link doesn't open, such as Recall added to your Home Screen. It expires with the link.
 
          If you didn't ask to sign in, you can ignore this email — nothing will happen.
 
@@ -189,7 +244,7 @@ public sealed class PasswordlessAuthService(
     /// (dark "broadcast slate" ink, paper card, amber signal). All styling is
     /// inline for mail-client compatibility.
     /// </summary>
-    private static string BuildHtmlBody(string link, int lifetimeMinutes)
+    private static string BuildHtmlBody(string link, string code, int lifetimeMinutes)
     {
         var href = WebUtility.HtmlEncode(link);
         const string sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
@@ -230,6 +285,9 @@ public sealed class PasswordlessAuthService(
                                 </td>
                               </tr>
                             </table>
+                            <p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#4a4638;">Or enter this code on the sign-in page:</p>
+                            <p style="margin:0 0 8px;font-family:{mono};font-size:28px;font-weight:700;letter-spacing:.12em;color:#2c2a24;">{SignInCode.Grouped(code)}</p>
+                            <p style="margin:0 0 26px;font-size:13px;line-height:1.5;color:#766c59;">Use the code where the link doesn't open, such as Recall added to your Home Screen. It expires with the link.</p>
                             <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#766c59;">Button not working? Paste this address into your browser:</p>
                             <p style="margin:0 0 26px;font-size:12px;line-height:1.5;word-break:break-all;font-family:{mono};color:#4a4638;">{href}</p>
                             <hr style="border:0;border-top:1px solid rgba(21,27,36,.14);margin:0 0 16px;">

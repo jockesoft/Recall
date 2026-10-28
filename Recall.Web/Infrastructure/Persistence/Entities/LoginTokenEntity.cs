@@ -15,6 +15,17 @@ public sealed class LoginTokenEntity : IHasAuditTimestamps
     /// <summary>Base64 SHA-256 of the raw token that was emailed.</summary>
     public string TokenHash { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Base64 SHA-256 of the 6-digit sign-in code emailed with the link,
+    /// salted with <see cref="Id"/> (<c>SignInCode.Hash</c>). The link and the
+    /// code are two ways to redeem this one row, so using either consumes both.
+    /// Null on rows from before codes existed.
+    /// </summary>
+    public string? CodeHash { get; set; }
+
+    /// <summary>Wrong codes entered against this token. At <c>SignInCode.MaxWrongAttempts</c> the token is consumed.</summary>
+    public int CodeAttempts { get; set; }
+
     public DateTime ExpiresUtc { get; set; }
 
     /// <summary>Set the moment the link is redeemed; <c>null</c> while still usable.</summary>
