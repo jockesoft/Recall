@@ -265,5 +265,20 @@ WHERE x.id = w.id;
 UPDATE user_movie_watch SET source = 'Import'
 WHERE user_id = :dev AND movie_tvdb_id = 290272;
 
+-- Two devices with push notifications on, for Profile's Notifications section.
+-- The endpoints are made up: the new-episode job, the one that sends pushes,
+-- is off in the review instances. The capture makes the browser report the
+-- first as its own subscription for the "enabled" shot. Any subscription copied
+-- from recall_db goes first, so a real device of the developer's is never used.
+DELETE FROM push_subscription;
+INSERT INTO push_subscription (id, user_id, endpoint, p256dh, auth, device_label, time_zone, last_success_utc, created_utc, updated_utc)
+VALUES
+    (gen_random_uuid(), :dev, 'https://fcm.googleapis.com/fcm/send/ui-review-android',
+     'BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'AAAAAAAAAAAAAAAAAAAAAA',
+     'Chrome on Android', 'Europe/Stockholm', now() - interval '2 days', now() - interval '20 days', now()),
+    (gen_random_uuid(), :dev, 'https://web.push.apple.com/ui-review-iphone',
+     'BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'AAAAAAAAAAAAAAAAAAAAAA',
+     'Safari on iPhone', 'America/New_York', now() - interval '5 days', now() - interval '60 days', now());
+
 DROP FUNCTION ui_track(int);
 DROP FUNCTION ui_watch(int, int);

@@ -12,7 +12,9 @@
 #   ./review.sh all        setup, start, capture, teardown
 #
 # Needs the local_postgres and my-redis containers from the README and TheTVDB
-# keys in user secrets. "start" builds Recall.Web (Debug) first.
+# keys in user secrets. "start" builds Recall.Web (Debug) first. When another
+# Redis already holds port 6379, point the run at a different container and
+# port: REDIS_CONTAINER=name REDIS_PORT=6380 ./review.sh all.
 #
 # The instances run with the import job switched off (Jobs:Disabled), so rows
 # left waiting for a screenshot are never looked up on TheTVDB, and with the
@@ -21,7 +23,11 @@
 # pending migrations to the clones at startup (the clones are copies of
 # recall_db, which may be a migration behind the code; recall_db itself is not
 # touched). The weekly digest is switched on so its Profile switch, Dashboard
-# offer and preview show, with its job off so nothing is queued.
+# offer and preview show, with its job off so nothing is queued. Push is
+# switched on too (a key pair generated once per run into .run/vapid.env) so
+# Profile's Notifications section, Admin's test button and the Privacy text
+# show, with the new-episode job off: it is the one that sends pushes, and the
+# seed's devices have made-up endpoints at a real push service.
 #
 # recall_db itself is only read (as the template for the clones). The apps use
 # Redis database 1, so the development cache in database 0 is left alone too.
@@ -30,7 +36,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/ui-review/.run"
 PG_CONTAINER=local_postgres
-REDIS_CONTAINER=my-redis
+REDIS_CONTAINER="${REDIS_CONTAINER:-my-redis}"
+REDIS_PORT="${REDIS_PORT:-6379}"
 REDIS_DB=1
 SOURCE_DB=recall_db
 SEEDED_DB=recall_uireview          # dev user with a full library
@@ -57,15 +64,21 @@ start_app() { # name url database environment [directory]
   ( cd "${5:-$ROOT/Recall.Web}"
     local dll=Recall.Web.dll
     [ -e "$dll" ] || dll=bin/Debug/net10.0/Recall.Web.dll
+    # One VAPID key pair for every instance of the run (Push__PublicKey, Push__PrivateKey).
+    [ -s "$RUN/vapid.env" ] || dotnet "$dll" generate-vapid-keys > "$RUN/vapid.env"
+    set -a; . "$RUN/vapid.env"; set +a
     ASPNETCORE_ENVIRONMENT="$4" \
     ASPNETCORE_URLS="$2" \
     ConnectionStrings__DefaultConnection="$(connection "$3")" \
-    REDIS_CONNECTION="localhost:6379,defaultDatabase=$REDIS_DB" \
+    REDIS_CONNECTION="localhost:$REDIS_PORT,defaultDatabase=$REDIS_DB" \
     Database__MigrateOnStartup=true \
     Jobs__Disabled__0=WatchlistImportTimer \
     Jobs__Disabled__1=WeeklyDigestTimer \
     Jobs__Disabled__2=UpdateTvDbInfoTimer \
+    Jobs__Disabled__3=NewEpisodeNotificationTimer \
     Digest__Enabled=true \
+    Push__Enabled=true \
+    Push__Subject=mailto:ui-review@example.com \
     Site__BaseUrl="$2" \
     nohup dotnet "$dll" > "$RUN/$1.log" 2>&1 &
     echo $! > "$RUN/$1.pid" )
@@ -129,6 +142,8 @@ setup() {
   psql_db "$EMPTY_DB" -c "
     TRUNCATE tracked_series, tracked_movie, episode_watch, user_movie_watch, user_like, user_rating,
              notification, notified_episode, login_token, email, watchlist_import_item, watchlist_import_job;"
+  # push_subscription only exists once the clone is migrated (the first start).
+  psql_db "$EMPTY_DB" -c "DO \$\$ BEGIN IF to_regclass('push_subscription') IS NOT NULL THEN TRUNCATE push_subscription; END IF; END \$\$;"
 
   # A second administrator in the empty clone, so the dev user is not the only
   # one there and "Delete my account" shows its confirmation form. In the seeded
@@ -187,6 +202,7 @@ teardown() {
     psql_db postgres -c "DROP DATABASE IF EXISTS $db WITH (FORCE);"
   done
   docker exec "$REDIS_CONTAINER" redis-cli -n "$REDIS_DB" FLUSHDB > /dev/null
+  rm -f "$RUN/vapid.env"
   row_counts "$SOURCE_DB" > "$RUN/source-counts-after.txt"
   echo "recall_db after:  $(cat "$RUN/source-counts-after.txt")"
   if diff -q "$RUN/source-counts-before.txt" "$RUN/source-counts-after.txt" > /dev/null; then

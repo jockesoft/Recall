@@ -15,7 +15,10 @@ using Microsoft.Playwright;
 //
 // After the shots it times the toasts in a real browser (RunToastChecksAsync,
 // results in toast-checks.json): how long each kind stays, pausing, Escape.
-// A failed check fails the run. --only toast-checks runs just those.
+// A failed check fails the run. --only toast-checks runs just those. Then it
+// checks Profile's push section the same way (RunPushChecksAsync,
+// push-checks.json): the browser is asked for permission only after "Turn on"
+// is pressed. --only push-checks runs just those.
 
 var options = Options.Parse(args);
 
@@ -32,6 +35,23 @@ const int NotStarted = 370112;   // Mare of Easttown
 const int Stopped = 417223;      // Baby Reindeer
 const int WatchedMovie = 287533; // Oppenheimer
 const int WatchlistMovie = 1305; // Heat
+
+// Profile's push section in the states a browser can be in. Headless Chromium
+// cannot really subscribe (it has no push service), so the browser's side is
+// played by an init script; the server's side is the seed's two devices.
+const string SeededAndroidEndpoint = "https://fcm.googleapis.com/fcm/send/ui-review-android";
+const string IPhoneSafari =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1";
+const string BrowserSubscribed =
+    $$"""
+    Object.defineProperty(Notification, 'permission', { get: () => 'granted', configurable: true });
+    (() => {
+        const subscription = { endpoint: '{{SeededAndroidEndpoint}}', unsubscribe: async () => true };
+        navigator.serviceWorker.getRegistration = async () => ({ pushManager: { getSubscription: async () => subscription } });
+    })();
+    """;
+const string BrowserWithoutPush = "delete window.PushManager;";
+const string BrowserDenied = "Object.defineProperty(Notification, 'permission', { get: () => 'denied', configurable: true });";
 
 string? cachedEpisodePath = null;
 
@@ -151,6 +171,16 @@ List<Shot> shots =
     new("movie-details", "watched", Site.SignedIn, $"/Movies/Details/{WatchedMovie}"),
     new("movie-details", "watchlist", Site.SignedIn, $"/Movies/Details/{WatchlistMovie}"),
     new("profile", "populated", Site.SignedIn, "/Account/Profile"),
+    // This browser has notifications on: "On", "Turn off", and its row in the device list says "This device".
+    new("profile", "push-enabled", Site.SignedIn, "/Account/Profile", ViewportOnly: true,
+        InitScript: BrowserSubscribed, Prepare: page => ShowPushSectionAsync(page, "on")),
+    // Safari on an iPhone, not opened from the Home Screen: the instructions instead of the switch.
+    new("profile", "push-ios", Site.SignedIn, "/Account/Profile", ViewportOnly: true,
+        UserAgent: IPhoneSafari, Prepare: page => ShowPushSectionAsync(page, "ios")),
+    new("profile", "push-unsupported", Site.SignedIn, "/Account/Profile", ViewportOnly: true,
+        InitScript: BrowserWithoutPush, Prepare: page => ShowPushSectionAsync(page, "unsupported")),
+    new("profile", "push-denied", Site.SignedIn, "/Account/Profile", ViewportOnly: true,
+        InitScript: BrowserDenied, Prepare: page => ShowPushSectionAsync(page, "denied")),
     new("edit-profile", "default", Site.SignedIn, "/Account/EditProfile"),
     new("edit-profile", "validation", Site.SignedIn, "/Account/EditProfile",
         Prepare: async page =>
@@ -357,6 +387,7 @@ Viewport[] viewports =
 ];
 
 const string ToastChecksName = "toast-checks";
+const string PushChecksName = "push-checks";
 
 if (options.Only is { } only)
     shots = shots.Where(s => s.Name.Contains(only, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -408,7 +439,88 @@ if (options.Only is null || ToastChecksName.Contains(options.Only, StringCompari
     Console.WriteLine($"{toastChecks.Count(c => c.Passed)} of {toastChecks.Count} toast checks passed");
 }
 
-return results.Any(r => r.Error is not null) || toastChecks.Any(c => !c.Passed) ? 1 : 0;
+// Profile's push section in a real browser. Part of a full run, or asked for by name.
+var pushChecks = new List<ToastCheck>();
+if (options.Only is null || PushChecksName.Contains(options.Only, StringComparison.OrdinalIgnoreCase))
+{
+    pushChecks = await RunPushChecksAsync();
+    foreach (var check in pushChecks)
+        Console.WriteLine($"{PushChecksName}: {(check.Passed ? "ok    " : "FAILED")} {check.Name}: {check.Detail}");
+
+    await File.WriteAllTextAsync(
+        Path.Combine(options.OutputDirectory, "push-checks.json"),
+        JsonSerializer.Serialize(pushChecks, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine($"{pushChecks.Count(c => c.Passed)} of {pushChecks.Count} push checks passed");
+}
+
+return results.Any(r => r.Error is not null) || toastChecks.Any(c => !c.Passed) || pushChecks.Any(c => !c.Passed) ? 1 : 0;
+
+// Profile's push section on the signed-in instance. The browser's permission
+// prompt is played by an init script that counts the calls, so the check sees
+// exactly when the page asks.
+async Task<List<ToastCheck>> RunPushChecksAsync()
+{
+    var checks = new List<ToastCheck>();
+    var profile = options.BaseUrl(Site.SignedIn) + "/Account/Profile";
+
+    async Task CheckAsync(string name, string initScript, Func<IPage, Task<string>> body)
+    {
+        await using var context = await browser.NewContextAsync(new() { ViewportSize = new() { Width = 1280, Height = 800 }, Locale = "en-US" });
+        await context.AddInitScriptAsync(initScript);
+        var page = await context.NewPageAsync();
+
+        try
+        {
+            checks.Add(new ToastCheck(name, true, await body(page)));
+        }
+        catch (Exception ex)
+        {
+            checks.Add(new ToastCheck(name, false, ex.Message.Split('\n')[0]));
+        }
+    }
+
+    const string CountingPrompt =
+        """
+        window.__permissionRequests = 0;
+        Object.defineProperty(Notification, 'permission', { get: () => 'default', configurable: true });
+        Notification.requestPermission = async () => { window.__permissionRequests++; return 'denied'; };
+        """;
+
+    await CheckAsync("the page asks for no permission on load, and Turn on asks once", CountingPrompt, async page =>
+    {
+        await page.GotoAsync(profile);
+        await page.Locator("[data-push-state='off']").WaitForAsync();
+        await page.WaitForTimeoutAsync(1500);
+
+        var onLoad = await page.EvaluateAsync<int>("() => window.__permissionRequests");
+        if (onLoad != 0)
+            throw new InvalidOperationException($"asked {onLoad} time(s) before anything was pressed");
+
+        await page.Locator("#pushSwitchOn").ClickAsync();
+        await page.Locator("[data-push-state='denied']").WaitForAsync(new() { Timeout = 5000 });
+
+        var afterTap = await page.EvaluateAsync<int>("() => window.__permissionRequests");
+        if (afterTap != 1)
+            throw new InvalidOperationException($"asked {afterTap} time(s) after one press");
+
+        return "0 requests on load; 1 after pressing Turn on; a refusal shows how to unblock";
+    });
+
+    await CheckAsync("the browser's own subscription is marked as this device", BrowserSubscribed, async page =>
+    {
+        await page.GotoAsync(profile);
+        await page.Locator("[data-push-state='on']").WaitForAsync();
+
+        var row = page.Locator(".tvdb-device", new() { HasText = "Chrome on Android" });
+        await row.Locator("[data-this-device]").WaitForAsync();
+        if (await page.Locator(".tvdb-device [data-this-device]:visible").CountAsync() != 1)
+            throw new InvalidOperationException("more than one device is marked as this one");
+
+        return "state on; \"This device\" on the Chrome on Android row only";
+    });
+
+    return checks;
+}
 
 // Times the toasts on the signed-in instance, at the desktop width (hovering
 // needs a mouse; the behaviour does not depend on the width). Every check
@@ -649,7 +761,10 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
         IsMobile = viewport.IsMobile,
         HasTouch = viewport.IsMobile,
         Locale = "en-US",
+        UserAgent = shot.UserAgent,
     });
+    if (shot.InitScript is not null)
+        await context.AddInitScriptAsync(shot.InitScript);
 
     var page = await context.NewPageAsync();
     page.Console += (_, message) =>
@@ -716,6 +831,14 @@ static Task FreezeToastCountdownsAsync(IPage page) =>
             bar.style.transform = transform;
         })
         """);
+
+// Waits for the push section to settle in the given state and brings it to the top of the window.
+static async Task ShowPushSectionAsync(IPage page, string state)
+{
+    await page.Locator($"[data-push-state='{state}']").WaitForAsync();
+    // Instant: the theme scrolls smoothly, and a screenshot would catch it halfway.
+    await page.Locator("#push").EvaluateAsync("section => section.scrollIntoView({ block: 'start', behavior: 'instant' })");
+}
 
 // A rating is the simplest toast without an action: "Rating saved."
 static async Task RateAsync(IPage page)
@@ -897,7 +1020,9 @@ record Shot(
     string Path,
     Func<IPage, Task>? Prepare = null,
     Func<IPage, Task>? Cleanup = null,
-    bool ViewportOnly = false)
+    bool ViewportOnly = false,
+    string? UserAgent = null,
+    string? InitScript = null)
 {
     public string Name => $"{Page}_{State}";
 }
