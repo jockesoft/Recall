@@ -32,6 +32,13 @@ public sealed class RetentionOptions
     /// </summary>
     public int DigestLedgerDays { get; set; } = 60;
 
+    /// <summary>
+    /// Push subscriptions with no successful push for this long (counted from
+    /// when they were added if none ever succeeded): the browser is most likely
+    /// gone without telling us.
+    /// </summary>
+    public int PushSubscriptionDays { get; set; } = 180;
+
     /// <summary>Completed IMDb import jobs and their rows, counted from completion. A job still processing is never deleted.</summary>
     public int ImportJobDays { get; set; } = 90;
 }

@@ -48,6 +48,17 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
                 cancellationToken);
     }
 
+    public async Task SetPushQuietHoursAsync(Guid userId, bool on, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        await dbContext.AppUsers
+            .Where(x => x.Id == userId)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(x => x.PushQuietHours, on).SetProperty(x => x.UpdatedUtc, now),
+                cancellationToken);
+    }
+
     public async Task<bool> IsOnlyAdminAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var isAdmin = await dbContext.AppUsers
@@ -96,6 +107,7 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
         await dbContext.TrackedSeries.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.LoginTokens.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.DigestSends.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.PushSubscriptions.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
 
         // The mail queue has no user id: its rows are found by the address
         // (stored lower-cased on the user).

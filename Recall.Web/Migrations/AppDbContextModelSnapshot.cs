@@ -47,6 +47,12 @@ namespace Recall.Web.Migrations
                         .HasColumnType("character varying(320)")
                         .HasColumnName("email");
 
+                    b.Property<bool>("PushQuietHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("push_quiet_hours");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -624,6 +630,77 @@ namespace Recall.Web.Migrations
                     b.ToTable("notified_episode", (string)null);
                 });
 
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.PushSubscriptionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("auth");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_utc");
+
+                    b.Property<string>("DeviceLabel")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("device_label");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("endpoint");
+
+                    b.Property<DateTime?>("HeldSinceUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("held_since_utc");
+
+                    b.Property<DateTime?>("HeldUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("held_until_utc");
+
+                    b.Property<DateTime?>("LastSuccessUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_success_utc");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("p256dh");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("time_zone");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_utc");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("push_subscription", (string)null);
+                });
+
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedMovieEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1049,6 +1126,17 @@ namespace Recall.Web.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.PushSubscriptionEntity", b =>
+                {
+                    b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", "User")
+                        .WithMany("PushSubscriptions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedMovieEntity", b =>
                 {
                     b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", "User")
@@ -1137,6 +1225,8 @@ namespace Recall.Web.Migrations
                     b.Navigation("MovieWatches");
 
                     b.Navigation("Notifications");
+
+                    b.Navigation("PushSubscriptions");
 
                     b.Navigation("Ratings");
 

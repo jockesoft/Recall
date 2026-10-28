@@ -22,6 +22,12 @@ public sealed class AppUserEntity : IHasAuditTimestamps
     /// </summary>
     public DateTime? DigestPromptDismissedUtc { get; set; }
 
+    /// <summary>
+    /// Push notifications wait for 08:00 on a device when they would arrive
+    /// there between 22:00 and 08:00. On unless the user turns it off.
+    /// </summary>
+    public bool PushQuietHours { get; set; } = true;
+
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
 
@@ -33,5 +39,6 @@ public sealed class AppUserEntity : IHasAuditTimestamps
     public ICollection<TrackedMovieEntity> TrackedMovies { get; set; } = new List<TrackedMovieEntity>();
     public ICollection<UserRatingEntity> Ratings { get; set; } = new List<UserRatingEntity>();
     public ICollection<NotificationEntity> Notifications { get; set; } = new List<NotificationEntity>();
+    public ICollection<PushSubscriptionEntity> PushSubscriptions { get; set; } = new List<PushSubscriptionEntity>();
     public ICollection<WatchlistImportJobEntity> WatchlistImportJobs { get; set; } = new List<WatchlistImportJobEntity>();
 }

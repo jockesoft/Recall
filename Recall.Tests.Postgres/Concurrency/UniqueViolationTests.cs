@@ -295,6 +295,31 @@ public sealed class UniqueViolationTests : PostgresFixture
         await ContextShouldStillSaveAsync(db);
     }
 
+    [Test]
+    public async Task PushSubscription_Save_Should_UpdateTheRowTheOtherRequestWrote_WhenTheSameBrowserSubscribedTwiceAtOnce()
+    {
+        var user = await SeedUserAsync();
+        var endpoint = $"https://fcm.googleapis.com/fcm/send/{Guid.NewGuid():N}";
+        var race = Competing(db => db.PushSubscriptions.Add(new PushSubscriptionEntity
+        {
+            Id = Guid.NewGuid(), UserId = user, Endpoint = endpoint, P256dh = "old-key", Auth = "old-auth",
+            DeviceLabel = "Chrome on Android", TimeZone = "UTC"
+        }));
+        await using var db = NewContext(race);
+        var repository = new PushSubscriptionRepository(db, NullLogger<PushSubscriptionRepository>.Instance);
+
+        var result = await repository.SaveAsync(user, new NewPushSubscription(endpoint, "new-key", "new-auth", "Chrome on Android", "Europe/Stockholm"));
+
+        race.Fired.Should().BeTrue();
+        result.Should().Be(PushSubscribeResult.Updated);
+        await using var check = NewContext();
+        var rows = await check.PushSubscriptions.Where(x => x.Endpoint == endpoint).ToListAsync();
+        rows.Should().ContainSingle();
+        rows[0].P256dh.Should().Be("new-key", "the later request's keys are the browser's current ones");
+        rows[0].TimeZone.Should().Be("Europe/Stockholm");
+        await ContextShouldStillSaveAsync(db);
+    }
+
     private CompetingWriteInterceptor Competing(Action<AppDbContext> add) =>
         new(async () =>
         {

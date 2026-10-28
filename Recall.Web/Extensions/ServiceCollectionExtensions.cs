@@ -6,6 +6,7 @@ using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.Mail;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
+using Recall.Web.Infrastructure.Push;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services.Digest;
@@ -142,6 +143,31 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Web Push notifications: the options and the subscription repository.
+    /// Off unless <c>Push:Enabled</c> is set, and then only with a VAPID key
+    /// pair that belongs together and a <c>mailto:</c> subject; anything less
+    /// fails startup with a message that says what to set, since a push signed
+    /// with a broken key is rejected by every push service without a word.
+    /// </summary>
+    public static IServiceCollection AddPush(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<PushOptions>(configuration.GetSection(PushOptions.SectionName));
+        services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
+
+        var push = configuration.GetSection(PushOptions.SectionName).Get<PushOptions>() ?? new PushOptions();
+        if (push.Enabled && VapidKeys.Problem(push) is { } problem)
+        {
+            throw new InvalidOperationException(
+                $"Push:Enabled is true, but the push settings cannot be used: {problem} " +
+                "Generate a key pair once with `dotnet run --project Recall.Web -- generate-vapid-keys`, " +
+                "then set Push__PublicKey, Push__PrivateKey and Push__Subject (mailto:you@example.com), " +
+                "or set Push__Enabled=false.");
+        }
 
         return services;
     }

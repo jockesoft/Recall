@@ -45,6 +45,13 @@ public sealed class DataRetentionRepository(AppDbContext dbContext) : IDataReten
             .ExecuteDeleteAsync(cancellationToken);
     }
 
+    public Task<int> DeleteStalePushSubscriptionsAsync(DateTime lastSuccessBeforeUtc, CancellationToken cancellationToken = default)
+    {
+        return dbContext.PushSubscriptions
+            .Where(x => (x.LastSuccessUtc ?? x.CreatedUtc) < lastSuccessBeforeUtc)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     public async Task<int> DeleteCompletedImportJobsAsync(DateTime completedBeforeUtc, CancellationToken cancellationToken = default)
     {
         var expiredJobs = dbContext.WatchlistImportJobs

@@ -48,6 +48,9 @@ public interface IAppUserRepository
     /// <summary>Records that the user declined the Dashboard's one-time offer of the weekly digest.</summary>
     Task DismissDigestPromptAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Turns push quiet hours (22:00–08:00 on each device) on or off for the user.</summary>
+    Task SetPushQuietHoursAsync(Guid userId, bool on, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// True when the user is an admin and no other admin exists. Such an
     /// account cannot be deleted: nobody would be left to run the site.
