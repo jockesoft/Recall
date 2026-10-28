@@ -84,9 +84,10 @@
            until "Turn on" is pressed. *@
         <section class="tvdb-page-section" id="push" data-push data-push-key="@Model.PushPublicKey">
             <h2>Notifications</h2>
+            @* Label above its content on a phone: the instructions need the width. *@
             <dl class="row mb-3">
-                <dt class="col-5 col-sm-3">This device</dt>
-                <dd class="col-7 col-sm-9">
+                <dt class="col-12 col-sm-3">This device</dt>
+                <dd class="col-12 col-sm-9">
                     <noscript>
                         <span class="tvdb-meta">Notifications need JavaScript, which is turned off in this browser.</span>
                     </noscript>
@@ -129,8 +130,8 @@
                     <p class="tvdb-field-message text-danger mb-0" data-push-error role="status" hidden></p>
                 </dd>
 
-                <dt class="col-5 col-sm-3">Quiet hours</dt>
-                <dd class="col-7 col-sm-9">
+                <dt class="col-12 col-sm-3">Quiet hours</dt>
+                <dd class="col-12 col-sm-9">
                     <form method="post" asp-page-handler="SetQuietHours" class="tvdb-setting">
                         <input type="hidden" name="on" value="@(Model.PushQuietHours ? "false" : "true")" />
                         <span class="tvdb-setting__state">
