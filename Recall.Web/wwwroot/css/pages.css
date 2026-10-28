@@ -1029,6 +1029,40 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     }
 }
 
+/* Notifications: the devices with push on, one row each with its Remove button. */
+.tvdb-device-list {
+    margin: 0;
+}
+
+.tvdb-device {
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    padding: var(--tvdb-space-3) 0;
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-device:first-child {
+    border-top: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-device > .ph {
+    flex: none;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-device__body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tvdb-device__this {
+    margin-left: var(--tvdb-space-2);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 500;
+    color: var(--tvdb-ok-ink);
+}
+
 /* ---- Edit profile -------------------------------------------------------------------------- */
 
 /* Input with a status icon inside its right edge. */

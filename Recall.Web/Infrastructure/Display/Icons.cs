@@ -70,6 +70,10 @@ public static class Icons
     public const string NoSchedule = "ph ph-broadcast";
     public const string EmptyLibrary = "ph ph-books";
     public const string NoNotifications = "ph ph-bell-slash";
+    /// <summary>A device with push notifications on (Profile's device list).</summary>
+    public const string Device = "ph ph-device-mobile";
+    /// <summary>Safari's Share button, as the "Add to Home Screen" instructions name it.</summary>
+    public const string Share = "ph ph-export";
     public const string NotFound = "ph ph-compass";
     public const string Problem = "ph ph-plugs";
     public const string Facebook = "ph ph-facebook-logo";

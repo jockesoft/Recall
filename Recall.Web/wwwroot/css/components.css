@@ -1146,14 +1146,15 @@ dl.row dd a.tvdb-inline-edit {
 
 /* ---- Titles in lists and on cards ---------------------------------------------------
    Two styles and no others. A row in a list (episode, search result, import
-   row, notification) has a title at body size; a card (poster, upcoming,
+   row, notification, push device) has a title at body size; a card (poster, upcoming,
    liked episode, person) has one a step smaller. Both are the UI face,
    semibold. */
 .tvdb-episode__title,
 .tvdb-result__title,
 .tvdb-import-row__title,
 .tvdb-bar-list__name,
-.tvdb-notification__title {
+.tvdb-notification__title,
+.tvdb-device__title {
     font-family: var(--tvdb-font-ui);
     font-size: var(--tvdb-text-md);
     font-weight: 600;

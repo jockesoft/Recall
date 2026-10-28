@@ -6,10 +6,12 @@ using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Display;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Infrastructure.Push;
 using Recall.Web.Services;
 using Recall.Web.Services.Digest;
 using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Favorites.Models;
+using Recall.Web.Services.Push;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
@@ -24,6 +26,8 @@ public sealed class ProfileModel(
     IWatchlistImportRepository importRepository,
     IAppUserRepository userRepository,
     IOptions<DigestOptions> digestOptions,
+    IPushSubscriptionRepository pushSubscriptions,
+    IOptions<PushOptions> pushOptions,
     TimeProvider timeProvider,
     ILogger<ProfileModel> logger) : PageModel
 {
@@ -35,6 +39,26 @@ public sealed class ProfileModel(
 
     /// <summary>The day the digest goes out, for the switch's explanation.</summary>
     public DayOfWeek DigestDay => digestOptions.Value.DayOfWeek;
+
+    /// <summary>Push notifications exist on this installation (<c>Push:Enabled</c>); otherwise the section is not shown.</summary>
+    public bool PushAvailable => pushOptions.Value.Enabled;
+
+    /// <summary>The VAPID public key the browser subscribes with.</summary>
+    public string PushPublicKey => pushOptions.Value.PublicKey;
+
+    /// <summary>The user's devices with notifications on, oldest first.</summary>
+    public IReadOnlyList<PushDeviceRow> PushDevices { get; private set; } = Array.Empty<PushDeviceRow>();
+
+    /// <summary>Pushes wait for 08:00 on each device when they would arrive between 22:00 and 08:00.</summary>
+    public bool PushQuietHours { get; private set; } = true;
+
+    /// <summary>One row of the device list.</summary>
+    /// <param name="EndpointHash">
+    /// SHA-256 of the endpoint, in hex: the page's script compares it with the
+    /// browser's own subscription to say "This device" and to show whether
+    /// notifications are on here, without the endpoint itself being in the page.
+    /// </param>
+    public sealed record PushDeviceRow(Guid Id, string Label, string TimeZone, string Added, string EndpointHash);
 
     /// <summary>Today's date in UTC, for the date format of the last import.</summary>
     public DateOnly Today => AirDate.Today(timeProvider);
@@ -100,15 +124,32 @@ public sealed class ProfileModel(
         if (currentUser.UserId is not { } userId)
             return;
 
-        if (DigestAvailable)
+        if (DigestAvailable || PushAvailable)
         {
             try
             {
-                DigestOn = (await userRepository.GetByIdAsync(userId, cancellationToken))?.DigestOptedInUtc is not null;
+                var user = await userRepository.GetByIdAsync(userId, cancellationToken);
+                DigestOn = user?.DigestOptedInUtc is not null;
+                PushQuietHours = user?.PushQuietHours ?? true;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogWarning(ex, "Could not load the digest setting for the profile page.");
+                logger.LogWarning(ex, "Could not load the digest and quiet-hours settings for the profile page.");
+            }
+        }
+
+        if (PushAvailable)
+        {
+            try
+            {
+                PushDevices = (await pushSubscriptions.GetForUserAsync(userId, cancellationToken))
+                    .Select(d => new PushDeviceRow(
+                        d.Id, d.DeviceLabel, d.TimeZone, DisplayDate.Format(d.CreatedUtc, Today), EndpointHash(d.Endpoint)))
+                    .ToList();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Could not load the push devices for the profile page.");
             }
         }
 
@@ -161,6 +202,116 @@ public sealed class ProfileModel(
 
         return RedirectToPage();
     }
+
+    /// <summary>
+    /// "Notifications on this device": the page's script has asked the browser
+    /// for permission (only after the user pressed the button) and subscribed
+    /// it, and posts the subscription and the device's time zone here.
+    /// </summary>
+    public async Task<IActionResult> OnPostSubscribeDeviceAsync(
+        string? endpoint, string? p256dh, string? auth, string? timeZone, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId || !PushAvailable)
+            return RedirectToPage();
+
+        switch (PushSubscriptionInput.Check(endpoint, p256dh, auth))
+        {
+            case PushSubscriptionInput.Problem.UnknownService:
+                logger.LogWarning("Refused a push subscription for user {UserId}: not a known push service.", userId);
+                this.SetErrorToast("This browser's notification service isn't one Recall can send to, so notifications can't be turned on here.");
+                return RedirectToPage();
+            case PushSubscriptionInput.Problem.BadKeys:
+                logger.LogWarning("Refused a push subscription for user {UserId}: malformed keys.", userId);
+                this.SetErrorToast("Could not turn on notifications on this device. Try again.");
+                return RedirectToPage();
+        }
+
+        try
+        {
+            await pushSubscriptions.SaveAsync(userId, new NewPushSubscription(
+                endpoint!.Trim(),
+                p256dh!.Trim(),
+                auth!.Trim(),
+                DeviceLabel.FromUserAgent(Request.Headers.UserAgent.ToString()),
+                DeviceTimeZone.Normalize(timeZone)), cancellationToken);
+            this.SetSuccessToast("Notifications are on for this device.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed saving a push subscription for user {UserId}.", userId);
+            this.SetErrorToast("Could not turn on notifications on this device. Try again.");
+        }
+
+        return RedirectToPage();
+    }
+
+    /// <summary>"Turn off" on this device: the script has unsubscribed the browser and posts its endpoint.</summary>
+    public async Task<IActionResult> OnPostUnsubscribeDeviceAsync(string? endpoint, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId || !PushAvailable)
+            return RedirectToPage();
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(endpoint))
+                await pushSubscriptions.RemoveByEndpointAsync(userId, endpoint.Trim(), cancellationToken);
+            this.SetSuccessToast("Notifications are off for this device.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed removing a push subscription for user {UserId}.", userId);
+            this.SetErrorToast("Could not turn off notifications right now.");
+        }
+
+        return RedirectToPage();
+    }
+
+    /// <summary>"Remove" on a row of the device list, for any of the user's devices.</summary>
+    public async Task<IActionResult> OnPostRemoveDeviceAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId || !PushAvailable)
+            return RedirectToPage();
+
+        try
+        {
+            if (await pushSubscriptions.RemoveAsync(userId, id, cancellationToken))
+                this.SetSuccessToast("Device removed. It gets no more notifications.");
+            else
+                this.SetInfoToast("That device was already removed.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed removing push device {DeviceId} for user {UserId}.", id, userId);
+            this.SetErrorToast("Could not remove that device right now.");
+        }
+
+        return RedirectToPage();
+    }
+
+    /// <summary>The "Quiet hours" switch: one setting for all of the user's devices, each in its own time zone.</summary>
+    public async Task<IActionResult> OnPostSetQuietHoursAsync(bool on, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId || !PushAvailable)
+            return RedirectToPage();
+
+        try
+        {
+            await userRepository.SetPushQuietHoursAsync(userId, on, cancellationToken);
+            this.SetSuccessToast(on
+                ? "Quiet hours are on. Notifications due between 22:00 and 08:00 on a device wait until 08:00 there."
+                : "Quiet hours are off. Notifications arrive whatever the time.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed changing quiet hours for user {UserId}.", userId);
+            this.SetErrorToast("Could not change that setting right now.");
+        }
+
+        return RedirectToPage();
+    }
+
+    private static string EndpointHash(string endpoint) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(endpoint)));
 
     public async Task<IActionResult> OnPostToggleSeriesLikeAsync(int id, CancellationToken cancellationToken)
     {
