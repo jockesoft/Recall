@@ -143,9 +143,11 @@ Testing on Android (Chrome, Edge, Firefox or Samsung Internet):
 
 Testing on iPhone or iPad (iOS/iPadOS 16.4 or later):
 1. In Safari, open the site and use Share, "Add to Home Screen". Push only exists for the Home Screen app; in Safari itself Profile shows these instructions instead of the switch.
-2. Open Recall from the Home Screen icon and sign in there. The Home Screen app most likely keeps its own sign-in, separate from Safari's, and the emailed link opens in Safari, so signing in inside the app may not work yet; see Observations in `CLAUDE.md`.
-3. In the app, Profile, Notifications, "Turn on", and allow. Then send a test push from Admin as above; it arrives like any app notification and opens Recall when tapped.
-4. If it was refused once, allow it again under Settings, Notifications, Recall.
+2. Open Recall from the Home Screen icon. The Home Screen app has its own cookies, separate from Safari's, so it starts signed out even when Safari is signed in.
+3. Sign in inside the app: enter your email and press "Send sign-in link". Don't open the link from the email (it opens in Safari); type the 6-digit code from the same email into the field under "Check your inbox" and press "Sign in". Spaces are fine.
+4. Check the code's limits once: a wrong code says "That code didn't work"; after five wrong codes the page asks for a new email; using the link afterwards, or the code after the link, does not sign in.
+5. In the app, Profile, Notifications, "Turn on", and allow. Then send a test push from Admin as above; it arrives like any app notification and opens Recall when tapped.
+6. If it was refused once, allow it again under Settings, Notifications, Recall.
 
 To switch push off again, set `Push__Enabled=false`. Subscriptions stay stored but nothing is sent, and they are deleted after 180 days without a successful push (`Retention__PushSubscriptionDays`).
 
