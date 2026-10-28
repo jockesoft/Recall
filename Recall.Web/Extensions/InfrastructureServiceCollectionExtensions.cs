@@ -200,12 +200,27 @@ public static class InfrastructureServiceCollectionExtensions
 
     public static readonly TimeSpan LoginEmailWindow = TimeSpan.FromMinutes(5);
 
+    /// <summary>The sign-in page's handler that checks a code from the email (<c>?handler=VerifyCode</c>).</summary>
+    public const string LoginCodeHandler = "VerifyCode";
+
+    /// <summary>How many sign-in codes one client IP may try per <see cref="LoginCodeWindow"/>.</summary>
+    public const int LoginCodePermits = 10;
+
+    public static readonly TimeSpan LoginCodeWindow = TimeSpan.FromMinutes(5);
+
     /// <summary>
     /// Limits requests for a sign-in link, which are the POSTs to the sign-in
     /// page: <see cref="LoginEmailPermits"/> per <see cref="LoginEmailWindow"/>
     /// per client IP. Loading the page (a GET) is never counted, so reloading
     /// it, or following a few links to it, cannot lock anyone out; only asking
     /// for links can.
+    ///
+    /// Trying a sign-in code from the email is a POST to the same page (a page
+    /// has one policy, whatever the handler), so it gets a bucket of its own:
+    /// <see cref="LoginCodePermits"/> per <see cref="LoginCodeWindow"/> per
+    /// client IP. Typing a code wrong never uses up the requests for links, and
+    /// the other way round. Each token also stops after
+    /// <c>SignInCode.MaxWrongAttempts</c> wrong codes, whatever the IP.
     /// </summary>
     public static RateLimitPartition<string> LoginEmailPartition(HttpContext httpContext)
     {
@@ -213,6 +228,16 @@ public static class InfrastructureServiceCollectionExtensions
             return RateLimitPartition.GetNoLimiter("page-load");
 
         var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        if (string.Equals(httpContext.Request.Query["handler"], LoginCodeHandler, StringComparison.OrdinalIgnoreCase))
+        {
+            return RateLimitPartition.GetFixedWindowLimiter($"code:{clientIp}", _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = LoginCodePermits,
+                Window = LoginCodeWindow,
+                QueueLimit = 0
+            });
+        }
 
         return RateLimitPartition.GetFixedWindowLimiter($"post:{clientIp}", _ => new FixedWindowRateLimiterOptions
         {
