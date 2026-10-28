@@ -230,6 +230,8 @@ public sealed class PipelineTests
         html.Should().Contain("The weekly email").And.Contain("only if you turn it on");
         html.Should().Contain("Your watch history and stats").And.Contain("Only you can see it");
         html.Should().Contain("The record of which weeks the weekly email was sent to you: deleted 60 days after it was made.");
+        html.Should().NotContain("id=\"push\"", "push is off here, so the page says nothing about it")
+            .And.Contain("nothing else is stored in your browser.");
     }
 
     [Test]

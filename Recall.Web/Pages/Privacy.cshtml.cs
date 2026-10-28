@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Authentication;
+using Recall.Web.Infrastructure.Push;
 using Recall.Web.Infrastructure.Retention;
 
 namespace Recall.Web.Pages;
@@ -14,6 +15,7 @@ namespace Recall.Web.Pages;
 public sealed class PrivacyModel(
     IOptions<RetentionOptions> retentionOptions,
     IOptions<LoginTokenOptions> loginOptions,
+    IOptions<PushOptions> pushOptions,
     IConfiguration configuration) : PageModel
 {
     /// <summary>
@@ -38,6 +40,9 @@ public sealed class PrivacyModel(
     }
 
     public RetentionOptions Retention => retentionOptions.Value;
+
+    /// <summary>Push notifications exist here, so the page describes them.</summary>
+    public bool PushAvailable => pushOptions.Value.Enabled;
 
     /// <summary>How long an emailed sign-in link works.</summary>
     public int SignInLinkMinutes => loginOptions.Value.TokenLifetimeMinutes;

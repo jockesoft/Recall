@@ -150,6 +150,18 @@ public sealed class PushPipelineTests
             .And.ContainSingle(s => s.Contains("getElementById(\"pushSwitchOn\").addEventListener(\"click\", turnOn"));
     }
 
+    [Test]
+    public async Task PrivacyPage_Should_SayWhatPushStores_WhoCarriesIt_AndHowToTurnItOff()
+    {
+        var html = await _client.GetStringAsync("/Privacy");
+
+        html.Should().Contain("id=\"push\"");
+        html.Should().Contain("subscription").And.Contain("device label").And.Contain("time zone").And.Contain("quiet hours");
+        html.Should().Contain("Google").And.Contain("Apple").And.Contain("Mozilla");
+        html.Should().Contain("series name and episode number");
+        html.Should().Contain("Turn off").And.Contain("180 days");
+    }
+
     private async Task<string> AntiforgeryTokenAsync()
     {
         var html = await _client.GetStringAsync("/Account/Profile");
