@@ -26,4 +26,19 @@ public interface ILoginAbuseGuard
     /// never both return <c>true</c>.
     /// </summary>
     bool TryStartResendCooldown(Guid userId, TimeSpan cooldown);
+
+    /// <summary>
+    /// Wrong sign-in codes entered for <paramref name="normalizedEmail"/> since
+    /// its last sign-in email, whether or not the address has an account. The
+    /// token's own count (in the database) is what stops guessing; this one
+    /// makes an unknown address answer exactly like a known one, lockout
+    /// included, so the code form cannot tell which addresses have accounts.
+    /// </summary>
+    int WrongCodeCount(string normalizedEmail);
+
+    /// <summary>Counts one wrong code for the address and returns the new count.</summary>
+    int RecordWrongCode(string normalizedEmail);
+
+    /// <summary>Starts the address's count again: a new sign-in email went out, or the code worked.</summary>
+    void ResetWrongCodes(string normalizedEmail);
 }

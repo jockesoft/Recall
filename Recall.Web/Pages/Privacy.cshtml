@@ -57,9 +57,11 @@
 
     <h2>Sign-in</h2>
     <p class="tvdb-prose">
-        There are no passwords. You enter your email address and we send you a link that works
-        once and expires after @Model.SignInLinkMinutes minutes. Once the email has gone out we keep only
-        a fingerprint (hash) of the link, not the link itself. Requests for links are rate limited to stop abuse.
+        There are no passwords. You enter your email address and we send you a link and a 6-digit code,
+        either of which signs you in once and expires after @Model.SignInLinkMinutes minutes. Once the email has
+        gone out we keep only a fingerprint (hash) of each, not the link or the code itself, and a count of wrong
+        codes so that guessing stops after a few tries. Requests for links and attempts at codes are rate limited
+        to stop abuse.
     </p>
 
     <h2 id="emails">Emails</h2>
