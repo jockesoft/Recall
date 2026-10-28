@@ -360,6 +360,21 @@ List<Shot> shots =
             await page.WaitForTimeoutAsync(2500); // the form refuses a submit faster than a person could type
             await page.GetByRole(AriaRole.Button, new() { Name = "Send sign-in link" }).ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            // "Check your inbox" has the field for the code from the email.
+            await page.Locator("#code").WaitForAsync();
+        }),
+    // A code that does not work: the one message for wrong, expired and unknown,
+    // and the field kept for another try. (Five of them would lock the address
+    // out, but would also use up most of the code POSTs one IP may make.)
+    new("login", "code-error", Site.Anonymous, "/Account/Login",
+        Prepare: async page =>
+        {
+            await page.Locator("#Email").FillAsync("ui-review-code@example.com");
+            await page.WaitForTimeoutAsync(2500);
+            await page.GetByRole(AriaRole.Button, new() { Name = "Send sign-in link" }).ClickAsync();
+            await page.Locator("#code").FillAsync("000 000");
+            await page.Locator("#signInCodeSubmit").ClickAsync();
+            await page.Locator("#codeMessage:not(:empty)").WaitForAsync();
         }),
     new("verify", "invalid-link", Site.Anonymous, "/Account/Verify?token=not-a-real-token"),
     new("series-details", "signed-out", Site.Anonymous, $"/Series/Details/{Watching}"),
