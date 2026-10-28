@@ -181,7 +181,7 @@ public sealed class UniqueViolationTests : PostgresFixture
         var repository = new NotificationRepository(db, NullLogger<NotificationRepository>.Instance);
 
         var added = await repository.AddNewEpisodeNotificationAsync(
-            user, seriesId, episodes[0], episodes.Length, "New episodes", null, episodes);
+            user, seriesId, episodes[0], episodes.Length, "New episodes", null, "Series", null, episodes);
 
         race.Fired.Should().BeTrue();
         added.Should().BeFalse();

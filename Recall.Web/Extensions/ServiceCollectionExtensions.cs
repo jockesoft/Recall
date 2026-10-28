@@ -18,6 +18,7 @@ using Recall.Web.Services.Favorites;
 using Recall.Web.Services.Health;
 using Recall.Web.Services.Import;
 using Recall.Web.Services.Notifications;
+using Recall.Web.Services.Push;
 using Recall.Web.Services.Sitemap;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
@@ -148,7 +149,8 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Web Push notifications: the options and the subscription repository.
+    /// Web Push notifications: the options, the subscription repository, the
+    /// sender (a typed client) and <see cref="PushNotificationService"/>.
     /// Off unless <c>Push:Enabled</c> is set, and then only with a VAPID key
     /// pair that belongs together and a <c>mailto:</c> subject; anything less
     /// fails startup with a message that says what to set, since a push signed
@@ -158,6 +160,12 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<PushOptions>(configuration.GetSection(PushOptions.SectionName));
         services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
+        services.AddScoped<IPushNotificationService, PushNotificationService>();
+
+        // A push service answers at once or not at all. No redirects: the
+        // request goes to the subscription's endpoint and nowhere else.
+        services.AddHttpClient<IPushSender, WebPushSender>(client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
         var push = configuration.GetSection(PushOptions.SectionName).Get<PushOptions>() ?? new PushOptions();
         if (push.Enabled && VapidKeys.Problem(push) is { } problem)

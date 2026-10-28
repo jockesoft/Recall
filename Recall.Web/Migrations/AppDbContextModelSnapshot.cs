@@ -548,6 +548,11 @@ namespace Recall.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_utc");
 
+                    b.Property<string>("EpisodeCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("episode_code");
+
                     b.Property<int>("EpisodeCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -565,6 +570,11 @@ namespace Recall.Web.Migrations
                     b.Property<DateTime?>("ReadUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("read_utc");
+
+                    b.Property<string>("SeriesName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("series_name");
 
                     b.Property<int?>("SeriesTvdbId")
                         .HasColumnType("integer")

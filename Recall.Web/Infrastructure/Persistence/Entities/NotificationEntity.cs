@@ -46,6 +46,15 @@ public sealed class NotificationEntity : IHasAuditTimestamps
     /// </summary>
     public int EpisodeCount { get; set; } = 1;
 
+    /// <summary>
+    /// The series' name, for the push that summarises this notification
+    /// ("Silo: S02E05 is out"). Null on rows written before push existed.
+    /// </summary>
+    public string? SeriesName { get; set; }
+
+    /// <summary>"S02E05" when the notification covers one episode with known numbers; otherwise null.</summary>
+    public string? EpisodeCode { get; set; }
+
     public bool IsRead { get; set; }
     public DateTime? ReadUtc { get; set; }
 

@@ -10,6 +10,7 @@ using Recall.Web.Services;
 using Recall.Web.Services.Import;
 using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Notifications.Models;
+using Recall.Web.Services.Push;
 
 namespace Recall.Tests.Infrastructure.Timers;
 
@@ -76,7 +77,9 @@ public class QueueAndNotificationTimerTests
     private Mock<IEpisodeWatchRepository> _watches = null!;
     private Mock<ITheTvDbService> _tvDb = null!;
     private Mock<INotificationService> _notifications = null!;
+    private Mock<IPushNotificationService> _push = null!;
     private List<(Guid UserId, NewEpisodesDigest Digest)> _sent = null!;
+    private List<string> _order = null!;
 
     [SetUp]
     public void SetUp()
@@ -85,24 +88,40 @@ public class QueueAndNotificationTimerTests
         _watches = new Mock<IEpisodeWatchRepository>();
         _tvDb = new Mock<ITheTvDbService>();
         _notifications = new Mock<INotificationService>();
+        _push = new Mock<IPushNotificationService>();
         _sent = [];
+        _order = [];
 
         _watches
             .Setup(x => x.GetWatchedEpisodeIdsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HashSet<int>());
         _notifications
             .Setup(x => x.NotifyNewEpisodesAsync(It.IsAny<Guid>(), It.IsAny<NewEpisodesDigest>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, NewEpisodesDigest, CancellationToken>((userId, digest, _) => _sent.Add((userId, digest)))
+            .Callback<Guid, NewEpisodesDigest, CancellationToken>((userId, digest, _) =>
+            {
+                _sent.Add((userId, digest));
+                _order.Add($"notify {digest.SeriesTvdbId}");
+            })
             .ReturnsAsync(true);
+        _push
+            .Setup(x => x.ReleaseHeldAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => _order.Add("release"))
+            .ReturnsAsync(PushRunCounts.None);
+        _push
+            .Setup(x => x.SendNewEpisodesAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, DateTime, CancellationToken>((userId, _, _) => _order.Add($"push {(userId == Alice ? "Alice" : "Bob")}"))
+            .ReturnsAsync(new PushRunCounts(Sent: 1));
     }
 
-    private NewEpisodeNotificationTimer NotificationJob(DateTimeOffset? now = null) => new(
+    private NewEpisodeNotificationTimer NotificationJob(
+        DateTimeOffset? now = null, Microsoft.Extensions.Logging.ILogger<NewEpisodeNotificationTimer>? logger = null) => new(
         _tracked.Object,
         _watches.Object,
         _tvDb.Object,
         _notifications.Object,
+        _push.Object,
         new FixedTimeProvider(now ?? new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero)),
-        NullLogger<NewEpisodeNotificationTimer>.Instance);
+        logger ?? NullLogger<NewEpisodeNotificationTimer>.Instance);
 
     private void Tracked(int seriesId, params Guid[] users)
     {
@@ -269,5 +288,77 @@ public class QueueAndNotificationTimerTests
         _sent.Should().BeEmpty();
         _tracked.Verify(x => x.GetUserIdsTrackingAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never,
             "there is no need to look up who tracks a series that has nothing new");
+    }
+
+    // ---- pushes ---------------------------------------------------------------------
+
+    [Test]
+    public async Task NotificationJob_Should_PushOncePerUser_AfterCreatingAllTheirNotifications()
+    {
+        // Alice tracks two series with new episodes, Bob one: Alice gets one push summarising both.
+        TrackedSeriesIds(1, 2);
+        Tracked(1, Alice, Bob);
+        Tracked(2, Alice);
+        Series(1, Ep(11, 2, Today.AddDays(-1)));
+        Series(2, Ep(21, 1, Today.AddDays(-1)));
+        var before = DateTime.UtcNow;
+
+        await NotificationJob().Execute(Mock.Of<IJobExecutionContext>());
+
+        _order.Should().Equal("release", "notify 1", "notify 1", "notify 2", "push Alice", "push Bob");
+        _push.Verify(x => x.SendNewEpisodesAsync(Alice, It.Is<DateTime>(since => since >= before && since <= DateTime.UtcNow), It.IsAny<CancellationToken>()),
+            Times.Once, "the push covers the notifications created in this run");
+    }
+
+    [Test]
+    public async Task NotificationJob_Should_NotPush_ToAUserWhoGotNoNewNotification()
+    {
+        TrackedSeriesIds(1);
+        Tracked(1, Alice);
+        Series(1, Ep(11, 2, Today.AddDays(-1)));
+        _notifications
+            .Setup(x => x.NotifyNewEpisodesAsync(Alice, It.IsAny<NewEpisodesDigest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        await NotificationJob().Execute(Mock.Of<IJobExecutionContext>());
+
+        _push.Verify(x => x.SendNewEpisodesAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task APushFailure_Should_NotStopTheNotifications_OrTheRun()
+    {
+        TrackedSeriesIds(1, 2);
+        Tracked(1, Alice);
+        Tracked(2, Bob);
+        Series(1, Ep(11, 2, Today.AddDays(-1)));
+        Series(2, Ep(21, 1, Today.AddDays(-1)));
+        _push.Setup(x => x.ReleaseHeldAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new HttpRequestException("push service down"));
+        _push.Setup(x => x.SendNewEpisodesAsync(Alice, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("database hiccup"));
+        var logger = new RecordingLogger<NewEpisodeNotificationTimer>();
+
+        var act = () => NotificationJob(logger: logger).Execute(Mock.Of<IJobExecutionContext>()).AsTask();
+
+        await act.Should().NotThrowAsync();
+        _sent.Select(s => s.UserId).Should().BeEquivalentTo([Alice, Bob], "every notification is created whatever the pushes do");
+        _push.Verify(x => x.SendNewEpisodesAsync(Bob, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once,
+            "one user's failed push does not keep the next from theirs");
+        logger.Entries.Should().Contain(e => e.Message.Contains("1 push(es) sent") && e.Message.Contains("1 failed"));
+    }
+
+    [Test]
+    public async Task NotificationJob_Should_ReleaseHeldPushes_AndLogTheRunsCounts_EvenWithNothingNew()
+    {
+        TrackedSeriesIds();
+        _push.Setup(x => x.ReleaseHeldAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PushRunCounts(Sent: 3, Failed: 1, Removed: 1, Dropped: 2));
+        var logger = new RecordingLogger<NewEpisodeNotificationTimer>();
+
+        await NotificationJob(logger: logger).Execute(Mock.Of<IJobExecutionContext>());
+
+        logger.Entries.Should().Contain((Microsoft.Extensions.Logging.LogLevel.Information,
+            "NewEpisodeNotificationTimer: 3 push(es) sent, 0 held for quiet hours, 1 failed " +
+            "(1 expired subscription(s) removed, 2 held push(es) dropped as already read)."));
     }
 }

@@ -44,7 +44,18 @@ public interface INotificationRepository
         int episodeCount,
         string title,
         string? body,
+        string seriesName,
+        string? episodeCode,
         IReadOnlyCollection<int> coveredEpisodeTvdbIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The user's unread "new episode" notifications created at or after
+    /// <paramref name="sinceUtc"/>, oldest first: what a push summarises.
+    /// </summary>
+    Task<IReadOnlyList<UnreadEpisodeNotice>> GetUnreadNewEpisodesSinceAsync(
+        Guid userId,
+        DateTime sinceUtc,
         CancellationToken cancellationToken = default);
 
     /// <summary>Marks one notification read. No-op if it's missing or already read.</summary>
@@ -53,6 +64,18 @@ public interface INotificationRepository
     /// <summary>Marks every unread notification for the user read.</summary>
     Task MarkAllReadAsync(Guid userId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>An unread "new episode(s)" notification, with what a push needs to summarise it.</summary>
+/// <param name="SeriesName">Null on rows written before the column existed; <see cref="Title"/> then stands in.</param>
+/// <param name="EpisodeCode">"S02E05" when it covers one episode with known numbers.</param>
+public sealed record UnreadEpisodeNotice(
+    Guid Id,
+    string Title,
+    string? SeriesName,
+    int? EpisodeTvdbId,
+    string? EpisodeCode,
+    int EpisodeCount,
+    DateTime CreatedUtc);
 
 /// <summary>A single notification, flattened for read use.</summary>
 /// <param name="Id">Notification id.</param>
