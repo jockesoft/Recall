@@ -5,8 +5,9 @@
 #   ./ui-review/logo/render.sh [play|check|bookmark]      default: bookmark
 #
 # Writes Recall.Web/wwwroot/{favicon.svg,favicon.ico,apple-touch-icon.png},
-# wwwroot/images/{logo.svg,logo-light.svg,logo-mark.svg,og-image.png} and
-# ui-review/screenshots/logo-options.png.
+# wwwroot/images/{logo.svg,logo-light.svg,logo-mark.svg,og-image.png},
+# wwwroot/images/icons/{icon-192.png,icon-512.png,icon-maskable-512.png} (the
+# web app manifest's icons) and ui-review/screenshots/logo-options.png.
 #
 # Needs: python3 with the packages in requirements.txt (PYTHON=... to pick one;
 #   python3 -m venv .venv && .venv/bin/pip install -r ui-review/logo/requirements.txt),
@@ -38,6 +39,9 @@ svg_page() { # svg-path -> url of a page showing it full-window
 
 for size in 16 32; do shot "$TMP/favicon-$size.png" "$size" "$size" "$(svg_page "$WWW/favicon.svg")"; done
 shot "$WWW/apple-touch-icon.png" 180 180 "$(svg_page "$HERE/touch-icon.svg")"
+mkdir -p "$WWW/images/icons"
+for size in 192 512; do shot "$WWW/images/icons/icon-$size.png" "$size" "$size" "$(svg_page "$HERE/app-icon.svg")"; done
+shot "$WWW/images/icons/icon-maskable-512.png" 512 512 "$(svg_page "$HERE/app-icon-maskable.svg")"
 shot "$WWW/images/og-image.png" 1200 630 "file://$HERE/og.html"
 mkdir -p "$ROOT/ui-review/screenshots"
 shot "$ROOT/ui-review/screenshots/logo-options.png" 1280 560 "file://$HERE/sheet.html" 2

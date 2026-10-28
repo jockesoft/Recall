@@ -96,7 +96,9 @@ app.UseHttpsRedirection();
 // rejected form, a rate limit) is re-run as Pages/Status, so the visitor gets
 // a page inside the layout with the original status code instead of a blank one.
 app.UseStatusCodePagesWithReExecute("/Status/{0}");
-app.UseStaticFiles(); // important for runtime-created files
+// Important for runtime-created files. The manifest and the service worker are
+// revalidated on every use (AppShellFiles).
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = AppShellFiles.PrepareResponse });
 app.UseRouting();
 
 app.UseAuthentication();

@@ -303,4 +303,48 @@ public sealed class PipelineTests
         (await _client.GetAsync("/health/live")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await _client.GetAsync("/health")).StatusCode.Should().Be(HttpStatusCode.OK, "the database check runs against the test database");
     }
+
+    [Test]
+    public async Task ServiceWorker_Should_BeServedFromTheRoot_AsJavaScript_AndRevalidatedOnEveryUse()
+    {
+        var response = await _client.GetAsync("/sw.js");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType?.MediaType.Should().EndWith("javascript");
+        response.Headers.CacheControl?.NoCache.Should().BeTrue("a changed worker must be picked up on the next visit");
+        response.Headers.CacheControl?.MaxAge.Should().BeNull();
+
+        var script = await response.Content.ReadAsStringAsync();
+        script.Should().Contain("addEventListener(\"push\"").And.Contain("addEventListener(\"notificationclick\"");
+        script.Should().NotContain("addEventListener(\"fetch\"", "the worker is for push only and caches nothing");
+    }
+
+    [Test]
+    public async Task Manifest_Should_DescribeAnInstallableApp_WithIconsThatExist()
+    {
+        var response = await _client.GetAsync("/manifest.webmanifest");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/manifest+json");
+        response.Headers.CacheControl?.NoCache.Should().BeTrue();
+
+        using var manifest = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = manifest.RootElement;
+        root.GetProperty("name").GetString().Should().Be("Recall");
+        root.GetProperty("short_name").GetString().Should().Be("Recall");
+        root.GetProperty("display").GetString().Should().Be("standalone");
+        root.GetProperty("start_url").GetString().Should().Be("/Dashboard");
+        root.GetProperty("theme_color").GetString().Should().Be("#1f2733", "--tvdb-ink-2, the navbar, as the theme-color meta tag");
+        root.GetProperty("background_color").GetString().Should().Be("#151b24", "--tvdb-ink, the page background");
+
+        var icons = root.GetProperty("icons").EnumerateArray().ToList();
+        icons.Select(i => (i.GetProperty("sizes").GetString(), i.GetProperty("purpose").GetString()))
+            .Should().BeEquivalentTo([("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")]);
+        foreach (var icon in icons)
+            (await _client.GetAsync(icon.GetProperty("src").GetString())).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var page = await _client.GetStringAsync("/Privacy");
+        // Fingerprinted by MapStaticAssets (manifest.<hash>.webmanifest); the app's identity is the manifest's "id".
+        page.Should().MatchRegex("<link rel=\"manifest\" href=\"/manifest(\\.[a-z0-9]+)?\\.webmanifest\"");
+    }
 }
