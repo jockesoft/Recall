@@ -48,6 +48,14 @@ public sealed class NotificationEntityConfiguration : IEntityTypeConfiguration<N
             .HasDefaultValue(1)
             .IsRequired();
 
+        builder.Property(x => x.SeriesName)
+            .HasColumnName("series_name")
+            .HasMaxLength(500);
+
+        builder.Property(x => x.EpisodeCode)
+            .HasColumnName("episode_code")
+            .HasMaxLength(16);
+
         builder.Property(x => x.IsRead)
             .HasColumnName("is_read")
             .IsRequired();

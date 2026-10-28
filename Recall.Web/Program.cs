@@ -3,12 +3,24 @@ using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Hosting;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Infrastructure.Push;
 using Recall.Web.Middleware;
 using Recall.Web.Services.Health;
 using Serilog;
 
 // English-only site: don't inherit the host's language for dates and numbers.
 AppCulture.PinToEnglish();
+
+// One-off helper, not part of the app: prints a new VAPID key pair for the
+// Push settings and exits (README, "Enabling push notifications").
+//   dotnet run --project Recall.Web -- generate-vapid-keys
+if (args is ["generate-vapid-keys"])
+{
+    var keys = VapidKeys.Generate();
+    Console.WriteLine($"Push__PublicKey={keys.PublicKey}");
+    Console.WriteLine($"Push__PrivateKey={keys.PrivateKey}");
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +55,7 @@ builder.Services.AddOmdb(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddWeeklyDigest(builder.Configuration);
 builder.Services.AddNotifications();
+builder.Services.AddPush(builder.Configuration);
 builder.Services.AddMail(builder.Configuration);
 builder.Services.AddWatchlistImport();
 
@@ -96,7 +109,9 @@ app.UseHttpsRedirection();
 // rejected form, a rate limit) is re-run as Pages/Status, so the visitor gets
 // a page inside the layout with the original status code instead of a blank one.
 app.UseStatusCodePagesWithReExecute("/Status/{0}");
-app.UseStaticFiles(); // important for runtime-created files
+// Important for runtime-created files. The manifest and the service worker are
+// revalidated on every use (AppShellFiles).
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = AppShellFiles.PrepareResponse });
 app.UseRouting();
 
 app.UseAuthentication();

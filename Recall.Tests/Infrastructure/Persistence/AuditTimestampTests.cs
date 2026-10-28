@@ -101,7 +101,7 @@ public sealed class AuditTimestampTests
             .Select(t => t.ClrType)
             .ToList();
 
-        withBothColumns.Should().HaveCount(10);
+        withBothColumns.Should().HaveCount(11);
         withBothColumns.Should().OnlyContain(t => typeof(IHasAuditTimestamps).IsAssignableFrom(t));
     }
 }

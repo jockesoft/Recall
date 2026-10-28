@@ -181,7 +181,7 @@ public sealed class UniqueViolationTests : PostgresFixture
         var repository = new NotificationRepository(db, NullLogger<NotificationRepository>.Instance);
 
         var added = await repository.AddNewEpisodeNotificationAsync(
-            user, seriesId, episodes[0], episodes.Length, "New episodes", null, episodes);
+            user, seriesId, episodes[0], episodes.Length, "New episodes", null, "Series", null, episodes);
 
         race.Fired.Should().BeTrue();
         added.Should().BeFalse();
@@ -292,6 +292,31 @@ public sealed class UniqueViolationTests : PostgresFixture
         (await CountAsync(x => x.DigestSends.CountAsync(d => d.UserId == user && d.PeriodStart == week))).Should().Be(1);
         (await CountAsync(x => x.Emails.CountAsync(e => e.ToAddress == address)))
             .Should().Be(0, "the ledger row and the email are one transaction: no second digest is queued");
+        await ContextShouldStillSaveAsync(db);
+    }
+
+    [Test]
+    public async Task PushSubscription_Save_Should_UpdateTheRowTheOtherRequestWrote_WhenTheSameBrowserSubscribedTwiceAtOnce()
+    {
+        var user = await SeedUserAsync();
+        var endpoint = $"https://fcm.googleapis.com/fcm/send/{Guid.NewGuid():N}";
+        var race = Competing(db => db.PushSubscriptions.Add(new PushSubscriptionEntity
+        {
+            Id = Guid.NewGuid(), UserId = user, Endpoint = endpoint, P256dh = "old-key", Auth = "old-auth",
+            DeviceLabel = "Chrome on Android", TimeZone = "UTC"
+        }));
+        await using var db = NewContext(race);
+        var repository = new PushSubscriptionRepository(db, NullLogger<PushSubscriptionRepository>.Instance);
+
+        var result = await repository.SaveAsync(user, new NewPushSubscription(endpoint, "new-key", "new-auth", "Chrome on Android", "Europe/Stockholm"));
+
+        race.Fired.Should().BeTrue();
+        result.Should().Be(PushSubscribeResult.Updated);
+        await using var check = NewContext();
+        var rows = await check.PushSubscriptions.Where(x => x.Endpoint == endpoint).ToListAsync();
+        rows.Should().ContainSingle();
+        rows[0].P256dh.Should().Be("new-key", "the later request's keys are the browser's current ones");
+        rows[0].TimeZone.Should().Be("Europe/Stockholm");
         await ContextShouldStillSaveAsync(db);
     }
 

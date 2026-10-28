@@ -77,6 +77,118 @@
         </a>
     </section>
 
+    @if (Model.PushAvailable)
+    {
+        @* What this browser can do is only known in the browser: tvdb-push.js
+           shows one of the data-push-state blocks and never asks for permission
+           until "Turn on" is pressed. *@
+        <section class="tvdb-page-section" id="push" data-push data-push-key="@Model.PushPublicKey">
+            <h2>Notifications</h2>
+            @* Label above its content on a phone: the instructions need the width. *@
+            <dl class="row mb-3">
+                <dt class="col-12 col-sm-3">This device</dt>
+                <dd class="col-12 col-sm-9">
+                    <noscript>
+                        <span class="tvdb-meta">Notifications need JavaScript, which is turned off in this browser.</span>
+                    </noscript>
+                    <div data-push-state="checking" hidden>
+                        <span class="tvdb-meta">Checking what this browser supports…</span>
+                    </div>
+                    <div class="tvdb-setting" data-push-state="off" hidden>
+                        <span class="tvdb-setting__state">
+                            <strong>Off</strong>
+                            <span class="tvdb-meta">Get a notification here when a new episode of a series you follow is out.</span>
+                        </span>
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="pushSwitchOn">Turn on</button>
+                    </div>
+                    <div class="tvdb-setting" data-push-state="on" hidden>
+                        <span class="tvdb-setting__state">
+                            <strong>On</strong>
+                            <span class="tvdb-meta">This device gets a notification when new episodes are out.</span>
+                        </span>
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="pushSwitchOff">Turn off</button>
+                    </div>
+                    <div data-push-state="ios" hidden>
+                        <p class="mb-1"><strong>Add Recall to your Home Screen to get notifications</strong></p>
+                        <ol class="tvdb-steps mb-0">
+                            <li>Tap the Share button <i class="@Icons.Share" aria-hidden="true"></i> in Safari.</li>
+                            <li>Choose <em>Add to Home Screen</em>.</li>
+                            <li>Open Recall from the Home Screen and turn notifications on here.</li>
+                        </ol>
+                    </div>
+                    <div data-push-state="unsupported" hidden>
+                        <span class="tvdb-meta">This browser can't show notifications from websites. A recent Chrome, Edge, Firefox or Safari can.</span>
+                    </div>
+                    <div data-push-state="denied" hidden>
+                        <p class="mb-1"><strong>Notifications are blocked for Recall in this browser.</strong></p>
+                        <p class="tvdb-meta mb-0">
+                            To allow them, open the site settings (the icon at the left of the address bar), set
+                            Notifications to Allow and reload this page. On a phone, also check that notifications
+                            are allowed for the browser, or for Recall on an iPhone, in the phone's Settings.
+                        </p>
+                    </div>
+                    <p class="tvdb-field-message text-danger mb-0" data-push-error role="status" hidden></p>
+                </dd>
+
+                <dt class="col-12 col-sm-3">Quiet hours</dt>
+                <dd class="col-12 col-sm-9">
+                    <form method="post" asp-page-handler="SetQuietHours" class="tvdb-setting">
+                        <input type="hidden" name="on" value="@(Model.PushQuietHours ? "false" : "true")" />
+                        <span class="tvdb-setting__state">
+                            <strong>@(Model.PushQuietHours ? "On" : "Off")</strong>
+                            <span class="tvdb-meta">
+                                @(Model.PushQuietHours
+                                    ? "22:00–08:00 on each device: notifications due then wait until 08:00."
+                                    : "Notifications arrive whatever the time. Turn on to hold them 22:00–08:00 on each device.")
+                            </span>
+                        </span>
+                        <button type="submit" class="btn btn-outline-dark btn-sm" id="quietHoursSwitch">
+                            @(Model.PushQuietHours ? "Turn off" : "Turn on")
+                        </button>
+                    </form>
+                </dd>
+            </dl>
+
+            <h3>Your devices</h3>
+            @if (Model.PushDevices.Count == 0)
+            {
+                <p class="tvdb-meta mb-0">No devices yet. Turn notifications on above, on each phone or computer you want them on.</p>
+            }
+            else
+            {
+                <ul class="tvdb-device-list list-unstyled mb-0">
+                    @foreach (var device in Model.PushDevices)
+                    {
+                        <li class="tvdb-device" data-endpoint-hash="@device.EndpointHash">
+                            <i class="@Icons.Device tvdb-icon--md" aria-hidden="true"></i>
+                            <div class="tvdb-device__body">
+                                <div class="tvdb-device__title">
+                                    @device.Label
+                                    <span class="tvdb-device__this" data-this-device hidden>This device</span>
+                                </div>
+                                <div class="tvdb-meta">@device.TimeZone · added @device.Added</div>
+                            </div>
+                            <form method="post" asp-page-handler="RemoveDevice" asp-route-id="@device.Id" data-remove-device>
+                                <button type="submit" class="btn btn-outline-dark btn-sm" aria-label="Remove @device.Label">Remove</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
+
+            @* Filled in and sent by tvdb-push.js: ordinary forms, so the antiforgery token and the toast work as everywhere else. *@
+            <form method="post" asp-page-handler="SubscribeDevice" id="pushSubscribeForm" hidden>
+                <input type="hidden" name="endpoint" />
+                <input type="hidden" name="p256dh" />
+                <input type="hidden" name="auth" />
+                <input type="hidden" name="timeZone" />
+            </form>
+            <form method="post" asp-page-handler="UnsubscribeDevice" id="pushUnsubscribeForm" hidden>
+                <input type="hidden" name="endpoint" />
+            </form>
+        </section>
+    }
+
     <section class="tvdb-page-section">
         <h2>Account</h2>
         <dl class="row mb-3">
@@ -135,3 +247,10 @@
         </div>
     </section>
 </div>
+
+@section Scripts {
+    @if (Model.PushAvailable)
+    {
+        <script src="~/js/tvdb-push.js" asp-append-version="true"></script>
+    }
+}

@@ -41,6 +41,8 @@ public sealed class NotificationService(
             episodeCount: fresh.Count,
             title: title,
             body: body,
+            seriesName: digest.SeriesName,
+            episodeCode: fresh.Count == 1 ? fresh[0].SlateCode : null,
             coveredEpisodeTvdbIds: fresh.Select(e => e.EpisodeTvdbId).ToList(),
             cancellationToken);
 

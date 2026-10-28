@@ -28,7 +28,7 @@ public class NotificationServiceTests
         _repository
             .Setup(x => x.AddNewEpisodeNotificationAsync(
                 It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
-                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         _sut = new NotificationService(_repository.Object, NullLogger<NotificationService>.Instance);
@@ -49,6 +49,8 @@ public class NotificationServiceTests
             User, 42, 900, 1,
             "New episode of Severance",
             "S02E05 · Trojan's Horse is out now.",
+            "Severance",
+            "S02E05",
             It.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { 900 })),
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -60,9 +62,9 @@ public class NotificationServiceTests
         _repository
             .Setup(x => x.AddNewEpisodeNotificationAsync(
                 It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
-                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, int, int, int, string, string?, IReadOnlyCollection<int>, CancellationToken>(
-                (_, _, _, _, _, body, _, _) => capturedBody = body)
+                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, int, int, int, string, string?, string, string?, IReadOnlyCollection<int>, CancellationToken>(
+                (_, _, _, _, _, body, _, _, _, _) => capturedBody = body)
             .ReturnsAsync(true);
 
         await _sut.NotifyNewEpisodesAsync(User, new NewEpisodesDigest(1, "Show", new[] { Ep(2, 1, 3, "TBA") }));
@@ -86,6 +88,8 @@ public class NotificationServiceTests
             8,                                      // count
             "8 new episodes of Show",
             "S02 · E01–E08 are out now.",
+            "Show",
+            null,
             It.Is<IReadOnlyCollection<int>>(ids => ids.Count == 8 && ids.First() == 1001 && ids.Last() == 1008),
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -105,6 +109,8 @@ public class NotificationServiceTests
             User, 42, 1003, 3,
             "3 new episodes of Show",
             "S02 · E03–E05 are out now.",
+            "Show",
+            null,
             It.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { 1003, 1004, 1005 })),
             It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -121,7 +127,7 @@ public class NotificationServiceTests
         created.Should().BeFalse();
         _repository.Verify(x => x.AddNewEpisodeNotificationAsync(
             It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
-            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()),
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IReadOnlyCollection<int>>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

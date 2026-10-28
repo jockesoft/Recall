@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Recall.Web.Infrastructure.Authentication;
+using Recall.Web.Infrastructure.Push;
 using Recall.Web.Infrastructure.Retention;
 using Recall.Web.Pages;
 
@@ -10,10 +11,23 @@ namespace Recall.Tests.Pages;
 [TestFixture]
 public class PrivacyModelTests
 {
-    private static PrivacyModel Create(Dictionary<string, string?>? settings = null, RetentionOptions? retention = null) =>
+    private static PrivacyModel Create(
+        Dictionary<string, string?>? settings = null, RetentionOptions? retention = null, bool pushEnabled = false) =>
         new(Options.Create(retention ?? new RetentionOptions()),
             Options.Create(new LoginTokenOptions { TokenLifetimeMinutes = 20 }),
+            Options.Create(new PushOptions { Enabled = pushEnabled }),
             new ConfigurationBuilder().AddInMemoryCollection(settings ?? []).Build());
+
+    [Test]
+    public void ThePushSection_Should_FollowPushEnabled_AndStateTheSubscriptionRetention()
+    {
+        Create().PushAvailable.Should().BeFalse();
+
+        var sut = Create(retention: new RetentionOptions { PushSubscriptionDays = 120 }, pushEnabled: true);
+
+        sut.PushAvailable.Should().BeTrue();
+        sut.Retention.PushSubscriptionDays.Should().Be(120);
+    }
 
     [Test]
     public void ThePage_Should_StateWhatTheConfigurationSays()

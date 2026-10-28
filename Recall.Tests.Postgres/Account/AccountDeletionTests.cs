@@ -40,7 +40,7 @@ public sealed class AccountDeletionTests : PostgresFixture
         tables.Should().Contain(
         [
             "digest_send", "tracked_series", "tracked_movie", "episode_watch", "user_movie_watch", "user_like", "user_rating",
-            "notification", "notified_episode", "login_token", "watchlist_import_job"
+            "notification", "notified_episode", "login_token", "watchlist_import_job", "push_subscription"
         ], "these are the tables the test seeds; the list itself comes from the database");
 
         foreach (var table in tables)
@@ -257,6 +257,13 @@ public sealed class AccountDeletionTests : PostgresFixture
         db.DigestSends.Add(new DigestSendEntity
         {
             Id = Guid.NewGuid(), UserId = userId, PeriodStart = DateOnly.FromDateTime(now), Status = DigestSendStatus.Queued, CreatedUtc = now
+        });
+
+        db.PushSubscriptions.Add(new PushSubscriptionEntity
+        {
+            Id = Guid.NewGuid(), UserId = userId, Endpoint = $"https://fcm.googleapis.com/fcm/send/{Guid.NewGuid():N}",
+            P256dh = "key", Auth = "auth", DeviceLabel = "Chrome on Android", TimeZone = "Europe/Stockholm",
+            HeldSinceUtc = now, HeldUntilUtc = now.AddHours(8)
         });
 
         var jobId = Guid.NewGuid();

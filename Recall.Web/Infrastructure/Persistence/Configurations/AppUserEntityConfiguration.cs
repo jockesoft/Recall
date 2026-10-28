@@ -38,6 +38,15 @@ public sealed class AppUserEntityConfiguration : IEntityTypeConfiguration<AppUse
             .HasColumnName("digest_prompt_dismissed_utc")
             .HasColumnType("timestamp with time zone");
 
+        // The sentinel is true, the default: EF leaves the column out of an
+        // insert only when the value is true, so a new user stored with quiet
+        // hours off really gets false and not the database default.
+        builder.Property(x => x.PushQuietHours)
+            .HasColumnName("push_quiet_hours")
+            .HasDefaultValue(true)
+            .HasSentinel(true)
+            .IsRequired();
+
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")

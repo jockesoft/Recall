@@ -13,6 +13,8 @@ and into ui-review/logo/:
     favicon-<name>.svg      the favicon for each variant
     mark-<name>.svg         the mark alone for each variant
     touch-icon.svg          the favicon without rounded corners (source of apple-touch-icon.png)
+    app-icon.svg            the web app manifest's icon (source of images/icons/icon-192.png and icon-512.png)
+    app-icon-maskable.svg   the same, full bleed with the mark inside the safe zone (icon-maskable-512.png)
     sheet.html              comparison sheet of the three variants
     og.html                 source of the Open Graph image
 
@@ -110,6 +112,19 @@ def favicon(variant: str, tile_radius: int = 14) -> str:
     )
 
 
+def maskable_icon(variant: str) -> str:
+    # A maskable icon is cropped by the launcher to a circle, squircle or
+    # rounded square of its own choosing; only the centre circle of 80% of the
+    # width is always shown. The tile fills the whole square and the mark is
+    # scaled down to sit inside that circle.
+    inner = mark(variant, CREAM, stroke=5)
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">'
+        f'<rect width="64" height="64" fill="{INK_2}"/>'
+        f'<g transform="translate(32 32.5) scale(0.62) translate(-32 -30)">{inner}</g></svg>\n'
+    )
+
+
 def sheet() -> str:
     def row(label, height, width):
         cells = "".join(
@@ -195,6 +210,9 @@ def main() -> None:
     (WWW / "favicon.svg").write_text(favicon(variant))
     # iOS rounds the corners itself and wants an opaque square.
     (OUT / "touch-icon.svg").write_text(favicon(variant, tile_radius=0))
+    # Android shows an "any" icon as it is, so this one keeps the rounded tile.
+    (OUT / "app-icon.svg").write_text(favicon(variant))
+    (OUT / "app-icon-maskable.svg").write_text(maskable_icon(variant))
     print(f"wrote the '{variant}' variant")
 
 

@@ -26,7 +26,13 @@
         </li>
     </ul>
 
-    <p class="mt-4 mb-0">
+    <div class="d-flex flex-wrap gap-2 mt-4">
         <a asp-page="/Admin/DigestPreview" class="btn btn-outline-dark btn-sm">Preview the weekly email</a>
-    </p>
+        @if (Model.PushAvailable)
+        {
+            <form method="post" asp-page-handler="TestPush">
+                <button type="submit" class="btn btn-outline-dark btn-sm" id="testPushButton">Send a test push to my devices</button>
+            </form>
+        }
+    </div>
 </div>

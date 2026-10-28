@@ -192,6 +192,33 @@ public sealed class DataRetentionRepositoryTests
     }
 
     [Test]
+    public async Task DeleteStalePushSubscriptionsAsync_Should_RemoveSubscriptionsSilentSinceTheCutoff_CountingFromCreationWhenNoPushEverSucceeded()
+    {
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.PushSubscriptions.AddRange(
+                Subscription("old-success", lastSuccess: Old),
+                Subscription("recent-success", lastSuccess: Recent),
+                Subscription("never-pushed-old", lastSuccess: null),
+                Subscription("never-pushed-new", lastSuccess: null));
+            await seed.SaveChangesAsync();
+
+            // CreatedUtc is stamped by SaveChanges; age two of them by hand.
+            await seed.PushSubscriptions
+                .Where(x => x.Endpoint.EndsWith("old-success") || x.Endpoint.EndsWith("never-pushed-old"))
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatedUtc, Old.AddDays(-10)));
+        }
+
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var deleted = await new DataRetentionRepository(dbContext).DeleteStalePushSubscriptionsAsync(Cutoff);
+
+        deleted.Should().Be(2);
+        (await dbContext.PushSubscriptions.Select(x => x.Endpoint).ToListAsync())
+            .Should().BeEquivalentTo(["https://fcm.googleapis.com/fcm/send/recent-success", "https://fcm.googleapis.com/fcm/send/never-pushed-new"],
+                "a new device that has not had a push yet is not stale; a device that recently received one is not either");
+    }
+
+    [Test]
     public async Task EveryDelete_Should_ReturnZero_OnEmptyTables()
     {
         await using var dbContext = new AppDbContext(_dbOptions);
@@ -202,7 +229,20 @@ public sealed class DataRetentionRepositoryTests
         (await sut.DeleteReadNotificationsAsync(Cutoff)).Should().Be(0);
         (await sut.DeleteNotifiedEpisodesAsync(Cutoff)).Should().Be(0);
         (await sut.DeleteCompletedImportJobsAsync(Cutoff)).Should().Be(0);
+        (await sut.DeleteStalePushSubscriptionsAsync(Cutoff)).Should().Be(0);
     }
+
+    private PushSubscriptionEntity Subscription(string name, DateTime? lastSuccess) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = _userId,
+        Endpoint = $"https://fcm.googleapis.com/fcm/send/{name}",
+        P256dh = "key",
+        Auth = "auth",
+        DeviceLabel = "Chrome on Android",
+        TimeZone = "Europe/Stockholm",
+        LastSuccessUtc = lastSuccess
+    };
 
     private LoginTokenEntity Token(string hash, DateTime expires, DateTime? consumed) => new()
     {

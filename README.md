@@ -107,6 +107,48 @@ This is the checklist that was followed before enabling it. Go through it again 
 
 To switch it off again, set `Digest__Enabled=false`. Users keep their choice.
 
+Enabling push notifications
+
+Push notifications tell users on their phone or computer when a new episode is out. They are off unless `Push:Enabled` is true; while off, nothing about them shows anywhere.
+
+1. Generate a VAPID key pair, once per environment:
+   ```
+   dotnet run --project Recall.Web -- generate-vapid-keys
+   ```
+   It prints `Push__PublicKey=…` and `Push__PrivateKey=…` and exits. Keep the private key out of the repository. Keep the pair, too: a new pair makes every existing subscription stop working until each device turns notifications on again.
+2. Set the keys and a contact address. Locally, in user secrets:
+   ```
+   dotnet user-secrets set "Push:Enabled" "true" --project Recall.Web
+   dotnet user-secrets set "Push:PublicKey" "<public key>" --project Recall.Web
+   dotnet user-secrets set "Push:PrivateKey" "<private key>" --project Recall.Web
+   dotnet user-secrets set "Push:Subject" "mailto:you@example.com" --project Recall.Web
+   ```
+   In production, in `.env.prod`:
+   ```
+   Push__Enabled=true
+   Push__PublicKey=<public key>
+   Push__PrivateKey=<private key>
+   Push__Subject=mailto:admin@recall.nu
+   ```
+   The app refuses to start when push is enabled with a key missing, malformed or from another pair, or a subject that is not a `mailto:` address, and the message says which.
+3. nginx: the app serves `/sw.js` (the service worker) and `/manifest.webmanifest` from the site root with `Cache-Control: no-cache`. nginx only has to pass that through: do not add caching rules (`expires`, `proxy_cache`) that cover these two paths, or a new service worker reaches browsers late. Push needs HTTPS, which the site has; `localhost` also works in Chrome and Firefox for local tests.
+4. Deploy, sign in as an admin and test from the devices below. The admin page's "Send a test push to my devices" sends to your own devices only, whatever the time. New-episode pushes are sent by the hourly `NewEpisodeNotificationTimer`; each run logs a line like `NewEpisodeNotificationTimer: 1 push(es) sent, 0 held for quiet hours, 0 failed (...)`.
+
+Testing on Android (Chrome, Edge, Firefox or Samsung Internet):
+1. Open the site, sign in, go to Profile, Notifications, and press "Turn on" under "This device". Allow notifications when the browser asks (it asks only then).
+2. The device appears under "Your devices" as, for example, "Chrome on Android", with its time zone.
+3. On Admin, press "Send a test push to my devices". "Recall test notification" should arrive within seconds, also with the browser in the background; tapping it opens Profile.
+4. Optional: install the app ("Add to Home screen" or "Install app" in the browser menu) and repeat from the installed app.
+5. Quiet hours: with them on (the default) and the phone's clock between 22:00 and 08:00, a new-episode push waits until 08:00 there. The test push ignores quiet hours.
+
+Testing on iPhone or iPad (iOS/iPadOS 16.4 or later):
+1. In Safari, open the site and use Share, "Add to Home Screen". Push only exists for the Home Screen app; in Safari itself Profile shows these instructions instead of the switch.
+2. Open Recall from the Home Screen icon and sign in there. The Home Screen app most likely keeps its own sign-in, separate from Safari's, and the emailed link opens in Safari, so signing in inside the app may not work yet; see Observations in `CLAUDE.md`.
+3. In the app, Profile, Notifications, "Turn on", and allow. Then send a test push from Admin as above; it arrives like any app notification and opens Recall when tapped.
+4. If it was refused once, allow it again under Settings, Notifications, Recall.
+
+To switch push off again, set `Push__Enabled=false`. Subscriptions stay stored but nothing is sent, and they are deleted after 180 days without a successful push (`Retention__PushSubscriptionDays`).
+
 Add update to DB
 ```
 dotnet ef migrations add <Any name> --project Recall.Web

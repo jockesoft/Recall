@@ -20,7 +20,7 @@
     <p class="tvdb-prose">
         Recall only uses cookies that are strictly necessary for the site to work, which is why
         you are not asked for consent to them. None is used for tracking, analytics or
-        advertising, and nothing else is stored in your browser.
+        advertising, and nothing else is stored in your browser@(Model.PushAvailable ? ", unless you turn on notifications (see below)" : string.Empty).
     </p>
     <ul class="tvdb-prose tvdb-privacy-list">
         <li>
@@ -85,6 +85,43 @@
         have sent it to you so that nobody gets it twice.
     </p>
 
+    @if (Model.PushAvailable)
+    {
+        <h2 id="push">Notifications on your devices</h2>
+        <p class="tvdb-prose">
+            Recall can tell you on your phone or computer when a new episode of a series you follow is out.
+            Nothing is sent until you turn it on for a device in your <a asp-page="/Account/Profile">profile</a>,
+            and the browser asks for your permission first. When you do, we store:
+        </p>
+        <ul class="tvdb-prose tvdb-privacy-list">
+            <li>
+                <strong>The subscription</strong>: an address at your browser's push service that reaches this
+                browser, and the keys that encrypt messages for it.
+            </li>
+            <li><strong>A device label</strong> made from your browser's name, such as "Chrome on Android", so you can tell your devices apart.</li>
+            <li><strong>The device's time zone</strong>, as your browser reports it, for quiet hours.</li>
+            <li><strong>Whether quiet hours are on</strong> for your account (they are unless you turn them off): notifications due between 22:00 and 08:00 on a device wait until 08:00 there.</li>
+        </ul>
+        <p class="tvdb-prose">
+            Your browser also keeps a small script for Recall (a service worker) that shows the notifications and
+            opens the page you tap. It stores nothing and caches nothing.
+        </p>
+        <p class="tvdb-prose">
+            Notifications travel through your browser's push service, run by Google (Chrome, Android and most other
+            browsers), Apple (Safari on iPhone, iPad and Mac), Mozilla (Firefox) or Microsoft (Edge), depending on the
+            device. The message is encrypted for your browser, so the push service cannot read it, and it holds only
+            what the notification shows: the series name and episode number (for example "Silo: S02E05 is out"), the
+            page a tap opens, and Recall's icon. The push service does see that a message was sent to your browser,
+            and when.
+        </p>
+        <p class="tvdb-prose">
+            To stop them, choose "Turn off" on the device or "Remove" next to any device in your profile, or block
+            notifications for Recall in your browser's or phone's settings. A device that has not received a
+            notification for @Model.Retention.PushSubscriptionDays days is removed automatically, and every device goes
+            when you delete your account.
+        </p>
+    }
+
     <h2 id="stats">Your watch history and stats</h2>
     <p class="tvdb-prose">
         When you mark an episode or a movie as watched we store which one, when you marked it, and how it
@@ -121,6 +158,13 @@
         </li>
         <li>IMDb imports and their rows: @PrivacyModel.After(Model.Retention.ImportJobDays, "the import finished").</li>
         <li>The record of which weeks the weekly email was sent to you: @PrivacyModel.After(Model.Retention.DigestLedgerDays, "it was made").</li>
+        @if (Model.PushAvailable)
+        {
+            <li>
+                A device you turned notifications on for:
+                @PrivacyModel.After(Model.Retention.PushSubscriptionDays, "the last notification that reached it (or after you added it, if none has)").
+            </li>
+        }
     </ul>
 
     <h2 id="delete">Deleting your account</h2>
@@ -133,7 +177,7 @@
         <li>
             <strong>Removed immediately:</strong> the account itself (email address and username), your
             library, watch history, likes, ratings, notifications, IMDb imports, sign-in links,
-            the emails we sent you, and your weekly-email setting with its history. Ratings you gave no longer count towards Recall ratings.
+            the emails we sent you, your weekly-email setting with its history@(Model.PushAvailable ? ", and the devices you turned notifications on for" : string.Empty). Ratings you gave no longer count towards Recall ratings.
         </li>
         <li>
             <strong>Not removed immediately:</strong> database backups are kept for about 9 days@(Model.LogRetentionDays is { } days ? $", and server logs for {days} days" : ", and server logs for a limited time").

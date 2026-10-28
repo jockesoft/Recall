@@ -9,7 +9,8 @@ namespace Recall.Web.Infrastructure.Timers;
 /// <summary>
 /// Daily housekeeping: deletes rows that have served their purpose and would
 /// otherwise accumulate forever — settled sign-in tokens, finished emails,
-/// read notifications, the already-notified ledger, and completed imports.
+/// read notifications, the already-notified ledger, push subscriptions that
+/// stopped working, and completed imports.
 /// How long each is kept comes from <see cref="RetentionOptions"/>
 /// (<c>Retention</c> section); 0 or less skips that category.
 ///
@@ -45,6 +46,9 @@ public sealed class PruneOldDataTimer(
 
         await PruneAsync("weekly-digest ledger rows", retention.DigestLedgerDays, now,
             (cutoff, ct) => retentionRepository.DeleteDigestLedgerAsync(cutoff, ct), cancellationToken);
+
+        await PruneAsync("push subscriptions without a successful push", retention.PushSubscriptionDays, now,
+            (cutoff, ct) => retentionRepository.DeleteStalePushSubscriptionsAsync(cutoff, ct), cancellationToken);
 
         await PruneAsync("completed import jobs", retention.ImportJobDays, now,
             (cutoff, ct) => retentionRepository.DeleteCompletedImportJobsAsync(cutoff, ct), cancellationToken);

@@ -55,6 +55,8 @@ public class ProfileModelTests
             _imports.Object,
             _users.Object,
             Options.Create(_digestOptions),
+            Mock.Of<IPushSubscriptionRepository>(),
+            Options.Create(new Recall.Web.Infrastructure.Push.PushOptions()),
             new FixedTimeProvider(new DateTimeOffset(2026, 10, 2, 12, 0, 0, TimeSpan.Zero)),
             NullLogger<ProfileModel>.Instance).WithTempData();
     }

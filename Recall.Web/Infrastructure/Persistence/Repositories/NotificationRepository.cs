@@ -71,6 +71,8 @@ public sealed class NotificationRepository(
         int episodeCount,
         string title,
         string? body,
+        string seriesName,
+        string? episodeCode,
         IReadOnlyCollection<int> coveredEpisodeTvdbIds,
         CancellationToken cancellationToken = default)
     {
@@ -86,6 +88,8 @@ public sealed class NotificationRepository(
             SeriesTvdbId = seriesTvdbId,
             EpisodeTvdbId = linkEpisodeTvdbId,
             EpisodeCount = episodeCount,
+            SeriesName = seriesName,
+            EpisodeCode = episodeCode,
             IsRead = false
         });
 
@@ -117,6 +121,24 @@ public sealed class NotificationRepository(
                 userId, seriesTvdbId);
             return false;
         }
+    }
+
+    public async Task<IReadOnlyList<UnreadEpisodeNotice>> GetUnreadNewEpisodesSinceAsync(
+        Guid userId,
+        DateTime sinceUtc,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Notifications
+            .AsNoTracking()
+            .Where(x => x.UserId == userId
+                        && !x.IsRead
+                        && x.Type == NotificationType.NewEpisode
+                        && x.CreatedUtc >= sinceUtc)
+            .OrderBy(x => x.CreatedUtc)
+            .ThenBy(x => x.Id)
+            .Select(x => new UnreadEpisodeNotice(
+                x.Id, x.Title, x.SeriesName, x.EpisodeTvdbId, x.EpisodeCode, x.EpisodeCount, x.CreatedUtc))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task MarkReadAsync(Guid userId, Guid notificationId, CancellationToken cancellationToken = default)

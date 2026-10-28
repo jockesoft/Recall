@@ -28,6 +28,12 @@ public interface IDataRetentionRepository
     Task<int> DeleteDigestLedgerAsync(DateTime createdBeforeUtc, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Push subscriptions whose last successful push (or, if none ever
+    /// succeeded, whose creation) is before <paramref name="lastSuccessBeforeUtc"/>.
+    /// </summary>
+    Task<int> DeleteStalePushSubscriptionsAsync(DateTime lastSuccessBeforeUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Import jobs completed before <paramref name="completedBeforeUtc"/>, with
     /// their rows. Returns the number of jobs removed. A job still processing
     /// is never touched.
