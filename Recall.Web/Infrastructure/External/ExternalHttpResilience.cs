@@ -37,8 +37,23 @@ public sealed class ExternalHttpResilienceOptions
 /// </summary>
 public static class ExternalHttpResilience
 {
-    /// <summary>Key of the TheTVDB retry pipeline (<c>ResiliencePipeline&lt;HttpResponseMessage&gt;</c>, keyed service).</summary>
+    /// <summary>Key of the TheTVDB retry pipeline (<c>ResiliencePipeline&lt;HttpResponseMessage&gt;</c>, keyed service), and its name in log lines.</summary>
     public const string TheTvDbPipeline = "thetvdb";
+
+    /// <summary>The OMDb pipeline's name in log lines (without it Polly names it after the typed client: <c>IOmdbApiClient-omdb</c>).</summary>
+    public const string OmdbPipeline = "omdb";
+
+    /// <summary>
+    /// The instance name of both pipelines. Polly's log lines name their source
+    /// as pipeline/instance/strategy, and an unset instance shows as "(null)"
+    /// or nothing: "thetvdb/standard/Retry" says which pipeline and strategy wrote it.
+    /// </summary>
+    public const string PipelineInstance = "standard";
+
+    /// <summary>Strategy names, the last part of a log line's source.</summary>
+    public const string RetryStrategy = "Retry";
+
+    public const string AttemptTimeoutStrategy = "AttemptTimeout";
 
     /// <summary>
     /// The longest wait between attempts: caps the exponential backoff, and is
@@ -86,6 +101,7 @@ public static class ExternalHttpResilience
     {
         services.AddResiliencePipeline<string, HttpResponseMessage>(TheTvDbPipeline, (pipeline, context) =>
         {
+            pipeline.InstanceName = PipelineInstance;
             pipeline.AddRetry(CreateRetry(context.ServiceProvider, TheTvDbMaxRetries, retryTooManyRequests: true));
         });
 
@@ -120,8 +136,14 @@ public static class ExternalHttpResilience
 
             retry.DisableForUnsafeHttpMethods();
 
+            pipeline.Name = OmdbPipeline;
+            pipeline.InstanceName = PipelineInstance;
             pipeline.AddRetry(retry);
-            pipeline.AddTimeout(OmdbAttemptTimeout);
+            pipeline.AddTimeout(new TimeoutStrategyOptions
+            {
+                Name = AttemptTimeoutStrategy,
+                Timeout = OmdbAttemptTimeout
+            });
         });
 
         return builder;
@@ -134,6 +156,7 @@ public static class ExternalHttpResilience
 
         return new HttpRetryStrategyOptions
         {
+            Name = RetryStrategy,
             MaxRetryAttempts = maxRetryAttempts,
             BackoffType = DelayBackoffType.Exponential,
             UseJitter = settings.UseJitter,
