@@ -8,7 +8,7 @@ using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.External;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
-using Serilog;
+using Recall.Tests.TestSupport;
 using Serilog.Core;
 using Serilog.Events;
 using Serilog.Extensions.Logging;
@@ -20,7 +20,7 @@ namespace Recall.Tests.Infrastructure.External;
 /// the app ships with. The clients come from the real registrations with only
 /// the socket swapped, and the logger factory is a Serilog one, as
 /// <c>UseSerilog</c> makes it, with the <c>Serilog:MinimumLevel</c> section of
-/// the real appsettings files and an in-memory sink in place of console and file.
+/// the real appsettings files and an in-memory sink (<see cref="ShippedSerilog"/>).
 /// </summary>
 [TestFixture]
 public class ResilienceLoggingTests
@@ -29,37 +29,18 @@ public class ResilienceLoggingTests
     private const string LoginJson = """{ "status": "success", "data": { "token": "t" } }""";
     private const string OmdbJson = """{ "Title": "Example", "Response": "True" }""";
 
-    private sealed class InMemorySink : ILogEventSink
-    {
-        public List<LogEvent> Events { get; } = [];
-
-        public void Emit(LogEvent logEvent)
-        {
-            lock (Events)
-                Events.Add(logEvent);
-        }
-
-        /// <summary>What reached the sink from Polly's telemetry (category <c>Polly</c>), in order.</summary>
-        public IReadOnlyList<PollyEntry> Polly()
-        {
-            lock (Events)
-            {
-                return Events
-                    .Where(e => Scalar(e, Constants.SourceContextPropertyName) == "Polly")
-                    .Select(e => new PollyEntry(
-                        e.Level,
-                        // The "Source" of Polly's message: pipeline/instance/strategy.
-                        $"{Scalar(e, "PipelineName")}/{Scalar(e, "PipelineInstance")}/{Scalar(e, "StrategyName")}",
-                        e.RenderMessage()))
-                    .ToList();
-            }
-        }
-
-        private static string? Scalar(LogEvent e, string property) =>
-            e.Properties.TryGetValue(property, out var value) ? (value as ScalarValue)?.Value?.ToString() : null;
-    }
-
     private sealed record PollyEntry(LogEventLevel Level, string Source, string Message);
+
+    /// <summary>What reached the sink from Polly's telemetry (category <c>Polly</c>), in order.</summary>
+    private static IReadOnlyList<PollyEntry> PollyEntries(InMemorySink sink) =>
+        sink.Events
+            .Where(e => InMemorySink.SourceContext(e) == "Polly")
+            .Select(e => new PollyEntry(
+                e.Level,
+                // The "Source" of Polly's message: pipeline/instance/strategy.
+                $"{InMemorySink.Scalar(e, "PipelineName")}/{InMemorySink.Scalar(e, "PipelineInstance")}/{InMemorySink.Scalar(e, "StrategyName")}",
+                e.RenderMessage()))
+            .ToList();
 
     /// <summary>Answers the TheTVDB login, then replays the scripted data responses (repeating the last).</summary>
     private sealed class ScriptedHandler(params Func<HttpResponseMessage>[] dataResponses) : HttpMessageHandler
@@ -81,29 +62,6 @@ public class ResilienceLoggingTests
 
     private static HttpResponseMessage Status(HttpStatusCode status) =>
         new(status) { Content = new StringContent("") };
-
-    /// <summary>The <c>Serilog:MinimumLevel</c> the app runs with in <paramref name="environment"/> (null = the base file alone).</summary>
-    private static Logger CreateLogger(InMemorySink sink, string? environment)
-    {
-        var builder = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false);
-        if (environment is not null)
-            builder.AddJsonFile($"appsettings.{environment}.json", optional: false);
-        var appConfiguration = builder.Build();
-
-        // Only the levels: the sinks the files name (console, a log file) stay out of a test run.
-        var levels = appConfiguration.GetSection("Serilog:MinimumLevel").AsEnumerable()
-            .Where(pair => pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value);
-        levels.Should().NotBeEmpty();
-        var levelsOnly = new ConfigurationBuilder().AddInMemoryCollection(levels).Build();
-
-        return new LoggerConfiguration()
-            .ReadFrom.Configuration(levelsOnly)
-            .WriteTo.Sink(sink)
-            .CreateLogger();
-    }
 
     private static ServiceProvider BuildServices(ScriptedHandler handler, Logger logger)
     {
@@ -130,19 +88,18 @@ public class ResilienceLoggingTests
         return services.BuildServiceProvider();
     }
 
-    /// <summary>The configurations the app runs with: the base file alone, and with each environment's file on top.</summary>
-    private static readonly string?[] Environments = [null, "Development", "Production"];
+    private static readonly string?[] Environments = ShippedSerilog.Environments;
 
     private static async Task<IReadOnlyList<PollyEntry>> RunAsync(
         string? environment, Func<IServiceProvider, Task> call, params Func<HttpResponseMessage>[] script)
     {
         var sink = new InMemorySink();
-        await using (var services = BuildServices(new ScriptedHandler(script), CreateLogger(sink, environment)))
+        await using (var services = BuildServices(new ScriptedHandler(script), ShippedSerilog.CreateLogger(sink, environment)))
         {
             await call(services);
         } // disposing the provider disposes the logger, which flushes the sink
 
-        return sink.Polly();
+        return PollyEntries(sink);
     }
 
     private static Task TheTvDbSearch(IServiceProvider services) =>
