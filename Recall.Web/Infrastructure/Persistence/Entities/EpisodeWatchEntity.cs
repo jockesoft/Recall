@@ -14,6 +14,13 @@ public sealed class EpisodeWatchEntity : IHasAuditTimestamps
 
     /// <summary>How the row was written; decides whether <see cref="WatchedUtc"/> counts as a watch date.</summary>
     public WatchSource Source { get; set; }
+
+    /// <summary>
+    /// The marking action that wrote the row: every row one action inserts
+    /// shares it, and an Undo deletes by it. Null on rows written before the
+    /// column existed (2026-11-13), which can no longer be undone anyway.
+    /// </summary>
+    public Guid? BatchId { get; set; }
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
 }
