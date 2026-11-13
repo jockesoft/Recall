@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Recall.Tests.TestSupport;
 using Serilog.Extensions.Logging;
@@ -62,6 +63,21 @@ public class LoggingLevelsTests
                 _ => LogLevel.Error
             })
             .ToList();
+    }
+
+    /// <summary>UseSerilog ignores Microsoft's Logging section, so a level set there would look effective and do nothing.</summary>
+    [TestCase("appsettings.json")]
+    [TestCase("appsettings.Development.json")]
+    [TestCase("appsettings.Production.json")]
+    public void AppSettings_Should_HaveNoLoggingSection(string file)
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile(file, optional: false)
+            .Build();
+
+        configuration.GetSection("Logging").Exists().Should().BeFalse(
+            "log levels live only under Serilog:MinimumLevel");
     }
 
     [TestCaseSource(nameof(PerRequestCases))]
