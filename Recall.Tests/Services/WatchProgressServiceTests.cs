@@ -40,7 +40,7 @@ public class WatchProgressServiceTests
     private const int SeriesId = 42;
     private const string Past = "2025-01-01";
     private const string Future = "2999-01-01";
-    private static readonly DateTime BatchStamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
 
     private static EpisodeSummary Ep(int id, int season, int number, string? aired, bool isMovie = false) => new()
     {
@@ -93,7 +93,7 @@ public class WatchProgressServiceTests
                 _markedSource = source;
                 _markedClickedEpisode = clicked;
             })
-            .ReturnsAsync(() => new WatchedBatch(marked.Count, BatchStamp));
+            .ReturnsAsync(() => new WatchedBatch(marked.Count, BatchId));
         return marked;
     }
 
@@ -279,7 +279,7 @@ public class WatchProgressServiceTests
 
         result.Outcome.Should().Be(EpisodeWatchOutcome.MarkedWatched);
         marked.Should().Equal([2], "only the episode itself, never the earlier ones");
-        result.Batch.Should().Be(new WatchedBatch(1, BatchStamp));
+        result.Batch.Should().Be(new WatchedBatch(1, BatchId));
     }
 
     [Test]
@@ -441,7 +441,7 @@ public class WatchProgressServiceTests
 
         var result = await _sut.MarkWatchedThroughAsync(Guid.NewGuid(), SeriesId, episodeTvdbId: 2);
 
-        result.Batch.Should().Be(new WatchedBatch(2, BatchStamp));
+        result.Batch.Should().Be(new WatchedBatch(2, BatchId));
     }
 
     [Test]

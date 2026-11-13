@@ -23,7 +23,7 @@ public class EpisodeDetailsPostTests
     private const int EpisodeId = 4201;
     private const int SeriesId = 42;
     private static readonly Guid UserId = Guid.NewGuid();
-    private static readonly DateTime BatchStamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
 
     private Mock<ITheTvDbService> _tvDb = null!;
     private Mock<ICurrentUserService> _currentUser = null!;
@@ -343,8 +343,8 @@ public class EpisodeDetailsPostTests
         EpisodeIs(1, 3);
         _progress
             .SetupSequence(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp), AddedToLibrary: "Silo"))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchStamp), AddedToLibrary: "Silo"));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchId), AddedToLibrary: "Silo"))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchId), AddedToLibrary: "Silo"));
 
         await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
         _sut.SuccessToast().Should().Be("Marked 3 episodes as watched and added Silo to your library.");
@@ -379,7 +379,7 @@ public class EpisodeDetailsPostTests
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MarkWatchedThroughResult(
-                EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp),
+                EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchId),
                 CaughtUp: new SeriesCaughtUp(SeriesId, "Silo", Finished: false)));
 
         await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
@@ -396,7 +396,7 @@ public class EpisodeDetailsPostTests
         EpisodeBelongsTo(SeriesId);
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp)));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchId)));
 
         var result = await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
 
@@ -466,8 +466,8 @@ public class EpisodeDetailsPostTests
         EpisodeIs(3, 4);
         _progress
             .SetupSequence(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp), ResumedWatching: "Silo"))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchStamp), ResumedWatching: "Silo"));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchId), ResumedWatching: "Silo"))
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchId), ResumedWatching: "Silo"));
 
         await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
         _sut.SuccessToast().Should().Be("Marked 3 episodes as watched and resumed watching Silo.");
@@ -486,7 +486,7 @@ public class EpisodeDetailsPostTests
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MarkWatchedThroughResult(
-                EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: stoppedOn));
+                EpisodeFound: true, MarkedCount: 3, Batch: new WatchedBatch(3, BatchId), ResumedWatching: "Silo", ResumedFromStoppedUtc: stoppedOn));
 
         await _sut.OnPostMarkWatchedThroughAsync(EpisodeId, default);
 

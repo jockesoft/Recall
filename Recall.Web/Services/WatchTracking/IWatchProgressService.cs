@@ -123,14 +123,15 @@ public interface IWatchProgressService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Reverses one bulk mark (a season, or "this and earlier"), identified by
-    /// the <see cref="WatchedBatch.WatchedUtc"/> it returned. Only the rows that
-    /// call inserted are removed. Returns how many were removed.
+    /// Reverses one undoable mark (a season, "this and earlier", or the
+    /// Dashboard's one-tap mark), identified by the <see cref="WatchedBatch.Id"/>
+    /// it returned. Only the rows that call inserted are removed. Returns how
+    /// many were removed.
     /// </summary>
     Task<int> UndoWatchedBatchAsync(
         Guid userId,
         int seriesTvdbId,
-        DateTime batchWatchedUtc,
+        Guid batchId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

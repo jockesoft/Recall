@@ -646,7 +646,7 @@ public class DashboardModelTests
 
     // ---- POST: mark watched ----------------------------------------------------
 
-    private static readonly DateTime BatchStamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
 
     [Test]
     public async Task MarkWatched_Should_AddTheCaughtUpSentence_ToTheSameToast_AndKeepTheUndo()
@@ -655,14 +655,14 @@ public class DashboardModelTests
         _progress
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UndoableEpisodeWatch(
-                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp),
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId),
                 new SeriesCaughtUp(1, "Chernobyl", Finished: true, UserHasRated: false)));
 
         await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
 
         _sut.SuccessToast().Should().Be("Marked Chernobyl S01E05 as watched. You've finished Chernobyl.");
         _sut.InfoToast().Should().BeNull("one toast per action");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
         _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpFinished);
         _sut.TempData[PageModelToastExtensions.RateSeriesKey].Should().Be("1");
     }
@@ -673,7 +673,7 @@ public class DashboardModelTests
         SetUpSeries(new SeriesAggregate { TvdbId = 1, Name = "Show", Episodes = [Ep(11, 2, 6, Today.AddDays(-7))] });
         _progress
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp)));
+            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId)));
 
         var result = await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
 
@@ -682,7 +682,7 @@ public class DashboardModelTests
         _sut.SuccessToast().Should().Be("Marked Show S02E06 as watched.");
         _sut.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be("1",
             "one tap with no confirmation, and the card is gone afterwards: the toast is the only way back");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
         _watches.Verify(
             x => x.MarkWatchedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Never, "the page must not write a watch itself — the service validates the pair first");
@@ -698,7 +698,7 @@ public class DashboardModelTests
         await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
 
         _sut.SuccessToast().Should().BeNull("a double tap wrote nothing, so there is nothing to undo");
-        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStampKey).Should().BeFalse();
+        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedBatchKey).Should().BeFalse();
     }
 
     [Test]
@@ -706,12 +706,12 @@ public class DashboardModelTests
     {
         _progress
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp)));
+            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId)));
 
         await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
 
         _sut.SuccessToast().Should().Be("Marked as watched.");
-        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStampKey).Should().BeTrue();
+        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedBatchKey).Should().BeTrue();
     }
 
     [TestCase(EpisodeWatchOutcome.EpisodeNotInSeries, "That episode doesn't belong to this series.")]
@@ -855,12 +855,12 @@ public class DashboardModelTests
         _progress
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UndoableEpisodeWatch(
-                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp), ResumedWatching: "Silo"));
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId), ResumedWatching: "Silo"));
 
         await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
 
         _sut.SuccessToast().Should().Be("Marked Silo S03E04 as watched and resumed watching Silo.");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString(), "the Undo of the mark stays");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"), "the Undo of the mark stays");
     }
 
     // ---- a series removed from the library keeps its watch history ---------------------
@@ -890,7 +890,7 @@ public class DashboardModelTests
         _progress
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UndoableEpisodeWatch(
-                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: stoppedOn));
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId), ResumedWatching: "Silo", ResumedFromStoppedUtc: stoppedOn));
 
         await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
 

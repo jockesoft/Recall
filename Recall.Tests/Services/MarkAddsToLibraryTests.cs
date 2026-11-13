@@ -79,7 +79,7 @@ public sealed class MarkAddsToLibraryTests
             .ReturnsAsync((Guid _, int _, IEnumerable<int> ids, WatchSource _, int? _, CancellationToken _) =>
             {
                 var added = ids.Count(id => _watched.Add(id));
-                return added == 0 ? WatchedBatch.Empty : new WatchedBatch(added, DateTime.UtcNow);
+                return added == 0 ? WatchedBatch.Empty : new WatchedBatch(added, Guid.NewGuid());
             });
 
         _sut = new WatchProgressService(

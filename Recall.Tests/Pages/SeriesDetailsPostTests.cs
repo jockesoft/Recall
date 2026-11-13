@@ -24,7 +24,7 @@ public class SeriesDetailsPostTests
     private const int SeriesId = 42;
     private const int EpisodeId = 4201;
     private static readonly Guid UserId = Guid.NewGuid();
-    private static readonly DateTime BatchStamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
 
     private Mock<ITheTvDbService> _tvDb = null!;
     private Mock<ICurrentUserService> _currentUser = null!;
@@ -90,7 +90,7 @@ public class SeriesDetailsPostTests
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default)), "track watched episodes").SetName("Guard_MarkWatchedThrough");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostMarkSeasonWatchedAsync(SeriesId, default)), "track watched episodes").SetName("Guard_MarkSeasonWatched");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostMarkSeasonUnwatchedAsync(SeriesId, default)), "track watched episodes").SetName("Guard_MarkSeasonUnwatched");
-        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default)), "track watched episodes").SetName("Guard_UndoWatched");
+        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostUndoWatchedAsync(SeriesId, BatchId, null, default)), "track watched episodes").SetName("Guard_UndoWatched");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostStopWatchingAsync(SeriesId, default)), "manage your library").SetName("Guard_StopWatching");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostResumeWatchingAsync(SeriesId, false, null, default)), "manage your library").SetName("Guard_ResumeWatching");
     }
@@ -329,17 +329,17 @@ public class SeriesDetailsPostTests
             .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, AddedToLibrary: "Silo"));
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchStamp), AddedToLibrary: "Silo"));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchId), AddedToLibrary: "Silo"));
         _progress
             .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchStamp), UpToDate, AddedToLibrary: "Silo"));
+            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchId), UpToDate, AddedToLibrary: "Silo"));
 
         await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
         _sut.SuccessToast().Should().Be("Marked the episode as watched and added Silo to your library.");
 
         await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
         _sut.SuccessToast().Should().Be("Marked 5 episodes as watched and added Silo to your library.");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
 
         await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
         _sut.SuccessToast().Should().Be(
@@ -419,12 +419,12 @@ public class SeriesDetailsPostTests
         AlreadyInLibrary();
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 8, Batch: new WatchedBatch(8, BatchStamp), CaughtUp: Finished));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 8, Batch: new WatchedBatch(8, BatchId), CaughtUp: Finished));
 
         await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
 
         _sut.SuccessToast().Should().Be("Marked 8 episodes as watched. You've finished Chernobyl.");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
         _sut.TempData[PageModelToastExtensions.RateSeriesKey].Should().Be(SeriesId.ToString());
     }
 
@@ -435,13 +435,13 @@ public class SeriesDetailsPostTests
         AlreadyInLibrary();
         _progress
             .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchStamp), UpToDate));
+            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchId), UpToDate));
 
         await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
 
         _sut.SuccessToast().Should().Be(
             "Marked 7 episodes as watched. You're up to date with Silo. We'll let you know when a new episode airs.");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
         _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpUpToDate);
     }
 
@@ -452,14 +452,14 @@ public class SeriesDetailsPostTests
         AlreadyInLibrary();
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(4, BatchStamp)));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(4, BatchId)));
 
         var result = await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
 
         AssertRedirectsBackToTheSeason(result);
         _sut.SuccessToast().Should().Be("Marked 5 episodes as watched.");
         _sut.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be("42");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
     }
 
     [Test]
@@ -469,12 +469,12 @@ public class SeriesDetailsPostTests
         AlreadyInLibrary();
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchStamp)));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 1, Batch: new WatchedBatch(1, BatchId)));
 
         await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
 
         _sut.SuccessToast().Should().Be("Episode marked as watched.");
-        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStampKey).Should().BeFalse("a single episode is undone by clicking its tick");
+        _sut.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedBatchKey).Should().BeFalse("a single episode is undone by clicking its tick");
     }
 
     [Test]
@@ -502,13 +502,13 @@ public class SeriesDetailsPostTests
         AlreadyInLibrary();
         _progress
             .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchStamp)));
+            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchId)));
 
         var result = await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
 
         AssertRedirectsBackToTheSeason(result);
         _sut.SuccessToast().Should().Be("Marked 7 episodes as watched.");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
     }
 
     [Test]
@@ -571,25 +571,31 @@ public class SeriesDetailsPostTests
     {
         SignIn();
         _progress
-            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(removed);
 
-        var result = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, returnUrl: null, default);
+        var result = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, returnUrl: null, default);
 
         AssertRedirectsBackToTheSeason(result);
         _sut.InfoToast().Should().Be(expected);
     }
 
-    [TestCase(0L)]
-    [TestCase(-5L)]
-    [TestCase(long.MaxValue)]
-    public async Task UndoWatched_Should_IgnoreAStampThatIsNotADate(long stamp)
+    /// <summary>
+    /// A toast rendered before 2026-11-13 posts the batch's timestamp as
+    /// <c>stamp</c> and no <c>batch</c>, which binds to null; an unparsable or
+    /// empty id is no better. Nothing is undone, and the page says so.
+    /// </summary>
+    [TestCase(null)]
+    [TestCase("00000000-0000-0000-0000-000000000000")]
+    public async Task UndoWatched_Should_SayThereIsNothingToUndo_ForAFormWithoutABatchId(string? batch)
     {
         SignIn();
 
-        var result = await _sut.OnPostUndoWatchedAsync(SeriesId, stamp, returnUrl: null, default);
+        var result = await _sut.OnPostUndoWatchedAsync(SeriesId, batch is null ? null : Guid.Parse(batch), returnUrl: null, default);
 
-        result.Should().BeOfType<RedirectToPageResult>();
+        AssertRedirectsBackToTheSeason(result);
+        _sut.InfoToast().Should().Be(DetailsModel.NothingToUndo);
+        _sut.ErrorToast().Should().BeNull();
         _progress.VerifyNoOtherCalls();
     }
 
@@ -602,8 +608,8 @@ public class SeriesDetailsPostTests
         url.Setup(x => x.IsLocalUrl("https://evil.example/")).Returns(false);
         _sut.Url = url.Object;
 
-        var local = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, "/Episodes/Details/4201", default);
-        var foreign = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, "https://evil.example/", default);
+        var local = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, "/Episodes/Details/4201", default);
+        var foreign = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, "https://evil.example/", default);
 
         local.Should().BeOfType<LocalRedirectResult>().Which.Url.Should().Be("/Episodes/Details/4201");
         AssertRedirectsBackToTheSeason(foreign);
@@ -735,17 +741,17 @@ public class SeriesDetailsPostTests
             .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedWatched, ResumedWatching: "Silo"));
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchStamp), ResumedWatching: "Silo"));
+            .ReturnsAsync(new MarkWatchedThroughResult(EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchId), ResumedWatching: "Silo"));
         _progress
             .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchStamp), UpToDate, ResumedWatching: "Silo"));
+            .ReturnsAsync(new SeasonWatchResult(SeasonFound: true, new WatchedBatch(7, BatchId), UpToDate, ResumedWatching: "Silo"));
 
         await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
         _sut.SuccessToast().Should().Be("Marked the episode as watched and resumed watching Silo.");
 
         await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
         _sut.SuccessToast().Should().Be("Marked 5 episodes as watched and resumed watching Silo.");
-        _sut.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(BatchStamp.Ticks.ToString());
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
 
         await _sut.OnPostMarkSeasonWatchedAsync(SeriesId, default);
         _sut.SuccessToast().Should().Be(
@@ -798,11 +804,11 @@ public class SeriesDetailsPostTests
         _progress
             .Setup(x => x.MarkWatchedThroughAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MarkWatchedThroughResult(
-                EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: StoppedOn));
+                EpisodeFound: true, MarkedCount: 5, Batch: new WatchedBatch(5, BatchId), ResumedWatching: "Silo", ResumedFromStoppedUtc: StoppedOn));
         _progress
             .Setup(x => x.MarkSeasonWatchedAsync(UserId, SeriesId, 2, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SeasonWatchResult(
-                SeasonFound: true, new WatchedBatch(7, BatchStamp), ResumedWatching: "Silo", ResumedFromStoppedUtc: StoppedOn));
+                SeasonFound: true, new WatchedBatch(7, BatchId), ResumedWatching: "Silo", ResumedFromStoppedUtc: StoppedOn));
 
         await _sut.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default);
         _sut.TempData[PageModelToastExtensions.UndoWatchedStoppedKey].Should().Be(StoppedOn.Ticks.ToString());
@@ -817,13 +823,13 @@ public class SeriesDetailsPostTests
     {
         SignIn();
         _progress
-            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(3);
         _progress
             .Setup(x => x.RestoreStoppedAsync(UserId, SeriesId, StoppedOn, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp: StoppedOn.Ticks);
+        var result = await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, null, default, stoppedStamp: StoppedOn.Ticks);
 
         AssertRedirectsBackToTheSeason(result);
         _sut.InfoToast().Should().Be("Undone — 3 episodes marked as not watched. You've stopped watching the series again.");
@@ -835,10 +841,10 @@ public class SeriesDetailsPostTests
     {
         SignIn();
         _progress
-            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(3);
 
-        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default);
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, null, default);
 
         _sut.InfoToast().Should().Be("Undone — 3 episodes marked as not watched.");
         VerifyRestored(Times.Never());
@@ -851,10 +857,10 @@ public class SeriesDetailsPostTests
     {
         SignIn();
         _progress
-            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
 
-        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp);
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, null, default, stoppedStamp);
 
         _sut.InfoToast().Should().Be("Undone — 1 episode marked as not watched.");
         VerifyRestored(Times.Never());
@@ -865,17 +871,17 @@ public class SeriesDetailsPostTests
     {
         SignIn();
         _progress
-            .SetupSequence(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchStamp, It.IsAny<CancellationToken>()))
+            .SetupSequence(x => x.UndoWatchedBatchAsync(UserId, SeriesId, BatchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(0)
             .ReturnsAsync(2);
 
         // A second press of the same Undo: nothing removed, so nothing restored.
-        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp: StoppedOn.Ticks);
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, null, default, stoppedStamp: StoppedOn.Ticks);
         _sut.InfoToast().Should().Be("Nothing left to undo.");
         VerifyRestored(Times.Never());
 
         // The restore changed nothing (already stopped again): the toast does not claim it did.
-        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchStamp.Ticks, null, default, stoppedStamp: StoppedOn.Ticks);
+        await _sut.OnPostUndoWatchedAsync(SeriesId, BatchId, null, default, stoppedStamp: StoppedOn.Ticks);
         _sut.InfoToast().Should().Be("Undone — 2 episodes marked as not watched.");
     }
 

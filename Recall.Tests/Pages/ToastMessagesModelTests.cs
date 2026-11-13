@@ -17,7 +17,7 @@ namespace Recall.Tests.Pages;
 [TestFixture]
 public sealed class ToastMessagesModelTests
 {
-    private static readonly DateTime Stamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
     private static readonly DateOnly Today = new(2026, 10, 6);
 
     private sealed class TestPage : PageModel;
@@ -119,11 +119,11 @@ public sealed class ToastMessagesModelTests
     public void AToastWithAnUndoOfAMark_Should_CloseAfterTenSeconds()
     {
         var page = Page();
-        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, Stamp));
+        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, BatchId));
 
         var toast = OnlyToastOf(page);
 
-        toast.UndoWatched.Should().Be(new UndoWatchedForm("42", Stamp.Ticks.ToString(), StoppedStamp: null));
+        toast.UndoWatched.Should().Be(new UndoWatchedForm("42", BatchId.ToString("D"), StoppedStamp: null));
         toast.HasAction.Should().BeTrue();
         toast.DurationMilliseconds.Should().Be(10000, "it no longer stays until dismissed");
     }
@@ -132,7 +132,7 @@ public sealed class ToastMessagesModelTests
     public void TheSameToast_WithoutItsUndo_Should_CloseAfterFiveSeconds()
     {
         var page = Page();
-        page.SetSuccessToastWithWatchedUndo("Episode marked as watched.", 42, new WatchedBatch(1, Stamp));
+        page.SetSuccessToastWithWatchedUndo("Episode marked as watched.", 42, new WatchedBatch(1, BatchId));
 
         var toast = OnlyToastOf(page);
 
@@ -145,7 +145,7 @@ public sealed class ToastMessagesModelTests
     {
         var stoppedUtc = new DateTime(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc);
         var page = Page();
-        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched and resumed watching Silo.", 42, new WatchedBatch(3, Stamp),
+        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched and resumed watching Silo.", 42, new WatchedBatch(3, BatchId),
             resumedFromStoppedUtc: stoppedUtc);
 
         OnlyToastOf(page).UndoWatched!.StoppedStamp.Should().Be(stoppedUtc.Ticks.ToString());
@@ -194,7 +194,7 @@ public sealed class ToastMessagesModelTests
     public void SeveralToasts_Should_EachGetTheirOwnDuration_WithTheNewestLast()
     {
         var page = Page();
-        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, Stamp));
+        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, BatchId));
         page.SetErrorToast("Could not load your rating.");
         page.SetInfoToast("Rating removed.");
 
@@ -220,12 +220,28 @@ public sealed class ToastMessagesModelTests
         var page = Page();
         page.SetSuccessToast("Saved.");
         page.TempData[PageModelToastExtensions.UndoWatchedSeriesKey] = "not-a-number";
-        page.TempData[PageModelToastExtensions.UndoWatchedStampKey] = "nor-this";
+        page.TempData[PageModelToastExtensions.UndoWatchedBatchKey] = "nor-this";
         page.TempData[PageModelToastExtensions.RateSeriesKey] = "x";
 
         var toast = OnlyToastOf(page);
 
         toast.HasAction.Should().BeFalse();
         toast.DurationMilliseconds.Should().Be(5000);
+    }
+
+    [Test]
+    public void UndoWatched_Should_NotBeOffered_FromAToastWrittenBeforeBatchIds()
+    {
+        // A TempData cookie from before 2026-11-13: the series and the batch's
+        // timestamp under the old key, no batch id.
+        var page = Page();
+        page.SetSuccessToast("Marked 8 episodes as watched.");
+        page.TempData[PageModelToastExtensions.UndoWatchedSeriesKey] = "42";
+        page.TempData["Toast.UndoWatched.Stamp"] = "639301705825420000";
+
+        var toast = OnlyToastOf(page);
+
+        toast.UndoWatched.Should().BeNull();
+        toast.HasAction.Should().BeFalse();
     }
 }
