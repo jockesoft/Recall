@@ -20,11 +20,37 @@
                 If this address can sign in, a link is on its way to <strong class="tvdb-break-anywhere">@Model.Email</strong>.
             </p>
             <p class="tvdb-meta mb-0">
-                The link expires in @Model.LinkLifetimeMinutes minute@(Model.LinkLifetimeMinutes == 1 ? "" : "s") and works once.
+                The link and the code in it expire in @Model.LinkLifetimeMinutes minute@(Model.LinkLifetimeMinutes == 1 ? "" : "s") and work once.
                 Nothing after a few minutes? Check your spam folder.
             </p>
+
+            @* For where the link doesn't open (a Home Screen app keeps its own sign-in):
+               the address rides along in the form, so no cookie of ours is needed. *@
+            <form method="post" asp-page-handler="VerifyCode" class="tvdb-code-form" id="signInCodeForm">
+                <input type="hidden" asp-for="Email" />
+                <input type="hidden" asp-for="ReturnUrl" />
+                @if (Model.CodeLockedOut)
+                {
+                    <p class="tvdb-field-message text-danger mb-0" id="codeMessage" role="alert">@Model.CodeError</p>
+                }
+                else
+                {
+                    <label for="code" class="form-label">Or enter the code from the email</label>
+                    <div class="tvdb-code-form__row">
+                        <input id="code" name="code" value="@Model.Code" class="form-control tvdb-code-form__input"
+                               inputmode="numeric" autocomplete="one-time-code" maxlength="12" required
+                               placeholder="123 456" aria-describedby="codeMessage codeHint"
+                               aria-invalid="@(Model.CodeError is null ? "false" : "true")"
+                               autofocus="@(Model.CodeError is not null)" />
+                        <button type="submit" class="btn btn-primary" id="signInCodeSubmit">Sign in</button>
+                    </div>
+                    <p class="tvdb-field-message text-danger mb-0" id="codeMessage" role="alert">@Model.CodeError</p>
+                    <p class="tvdb-meta mb-0" id="codeHint">For where the link doesn't open, such as Recall added to your Home Screen.</p>
+                }
+            </form>
+
             <div class="tvdb-empty-state__actions">
-                <a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl">Use a different email</a>
+                <a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl">@(Model.CodeLockedOut ? "Request a new email" : "Use a different email")</a>
             </div>
         </div>
     }

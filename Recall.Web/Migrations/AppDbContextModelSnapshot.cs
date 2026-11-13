@@ -496,6 +496,17 @@ namespace Recall.Web.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<int>("CodeAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("code_attempts");
+
+                    b.Property<string>("CodeHash")
+                        .HasMaxLength(44)
+                        .HasColumnType("character varying(44)")
+                        .HasColumnName("code_hash");
+
                     b.Property<DateTime?>("ConsumedUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("consumed_utc");

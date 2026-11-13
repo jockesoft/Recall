@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -62,6 +64,23 @@ public sealed class LoginModel(
     /// <summary>How long an emailed link works, from configuration, so the page tells the truth about it.</summary>
     public int LinkLifetimeMinutes => loginOptions.Value.TokenLifetimeMinutes;
 
+    /// <summary>The code as typed, kept when it did not work so it can be corrected.</summary>
+    public string? Code { get; private set; }
+
+    /// <summary>Why the code did not sign in; null before one is tried.</summary>
+    public string? CodeError { get; private set; }
+
+    /// <summary>Too many wrong codes since the last email: the field gives way to "request a new email".</summary>
+    public bool CodeLockedOut { get; private set; }
+
+    /// <summary>
+    /// One answer for a wrong code, an expired one and an address without an
+    /// account, so the form cannot be used to find out which addresses have one.
+    /// </summary>
+    public const string WrongCodeMessage = "That code didn't work. Check it, or request a new email if it has expired.";
+
+    public const string TooManyCodesMessage = "Too many wrong codes. Request a new email to get a new link and code.";
+
     public void OnGet()
     {
         // Unix milliseconds rather than an ISO-8601 string: a plain integer
@@ -115,6 +134,43 @@ public sealed class LoginModel(
         // Always report the same thing whether or not the account existed.
         LinkSent = true;
         return Page();
+    }
+
+    /// <summary>
+    /// The code from the email, for where the link does not open: a Home Screen
+    /// app on an iPhone has cookies of its own, and the link opens Safari. The
+    /// form carries the address it was sent to, so it needs no cookie of ours
+    /// beyond the antiforgery one. Rate limited per IP in its own bucket
+    /// (<c>LoginEmailPartition</c>).
+    /// </summary>
+    public async Task<IActionResult> OnPostVerifyCodeAsync(string? code, CancellationToken cancellationToken)
+    {
+        // Back to "check your inbox", with the field, whatever happens below.
+        LinkSent = true;
+        Code = code;
+        ModelState.Clear();
+
+        var result = await authService.RedeemCodeAsync(Email, code, cancellationToken);
+
+        switch (result.Status)
+        {
+            case LoginRedemptionStatus.Success:
+                // As Pages/Account/Verify does for the link.
+                await HttpContext.SignInAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    RecallPrincipal.Create(result.UserId, result.DisplayName, result.Email, result.Role),
+                    new AuthenticationProperties { IsPersistent = true });
+                return LocalRedirect(SafeReturnUrl());
+
+            case LoginRedemptionStatus.TooManyAttempts:
+                CodeLockedOut = true;
+                CodeError = TooManyCodesMessage;
+                return Page();
+
+            default:
+                CodeError = WrongCodeMessage;
+                return Page();
+        }
     }
 
     private bool SubmittedLikeAHuman()

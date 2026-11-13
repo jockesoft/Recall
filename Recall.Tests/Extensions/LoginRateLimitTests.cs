@@ -75,4 +75,36 @@ public class LoginRateLimitTests
         TryAcquire(Request("GET", "198.51.100.9")).Should().BeTrue();
         TryAcquire(Request("HEAD", "198.51.100.9")).Should().BeTrue();
     }
+
+    // ---- the code from the email: its own bucket ------------------------------------------
+
+    private const int CodeLimit = InfrastructureServiceCollectionExtensions.LoginCodePermits;
+
+    private static HttpContext CodePost(string ip) => new DefaultHttpContext
+    {
+        Request = { Method = "POST", Path = "/Account/Login", QueryString = new QueryString("?handler=VerifyCode") },
+        Connection = { RemoteIpAddress = IPAddress.Parse(ip) }
+    };
+
+    [Test]
+    public void CodeAttempts_Should_BeAllowedUpToTheirOwnLimit_ThenRejected_PerClientIp()
+    {
+        for (var i = 0; i < CodeLimit; i++)
+            TryAcquire(CodePost("198.51.100.9")).Should().BeTrue();
+
+        TryAcquire(CodePost("198.51.100.9")).Should().BeFalse();
+        TryAcquire(CodePost("198.51.100.10")).Should().BeTrue("another visitor has their own allowance");
+    }
+
+    [Test]
+    public void CodeAttempts_And_LinkRequests_Should_NotUseUpEachOthersAllowance()
+    {
+        for (var i = 0; i < CodeLimit + 5; i++)
+            TryAcquire(CodePost("198.51.100.9"));
+
+        for (var i = 0; i < Limit; i++)
+            TryAcquire(Request("POST", "198.51.100.9")).Should().BeTrue("mistyped codes do not stop a new email being requested");
+
+        TryAcquire(Request("POST", "198.51.100.9")).Should().BeFalse();
+    }
 }

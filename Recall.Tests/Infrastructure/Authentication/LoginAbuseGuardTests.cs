@@ -110,4 +110,33 @@ public class LoginAbuseGuardTests
 
         allowed.Should().Be(1);
     }
+
+    // ---- wrong sign-in codes -----------------------------------------------------------
+
+    [Test]
+    public void WrongCodes_Should_BeCountedPerAddress_AndStartAgainWhenReset()
+    {
+        using var guard = Create();
+
+        guard.WrongCodeCount("a@test.local").Should().Be(0);
+        guard.RecordWrongCode("a@test.local").Should().Be(1);
+        guard.RecordWrongCode("a@test.local").Should().Be(2);
+        guard.RecordWrongCode("b@test.local").Should().Be(1, "each address has its own count");
+        guard.WrongCodeCount("a@test.local").Should().Be(2);
+
+        guard.ResetWrongCodes("a@test.local");
+
+        guard.WrongCodeCount("a@test.local").Should().Be(0);
+        guard.WrongCodeCount("b@test.local").Should().Be(1);
+    }
+
+    [Test]
+    public void WrongCodes_Should_AllBeCounted_WhenTheyArriveTogether()
+    {
+        using var guard = Create();
+
+        Parallel.For(0, 100, _ => guard.RecordWrongCode("a@test.local"));
+
+        guard.WrongCodeCount("a@test.local").Should().Be(100);
+    }
 }

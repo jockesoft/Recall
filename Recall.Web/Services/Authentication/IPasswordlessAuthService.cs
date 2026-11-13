@@ -24,4 +24,15 @@ public interface IPasswordlessAuthService
     /// (single-use) and the associated user is returned.
     /// </summary>
     Task<LoginRedemptionResult> RedeemAsync(string token, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Verifies the 6-digit code from the sign-in email for <paramref name="email"/>
+    /// (spaces ignored). On success the token is consumed, so the link stops
+    /// working too. A wrong code, an expired one and an unknown address give the
+    /// same <see cref="LoginRedemptionStatus.InvalidOrExpired"/>; after
+    /// <see cref="SignInCode.MaxWrongAttempts"/> wrong codes for the address the
+    /// answer is <see cref="LoginRedemptionStatus.TooManyAttempts"/> until a new
+    /// email is requested.
+    /// </summary>
+    Task<LoginRedemptionResult> RedeemCodeAsync(string? email, string? code, CancellationToken cancellationToken = default);
 }

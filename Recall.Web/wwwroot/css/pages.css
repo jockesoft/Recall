@@ -1118,6 +1118,33 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
 
 /* What signing in gets you: an icon column and a text column, so wrapped
    lines stay aligned with their text. */
+/* The code from the sign-in email, under "Check your inbox": for where the link
+   doesn't open. Left-aligned inside the centred empty state, field and button
+   on one line at every width. */
+.tvdb-code-form {
+    align-self: stretch;
+    margin-top: var(--tvdb-space-4);
+    padding-top: var(--tvdb-space-4);
+    border-top: 1px solid var(--tvdb-ink-line);
+    text-align: left;
+}
+
+.tvdb-code-form__row {
+    display: flex;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-code-form__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--tvdb-font-mono);
+    letter-spacing: 0.12em;
+}
+
+.tvdb-code-form__row > .btn {
+    flex: none;
+}
+
 .tvdb-benefits {
     display: flex;
     flex-direction: column;

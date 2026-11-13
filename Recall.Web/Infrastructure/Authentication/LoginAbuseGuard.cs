@@ -24,6 +24,11 @@ public sealed class LoginAbuseGuard : ILoginAbuseGuard, IDisposable
     // restart along with everything else here.
     private readonly ConcurrentDictionary<Guid, DateTime> _lastResendUtc = new();
 
+    // Wrong sign-in codes per address, with when the count started. An entry
+    // older than a day counts as zero; ResetWrongCodes removes it.
+    private readonly ConcurrentDictionary<string, (int Count, DateTime SinceUtc)> _wrongCodes = new();
+    private static readonly TimeSpan WrongCodeWindow = TimeSpan.FromDays(1);
+
     public LoginAbuseGuard(IOptions<LoginTokenOptions> options)
     {
         var settings = options.Value;
@@ -82,6 +87,22 @@ public sealed class LoginAbuseGuard : ILoginAbuseGuard, IDisposable
             // Someone else updated it between our read and this attempt; retry.
         }
     }
+
+    public int WrongCodeCount(string normalizedEmail) =>
+        _wrongCodes.TryGetValue(normalizedEmail, out var entry) && DateTime.UtcNow - entry.SinceUtc < WrongCodeWindow
+            ? entry.Count
+            : 0;
+
+    public int RecordWrongCode(string normalizedEmail)
+    {
+        var now = DateTime.UtcNow;
+        return _wrongCodes.AddOrUpdate(
+            normalizedEmail,
+            _ => (1, now),
+            (_, entry) => now - entry.SinceUtc < WrongCodeWindow ? (entry.Count + 1, entry.SinceUtc) : (1, now)).Count;
+    }
+
+    public void ResetWrongCodes(string normalizedEmail) => _wrongCodes.TryRemove(normalizedEmail, out _);
 
     public void Dispose()
     {
