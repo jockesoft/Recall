@@ -50,6 +50,12 @@ public sealed class EpisodeWatchEntityConfiguration : IEntityTypeConfiguration<E
             .HasDefaultValue(WatchSource.Unknown)
             .IsRequired();
 
+        // No index of its own: the undo also filters on user and series, and
+        // the (user_id, series_tvdb_id) index finds those rows; see
+        // BulkWatchUndoTests (PostgreSQL suite) for the plan.
+        builder.Property(x => x.BatchId)
+            .HasColumnName("batch_id");
+
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")

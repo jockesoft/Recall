@@ -100,14 +100,14 @@ public sealed class StoppedSeriesTests
             .Returns(Task.CompletedTask);
         _watches.Setup(x => x.MarkUnwatchedRangeAsync(UserId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid _, IEnumerable<int> ids, CancellationToken _) => ids.Count(id => _watched.Remove(id)));
-        _watches.Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+        _watches.Setup(x => x.UndoWatchedBatchAsync(UserId, SeriesId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
         _watches.Setup(x => x.MarkWatchedRangeAsync(
                 UserId, SeriesId, It.IsAny<IEnumerable<int>>(), It.IsAny<WatchSource>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid _, int _, IEnumerable<int> ids, WatchSource _, int? _, CancellationToken _) =>
             {
                 var added = ids.Count(id => _watched.Add(id));
-                return added == 0 ? WatchedBatch.Empty : new WatchedBatch(added, Now);
+                return added == 0 ? WatchedBatch.Empty : new WatchedBatch(added, Guid.NewGuid());
             });
 
         _sut = new WatchProgressService(
@@ -400,7 +400,7 @@ public sealed class StoppedSeriesTests
 
         var toggled = await _sut.ToggleEpisodeWatchedAsync(UserId, SeriesId, 3);
         var season = await _sut.MarkSeasonUnwatchedAsync(UserId, SeriesId, 1);
-        var undone = await _sut.UndoWatchedBatchAsync(UserId, SeriesId, Now);
+        var undone = await _sut.UndoWatchedBatchAsync(UserId, SeriesId, Guid.NewGuid());
 
         toggled.Outcome.Should().Be(EpisodeWatchOutcome.MarkedUnwatched);
         toggled.ResumedWatching.Should().BeNull();
@@ -418,7 +418,7 @@ public sealed class StoppedSeriesTests
 
         await _sut.ToggleEpisodeWatchedAsync(UserId, SeriesId, 2);
         await _sut.MarkSeasonUnwatchedAsync(UserId, SeriesId, 1);
-        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, Now);
+        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, Guid.NewGuid());
 
         _tracked!.StoppedUtc.Should().BeNull();
         VerifyStopped(Times.Never());
@@ -471,7 +471,7 @@ public sealed class StoppedSeriesTests
         _tracked!.StoppedUtc.Should().BeNull("the mark resumed it");
 
         // What the Undo in the toast does: remove the batch, then put the date back.
-        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, marked.Batch!.WatchedUtc);
+        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, marked.Batch!.Id);
         var restored = await _sut.RestoreStoppedAsync(UserId, SeriesId, marked.ResumedFromStoppedUtc!.Value);
 
         restored.Should().BeTrue();
@@ -499,7 +499,7 @@ public sealed class StoppedSeriesTests
     {
         _watched.UnionWith([1, 2]);
 
-        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, Now);
+        await _sut.UndoWatchedBatchAsync(UserId, SeriesId, Guid.NewGuid());
 
         _tracked!.StoppedUtc.Should().BeNull("only the page's Undo of a resuming mark restores a stop, and it says so explicitly");
         VerifyStopped(Times.Never());

@@ -27,7 +27,7 @@ namespace Recall.Tests.Pipeline;
 [TestFixture]
 public sealed class ToastPartialTests
 {
-    private static readonly DateTime Stamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
 
     private RecallWebApplicationFactory _factory = null!;
 
@@ -108,13 +108,13 @@ public sealed class ToastPartialTests
     public async Task AToastWithAnUndo_Should_CarryTenSeconds_AndNoLongerPersist()
     {
         var html = await RenderAsync(page =>
-            page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, Stamp)));
+            page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, BatchId)));
 
         var toast = ToastTags(html).Should().ContainSingle().Subject;
         toast.Should().Contain("data-toast-duration=\"10000\"").And.Contain("data-toast-actions=\"true\"");
         html.Should().NotContain("data-toast-persist");
         html.Should().Contain("handler=UndoWatched").And.Contain(">Undo</button>");
-        html.Should().Contain($"name=\"stamp\" value=\"{Stamp.Ticks}\"");
+        html.Should().Contain($"name=\"batch\" value=\"{BatchId:D}\"").And.NotContain("name=\"stamp\"");
         html.Should().Contain("name=\"returnUrl\" value=\"/Dashboard\"");
         Bars(html).Should().Be(1);
     }
@@ -161,7 +161,7 @@ public sealed class ToastPartialTests
     {
         var html = await RenderAsync(page =>
         {
-            page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, Stamp));
+            page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, BatchId));
             page.SetErrorToast("Could not load your rating.");
             page.SetInfoToast("Rating removed.");
         });

@@ -176,9 +176,9 @@ public sealed class WatchProgressService(
     public Task<int> UndoWatchedBatchAsync(
         Guid userId,
         int seriesTvdbId,
-        DateTime batchWatchedUtc,
+        Guid batchId,
         CancellationToken cancellationToken = default)
-        => episodeWatchRepository.UndoWatchedBatchAsync(userId, seriesTvdbId, batchWatchedUtc, cancellationToken);
+        => episodeWatchRepository.UndoWatchedBatchAsync(userId, seriesTvdbId, batchId, cancellationToken);
 
     /// <summary>
     /// Every aggregate entry in the season — including movie-flagged ones, since
@@ -226,7 +226,7 @@ public sealed class WatchProgressService(
 
         var before = await BeforeMarkAsync(userId, seriesTvdbId, cancellationToken);
 
-        // A range of one: it gets the batch timestamp the undo looks for.
+        // A range of one: it gets the batch id the undo looks for.
         var batch = await episodeWatchRepository.MarkWatchedRangeAsync(
             userId, seriesTvdbId, [episodeTvdbId], WatchSource.Single, cancellationToken: cancellationToken);
         var caughtUp = await CaughtUpByAsync(before, [episodeTvdbId], cancellationToken);

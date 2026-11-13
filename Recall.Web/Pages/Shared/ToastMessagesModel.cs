@@ -67,18 +67,18 @@ public sealed class ToastMessagesModel
     private static UndoWatchedForm? UndoWatchedFrom(ITempDataDictionary tempData)
     {
         var seriesId = Id(tempData, PageModelToastExtensions.UndoWatchedSeriesKey);
-        var stamp = tempData[PageModelToastExtensions.UndoWatchedStampKey] as string;
+        var batch = tempData[PageModelToastExtensions.UndoWatchedBatchKey] as string;
         var stoppedStamp = tempData[PageModelToastExtensions.UndoWatchedStoppedKey] as string;
 
-        if (seriesId is null || !long.TryParse(stamp, out _))
+        if (seriesId is null || !Guid.TryParseExact(batch, "D", out var batchId) || batchId == Guid.Empty)
             return null;
 
-        return new UndoWatchedForm(seriesId, stamp!, long.TryParse(stoppedStamp, out _) ? stoppedStamp : null);
+        return new UndoWatchedForm(seriesId, batchId.ToString("D"), long.TryParse(stoppedStamp, out _) ? stoppedStamp : null);
     }
 }
 
 /// <summary>What the Undo of a "mark watched" posts back: the batch, and the stopped date to restore when the mark had resumed the series.</summary>
-public sealed record UndoWatchedForm(string SeriesId, string Stamp, string? StoppedStamp);
+public sealed record UndoWatchedForm(string SeriesId, string Batch, string? StoppedStamp);
 
 /// <summary>One toast.</summary>
 public sealed record ToastView(ToastKind Kind, string Text)

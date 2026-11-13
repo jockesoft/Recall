@@ -44,7 +44,7 @@
             @if (toast.UndoWatched is { } undo)
             {
                 <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undo.SeriesId" class="d-inline-flex">
-                    <input type="hidden" name="stamp" value="@undo.Stamp" />
+                    <input type="hidden" name="batch" value="@undo.Batch" />
                     @if (undo.StoppedStamp is not null)
                     {
                         <input type="hidden" name="stoppedStamp" value="@undo.StoppedStamp" />

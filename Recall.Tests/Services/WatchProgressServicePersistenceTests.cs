@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Recall.Tests.TestSupport;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -123,10 +124,31 @@ public sealed class WatchProgressServicePersistenceTests
         season.Batch.InsertedCount.Should().Be(2);
         (await StoredWatchesAsync()).Should().BeEquivalentTo([(SeriesId, 1), (SeriesId, 2), (SeriesId, 3)]);
 
-        var removed = await sut.UndoWatchedBatchAsync(_userId, SeriesId, season.Batch.WatchedUtc);
+        var removed = await sut.UndoWatchedBatchAsync(_userId, SeriesId, season.Batch.Id);
 
         removed.Should().Be(2);
         (await StoredWatchesAsync()).Should().BeEquivalentTo([(SeriesId, 2)], "the episode watched before the bulk mark stays watched");
+    }
+
+    [Test]
+    public async Task UndoWatchedBatchAsync_Should_TakeBackOneMarkThroughAsOneBatch_EvenAtTheSameInstantAsAnother()
+    {
+        // Two "mark this and earlier" at one instant of the test clock: through
+        // episode 2 (1 and 2), then through 3 (only 3 is new). Each Undo takes
+        // back its own mark, clicked episode (a Single row) and all.
+        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 11, 13, 12, 0, 0, TimeSpan.Zero));
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var sut = CreateSut(dbContext, clock);
+
+        var throughTwo = await sut.MarkWatchedThroughAsync(_userId, SeriesId, 2);
+        var throughThree = await sut.MarkWatchedThroughAsync(_userId, SeriesId, 3);
+        throughThree.Batch!.InsertedCount.Should().Be(1);
+
+        (await sut.UndoWatchedBatchAsync(_userId, SeriesId, throughThree.Batch.Id)).Should().Be(1);
+        (await StoredWatchesAsync()).Should().BeEquivalentTo([(SeriesId, 1), (SeriesId, 2)], "the other mark of the same instant stays");
+
+        (await sut.UndoWatchedBatchAsync(_userId, SeriesId, throughTwo.Batch!.Id)).Should().Be(2, "the clicked episode is part of its batch");
+        (await StoredWatchesAsync()).Should().BeEmpty();
     }
 
     [Test]
@@ -142,14 +164,14 @@ public sealed class WatchProgressServicePersistenceTests
         (await StoredWatchesAsync()).Should().BeEmpty();
     }
 
-    private WatchProgressService CreateSut(AppDbContext dbContext) =>
+    private WatchProgressService CreateSut(AppDbContext dbContext, TimeProvider? clock = null) =>
         new(
             _tvDbService.Object,
-            new EpisodeWatchRepository(dbContext, NullLogger<EpisodeWatchRepository>.Instance),
+            new EpisodeWatchRepository(dbContext, NullLogger<EpisodeWatchRepository>.Instance, clock),
             // tracked_series cannot be inserted through EF on SQLite (xmin); the library is not this fixture's subject.
             Mock.Of<ITrackedSeriesRepository>(r => r.ExistsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()) == Task.FromResult(true)),
             new RatingRepository(dbContext, NullLogger<RatingRepository>.Instance),
-            TimeProvider.System,
+            clock ?? TimeProvider.System,
             NullLogger<WatchProgressService>.Instance);
 
     private async Task<List<(int SeriesTvdbId, int EpisodeTvdbId)>> StoredWatchesAsync()

@@ -16,7 +16,10 @@ public static class PageModelToastExtensions
     // Read back by _ToastMessages.cshtml, which renders an "Undo" POST form
     // inside the success toast when both are present.
     public const string UndoWatchedSeriesKey = "Toast.UndoWatched.SeriesId";
-    public const string UndoWatchedStampKey = "Toast.UndoWatched.Stamp";
+    // The batch's id. Until 2026-11-13 the key was "Toast.UndoWatched.Stamp"
+    // (the batch's timestamp); a TempData cookie still holding that key gets
+    // no Undo button.
+    public const string UndoWatchedBatchKey = "Toast.UndoWatched.Batch";
 
     // With the two above, when the mark resumed a series the user had stopped
     // watching: the stopped date (ticks) the Undo puts back.
@@ -131,7 +134,7 @@ public static class PageModelToastExtensions
 
             // Strings: the cookie TempData serializer only round-trips a few primitive types.
             pageModel.TempData[UndoWatchedSeriesKey] = seriesTvdbId.ToString(CultureInfo.InvariantCulture);
-            pageModel.TempData[UndoWatchedStampKey] = batch.WatchedUtc.Ticks.ToString(CultureInfo.InvariantCulture);
+            pageModel.TempData[UndoWatchedBatchKey] = batch.Id.ToString("D");
 
             if (resumedFromStoppedUtc is { } stoppedUtc)
                 pageModel.TempData[UndoWatchedStoppedKey] = stoppedUtc.Ticks.ToString(CultureInfo.InvariantCulture);

@@ -12,7 +12,7 @@ namespace Recall.Tests.Extensions;
 [TestFixture]
 public class PageModelToastExtensionsTests
 {
-    private static readonly DateTime Stamp = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
 
     private sealed class TestPageModel : PageModel;
 
@@ -26,17 +26,17 @@ public class PageModelToastExtensionsTests
     {
         var page = CreatePage();
 
-        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", seriesTvdbId: 42, new WatchedBatch(3, Stamp));
+        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", seriesTvdbId: 42, new WatchedBatch(3, BatchId));
 
         page.TempData["Toast.Success"].Should().Be("Marked 3 episodes as watched.");
         page.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be("42");
-        page.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(Stamp.Ticks.ToString());
+        page.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
     }
 
     [Test]
     public void SetSuccessToastWithWatchedUndo_Should_NotOfferAnUndo_WhenAtMostOneRowWasWritten()
     {
-        foreach (var batch in new[] { null, WatchedBatch.Empty, new WatchedBatch(1, Stamp) })
+        foreach (var batch in new[] { null, WatchedBatch.Empty, new WatchedBatch(1, BatchId) })
         {
             var page = CreatePage();
 
@@ -44,7 +44,7 @@ public class PageModelToastExtensionsTests
 
             page.TempData["Toast.Success"].Should().Be("Episode marked as watched.");
             page.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedSeriesKey).Should().BeFalse();
-            page.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStampKey).Should().BeFalse();
+            page.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedBatchKey).Should().BeFalse();
         }
     }
 
@@ -115,11 +115,11 @@ public class PageModelToastExtensionsTests
         var page = CreatePage();
 
         page.SetSuccessToastWithWatchedUndo(
-            "Marked 8 episodes as watched.", seriesTvdbId: 42, new WatchedBatch(8, Stamp), caughtUp: FinishedUnrated, today: Today);
+            "Marked 8 episodes as watched.", seriesTvdbId: 42, new WatchedBatch(8, BatchId), caughtUp: FinishedUnrated, today: Today);
 
         page.TempData["Toast.Success"].Should().Be("Marked 8 episodes as watched. You've finished Chernobyl.");
         page.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be("42");
-        page.TempData[PageModelToastExtensions.UndoWatchedStampKey].Should().Be(Stamp.Ticks.ToString());
+        page.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
         page.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpFinished);
         page.TempData[PageModelToastExtensions.RateSeriesKey].Should().Be("42");
     }
@@ -129,7 +129,7 @@ public class PageModelToastExtensionsTests
     {
         var page = CreatePage();
 
-        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", seriesTvdbId: 42, new WatchedBatch(3, Stamp));
+        page.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", seriesTvdbId: 42, new WatchedBatch(3, BatchId));
 
         page.TempData["Toast.Success"].Should().Be("Marked 3 episodes as watched.");
         page.TempData.ContainsKey(PageModelToastExtensions.CaughtUpKindKey).Should().BeFalse();
@@ -146,7 +146,7 @@ public class PageModelToastExtensionsTests
 
         page.TempData["Toast.Success"].Should().Be("Stopped watching Silo.");
         page.TempData[PageModelToastExtensions.UndoStoppedSeriesKey].Should().Be("42", "the Undo resumes this series");
-        page.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStampKey).Should().BeFalse("it is not a watch to undo");
+        page.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedBatchKey).Should().BeFalse("it is not a watch to undo");
     }
 
     [TestCase(StopWatchingOutcome.AlreadyStopped, "Toast.Info", "You had already stopped watching Silo.")]
@@ -170,16 +170,16 @@ public class PageModelToastExtensionsTests
         var stoppedUtc = new DateTime(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc);
 
         var resumed = CreatePage();
-        resumed.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched and resumed watching Silo.", 42, new WatchedBatch(3, Stamp),
+        resumed.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched and resumed watching Silo.", 42, new WatchedBatch(3, BatchId),
             resumedFromStoppedUtc: stoppedUtc);
         resumed.TempData[PageModelToastExtensions.UndoWatchedStoppedKey].Should().Be(stoppedUtc.Ticks.ToString());
 
         var ordinary = CreatePage();
-        ordinary.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, Stamp));
+        ordinary.SetSuccessToastWithWatchedUndo("Marked 3 episodes as watched.", 42, new WatchedBatch(3, BatchId));
         ordinary.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStoppedKey).Should().BeFalse();
 
         var noUndo = CreatePage();
-        noUndo.SetSuccessToastWithWatchedUndo("Episode marked as watched.", 42, new WatchedBatch(1, Stamp), resumedFromStoppedUtc: stoppedUtc);
+        noUndo.SetSuccessToastWithWatchedUndo("Episode marked as watched.", 42, new WatchedBatch(1, BatchId), resumedFromStoppedUtc: stoppedUtc);
         noUndo.TempData.ContainsKey(PageModelToastExtensions.UndoWatchedStoppedKey).Should().BeFalse("no Undo, nothing to restore");
     }
 }

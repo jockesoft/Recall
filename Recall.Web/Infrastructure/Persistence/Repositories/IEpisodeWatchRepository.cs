@@ -62,8 +62,9 @@ public interface IEpisodeWatchRepository
     /// <summary>
     /// Marks multiple episodes watched in one round trip, skipping any that
     /// are already marked. Used by "mark this and every earlier episode" and
-    /// "mark season watched". Every row it inserts carries the same
-    /// <c>WatchedUtc</c>, returned in the batch so the caller can offer an undo.
+    /// "mark season watched". Every row it inserts carries the same batch id
+    /// (and the same <c>WatchedUtc</c>); the id is returned in the batch so the
+    /// caller can offer an undo.
     /// </summary>
     /// <param name="source">What the inserted rows are recorded as.</param>
     /// <param name="clickedEpisodeTvdbId">
@@ -89,14 +90,14 @@ public interface IEpisodeWatchRepository
 
     /// <summary>
     /// Removes exactly the rows one <see cref="MarkWatchedRangeAsync"/> call
-    /// inserted — the user's watches in that series stamped with the batch's
-    /// <c>WatchedUtc</c> — and nothing the user had marked before or since.
-    /// Returns how many were removed.
+    /// inserted — the user's watches in that series carrying the batch's id —
+    /// and nothing the user had marked before or since, however close in time.
+    /// Returns how many were removed; 0 for <see cref="Guid.Empty"/>.
     /// </summary>
     Task<int> UndoWatchedBatchAsync(
         Guid userId,
         int seriesTvdbId,
-        DateTime batchWatchedUtc,
+        Guid batchId,
         CancellationToken cancellationToken = default);
 
     /// <summary>Removes the user's watches for the given episodes. Returns how many were removed.</summary>
@@ -110,8 +111,8 @@ public interface IEpisodeWatchRepository
 public sealed record EpisodeWatchRecord(int SeriesTvdbId, int EpisodeTvdbId, DateTime WatchedUtc, WatchSource Source);
 
 /// <param name="InsertedCount">Rows actually written (already-watched episodes are skipped).</param>
-/// <param name="WatchedUtc">The timestamp shared by every inserted row; identifies the batch for an undo.</param>
-public sealed record WatchedBatch(int InsertedCount, DateTime WatchedUtc)
+/// <param name="Id">The <c>batch_id</c> every inserted row carries; what an undo deletes by.</param>
+public sealed record WatchedBatch(int InsertedCount, Guid Id)
 {
-    public static WatchedBatch Empty { get; } = new(0, DateTime.MinValue);
+    public static WatchedBatch Empty { get; } = new(0, Guid.Empty);
 }

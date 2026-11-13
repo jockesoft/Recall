@@ -4,11 +4,15 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 
 namespace Recall.Web.Infrastructure.Persistence.Repositories;
 
+/// <param name="timeProvider">The clock for <c>WatchedUtc</c>; the system clock when not given (tests pass a fixed one).</param>
 public sealed class EpisodeWatchRepository(
     AppDbContext dbContext,
-    ILogger<EpisodeWatchRepository> logger)
+    ILogger<EpisodeWatchRepository> logger,
+    TimeProvider? timeProvider = null)
     : IEpisodeWatchRepository
 {
+    private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
+
     public Task<bool> IsWatchedAsync(Guid userId, int episodeTvdbId, CancellationToken cancellationToken = default)
     {
         return dbContext.EpisodeWatches
@@ -46,8 +50,10 @@ public sealed class EpisodeWatchRepository(
             UserId = userId,
             SeriesTvdbId = seriesTvdbId,
             EpisodeTvdbId = episodeTvdbId,
-            WatchedUtc = DateTime.UtcNow,
-            Source = WatchSource.Single
+            WatchedUtc = _clock.GetUtcNow().UtcDateTime,
+            Source = WatchSource.Single,
+            // A batch of one: every marking action has its own id.
+            BatchId = Guid.NewGuid()
         };
         dbContext.EpisodeWatches.Add(entity);
 
@@ -171,12 +177,12 @@ public sealed class EpisodeWatchRepository(
 
         var alreadyWatchedSet = alreadyWatched.ToHashSet();
 
-        // One timestamp for the whole batch, truncated to the millisecond: the
-        // undo finds these rows again by comparing WatchedUtc for equality, and
-        // Postgres keeps microseconds where .NET keeps 100 ns ticks — an
-        // untruncated value would not survive the round trip unchanged.
-        var now = DateTime.UtcNow;
-        var batchWatchedUtc = new DateTime(now.Ticks - now.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
+        // One id and one timestamp for the whole batch. The undo finds the rows
+        // by the id: until 2026-11-13 it compared WatchedUtc for equality, which
+        // also took any other watch of the user's in that series stamped in the
+        // same millisecond.
+        var batchId = Guid.NewGuid();
+        var batchWatchedUtc = _clock.GetUtcNow().UtcDateTime;
 
         var toInsert = ids
             .Distinct()
@@ -187,6 +193,7 @@ public sealed class EpisodeWatchRepository(
                 SeriesTvdbId = seriesTvdbId,
                 EpisodeTvdbId = id,
                 WatchedUtc = batchWatchedUtc,
+                BatchId = batchId,
                 // The episode the user pointed at was (as far as anyone can
                 // tell) watched now; the ones swept in with it were not.
                 Source = id == clickedEpisodeTvdbId ? WatchSource.Single : source
@@ -199,19 +206,22 @@ public sealed class EpisodeWatchRepository(
         await dbContext.EpisodeWatches.AddRangeAsync(toInsert, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new WatchedBatch(toInsert.Count, batchWatchedUtc);
+        return new WatchedBatch(toInsert.Count, batchId);
     }
 
-    public Task<int> UndoWatchedBatchAsync(
+    public async Task<int> UndoWatchedBatchAsync(
         Guid userId,
         int seriesTvdbId,
-        DateTime batchWatchedUtc,
+        Guid batchId,
         CancellationToken cancellationToken = default)
     {
-        return dbContext.EpisodeWatches
+        if (batchId == Guid.Empty)
+            return 0;
+
+        return await dbContext.EpisodeWatches
             .Where(x => x.UserId == userId
                         && x.SeriesTvdbId == seriesTvdbId
-                        && x.WatchedUtc == batchWatchedUtc)
+                        && x.BatchId == batchId)
             .ExecuteDeleteAsync(cancellationToken);
     }
 

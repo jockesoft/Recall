@@ -483,20 +483,25 @@ public sealed class DetailsModel(
         return RedirectToPage(new { id, season });
     }
 
+    /// <summary>What an Undo says when there is nothing (left) to remove.</summary>
+    public const string NothingToUndo = "Nothing left to undo.";
+
     /// <summary>
     /// Reverses one bulk "mark watched" — posted by the Undo button in the
     /// success toast (see <c>_ToastMessages.cshtml</c>), from this page or from
-    /// Episodes/Details. <paramref name="stamp"/> is the batch's
-    /// <c>WatchedUtc</c> in ticks; only the current user's own rows carrying
-    /// exactly that timestamp are removed, so a forged value can at worst
-    /// un-watch the sender's own episodes. When the mark had resumed a series
+    /// Episodes/Details or the Dashboard. <paramref name="batch"/> is the
+    /// batch's id; only the current user's own rows in this series carrying it
+    /// are removed, so a forged value can at worst un-watch the sender's own
+    /// episodes. A form without one (a toast rendered before 2026-11-13, whose
+    /// form posted the batch's timestamp as <c>stamp</c>) gets "Nothing left to
+    /// undo." and changes nothing. When the mark had resumed a series
     /// the user stopped watching, <paramref name="stoppedStamp"/> is the
     /// stopped date it cleared (ticks) and the undo puts it back; a forged one
     /// can at worst stop the sender's own series.
     /// </summary>
     public async Task<IActionResult> OnPostUndoWatchedAsync(
         [FromRoute] int id,
-        [FromForm] long stamp,
+        [FromForm] Guid? batch,
         [FromForm] string? returnUrl,
         CancellationToken cancellationToken,
         [FromForm] long? stoppedStamp = null)
@@ -512,13 +517,15 @@ public sealed class DetailsModel(
             return Back();
         }
 
-        if (stamp <= 0 || stamp > DateTime.MaxValue.Ticks)
+        if (batch is not { } batchId || batchId == Guid.Empty)
+        {
+            this.SetInfoToast(NothingToUndo);
             return Back();
+        }
 
         try
         {
-            var removed = await watchProgressService.UndoWatchedBatchAsync(
-                userId, id, new DateTime(stamp, DateTimeKind.Utc), cancellationToken);
+            var removed = await watchProgressService.UndoWatchedBatchAsync(userId, id, batchId, cancellationToken);
 
             // Undoing the mark that resumed a stopped series stops it again, as it
             // was. Only then: an ordinary unmark never touches the stopped state.
@@ -529,7 +536,7 @@ public sealed class DetailsModel(
 
             var undone = removed switch
             {
-                0 => "Nothing left to undo.",
+                0 => NothingToUndo,
                 1 => "Undone — 1 episode marked as not watched.",
                 _ => $"Undone — {removed} episodes marked as not watched."
             };

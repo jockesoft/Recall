@@ -22,7 +22,7 @@ public sealed class SeriesCaughtUpTests
     private const int SeriesId = 42;
     private static readonly Guid UserId = Guid.NewGuid();
     private static readonly DateOnly Today = new(2026, 10, 2);
-    private static readonly DateTime BatchStamp = new(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid BatchId = new("0b5e0c1d-7a6f-4a1e-9a55-2f4c7c1a9d01");
 
     private Mock<ITheTvDbService> _tvDb = null!;
     private Mock<IEpisodeWatchRepository> _watches = null!;
@@ -54,7 +54,7 @@ public sealed class SeriesCaughtUpTests
             .ReturnsAsync((Guid _, int _, IEnumerable<int> ids, WatchSource _, int? _, CancellationToken _) =>
             {
                 var added = ids.Count(id => _watched.Add(id));
-                return added == 0 ? WatchedBatch.Empty : new WatchedBatch(added, BatchStamp);
+                return added == 0 ? WatchedBatch.Empty : new WatchedBatch(added, BatchId);
             });
 
         _sut = new WatchProgressService(
