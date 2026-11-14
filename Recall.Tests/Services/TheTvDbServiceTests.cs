@@ -88,7 +88,7 @@ public class TheTvDbServiceTests
             Characters = [new Character { Id = 1, Name = "Someone", Image = "/banners/actors/1.jpg" }]
         };
         _cache
-            .Setup(c => c.GetAsync<MovieAggregate>("movie:aggregate:v1:7:eng", It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetAsync<MovieAggregate>("movie:aggregate:v2:7:eng", It.IsAny<CancellationToken>()))
             .ReturnsAsync(stale);
 
         var result = await _sut.GetMovieAggregateByIdAsync(7);
@@ -102,7 +102,7 @@ public class TheTvDbServiceTests
     {
         var cached = new MovieAggregate { TvdbId = 7, Name = "Cached Movie" };
         _cache
-            .Setup(c => c.GetAsync<MovieAggregate>("movie:aggregate:v1:7:eng", It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetAsync<MovieAggregate>("movie:aggregate:v2:7:eng", It.IsAny<CancellationToken>()))
             .ReturnsAsync(cached);
 
         var result = await _sut.GetMovieAggregateByIdAsync(7);
@@ -124,7 +124,7 @@ public class TheTvDbServiceTests
 
         result.Should().BeEquivalentTo(stored, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
         _apiClient.Verify(a => a.GetMovieAggregateByIdAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        _cache.Verify(c => c.SetAsync("movie:aggregate:v1:8:eng", stored, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.SetAsync("movie:aggregate:v2:8:eng", stored, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -139,7 +139,7 @@ public class TheTvDbServiceTests
 
         result.Should().BeEquivalentTo(fresh, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
         _store.Verify(s => s.SaveMovieAggregateAsync(fresh, "eng", It.IsAny<CancellationToken>()), Times.Once);
-        _cache.Verify(c => c.SetAsync("movie:aggregate:v1:9:eng", fresh, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.SetAsync("movie:aggregate:v2:9:eng", fresh, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -156,7 +156,7 @@ public class TheTvDbServiceTests
         _store.Verify(s => s.UpsertMovieAggregateAsync(
             It.Is<MovieAggregate>(a => a.TvdbId == 10), "eng", It.IsAny<CancellationToken>()), Times.Once);
         _cache.Verify(c => c.SetAsync(
-            "movie:aggregate:v1:10:eng", It.IsAny<MovieAggregate>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+            "movie:aggregate:v2:10:eng", It.IsAny<MovieAggregate>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -224,7 +224,7 @@ public class TheTvDbServiceTests
             Episodes = [new EpisodeSummary { Id = 1, Name = "Pilot", Image = "/banners/v4/episode/11884343/screencap/6a9a171d96372.jpg" }]
         };
         _cache
-            .Setup(c => c.GetAsync<SeriesAggregate>("series:aggregate:v1:7:eng", It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetAsync<SeriesAggregate>("series:aggregate:v2:7:eng", It.IsAny<CancellationToken>()))
             .ReturnsAsync(stale);
 
         var result = await _sut.GetSeriesAggregateByIdAsync(7);
@@ -238,7 +238,7 @@ public class TheTvDbServiceTests
     {
         var cached = new SeriesAggregate { TvdbId = 7, Name = "Cached Show" };
         _cache
-            .Setup(c => c.GetAsync<SeriesAggregate>("series:aggregate:v1:7:eng", It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetAsync<SeriesAggregate>("series:aggregate:v2:7:eng", It.IsAny<CancellationToken>()))
             .ReturnsAsync(cached);
 
         var result = await _sut.GetSeriesAggregateByIdAsync(7);
@@ -260,7 +260,7 @@ public class TheTvDbServiceTests
 
         result.Should().BeEquivalentTo(stored, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
         _apiClient.Verify(a => a.GetSeriesAggregateByIdAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        _cache.Verify(c => c.SetAsync("series:aggregate:v1:8:eng", stored, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.SetAsync("series:aggregate:v2:8:eng", stored, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -326,7 +326,7 @@ public class TheTvDbServiceTests
 
         result.Should().BeEquivalentTo(fresh, "the service defensively re-normalizes images, so it returns a fresh copy rather than the same reference");
         _store.Verify(s => s.SaveSeriesAggregateAsync(fresh, "eng", It.IsAny<CancellationToken>()), Times.Once);
-        _cache.Verify(c => c.SetAsync("series:aggregate:v1:9:eng", fresh, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.SetAsync("series:aggregate:v2:9:eng", fresh, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -370,7 +370,7 @@ public class TheTvDbServiceTests
             s => s.BackfillEpisodeImagesFromAggregateAsync(It.Is<SeriesAggregate>(a => a.TvdbId == 20), It.IsAny<CancellationToken>()),
             Times.Once);
         _cache.Verify(
-            c => c.SetAsync("episode:extended:v2:2001:eng", patchedEpisode, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+            c => c.SetAsync("episode:extended:v3:2001:eng", patchedEpisode, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
