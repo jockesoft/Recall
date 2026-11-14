@@ -15,6 +15,13 @@ namespace Recall.Web.Infrastructure.Caching;
 /// </remarks>
 public static class TvdbCacheKeys
 {
+    /// <summary>
+    /// The distributed cache's instance name, in front of every key in Redis.
+    /// Every key of Recall's cache starts with it, which is what
+    /// <see cref="RedisCacheClearer"/> removes after an outage.
+    /// </summary>
+    public const string InstancePrefix = "tvdb:";
+
     public static string SeriesAggregate(int seriesId, string language) =>
         $"series:aggregate:v2:{seriesId}:{language}";
 

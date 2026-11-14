@@ -1,9 +1,7 @@
 using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Moq;
 using Recall.Tests.Infrastructure.Caching;
 using Recall.Tests.TestSupport;
@@ -38,7 +36,7 @@ public class TheTvDbServiceRedisTierTests
         _clock = new FixedTimeProvider(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
         _api = new Mock<ITheTvDbApiClient>(MockBehavior.Strict);
         _store = new Mock<ITvdbSnapshotStore>();
-        var cache = new DistributedCacheJson(_redis, _clock, NullLogger<DistributedCacheJson>.Instance);
+        var cache = new DistributedCacheJson(_redis, _redis.Clearer, _clock, NullLogger<DistributedCacheJson>.Instance);
         _sut = new TheTvDbService(_api.Object, cache, _store.Object, NullLogger<TheTvDbService>.Instance);
     }
 
@@ -144,6 +142,36 @@ public class TheTvDbServiceRedisTierTests
             "two reads while Redis was down, one to refill it, then Redis");
     }
 
+    [Test]
+    public async Task RefreshDuringAnOutage_IsWhatIsReadOnceRedisIsBack()
+    {
+        // Cached before the outage.
+        var before = CacheSamples.Series(78957) with { Name = "Before" };
+        var refreshed = CacheSamples.Series(78957) with { Name = "Refreshed" };
+        var snapshot = before;
+        _store.Setup(s => s.GetSeriesAggregateAsync(78957, "eng", It.IsAny<CancellationToken>())).ReturnsAsync(() => snapshot);
+        _store.Setup(s => s.UpsertSeriesAggregateAsync(It.IsAny<SeriesAggregate>(), "eng", It.IsAny<CancellationToken>()))
+            .Callback<SeriesAggregate, string, CancellationToken>((a, _, _) => snapshot = a)
+            .Returns(Task.CompletedTask);
+        _store.Setup(s => s.BackfillEpisodeImagesFromAggregateAsync(It.IsAny<SeriesAggregate>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _api.Setup(a => a.GetSeriesAggregateByIdAsync(78957, "eng", It.IsAny<CancellationToken>())).ReturnsAsync(refreshed);
+        (await _sut.GetSeriesAggregateByIdAsync(78957))!.Name.Should().Be("Before");
+
+        // The refresh job runs while Redis is down: Postgres is rewritten, Redis is not.
+        _redis.Down = true;
+        await _sut.RefreshSeriesAggregateByIdAsync(78957);
+        _redis.Down = false;
+        _clock.Now += DistributedCacheJson.BypassFor;
+
+        var afterRecovery = await _sut.GetSeriesAggregateByIdAsync(78957);
+        var next = await _sut.GetSeriesAggregateByIdAsync(78957);
+
+        afterRecovery!.Name.Should().Be("Refreshed", "the copy from before the outage was cleared");
+        next!.Name.Should().Be("Refreshed");
+        _redis.Clearer.Clears.Should().Be(1);
+    }
+
     // ---- lifetimes -------------------------------------------------------------
 
     [Test]
@@ -179,48 +207,4 @@ public class TheTvDbServiceRedisTierTests
 
     private static void AboutAWeek(TimeSpan ttl) =>
         ttl.Should().BeCloseTo(TheTvDbService.RedisLifetime, TimeSpan.FromHours(16.8 + 0.1), "7 days ±10%");
-
-    /// <summary>An in-memory <see cref="IDistributedCache"/> that records what it is asked and can be taken down.</summary>
-    private sealed class SwitchableCache : IDistributedCache
-    {
-        private readonly MemoryDistributedCache _inner = new(Options.Create(new MemoryDistributedCacheOptions()));
-        private readonly HashSet<string> _keys = [];
-
-        public bool Down { get; set; }
-        public int Calls { get; private set; }
-        public List<string> Reads { get; } = [];
-        public List<TimeSpan> Lifetimes { get; } = [];
-        public IReadOnlyCollection<string> Keys => _keys;
-
-        public byte[]? Get(string key) => throw new NotSupportedException();
-        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => throw new NotSupportedException();
-        public void Refresh(string key) => throw new NotSupportedException();
-        public void Remove(string key) => throw new NotSupportedException();
-
-        public Task<byte[]?> GetAsync(string key, CancellationToken token = default)
-        {
-            Calls++;
-            if (Down) throw new InvalidOperationException("It was not possible to connect to the redis server(s).");
-            Reads.Add(key);
-            return _inner.GetAsync(key, token);
-        }
-
-        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
-        {
-            Calls++;
-            if (Down) throw new InvalidOperationException("It was not possible to connect to the redis server(s).");
-            _keys.Add(key);
-            if (options.AbsoluteExpirationRelativeToNow is { } ttl) Lifetimes.Add(ttl);
-            return _inner.SetAsync(key, value, options, token);
-        }
-
-        public Task RefreshAsync(string key, CancellationToken token = default) => throw new NotSupportedException();
-
-        public Task RemoveAsync(string key, CancellationToken token = default)
-        {
-            Calls++;
-            _keys.Remove(key);
-            return _inner.RemoveAsync(key, token);
-        }
-    }
 }

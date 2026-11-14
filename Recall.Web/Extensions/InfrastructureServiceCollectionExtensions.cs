@@ -28,7 +28,8 @@ public static class InfrastructureServiceCollectionExtensions
 {
     /// <summary>
     /// The Redis-backed distributed cache, wrapped as <see cref="IDistributedCacheJson"/>,
-    /// which stores compressed JSON and treats a failing Redis as a miss.
+    /// which stores compressed JSON, treats a failing Redis as a miss, and
+    /// clears the cache's keys once when Redis is back after an outage.
     /// </summary>
     public static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
     {
@@ -46,9 +47,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddStackExchangeRedisCache(options =>
         {
             options.ConfigurationOptions = RedisConnection.Options(redisConnection);
-            options.InstanceName = "tvdb:"; // prefix of every key (TvdbCacheKeys)
+            options.InstanceName = TvdbCacheKeys.InstancePrefix;
         });
 
+        services.AddSingleton<ICacheClearer>(_ => new RedisCacheClearer(redisConnection, TvdbCacheKeys.InstancePrefix));
         services.AddSingleton<IDistributedCacheJson, DistributedCacheJson>();
 
         return services;

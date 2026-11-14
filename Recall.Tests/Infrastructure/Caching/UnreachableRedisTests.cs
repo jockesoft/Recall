@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Recall.Tests.TestSupport;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Caching;
+using StackExchange.Redis;
 
 namespace Recall.Tests.Infrastructure.Caching;
 
@@ -23,17 +24,19 @@ public class UnreachableRedisTests
     [Test]
     public async Task RedisNotListening_ReadIsAMiss_WriteIsSkipped_AndLaterCallsDoNotWait()
     {
+        var port = ClosedPort();
         var services = new ServiceCollection();
         services.AddStackExchangeRedisCache(o =>
         {
             // As AddRedisCache sets it up; the short connect timeout only makes
             // the first, connecting call fail sooner than the default 5 s.
-            o.ConfigurationOptions = RedisConnection.Options($"127.0.0.1:{ClosedPort()},connectTimeout=500");
+            o.ConfigurationOptions = RedisConnection.Options($"127.0.0.1:{port},connectTimeout=500");
             o.InstanceName = "tvdb:";
         });
         await using var provider = services.BuildServiceProvider();
         var logger = new RecordingLogger<DistributedCacheJson>();
-        var sut = new DistributedCacheJson(provider.GetRequiredService<IDistributedCache>(), TimeProvider.System, logger);
+        await using var clearer = new RedisCacheClearer($"127.0.0.1:{port},connectTimeout=500", TvdbCacheKeys.InstancePrefix);
+        var sut = new DistributedCacheJson(provider.GetRequiredService<IDistributedCache>(), clearer, TimeProvider.System, logger);
 
         var read = await sut.GetAsync<SeriesAggregate>("series:aggregate:v2:1:eng");
         var write = () => sut.SetAsync("series:aggregate:v2:1:eng", CacheSamples.Series(1), TimeSpan.FromDays(7));
@@ -47,6 +50,20 @@ public class UnreachableRedisTests
             await sut.GetAsync<SeriesAggregate>($"series:aggregate:v2:{i}:eng");
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(250),
             "while bypassed, a read does not try to connect");
+    }
+
+    [Test]
+    public async Task ClearerAtAClosedPort_Throws_AndFailsFastAfterItsFirstConnect()
+    {
+        await using var clearer = new RedisCacheClearer($"127.0.0.1:{ClosedPort()},connectTimeout=500", TvdbCacheKeys.InstancePrefix);
+
+        var first = () => clearer.ClearAsync();
+        await first.Should().ThrowAsync<RedisConnectionException>();
+
+        var stopwatch = Stopwatch.StartNew();
+        var second = () => clearer.ClearAsync();
+        await second.Should().ThrowAsync<RedisConnectionException>();
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
     }
 
     [Test]

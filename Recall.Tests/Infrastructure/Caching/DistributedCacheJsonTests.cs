@@ -28,7 +28,7 @@ public class DistributedCacheJsonTests
         _memory = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
         _clock = new FixedTimeProvider(Now);
         _logger = new RecordingLogger<DistributedCacheJson>();
-        _sut = new DistributedCacheJson(_memory, _clock, _logger);
+        _sut = new DistributedCacheJson(_memory, Mock.Of<ICacheClearer>(), _clock, _logger);
     }
 
     // ---- compressed round trips ------------------------------------------------
@@ -135,7 +135,7 @@ public class DistributedCacheJsonTests
     public async Task FailingRedis_ReadIsAMiss_WriteIsSkipped_AndNothingThrows()
     {
         var failing = FailingCache();
-        var sut = new DistributedCacheJson(failing.Object, _clock, _logger);
+        var sut = new DistributedCacheJson(failing.Object, Mock.Of<ICacheClearer>(), _clock, _logger);
 
         var read = await sut.GetAsync<SeriesAggregate>("series:aggregate:v2:1:eng");
         var write = () => sut.SetAsync("series:aggregate:v2:1:eng", CacheSamples.Series(1), TimeSpan.FromDays(7));
@@ -150,7 +150,7 @@ public class DistributedCacheJsonTests
     public async Task FailingRedis_IsBypassedForHalfAMinute_ThenTriedAgain()
     {
         var failing = FailingCache();
-        var sut = new DistributedCacheJson(failing.Object, _clock, _logger);
+        var sut = new DistributedCacheJson(failing.Object, Mock.Of<ICacheClearer>(), _clock, _logger);
 
         await sut.GetAsync<SeriesAggregate>("a");
         await sut.GetAsync<SeriesAggregate>("b");
@@ -171,7 +171,7 @@ public class DistributedCacheJsonTests
     public async Task FailingRedis_LogsOneWarningPerOutage()
     {
         var failing = FailingCache();
-        var sut = new DistributedCacheJson(failing.Object, _clock, _logger);
+        var sut = new DistributedCacheJson(failing.Object, Mock.Of<ICacheClearer>(), _clock, _logger);
 
         await sut.GetAsync<SeriesAggregate>("a");
         _clock.Now += DistributedCacheJson.BypassFor; // still down when the bypass ends
@@ -188,7 +188,7 @@ public class DistributedCacheJsonTests
         flaky.SetupSequence(c => c.GetAsync("k", It.IsAny<CancellationToken>()))
             .ThrowsAsync(new TimeoutException("Redis timed out"))
             .ReturnsAsync(CachePayload.Serialize(CacheSamples.Movie(), RecallJsonOptions.Web));
-        var sut = new DistributedCacheJson(flaky.Object, _clock, _logger);
+        var sut = new DistributedCacheJson(flaky.Object, Mock.Of<ICacheClearer>(), _clock, _logger);
 
         (await sut.GetAsync<MovieAggregate>("k")).Should().BeNull();
         _clock.Now += DistributedCacheJson.BypassFor;
@@ -204,11 +204,110 @@ public class DistributedCacheJsonTests
         var cache = new Mock<IDistributedCache>();
         cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException(cts.Token));
-        var sut = new DistributedCacheJson(cache.Object, _clock, _logger);
+        var sut = new DistributedCacheJson(cache.Object, Mock.Of<ICacheClearer>(), _clock, _logger);
 
         var read = () => sut.GetAsync<SeriesAggregate>("k", cts.Token);
 
         await read.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    // ---- clearing the cache after an outage -----------------------------------
+
+    [Test]
+    public async Task NormalRun_WithoutAnOutage_NeverClears()
+    {
+        var redis = new SwitchableCache();
+        var sut = new DistributedCacheJson(redis, redis.Clearer, _clock, _logger);
+
+        for (var i = 0; i < 20; i++)
+        {
+            await sut.SetAsync($"movie:aggregate:v2:{i}:eng", CacheSamples.Movie(i), TimeSpan.FromDays(7));
+            await sut.GetAsync<MovieAggregate>($"movie:aggregate:v2:{i}:eng");
+            await sut.GetAsync<MovieAggregate>("missing");
+            _clock.Now += TimeSpan.FromMinutes(1);
+        }
+        await sut.RemoveAsync("movie:aggregate:v2:0:eng");
+
+        redis.Clearer.Clears.Should().Be(0);
+        redis.Clearer.FailedClears.Should().Be(0);
+        redis.Keys.Should().HaveCount(19);
+        _logger.Entries.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task OutageThenRecovery_ClearsExactlyOnce_BeforeAnythingIsReadAgain()
+    {
+        var redis = new SwitchableCache();
+        var sut = new DistributedCacheJson(redis, redis.Clearer, _clock, _logger);
+        await sut.SetAsync("movie:aggregate:v2:7:eng", CacheSamples.Movie(7), TimeSpan.FromDays(7));
+        await sut.SetAsync("movie:aggregate:v2:8:eng", CacheSamples.Movie(8), TimeSpan.FromDays(7));
+
+        redis.Down = true;
+        await sut.SetAsync("movie:aggregate:v2:7:eng", CacheSamples.Movie(7) with { Name = "Refreshed" }, TimeSpan.FromDays(7));
+        _clock.Now += DistributedCacheJson.BypassFor;
+        await sut.GetAsync<MovieAggregate>("movie:aggregate:v2:7:eng"); // still down: the clear fails, bypass again
+        redis.Down = false;
+        _clock.Now += DistributedCacheJson.BypassFor;
+
+        var afterRecovery = await sut.GetAsync<MovieAggregate>("movie:aggregate:v2:7:eng");
+        for (var i = 0; i < 10; i++)
+        {
+            await sut.SetAsync($"movie:aggregate:v2:{i}:eng", CacheSamples.Movie(i), TimeSpan.FromDays(7));
+            await sut.GetAsync<MovieAggregate>($"movie:aggregate:v2:{i}:eng");
+            _clock.Now += DistributedCacheJson.BypassFor;
+        }
+
+        afterRecovery.Should().BeNull("the entry from before the outage was cleared, not served");
+        redis.Clearer.Clears.Should().Be(1);
+        redis.Clearer.FailedClears.Should().Be(1);
+        redis.Keys.Should().HaveCount(10, "the cache refills normally after the clear");
+        _logger.Entries.Where(e => e.Level == LogLevel.Information).Should().ContainSingle()
+            .Which.Message.Should().Be("Redis is reachable again after an outage; removed 2 cache key(s) written before or during it.");
+    }
+
+    [Test]
+    public async Task TwoOutages_ClearTwice()
+    {
+        var redis = new SwitchableCache();
+        var sut = new DistributedCacheJson(redis, redis.Clearer, _clock, _logger);
+
+        for (var outage = 0; outage < 2; outage++)
+        {
+            redis.Down = true;
+            await sut.GetAsync<MovieAggregate>("k");
+            redis.Down = false;
+            _clock.Now += DistributedCacheJson.BypassFor;
+            await sut.GetAsync<MovieAggregate>("k");
+            await sut.GetAsync<MovieAggregate>("k");
+        }
+
+        redis.Clearer.Clears.Should().Be(2);
+    }
+
+    [Test]
+    public async Task WhileTheClearRuns_OtherCallersSkipRedis()
+    {
+        var redis = new SwitchableCache();
+        var sut = new DistributedCacheJson(redis, redis.Clearer, _clock, _logger);
+        await sut.SetAsync("k", CacheSamples.Movie(), TimeSpan.FromDays(7));
+        redis.Down = true;
+        await sut.GetAsync<MovieAggregate>("k");
+        redis.Down = false;
+        _clock.Now += DistributedCacheJson.BypassFor;
+        var gate = new TaskCompletionSource();
+        redis.Clearer.Gate = gate.Task;
+        var callsBefore = redis.Calls;
+
+        var clearing = sut.GetAsync<MovieAggregate>("k");
+        var meanwhile = await sut.GetAsync<MovieAggregate>("k");
+        await sut.SetAsync("other", CacheSamples.Movie(), TimeSpan.FromDays(7));
+
+        meanwhile.Should().BeNull();
+        redis.Calls.Should().Be(callsBefore, "nothing reaches Redis until the clear is done");
+
+        gate.SetResult();
+        (await clearing).Should().BeNull("the clear removed the entry before the first caller read it");
+        redis.Clearer.Clears.Should().Be(1);
     }
 
     private static Mock<IDistributedCache> FailingCache()
