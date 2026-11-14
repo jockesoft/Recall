@@ -27,7 +27,8 @@ namespace Recall.Web.Extensions;
 public static class InfrastructureServiceCollectionExtensions
 {
     /// <summary>
-    /// The Redis-backed distributed cache, wrapped as <see cref="IDistributedCacheJson"/>.
+    /// The Redis-backed distributed cache, wrapped as <see cref="IDistributedCacheJson"/>,
+    /// which stores compressed JSON and treats a failing Redis as a miss.
     /// </summary>
     public static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
     {
@@ -44,8 +45,8 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddStackExchangeRedisCache(options =>
         {
-            options.Configuration = redisConnection;
-            options.InstanceName = "tvdb:"; // optional prefix
+            options.ConfigurationOptions = RedisConnection.Options(redisConnection);
+            options.InstanceName = "tvdb:"; // prefix of every key (TvdbCacheKeys)
         });
 
         services.AddSingleton<IDistributedCacheJson, DistributedCacheJson>();
