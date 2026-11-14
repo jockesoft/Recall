@@ -115,6 +115,42 @@ public class TheTvDbServiceRedisTierTests
         _redis.Reads.Should().Equal("series:aggregate:v2:78957:eng");
     }
 
+    // ---- lifetimes -------------------------------------------------------------
+
+    [Test]
+    public async Task EntryWrittenBackFromPostgres_LivesAWeek()
+    {
+        // A continuing series: until 2026-11-14 this got 12 hours.
+        _store.Setup(s => s.GetSeriesAggregateAsync(78957, "eng", It.IsAny<CancellationToken>())).ReturnsAsync(CacheSamples.Series(78957));
+        _store.Setup(s => s.GetEpisodeExtendedAsync(2001, It.IsAny<CancellationToken>())).ReturnsAsync(CacheSamples.Episode(2001));
+        _store.Setup(s => s.GetMovieAggregateAsync(8, "eng", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CacheSamples.Movie(8) with { Status = new MovieStatus { Name = "Announced" } });
+
+        await _sut.GetSeriesAggregateByIdAsync(78957);
+        await _sut.GetEpisodeDetailsAsync(2001);
+        await _sut.GetMovieAggregateByIdAsync(8);
+
+        _redis.Lifetimes.Should().HaveCount(3).And.AllSatisfy(AboutAWeek);
+    }
+
+    [Test]
+    public async Task RefreshedEntries_LiveAWeek()
+    {
+        _api.Setup(a => a.GetSeriesAggregateByIdAsync(78957, "eng", It.IsAny<CancellationToken>())).ReturnsAsync(CacheSamples.Series(78957));
+        _api.Setup(a => a.GetMovieAggregateByIdAsync(7, "eng", It.IsAny<CancellationToken>())).ReturnsAsync(CacheSamples.Movie(7));
+        _store.Setup(s => s.BackfillEpisodeImagesFromAggregateAsync(It.IsAny<SeriesAggregate>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([CacheSamples.Episode(2001)]);
+
+        await _sut.RefreshSeriesAggregateByIdAsync(78957);
+        await _sut.RefreshMovieAggregateByIdAsync(7);
+
+        _redis.Keys.Should().BeEquivalentTo(["series:aggregate:v2:78957:eng", "episode:extended:v3:2001:eng", "movie:aggregate:v2:7:eng"]);
+        _redis.Lifetimes.Should().HaveCount(3).And.AllSatisfy(AboutAWeek);
+    }
+
+    private static void AboutAWeek(TimeSpan ttl) =>
+        ttl.Should().BeCloseTo(TheTvDbService.RedisLifetime, TimeSpan.FromHours(16.8 + 0.1), "7 days ±10%");
+
     /// <summary>An in-memory <see cref="IDistributedCache"/> that records what it is asked.</summary>
     private sealed class SwitchableCache : IDistributedCache
     {
@@ -122,6 +158,7 @@ public class TheTvDbServiceRedisTierTests
         private readonly HashSet<string> _keys = [];
 
         public List<string> Reads { get; } = [];
+        public List<TimeSpan> Lifetimes { get; } = [];
         public IReadOnlyCollection<string> Keys => _keys;
 
         public byte[]? Get(string key) => throw new NotSupportedException();
@@ -138,6 +175,7 @@ public class TheTvDbServiceRedisTierTests
         public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
         {
             _keys.Add(key);
+            if (options.AbsoluteExpirationRelativeToNow is { } ttl) Lifetimes.Add(ttl);
             return _inner.SetAsync(key, value, options, token);
         }
 

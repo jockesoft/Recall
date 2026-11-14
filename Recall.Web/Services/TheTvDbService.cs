@@ -73,7 +73,6 @@ public sealed class TheTvDbService(
             // requests per series however many episodes it has.
             ct => apiClient.GetSeriesAggregateByIdAsync(seriesId, Language, ct),
             aggregate => store.SaveSeriesAggregateAsync(aggregate, Language, cancellationToken),
-            AggregateTtl,
             cancellationToken);
 
         // Defensive: heals image paths from any tier (a Postgres snapshot cached
@@ -94,7 +93,6 @@ public sealed class TheTvDbService(
             ct => store.GetSeriesAggregateAsync(seriesId, Language, ct),
             _ => Task.FromResult<SeriesAggregate?>(null),
             _ => Task.CompletedTask,
-            AggregateTtl,
             cancellationToken);
 
         return aggregate?.WithNormalizedImages();
@@ -114,7 +112,7 @@ public sealed class TheTvDbService(
         fresh = fresh.WithNormalizedImages();
 
         await store.UpsertSeriesAggregateAsync(fresh, Language, cancellationToken);
-        await cache.SetAsync(TvdbCacheKeys.SeriesAggregate(seriesId, Language), fresh, AggregateTtl(fresh), cancellationToken);
+        await cache.SetAsync(TvdbCacheKeys.SeriesAggregate(seriesId, Language), fresh, RedisTtl(), cancellationToken);
 
         logger.LogInformation("Refreshed series aggregate {SeriesId} ({EpisodeCount} episodes).", seriesId, fresh.Episodes.Count);
 
@@ -138,7 +136,7 @@ public sealed class TheTvDbService(
 
         foreach (var episode in patched)
         {
-            await cache.SetAsync(TvdbCacheKeys.EpisodeExtended(episode.Id!.Value, Language), episode, EpisodeTtl(), cancellationToken);
+            await cache.SetAsync(TvdbCacheKeys.EpisodeExtended(episode.Id!.Value, Language), episode, RedisTtl(), cancellationToken);
         }
 
         logger.LogInformation(
@@ -155,7 +153,6 @@ public sealed class TheTvDbService(
             ct => store.GetMovieAggregateAsync(movieId, Language, ct),
             ct => apiClient.GetMovieAggregateByIdAsync(movieId, Language, ct),
             aggregate => store.SaveMovieAggregateAsync(aggregate, Language, cancellationToken),
-            MovieAggregateTtl,
             cancellationToken);
 
         // Defensive: see DomainImageNormalization / GetSeriesAggregateByIdAsync.
@@ -172,7 +169,6 @@ public sealed class TheTvDbService(
             ct => store.GetMovieAggregateAsync(movieId, Language, ct),
             _ => Task.FromResult<MovieAggregate?>(null),
             _ => Task.CompletedTask,
-            MovieAggregateTtl,
             cancellationToken);
 
         return aggregate?.WithNormalizedImages();
@@ -190,7 +186,7 @@ public sealed class TheTvDbService(
         }
 
         await store.UpsertMovieAggregateAsync(fresh, Language, cancellationToken);
-        await cache.SetAsync(TvdbCacheKeys.MovieAggregate(movieId, Language), fresh, MovieAggregateTtl(fresh), cancellationToken);
+        await cache.SetAsync(TvdbCacheKeys.MovieAggregate(movieId, Language), fresh, RedisTtl(), cancellationToken);
 
         logger.LogInformation("Refreshed movie aggregate {MovieId} (\"{Name}\").", movieId, fresh.Name);
         return true;
@@ -204,10 +200,7 @@ public sealed class TheTvDbService(
             ct => store.GetSeriesExtendedAsync(seriesId, ct),
             async ct => (await apiClient.GetSeriesByIdExtendedAsync(seriesId, ct))?.ToDomain(),
             series => store.SaveSeriesExtendedAsync(series, cancellationToken),
-            _ => Jitter(TimeSpan.FromHours(12), 0.10),
             cancellationToken);
-
-    private static TimeSpan EpisodeTtl() => Jitter(TimeSpan.FromHours(12), 0.10);
 
     public async Task<Episode?> GetEpisodeDetailsAsync(
         int episodeId,
@@ -218,7 +211,6 @@ public sealed class TheTvDbService(
             ct => store.GetEpisodeExtendedAsync(episodeId, ct),
             async ct => (await apiClient.GetEpisodeInformationByIdAsync(episodeId, ct))?.ToDomain(),
             episode => store.SaveEpisodeExtendedAsync(episode, cancellationToken),
-            _ => EpisodeTtl(),
             cancellationToken);
 
         // Defensive: see DomainImageNormalization / GetSeriesAggregateByIdAsync.
@@ -237,7 +229,7 @@ public sealed class TheTvDbService(
         }
 
         await store.UpsertEpisodeExtendedAsync(fresh, cancellationToken);
-        await cache.SetAsync(TvdbCacheKeys.EpisodeExtended(episodeId, Language), fresh, EpisodeTtl(), cancellationToken);
+        await cache.SetAsync(TvdbCacheKeys.EpisodeExtended(episodeId, Language), fresh, RedisTtl(), cancellationToken);
 
         logger.LogInformation("Refreshed episode snapshot {EpisodeId} (\"{Name}\").", episodeId, fresh.Name);
         return true;
@@ -253,7 +245,6 @@ public sealed class TheTvDbService(
         Func<CancellationToken, Task<T?>> dbGet,
         Func<CancellationToken, Task<T?>> apiFetch,
         Func<T, Task> dbSave,
-        Func<T, TimeSpan> ttl,
         CancellationToken cancellationToken) where T : class
     {
         var cached = await cache.GetAsync<T>(cacheKey, cancellationToken);
@@ -267,7 +258,7 @@ public sealed class TheTvDbService(
         if (stored is not null)
         {
             logger.LogDebug("Local DB hit for {CacheKey} ({Type}).", cacheKey, typeof(T).Name);
-            await cache.SetAsync(cacheKey, stored, ttl(stored), cancellationToken);
+            await cache.SetAsync(cacheKey, stored, RedisTtl(), cancellationToken);
             return stored;
         }
 
@@ -276,25 +267,28 @@ public sealed class TheTvDbService(
             return null;
 
         await dbSave(fresh);
-        await cache.SetAsync(cacheKey, fresh, ttl(fresh), cancellationToken);
+        await cache.SetAsync(cacheKey, fresh, RedisTtl(), cancellationToken);
         return fresh;
     }
 
-    private static TimeSpan AggregateTtl(SeriesAggregate aggregate) =>
-        aggregate.Status is { KeepUpdated: false, Name: not null }
-        && aggregate.Status.Name.Equals("ended", StringComparison.OrdinalIgnoreCase)
-            ? Jitter(TimeSpan.FromDays(7), 0.10)
-            : Jitter(TimeSpan.FromHours(12), 0.10);
-
     /// <summary>
-    /// A released movie's metadata rarely changes, so it gets the long TTL;
-    /// anything still upcoming (rumored/planned/in production) is refreshed
-    /// more often since those rows tend to firm up as release approaches.
+    /// How long a Redis entry lives: 7 days, ±10% so a burst of writes (Redis
+    /// restarted, a backfill) does not all expire in the same hour. Every
+    /// resource gets the same, because the lifetime decides nothing about
+    /// freshness: a miss is served from the Postgres snapshot, which has no
+    /// staleness check, and never from TheTVDB. What keeps the data fresh is the
+    /// refresh jobs, and every refresh (and the episode still backfill) rewrites
+    /// the Redis entry along with the snapshot, so an entry is never older than
+    /// its row; a shorter lifetime only meant more misses and more rewrites.
+    /// Until 2026-11-14 it was 12 hours for anything that could still change
+    /// (7 days for ended series and released movies), and keys lived about 15
+    /// hours on average in production. Not sliding: a sliding entry costs a
+    /// write (an EXPIRE) on every read. Memory is bounded by Redis itself
+    /// (<c>maxmemory</c> with LRU eviction in <c>compose.prod.yml</c>).
     /// </summary>
-    private static TimeSpan MovieAggregateTtl(MovieAggregate aggregate) =>
-        aggregate.Status is { Name: not null } && aggregate.Status.Name.Equals("released", StringComparison.OrdinalIgnoreCase)
-            ? Jitter(TimeSpan.FromDays(7), 0.10)
-            : Jitter(TimeSpan.FromHours(12), 0.10);
+    public static readonly TimeSpan RedisLifetime = TimeSpan.FromDays(7);
+
+    private static TimeSpan RedisTtl() => Jitter(RedisLifetime, 0.10);
 
     private static TimeSpan Jitter(TimeSpan baseTtl, double pct)
     {
