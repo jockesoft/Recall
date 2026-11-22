@@ -22,6 +22,19 @@ if (args is ["generate-vapid-keys"])
     return;
 }
 
+// The container's healthcheck (HEALTHCHECK in Dockerfile.prod), since the
+// hardened runtime image has no shell or curl: asks the running app's
+// /health/live on its own port and exits 0 or 1. Before CreateBuilder, so it
+// starts nothing and reads no configuration.
+//   dotnet /app/Recall.Web.dll healthcheck
+if (args is [HealthProbe.Command])
+{
+    Environment.ExitCode = await HealthProbe.RunAsync(HealthProbe.PortFrom(
+        urls: Environment.GetEnvironmentVariable("ASPNETCORE_URLS"),
+        httpPorts: Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORTS")));
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, services, configuration) =>
