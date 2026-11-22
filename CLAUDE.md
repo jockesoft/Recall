@@ -597,8 +597,6 @@ The cache container keeps the name `my-redis` (`ui-review/review.sh` uses it) an
 
 **Backups**: `deploy/dump_db.sh`, shipped by the deploy to `~/recall-deploy/dump_db.sh`, run daily by a cron job on the server from that path and by every deploy before it starts anything. It reads `POSTGRES_HOST` (the container), `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` from the `.env.prod` beside it (`ENV_FILE` overrides the path) and stops if one is missing; runs `pg_dump` through `docker exec` into the Postgres container; writes `/var/backups/recall/<db>_<UTC timestamp>.sql.gz` (umask 077) as `.partial`, renamed only after `gzip -t` passes; and only then deletes dumps older than 9 days. The cron entry itself is on the server, not in the repository. `README.md` has the restore commands; they read the user, database and password from `.env.prod` rather than spelling them out.
 
-`Recall.Web/Dockerfile` and `compose.yaml` are IDE-generated and not used by CI.
-
 ## 13. Conventions
 
 - **Layering**: `Pages` → `Services` → `Infrastructure` → `Domain`/`Mappings`. In practice page models inject repositories directly for simple reads and writes; services exist where there is real logic.
@@ -642,7 +640,7 @@ Ranked by impact. Items marked fixed are kept for the record, with whatever rema
 7. **Write handlers trusting client-supplied id pairs: fixed for watches, likes and ratings on episodes.** They go through `IWatchProgressService` or refuse when the parent series can't be resolved. Still unvalidated: series and movie like/rating handlers accept any positive id without checking it exists on TheTVDB.
 8. **Single-instance assumptions.** Login abuse limits, the OMDb daily budget, the TheTVDB token and the Quartz schedule are all in process memory, and migrations run at startup. Every deploy resets the OMDb budget and login counters. A second instance would double every job.
 9. **Test gaps: mostly fixed.** Page models, all jobs, `LoginAbuseGuard`, `TurnstileVerifier`, `OmdbApiClient` and a small pipeline suite are tested, and `Recall.Tests.Postgres` runs the migrations, the `UniqueViolation` catch blocks, the `xmin` token, `jsonb` and the provider-specific queries against real PostgreSQL (see section 11 for what remains). Writing those tests found that `EpisodeWatchRepository.MarkWatchedAsync`, `LikeRepository.ToggleAsync` and `MovieWatchRepository.ToggleAsync` left the row that lost the race pending in the context; they now detach it. Still open: CI coverage is informational only and does not include the PostgreSQL tests.
-10. **Dead or unused code and dependencies: fixed.** The four unused packages, the controller and session registrations, the unused Redis multiplexer, `AppDbContextFactory`, `UserItem`/`UserMappings`, `site.js`, the empty import map and the stale csproj items are gone. Left alone: `Microsoft.AspNetCore.Mvc.Testing` in the test project (unused, see 9), and `Recall.Web/Dockerfile` and `compose.yaml` (Docker setup is not changed without being asked).
+10. **Dead or unused code and dependencies: fixed.** The four unused packages, the controller and session registrations, the unused Redis multiplexer, `AppDbContextFactory`, `UserItem`/`UserMappings`, `site.js`, the empty import map and the stale csproj items are gone. Left alone: `Microsoft.AspNetCore.Mvc.Testing` in the test project (unused, see 9). The IDE-generated `Recall.Web/Dockerfile` and `compose.yaml` were deleted on 2026-11-22 (open questions).
 11. **Convention drift: mostly fixed.** "Already in your library" is a return value, the admin counts come from `IAppUserRepository`, and movies and episodes have their own OMDb types. Remaining: `IAppUserRepository` still returns entities, and `EpisodeOmdbSnapshotStore` uses the scoped context while its two siblings use the factory.
 12. **State-changing GETs: fixed.** Logout and notification-open are POST-only. Convention: anything that changes state is a POST handler behind the antiforgery token.
 13. **Unbounded tables: fixed.** `PruneOldDataTimer` deletes settled login tokens, finished emails, read notifications, the notified-episode ledger and completed imports on the periods in `Retention`. By design it keeps unread notifications and anything still in progress, so an account that never reads its notifications still accumulates them.
@@ -664,14 +662,14 @@ Answered (2026-10-01), recorded here because the code alone does not show them:
 - **"Aired" is judged in UTC.** **A single app instance** is a permanent assumption.
 - **API plans**: OMDb free tier (1,000 requests a day); TheTVDB free tier, which requires attribution.
 - **Backups** run on the server: `docker exec` into the `recall_postgres` container (database `recall_db`, user `recall_user`), `pg_dump`, gzipped into `/var/backups/recall/`. The backup script was kept off the repository while it held the password; since 2026-11-22 it reads `.env.prod` and is `deploy/dump_db.sh`, shipped by the deploy (section 12).
+- **The IDE-generated Docker files** (`Recall.Web/Dockerfile`, `compose.yaml`) were deleted on 2026-11-22: nothing used them, and they would not have built on the hardened images (`USER $APP_UID`, which those images do not define). `Dockerfile.prod` and `compose.prod.yml` are the only Docker files.
 
 Still open:
 
 1. What are TheTVDB's rate limits on the free tier? (The retry counts and the 60-per-minute anonymous page limit are guesses until then.)
 2. Are the retention periods in `Retention` the ones you want? (Account deletion exists now, and the Privacy page describes it and the retention periods.)
 3. Are the backups in `/var/backups/recall/` copied off the server, and has a restore been tested?
-4. Should `Recall.Web/Dockerfile` and `compose.yaml` (IDE-generated, unused by CI) be kept?
-5. The project memory notes that Recall mirrors account features from the sibling Receptus repository. Which Receptus features are still to be ported?
+4. The project memory notes that Recall mirrors account features from the sibling Receptus repository. Which Receptus features are still to be ported?
 
 ## Quick facts
 
