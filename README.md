@@ -21,10 +21,19 @@ dotnet user-secrets set "Login:AllowedEmails:0" "dev@email.com" --project Recall
 dotnet user-secrets set "Login:AllowedEmails:1" "user@email.com" --project Recall.Web
 ```
 
-Start redis container
+Start the cache container (Valkey, from Docker Hardened Images)
+
+The image is on `dhi.io`, which needs a Docker Hub login once per machine (`docker login dhi.io`, with your
+Docker Hub username and an access token). The PostgreSQL test suite pulls the same image.
 ```
-docker run --name my-redis -p 6379:6379 -d redis:7
+docker run --name my-redis -p 127.0.0.1:6379:6379 -d dhi.io/valkey:9.1 \
+  --protected-mode no --save "" --appendonly no
 ```
+The container keeps the name `my-redis`, which `ui-review/review.sh` uses. Locally it has no password, so the port
+is bound to 127.0.0.1 only; `--protected-mode no` is needed because the app reaches it through Docker's port
+forwarding, which Valkey does not count as loopback (with protected mode on it refuses the app, and the app quietly
+reads everything from Postgres instead). To replace an old Redis container: `docker rm -f my-redis`, then the
+command above; it only ever held cache.
 
 Start postgres container
 ```
@@ -63,6 +72,47 @@ proxy_set_header X-Forwarded-Proto $scheme;
 The app accepts `X-Forwarded-*` from loopback and the private address ranges, which is how nginx on the
 host reaches the container, so nothing needs configuring for this.
 
+
+Cache settings in .env.prod
+
+The cache is Valkey (`dhi.io/valkey:9.1`, the `redis` service in `compose.prod.yml`), protected with a password.
+`.env.prod` holds it twice: once for compose, which passes it to Valkey, and once inside the app's connection string.
+```
+VALKEY_PASSWORD=<long random value>
+REDIS_CONNECTION=redis:6379,password=<the same value, written out>
+```
+Generate the value with `openssl rand -hex 32`: hex has no `,` (which would split the connection string) and no `$`
+(which compose would try to expand). Write it out in `REDIS_CONNECTION` rather than referring to `${VALKEY_PASSWORD}`.
+Compose refuses to start when `VALKEY_PASSWORD` is missing.
+
+Switching production to Valkey
+
+Done once, on the server, in the folder that holds `compose.prod.yml` and `.env.prod`. The cache holds nothing that
+is not also in Postgres, so nothing is migrated: Valkey starts empty and fills as pages are read.
+
+1. Log in to the hardened-image registry as the user that runs compose (Docker Hub username and a read-only access
+   token): `docker login dhi.io`.
+2. Add `VALKEY_PASSWORD` and change `REDIS_CONNECTION` in `.env.prod` as above.
+3. Replace `compose.prod.yml` with the repository's version.
+4. `docker compose --env-file .env.prod -f compose.prod.yml up -d --wait`. This recreates the `redis` container on
+   Valkey and the app container with the new connection string.
+
+Checks afterwards:
+```
+docker compose --env-file .env.prod -f compose.prod.yml ps                          # redis and recall_app running, redis healthy
+docker compose --env-file .env.prod -f compose.prod.yml exec redis valkey-cli -e INFO server | grep -E 'valkey_version|redis_version'
+docker logs recall_app 2>&1 | grep -c "Redis read failed"                            # 0 for everything since the restart
+docker compose --env-file .env.prod -f compose.prod.yml exec redis valkey-cli -e INFO stats | grep keyspace   # hits rise as pages are opened
+docker compose --env-file .env.prod -f compose.prod.yml exec redis valkey-cli -e INFO memory | grep -E 'maxmemory_human|maxmemory_policy'   # 256.00M, allkeys-lru
+docker compose --env-file .env.prod -f compose.prod.yml exec redis valkey-cli -e CONFIG GET save              # empty: no snapshots
+```
+`valkey-cli` inside the container authenticates through `VALKEYCLI_AUTH`. The first page loads after the switch read
+from the Postgres snapshots, not from TheTVDB.
+
+Rollback: put back the previous `redis` service (`image: redis:7`, no password, `redis-cli ping` healthcheck),
+set `REDIS_CONNECTION=redis:6379` again (the app also connects to a Redis without a password while it still sends
+one, but the setting should say what is true) and remove `VALKEY_PASSWORD`, then run the same `up -d --wait`.
+Nothing needs restoring.
 
 Back up the production database
 
