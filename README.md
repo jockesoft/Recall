@@ -104,7 +104,7 @@ Read by the app (the container gets the whole file):
 | Variable | What it is |
 |---|---|
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
-| `ASPNETCORE_URLS` | Where the app listens inside its container: `http://+:8701` |
+| `ASPNETCORE_URLS` | Where the app listens inside its container: `http://+:8701`. Or, instead, `ASPNETCORE_HTTP_PORTS=8701`, which avoids the startup warning "Overriding HTTP_PORTS '8080'" (the image sets HTTP_PORTS to 8080 and URLS overrides it); keep only one of the two, since URLS wins when both are set |
 | `ConnectionStrings__DefaultConnection` | Npgsql connection string to `POSTGRES_HOST`/`POSTGRES_DB` with that user and password; startup fails without it |
 | `REDIS_CONNECTION` | `redis:6379,password=<VALKEY_PASSWORD written out>` (see "Cache settings in .env.prod") |
 | `TheTvDb__ApiKey` | TheTVDB API key |
@@ -140,8 +140,36 @@ Roll back the one that is wrong, or both. The next deploy copies the repository'
 the repository as well. To go back to an
 earlier image too, set `image:` to `ghcr.io/jockesoft/recall:<run number>` in the repository and deploy.
 
-On the server after first deploy run:
-mkdir -p logs dataprotection-keys && sudo chown -R 64198:64198 logs dataprotection-keys
+Folders the app writes to
+
+The app's image runs as UID 65532 (the hardened image's `nonroot` user) and can write only two folders on the server,
+both in `~/recall-deploy` and both bind-mounted by `compose.prod.yml`: `logs/` (its log files) and
+`dataprotection-keys/` (the keys that protect sign-in cookies and the unsubscribe links in sent digests). Both must be
+owned by 65532:
+```
+cd ~/recall-deploy
+mkdir -p logs dataprotection-keys
+sudo chown -R 65532:65532 logs dataprotection-keys
+ls -ln logs dataprotection-keys        # 65532 65532 on every line
+```
+Keep the key files: losing them signs everyone out and breaks every unsubscribe link already sent. If the app cannot
+write its key folder it does not start: `docker logs recall_app` then shows a critical line naming the folder and UID
+65532, the container restarts and reports unhealthy, and the deploy's `up --wait` fails.
+
+Debugging the app container
+
+The image has no shell, so `docker exec recall_app sh` does not work. Instead:
+- `docker logs recall_app`, and the files in `~/recall-deploy/logs`;
+- `docker inspect recall_app --format '{{json .State.Health}}'` for the healthcheck's last answers, and
+  `docker exec recall_app dotnet /app/Recall.Web.dll healthcheck` to ask once (it needs no shell);
+- `docker debug recall_app`, which opens a shell with tools beside the container, where Docker Desktop's
+  `docker debug` is installed;
+- otherwise a throwaway container from the hardened `-dev` image (shell, `apt-get`) that joins the app's processes and
+  network; the app's files are under `/proc/1/root`:
+  ```
+  docker run --rm -it --pid container:recall_app --network container:recall_app --cap-add SYS_PTRACE \
+    dhi.io/aspnetcore:10-dev bash
+  ```
 
 Reverse proxy on the server
 
@@ -304,16 +332,8 @@ dotnet ef migrations add <Any name> --project Recall.Web
 dotnet ef database update --project Recall.Web
 ```
 
-If the following error appears:
-```
-Access to the path '/home/devuser/.aspnet/DataProtection-Keys/key-b645bc76-25a2-4024-9014-948416852792.xml' is denied.
-aspnetcore_app  |  ---> System.IO.IOException: Permission denied
-```
-Then login to docker using root and run the following command:
-```
-chown -R 1000:1000 /home/devuser/.aspnet/.
-
-```
+If the app logs that its Data Protection key folder is not writable, give the folder to the app's user, as in "Folders
+the app writes to": `sudo chown -R 65532:65532 dataprotection-keys` in `~/recall-deploy`.
 
 If port is in use on localhost:
 ```
