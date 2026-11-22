@@ -1,0 +1,5 @@
+# Shell scripts run on Linux (the server, CI) and macOS, and a CR at the end of
+# a line breaks them: always LF in the working tree, whatever core.autocrlf says.
+*.sh text eol=lf
+# Shipped to the server by the deploy, like deploy/dump_db.sh.
+compose.prod.yml text eol=lf

@@ -111,21 +111,23 @@ jobs:
             ghcr.io/${{ secrets.GHCR_USERNAME }}/recall:latest
             ghcr.io/${{ secrets.GHCR_USERNAME }}/recall:${{ env.BUILD_NUMBER }}
 
-      # The repository's compose.prod.yml is the server's: it is uploaded under a
-      # temporary name and put in place by the deploy script below, which keeps
-      # the previous one as compose.prod.yml.prev. .env.prod stays on the server.
-      - name: Stage compose file for upload
+      # The server-side files come from the repository: compose.prod.yml and
+      # deploy/dump_db.sh are uploaded under temporary names and put in place by
+      # the deploy script below, which keeps the previous ones as *.prev.
+      # .env.prod stays on the server.
+      - name: Stage server files for upload
         run: |
           mkdir -p deploy-upload
           cp compose.prod.yml deploy-upload/compose.prod.yml.incoming
+          cp deploy/dump_db.sh deploy-upload/dump_db.sh.incoming
 
-      - name: Upload compose file
+      - name: Upload server files
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: deploy-upload/compose.prod.yml.incoming
+          source: deploy-upload/compose.prod.yml.incoming,deploy-upload/dump_db.sh.incoming
           target: /home/${{ secrets.SSH_USER }}/recall-deploy
           strip_components: 1
           overwrite: true
@@ -141,17 +143,23 @@ jobs:
             set -eu
             cd /home/${{ secrets.SSH_USER }}/recall-deploy
 
-            # Keep the running file for a one-command rollback, then take the repository's.
+            # Keep the running files for a one-command rollback, then take the repository's.
+            # dump_db.sh keeps its name and place: the daily backup cron job runs it from here.
             if [ -f compose.prod.yml ]; then cp compose.prod.yml compose.prod.yml.prev; fi
+            if [ -f dump_db.sh ]; then cp -p dump_db.sh dump_db.sh.prev; fi
             mv compose.prod.yml.incoming compose.prod.yml
+            mv dump_db.sh.incoming dump_db.sh
+            chmod 750 dump_db.sh
 
             # Nothing is pulled or started until the file and .env.prod agree: every
             # variable compose.prod.yml interpolates is required, so a missing one fails
-            # here. On failure the previous file is put back, so the folder still
-            # describes what is running and .prev stays a good copy for the next deploy.
+            # here. On failure both previous files are put back, so the folder still
+            # describes what is running (never a mix) and the .prev copies stay good
+            # for the next deploy.
             if ! docker compose --env-file .env.prod -f compose.prod.yml config -q; then
-              echo "compose.prod.yml does not validate with .env.prod; restored the previous file, nothing was deployed." >&2
+              echo "compose.prod.yml does not validate with .env.prod; restored the previous compose.prod.yml and dump_db.sh, nothing was deployed." >&2
               if [ -f compose.prod.yml.prev ]; then cp compose.prod.yml.prev compose.prod.yml; fi
+              if [ -f dump_db.sh.prev ]; then cp -p dump_db.sh.prev dump_db.sh; fi
               exit 1
             fi
 

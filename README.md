@@ -63,17 +63,20 @@ How a deploy works
 
 A push to `main` builds the image and deploys it (`build_and_deploy` in `.github/workflows/dotnet.yml`). The deploy
 folder on the server, `~/recall-deploy`, holds `compose.prod.yml`, `.env.prod`, `dump_db.sh`, `logs/` and
-`dataprotection-keys/`. **`compose.prod.yml` comes from the repository on every deploy**: change it in the repository,
-never on the server (the next deploy would overwrite the edit). **`.env.prod` is the only file kept by hand on the
-server**, and it never leaves it. `dump_db.sh` also lives only on the server. The deploy:
+`dataprotection-keys/`. **`compose.prod.yml` and `dump_db.sh` come from the repository on every deploy**
+(`compose.prod.yml` and `deploy/dump_db.sh`): change them in the repository, never on the server (the next deploy
+would overwrite the edit). **`.env.prod` is the only file kept by hand on the server**, and it never leaves it. The
+deploy:
 
-1. copies the repository's `compose.prod.yml` to the server, saving the file it replaces as `compose.prod.yml.prev`;
+1. copies both files to the server, saving the ones they replace as `compose.prod.yml.prev` and `dump_db.sh.prev`;
+   `dump_db.sh` keeps its path and name, `~/recall-deploy/dump_db.sh`, with mode 750;
 2. runs `docker compose --env-file .env.prod -f compose.prod.yml config -q` and stops if it fails, before anything is
    pulled or started: every variable `compose.prod.yml` uses is required, so one missing from `.env.prod` fails here
-   with "`NAME` must be set in .env.prod". The previous `compose.prod.yml` is then put back, so the folder still
-   describes what is running;
-3. logs in to GHCR, runs `dump_db.sh`, runs `docker compose --env-file .env.prod -f compose.prod.yml up -d --pull
-   always`, and prunes old images. Any failing step stops the deploy.
+   with "`NAME` must be set in .env.prod". Both previous files are then put back, so the folder still describes what
+   is running and never holds one new file beside an old one;
+3. logs in to GHCR, runs `bash dump_db.sh` (a backup before every deploy), runs
+   `docker compose --env-file .env.prod -f compose.prod.yml up -d --pull always`, and prunes old images. Any failing
+   step stops the deploy, a failed backup included.
 
 So a change that needs a new variable is deployed in two steps: add the variable to the server's `.env.prod` first,
 then push the change.
@@ -93,6 +96,8 @@ Required by `compose.prod.yml` (the deploy fails without them):
 | `POSTGRES_USER` | Owner of that database, used by the healthcheck and the backups |
 | `POSTGRES_PASSWORD` | Its password |
 | `VALKEY_PASSWORD` | Password Valkey requires; the same value goes in `REDIS_CONNECTION` |
+
+`dump_db.sh` reads four of them too: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`.
 
 Read by the app (the container gets the whole file):
 
@@ -122,14 +127,17 @@ Read by the app (the container gets the whole file):
 | `Push__PrivateKey` | Only while push is on: VAPID private key |
 | `Push__Subject` | Only while push is on: `mailto:` contact address |
 
-Rolling back compose.prod.yml
+Rolling back the deployed files
 
-The deploy keeps the file it replaced. To go back to it, in the deploy folder:
+The deploy keeps the files it replaced. To go back to them, in the deploy folder:
 ```
 cp compose.prod.yml.prev compose.prod.yml
 docker compose --env-file .env.prod -f compose.prod.yml up -d --wait
+
+cp -p dump_db.sh.prev dump_db.sh      # -p keeps its mode; the cron job runs it from here
 ```
-The next deploy copies the repository's file again, so revert the change in the repository as well. To go back to an
+Roll back the one that is wrong, or both. The next deploy copies the repository's files again, so revert the change in
+the repository as well. To go back to an
 earlier image too, set `image:` to `ghcr.io/jockesoft/recall:<run number>` in the repository and deploy.
 
 On the server after first deploy run:
@@ -193,9 +201,21 @@ Nothing needs restoring.
 
 Back up the production database
 
-Runs on the server. The Postgres container is `recall_postgres` (database `recall_db`, user `recall_user`);
-dumps are gzipped into `/var/backups/recall/`. Nothing here contains a password: the user, database and
-password come from the server's `.env.prod`.
+Backups are made by `dump_db.sh` (`deploy/dump_db.sh` in the repository, shipped by every deploy to
+`~/recall-deploy/dump_db.sh`). A daily cron job on the server runs it from there, and every deploy runs it before
+starting anything. It contains no secrets:
+
+- it reads `POSTGRES_HOST` (the Postgres container's name), `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` from
+  the `.env.prod` next to it (`ENV_FILE=...` points it at another file), and stops with "`NAME` is not set" when one
+  is missing;
+- it runs `pg_dump` inside the Postgres container and writes `/var/backups/recall/<database>_<UTC date and
+  time>.sql.gz` (owner-only permissions), first as `.partial`, renamed only after `gzip -t` has checked it;
+- only after a successful dump does it delete dumps older than 9 days, so a failing backup never removes the old ones.
+
+Run it by hand the same way: `bash ~/recall-deploy/dump_db.sh`.
+
+The Postgres container is `recall_postgres` (database `recall_db`, user `recall_user`). The same dump without the
+script, for reference:
 
 ```
 # In the folder that holds .env.prod: load POSTGRES_USER, POSTGRES_DB and POSTGRES_PASSWORD
