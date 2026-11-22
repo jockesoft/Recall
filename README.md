@@ -26,10 +26,13 @@ Start the cache container (Valkey, from Docker Hardened Images)
 The image is on `dhi.io`, which needs a Docker Hub login once per machine (`docker login dhi.io`, with your
 Docker Hub username and an access token). The PostgreSQL test suite pulls the same image.
 ```
-docker run --name my-redis -p 127.0.0.1:6379:6379 -d dhi.io/valkey:9.1 \
+docker run --name my-redis -p 127.0.0.1:6380:6379 -d dhi.io/valkey:9.1 \
   --protected-mode no --save "" --appendonly no
 ```
-The container keeps the name `my-redis`, which `ui-review/review.sh` uses. Locally it has no password, so the port
+The container keeps the name `my-redis`, which `ui-review/review.sh` uses. It is published on host port **6380**, not
+Valkey's usual 6379, which another project on the development machine holds; the development connection string
+(`ConnectionStrings:RedisConnection` in `appsettings.json`, `localhost:6380`) and `review.sh`'s default `REDIS_PORT`
+match it. Locally it has no password, so the port
 is bound to 127.0.0.1 only; `--protected-mode no` is needed because the app reaches it through Docker's port
 forwarding, which Valkey does not count as loopback (with protected mode on it refuses the app, and the app quietly
 reads everything from Postgres instead). To replace an old Redis container: `docker rm -f my-redis`, then the

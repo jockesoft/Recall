@@ -12,9 +12,9 @@
 #   ./review.sh all        setup, start, capture, teardown
 #
 # Needs the local_postgres and my-redis containers from the README and TheTVDB
-# keys in user secrets. "start" builds Recall.Web (Debug) first. When another
-# Redis already holds port 6379, point the run at a different container and
-# port: REDIS_CONTAINER=name REDIS_PORT=6380 ./review.sh all.
+# keys in user secrets. "start" builds Recall.Web (Debug) first. my-redis is
+# published on host port 6380 (another project holds 6379); to use a different
+# cache container or port: REDIS_CONTAINER=name REDIS_PORT=6381 ./review.sh all.
 #
 # The instances run with the import job switched off (Jobs:Disabled), so rows
 # left waiting for a screenshot are never looked up on TheTVDB, and with the
@@ -37,7 +37,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/ui-review/.run"
 PG_CONTAINER=local_postgres
 REDIS_CONTAINER="${REDIS_CONTAINER:-my-redis}"
-REDIS_PORT="${REDIS_PORT:-6379}"
+REDIS_PORT="${REDIS_PORT:-6380}"
 REDIS_DB=1
 SOURCE_DB=recall_db
 SEEDED_DB=recall_uireview          # dev user with a full library
