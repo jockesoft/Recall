@@ -61,7 +61,11 @@ public sealed class DataProtectionKeyFolderTests
     public void AFolderThatCannotBeWritten_Should_StopTheApp_WithACriticalLineNamingTheOwner()
     {
         if (OperatingSystem.IsWindows())
+        {
             Assert.Ignore("Unix file modes only.");
+            return;   // for the platform analyzer, which does not know Ignore throws
+        }
+
         File.WriteAllText(Path.Combine(_folder, "key-1.xml"), "<key/>");
         File.SetUnixFileMode(_folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);   // r-x: as a folder owned by another user
         if (DataProtectionKeyFolder.Inspect(_folder).Writable)
