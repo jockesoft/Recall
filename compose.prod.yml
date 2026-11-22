@@ -39,21 +39,29 @@ services:
     networks:
       - recall_prodnet
 
+  # Valkey (Docker Hardened Image) as a pure cache: no snapshots, no append-only
+  # file, 256 MB with LRU eviction. The service keeps the name "redis" so
+  # REDIS_CONNECTION=redis:6379,password=... still resolves. The hardened image
+  # keeps protected mode on, which refuses other containers unless a password
+  # is set, so it has one: VALKEY_PASSWORD from .env.prod (compose refuses to
+  # start without it). VALKEYCLI_AUTH lets the healthcheck authenticate, and -e
+  # makes valkey-cli exit non-zero on an error reply such as NOAUTH.
   redis:
-    image: redis:7
+    image: dhi.io/valkey:9.1
     restart: unless-stopped
+    environment:
+      VALKEYCLI_AUTH: ${VALKEY_PASSWORD:?VALKEY_PASSWORD must be set in .env.prod}
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping"]
+      test: ["CMD", "valkey-cli", "-e", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--requirepass", "${VALKEY_PASSWORD:?VALKEY_PASSWORD must be set in .env.prod}"]
     networks:
       - recall_prodnet
 
 volumes:
   pgdata:
-  dataprotection-keys:
 
 networks:
   recall_prodnet:
