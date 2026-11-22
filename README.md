@@ -56,6 +56,79 @@ Launch the application in your dev environment
 dotnet watch run --project Recall.Web --launch-profile Recall.Web
 ```
 
+How a deploy works
+
+A push to `main` builds the image and deploys it (`build_and_deploy` in `.github/workflows/dotnet.yml`). The deploy
+folder on the server, `~/recall-deploy`, holds `compose.prod.yml`, `.env.prod`, `dump_db.sh`, `logs/` and
+`dataprotection-keys/`. **`compose.prod.yml` comes from the repository on every deploy**: change it in the repository,
+never on the server (the next deploy would overwrite the edit). **`.env.prod` is the only file kept by hand on the
+server**, and it never leaves it. `dump_db.sh` also lives only on the server. The deploy:
+
+1. copies the repository's `compose.prod.yml` to the server, saving the file it replaces as `compose.prod.yml.prev`;
+2. runs `docker compose --env-file .env.prod -f compose.prod.yml config -q` and stops if it fails, before anything is
+   pulled or started: every variable `compose.prod.yml` uses is required, so one missing from `.env.prod` fails here
+   with "`NAME` must be set in .env.prod". The previous `compose.prod.yml` is then put back, so the folder still
+   describes what is running;
+3. logs in to GHCR, runs `dump_db.sh`, runs `docker compose --env-file .env.prod -f compose.prod.yml up -d --pull
+   always`, and prunes old images. Any failing step stops the deploy.
+
+So a change that needs a new variable is deployed in two steps: add the variable to the server's `.env.prod` first,
+then push the change.
+
+Variables in .env.prod
+
+Names only; the values are secrets or server-specific. Every setting in `appsettings.json` can also be overridden here
+as `Section__Key` (for example `Login__AllowedEmails__0`, `TrustedProxies__Networks__0`, `Retention__EmailDays`).
+
+Required by `compose.prod.yml` (the deploy fails without them):
+
+| Variable | What it is |
+|---|---|
+| `POSTGRES_HOST` | Name of the Postgres container (`recall_postgres`), also the host in the connection string |
+| `POSTGRES_PORT` | Port Postgres listens on inside its container (5432), published on the host's loopback as 5433 |
+| `POSTGRES_DB` | Database Postgres creates on first start (`recall_db`) |
+| `POSTGRES_USER` | Owner of that database, used by the healthcheck and the backups |
+| `POSTGRES_PASSWORD` | Its password |
+| `VALKEY_PASSWORD` | Password Valkey requires; the same value goes in `REDIS_CONNECTION` |
+
+Read by the app (the container gets the whole file):
+
+| Variable | What it is |
+|---|---|
+| `ASPNETCORE_ENVIRONMENT` | `Production` |
+| `ASPNETCORE_URLS` | Where the app listens inside its container: `http://+:8701` |
+| `ConnectionStrings__DefaultConnection` | Npgsql connection string to `POSTGRES_HOST`/`POSTGRES_DB` with that user and password; startup fails without it |
+| `REDIS_CONNECTION` | `redis:6379,password=<VALKEY_PASSWORD written out>` (see "Cache settings in .env.prod") |
+| `TheTvDb__ApiKey` | TheTVDB API key |
+| `TheTvDb__Pin` | TheTVDB subscriber PIN, if the key has one |
+| `Omdb__ApiKey` | OMDb API key (IMDb ratings) |
+| `Mail__FromAddress` | Sender address of sign-in emails and digests |
+| `Mail__Host` | SMTP server |
+| `Mail__Port` | SMTP port |
+| `Mail__Username` | SMTP user |
+| `Mail__Password` | SMTP password |
+| `Turnstile__SiteKey` | Cloudflare Turnstile site key for the sign-in form (blank turns Turnstile off) |
+| `Turnstile__SecretKey` | Cloudflare Turnstile secret key |
+| `Site__BaseUrl` | Public address (`https://recall.nu`) for links in emails; required while the digest is on |
+| `Digest__Enabled` | `true`: the weekly digest is on |
+| `Digest__MaxPerRun` | Users handled per hourly digest run (50) |
+| `Digest__DayOfWeek` | Optional: day the digest goes out (default Friday) |
+| `Digest__HourUtc` | Optional: UTC hour it goes out (default 15) |
+| `Push__Enabled` | Only while push notifications are on: `true` |
+| `Push__PublicKey` | Only while push is on: VAPID public key (see "Enabling push notifications") |
+| `Push__PrivateKey` | Only while push is on: VAPID private key |
+| `Push__Subject` | Only while push is on: `mailto:` contact address |
+
+Rolling back compose.prod.yml
+
+The deploy keeps the file it replaced. To go back to it, in the deploy folder:
+```
+cp compose.prod.yml.prev compose.prod.yml
+docker compose --env-file .env.prod -f compose.prod.yml up -d --wait
+```
+The next deploy copies the repository's file again, so revert the change in the repository as well. To go back to an
+earlier image too, set `image:` to `ghcr.io/jockesoft/recall:<run number>` in the repository and deploy.
+
 On the server after first deploy run:
 mkdir -p logs dataprotection-keys && sudo chown -R 64198:64198 logs dataprotection-keys
 
@@ -93,7 +166,8 @@ is not also in Postgres, so nothing is migrated: Valkey starts empty and fills a
 1. Log in to the hardened-image registry as the user that runs compose (Docker Hub username and a read-only access
    token): `docker login dhi.io`.
 2. Add `VALKEY_PASSWORD` and change `REDIS_CONNECTION` in `.env.prod` as above.
-3. Replace `compose.prod.yml` with the repository's version.
+3. Replace `compose.prod.yml` with the repository's version. (Since the deploy ships `compose.prod.yml`, the next
+   deploy does this and step 4 itself, provided steps 1 and 2 are done first; otherwise it stops at its config check.)
 4. `docker compose --env-file .env.prod -f compose.prod.yml up -d --wait`. This recreates the `redis` container on
    Valkey and the app container with the new connection string.
 
