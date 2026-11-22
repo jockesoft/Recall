@@ -1,4 +1,8 @@
 @model Recall.Web.Pages.Shared.EpisodeWatchedToggleModel
+@* The full-size button is named by its visible text ("Watched Fri, Sep 11"):
+   WCAG 2.5.3 wants the visible label inside the accessible name, aria-pressed
+   says it is on, and the title ("Mark as unwatched") becomes its description.
+   Only the compact dot, which has no text, carries an aria-label. *@
 
 <form method="post" asp-page-handler="@Model.Handler" asp-route-id="@Model.RouteId" class="d-inline tvdb-watch-form">
     @foreach (var field in Model.HiddenFields)
@@ -12,7 +16,7 @@
                 class="@(Model.Compact ? "tvdb-watch-dot tvdb-watch-dot--on" : "btn btn-watch--on")"
                 title="Mark as unwatched"
                 aria-pressed="true"
-                aria-label="Watched. Click to mark as unwatched.">
+                aria-label="@(Model.Compact ? "Watched. Click to mark as unwatched." : null)">
             <i class="@Icons.Check" aria-hidden="true"></i>
             @if (!Model.Compact)
             {

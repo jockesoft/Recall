@@ -28,7 +28,7 @@ public sealed class ToastMessagesModel
             // Set by the watched toasts when the mark brought the user up to date
             // with a series, or finished it: a different icon, and "Rate it" for
             // a finished series the user has not rated.
-            var caughtUpKind = tempData[PageModelToastExtensions.CaughtUpKindKey] as string;
+            var caughtUpKind = tempData.GetText(PageModelToastExtensions.CaughtUpKindKey);
 
             toasts.Add(new ToastView(ToastKind.Success, success)
             {
@@ -57,23 +57,29 @@ public sealed class ToastMessagesModel
         return new ToastMessagesModel(toasts);
     }
 
+    // Every read goes through TempDataValueExtensions: the cookie serializer
+    // gives values back as other types than were written (a GUID-shaped string
+    // as a Guid), so "as string" would silently lose them.
     private static string? Text(ITempDataDictionary tempData, string key) =>
-        tempData[key] is string text && !string.IsNullOrWhiteSpace(text) ? text : null;
+        tempData.GetText(key) is { } text && !string.IsNullOrWhiteSpace(text) ? text : null;
 
-    /// <summary>A TheTVDB id written as a string (the cookie TempData serializer keeps few types); null when absent or not a number.</summary>
+    /// <summary>A TheTVDB id (written as invariant text), back as invariant text; null when absent or not a positive number.</summary>
     private static string? Id(ITempDataDictionary tempData, string key) =>
-        tempData[key] is string value && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out _) ? value : null;
+        tempData.GetInt32(key) is > 0 and var id ? id.ToString(CultureInfo.InvariantCulture) : null;
 
     private static UndoWatchedForm? UndoWatchedFrom(ITempDataDictionary tempData)
     {
         var seriesId = Id(tempData, PageModelToastExtensions.UndoWatchedSeriesKey);
-        var batch = tempData[PageModelToastExtensions.UndoWatchedBatchKey] as string;
-        var stoppedStamp = tempData[PageModelToastExtensions.UndoWatchedStoppedKey] as string;
+        var batchId = tempData.GetGuid(PageModelToastExtensions.UndoWatchedBatchKey);
+        var stoppedTicks = tempData.GetInt64(PageModelToastExtensions.UndoWatchedStoppedKey);
 
-        if (seriesId is null || !Guid.TryParseExact(batch, "D", out var batchId) || batchId == Guid.Empty)
+        if (seriesId is null || batchId is not { } batch || batch == Guid.Empty)
             return null;
 
-        return new UndoWatchedForm(seriesId, batchId.ToString("D"), long.TryParse(stoppedStamp, out _) ? stoppedStamp : null);
+        return new UndoWatchedForm(
+            seriesId,
+            batch.ToString("D"),
+            stoppedTicks?.ToString(CultureInfo.InvariantCulture));
     }
 }
 
