@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Hosting;
@@ -84,6 +85,20 @@ builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 builder.Services.AddScheduledJobs(builder.Configuration);
 
 var app = builder.Build();
+
+// Production keeps its Data Protection keys on a bind mount (compose.prod.yml).
+// If the app cannot write there, the framework would quietly use keys it
+// cannot keep, signing everyone out on every deploy and breaking every
+// unsubscribe link already sent; stop instead, so the deploy's --wait fails.
+if (app.Environment.IsProduction()
+    && !DataProtectionKeyFolder.Verify(
+        FileSystemXmlRepository.DefaultKeyStorageDirectory?.FullName,
+        app.Services.GetRequiredService<ILogger<Program>>()))
+{
+    Environment.ExitCode = 1;
+    await app.DisposeAsync();   // flushes the log sinks, so the reason is on disk too
+    return;
+}
 
 // Bring the database schema up to the current model before serving traffic.
 await app.MigrateDatabaseAsync();
