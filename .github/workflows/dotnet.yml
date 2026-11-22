@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Set build number
-        run: echo "BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
+        run: echo "BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
   
       - name: Print new build number
         run: echo "Build number is $BUILD_NUMBER"
@@ -111,17 +111,53 @@ jobs:
             ghcr.io/${{ secrets.GHCR_USERNAME }}/recall:latest
             ghcr.io/${{ secrets.GHCR_USERNAME }}/recall:${{ env.BUILD_NUMBER }}
 
+      # The repository's compose.prod.yml is the server's: it is uploaded under a
+      # temporary name and put in place by the deploy script below, which keeps
+      # the previous one as compose.prod.yml.prev. .env.prod stays on the server.
+      - name: Stage compose file for upload
+        run: |
+          mkdir -p deploy-upload
+          cp compose.prod.yml deploy-upload/compose.prod.yml.incoming
+
+      - name: Upload compose file
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: deploy-upload/compose.prod.yml.incoming
+          target: /home/${{ secrets.SSH_USER }}/recall-deploy
+          strip_components: 1
+          overwrite: true
+
       - name: Deploy on remote server
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # set -e: the action no longer stops at a failing command by itself.
           script: |
+            set -eu
+            cd /home/${{ secrets.SSH_USER }}/recall-deploy
+
+            # Keep the running file for a one-command rollback, then take the repository's.
+            if [ -f compose.prod.yml ]; then cp compose.prod.yml compose.prod.yml.prev; fi
+            mv compose.prod.yml.incoming compose.prod.yml
+
+            # Nothing is pulled or started until the file and .env.prod agree: every
+            # variable compose.prod.yml interpolates is required, so a missing one fails
+            # here. On failure the previous file is put back, so the folder still
+            # describes what is running and .prev stays a good copy for the next deploy.
+            if ! docker compose --env-file .env.prod -f compose.prod.yml config -q; then
+              echo "compose.prod.yml does not validate with .env.prod; restored the previous file, nothing was deployed." >&2
+              if [ -f compose.prod.yml.prev ]; then cp compose.prod.yml.prev compose.prod.yml; fi
+              exit 1
+            fi
+
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io \
               -u "${{ secrets.GHCR_USERNAME }}" \
               --password-stdin
-            cd /home/${{ secrets.SSH_USER }}/recall-deploy
             bash dump_db.sh
             docker compose --env-file .env.prod -f compose.prod.yml up -d --pull always --quiet-pull
             docker image prune -f

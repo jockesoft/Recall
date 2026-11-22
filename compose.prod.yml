@@ -1,3 +1,9 @@
+# Shipped by the deploy (build_and_deploy in .github/workflows/dotnet.yml): the
+# repository's copy replaces the server's on every deploy, so change it here,
+# never on the server. Values come from .env.prod, the one file kept by hand on
+# the server. Every variable this file interpolates is required (${NAME:?...}),
+# so a missing one fails "docker compose config -q" before anything is pulled
+# or started, instead of quietly becoming empty.
 services:
   recall:
     container_name: recall_app
@@ -21,19 +27,19 @@ services:
 
   postgres:
     image: postgres:18.1
-    container_name: ${POSTGRES_HOST}
+    container_name: ${POSTGRES_HOST:?POSTGRES_HOST must be set in .env.prod}
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?POSTGRES_USER must be set in .env.prod} -d ${POSTGRES_DB:?POSTGRES_DB must be set in .env.prod}"]
       interval: 10s
       timeout: 5s
       retries: 5
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set in .env.prod}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set in .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}
     ports: # Not needed in prod?? According to AI but needed to be able to connect from host machine for testing/debugging. Can be removed if not needed.
-      - "127.0.0.1:5433:${POSTGRES_PORT}"
+      - "127.0.0.1:5433:${POSTGRES_PORT:?POSTGRES_PORT must be set in .env.prod}"
     volumes:
       - pgdata:/var/lib/postgresql
     networks:
