@@ -30,6 +30,11 @@ RUN mkdir -p /out/logs /out/dataprotection-keys
 # ============================================
 FROM dhi.io/aspnetcore:10 AS final
 
+# The base image already runs as 65532, and a folder WORKDIR creates belongs to
+# the current user: build this stage as root, so /app and the app's files are
+# root's and the app cannot change them. The app runs as 65532 (USER below).
+USER 0:0
+
 # Logs and anything else that prints a local time say UTC. Time zone data and
 # ICU come with the image (the release-moment rule needs the zones).
 ENV TZ=UTC
@@ -42,7 +47,8 @@ COPY --from=build --chown=65532:65532 /out/dataprotection-keys /home/nonroot/.as
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# The image's nonroot user.
+# The image's nonroot user runs the app: besides /tmp and its home folder, it can
+# write only the two folders above.
 USER 65532:65532
 
 EXPOSE 8701
