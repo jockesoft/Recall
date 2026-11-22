@@ -37,21 +37,35 @@ jobs:
                 ports:
                     - 5432:5432
 
-            redis:
-                image: redis:7-alpine
-                options: >-
-                    --health-cmd "redis-cli ping"
-                    --health-interval 10s
-                    --health-timeout 5s
-                    --health-retries 5
-                ports:
-                    - 6379:6379
-
         # You can define any steps you want, and they will run before the agent starts.
         # If you do not check out your code, Copilot will do this for you.
         steps:
             - name: Checkout code
               uses: actions/checkout@v5
+
+            # The cache (Valkey, as in production) is started here rather than as a
+            # service: a service cannot be given a command, and the hardened image
+            # keeps protected mode on, which refuses connections through the mapped
+            # port while no password is set. The secrets must also exist in the
+            # repository's "copilot" environment for runs started by Copilot.
+            - name: Log in to Docker Hardened Images
+              uses: docker/login-action@v4
+              with:
+                  registry: dhi.io
+                  username: ${{ secrets.DHI_USERNAME }}
+                  password: ${{ secrets.DHI_TOKEN }}
+
+            - name: Start Valkey
+              run: |
+                  docker run -d --name valkey -p 127.0.0.1:6379:6379 \
+                    --health-cmd "valkey-cli -e ping" --health-interval 2s --health-timeout 5s --health-retries 15 \
+                    dhi.io/valkey:9.1 --protected-mode no --save "" --appendonly no
+                  for _ in $(seq 1 30); do
+                    [ "$(docker inspect -f '{{.State.Health.Status}}' valkey)" = healthy ] && exit 0
+                    sleep 1
+                  done
+                  docker logs valkey
+                  exit 1
 
             - name: Set up .NET 10
               uses: actions/setup-dotnet@v4
