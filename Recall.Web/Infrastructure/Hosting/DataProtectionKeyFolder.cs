@@ -85,7 +85,7 @@ public static class DataProtectionKeyFolder
                 "The Data Protection key folder {Folder} is not writable by the user the app runs as ({User}): {Problem}. " +
                 "Not starting, rather than signing everyone out with keys that cannot be kept. The folder (on the server, " +
                 "./dataprotection-keys) must be owned by UID {Uid}: sudo chown -R {Uid}:{Uid} dataprotection-keys",
-                status.Path, Environment.UserName, status.Problem, ExpectedOwnerUid, ExpectedOwnerUid, ExpectedOwnerUid);
+                status.Path, Environment.UserName, status.Problem?.TrimEnd('.'), ExpectedOwnerUid, ExpectedOwnerUid, ExpectedOwnerUid);
             return false;
         }
 

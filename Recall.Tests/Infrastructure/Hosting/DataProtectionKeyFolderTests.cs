@@ -73,6 +73,7 @@ public sealed class DataProtectionKeyFolderTests
         var entry = logger.Entries.Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Critical);
         entry.Message.Should().Contain(_folder).And.Contain("not writable").And.Contain("65532").And.Contain("Not starting");
+        entry.Message.Should().NotContain("..", "the exception's own full stop is not doubled");
     }
 
     [Test]
