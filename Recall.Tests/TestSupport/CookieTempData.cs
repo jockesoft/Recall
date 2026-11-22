@@ -41,7 +41,7 @@ public static class CookieTempData
         write(new TempDataPage { TempData = written });
         written.Save();
 
-        var cookies = SetCookieHeaderValue.ParseList(post.Response.Headers.SetCookie.ToList());
+        var cookies = SetCookieHeaderValue.ParseList(post.Response.Headers.SetCookie.OfType<string>().ToList());
         cookies.Should().NotBeEmpty("TempData with values is saved as a cookie");
 
         var next = new DefaultHttpContext();

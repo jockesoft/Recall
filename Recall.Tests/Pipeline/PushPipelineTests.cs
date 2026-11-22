@@ -53,8 +53,8 @@ public sealed class PushPipelineTests
             {
                 // A request with the header is signed in as that user; one without stays anonymous.
                 services.AddAuthentication()
-                    .AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(HeaderAuthenticationHandler.Scheme, _ => { });
-                services.PostConfigure<AuthenticationOptions>(o => o.DefaultAuthenticateScheme = HeaderAuthenticationHandler.Scheme);
+                    .AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(HeaderAuthenticationHandler.SchemeName, _ => { });
+                services.PostConfigure<AuthenticationOptions>(o => o.DefaultAuthenticateScheme = HeaderAuthenticationHandler.SchemeName);
             });
         });
 
@@ -182,7 +182,7 @@ public sealed class PushPipelineTests
         IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
-        public const string Scheme = "TestHeader";
+        public const string SchemeName = "TestHeader";
 
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
@@ -190,8 +190,8 @@ public sealed class PushPipelineTests
                 return Task.FromResult(AuthenticateResult.NoResult());
 
             var principal = RecallPrincipal.Create(userId, "push-user", "push@test.local", UserRole.Admin);
-            var identity = new ClaimsIdentity(principal.Claims, Scheme);
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme)));
+            var identity = new ClaimsIdentity(principal.Claims, SchemeName);
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
         }
     }
 }

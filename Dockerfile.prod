@@ -1,56 +1,61 @@
+# Recall's production image, built on Docker Hardened Images (dhi.io). Pulling
+# from dhi.io needs a Docker Hub login (CI: the DHI_USERNAME and DHI_TOKEN
+# secrets). The tags float on the major version, so every CI build picks up
+# DHI's patches.
+
 # ============================================
 # BUILD STAGE
 # ============================================
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-
+FROM dhi.io/dotnet:10-sdk AS build
 WORKDIR /src
 
-# Copy everything
+# Restore from the project file alone, so this layer is reused while it is unchanged.
+COPY Recall.Web/Recall.Web.csproj Recall.Web/
+RUN dotnet restore Recall.Web/Recall.Web.csproj
+
 COPY . .
-# Copy the build.txt file to the image
-# COPY build.txt /app/build.txt
+RUN dotnet publish Recall.Web/Recall.Web.csproj -c Release -o /app/publish --no-restore /p:UseAppHost=false
 
-# Restore + publish (Release)
-RUN dotnet restore
-WORKDIR /src/Recall.Web
-RUN dotnet publish Recall.Web.csproj -c Release -o /app/publish --no-restore
-
-# Copy build.txt to the publish directory
+# Written by CI (the run number); shown in the footer.
 COPY build.txt /app/publish/build.txt
 
-# ============================================
-# RUNTIME STAGE (small, secure)
-# ============================================
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+# The runtime image has no shell, so the folders the app writes to are made
+# here and copied in with their owner: the log folder and the Data Protection
+# key folder ($HOME/.aspnet/DataProtection-Keys of the nonroot user). Both are
+# bind-mounted in production (compose.prod.yml), from folders owned by 65532.
+RUN mkdir -p /out/logs /out/dataprotection-keys
 
-# Install time zone data + fonts (same as dev)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        tzdata \
-        fonts-dejavu \
-        fonts-liberation \
-        fontconfig \
-        procps && \
-    rm -rf /var/lib/apt/lists/*
+# ============================================
+# RUNTIME STAGE: no shell, no package manager, no RUN steps
+# ============================================
+FROM dhi.io/aspnetcore:10 AS final
 
-# No LANG/LC_ALL: the app is English-only and pins its own culture at startup
-# (AppCulture.PinToEnglish), so the container's locale must not decide how
-# dates and numbers render.
+# The base image already runs as 65532, and a folder WORKDIR creates belongs to
+# the current user: build this stage as root, so /app and the app's files are
+# root's and the app cannot change them. The app runs as 65532 (USER below).
+USER 0:0
+
+# Logs and anything else that prints a local time say UTC. Time zone data and
+# ICU come with the image (the release-moment rule needs the zones).
 ENV TZ=UTC
 
-# Log folder
-RUN mkdir -p /var/log/recallapp && chmod -R 777 /var/log/recallapp
+COPY --from=build --chown=65532:65532 /out/logs /var/log/recallapp
+COPY --from=build --chown=65532:65532 /out/dataprotection-keys /home/nonroot/.aspnet/DataProtection-Keys
 
+# Keep exactly /app: Data Protection scopes its keys to the content root, so a
+# different folder would make every existing cookie and unsubscribe link unreadable.
 WORKDIR /app
-
-# Copy published output from build stage
 COPY --from=build /app/publish .
 
-# Switch to non-root user
-USER app
+# The image's nonroot user runs the app: besides /tmp and its home folder, it can
+# write only the two folders above.
+USER 65532:65532
 
-# Expose production port (match your ASPNETCORE_URLS)
 EXPOSE 8701
 
-# Run the app
+# The app checks itself (no curl here): dotnet Recall.Web.dll healthcheck asks
+# /health/live on the port from ASPNETCORE_URLS or ASPNETCORE_HTTP_PORTS.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD ["dotnet", "/app/Recall.Web.dll", "healthcheck"]
+
 ENTRYPOINT ["dotnet", "Recall.Web.dll"]
