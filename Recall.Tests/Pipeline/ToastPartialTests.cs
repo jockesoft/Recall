@@ -61,17 +61,19 @@ public sealed class ToastPartialTests
         var view = services.GetRequiredService<IRazorViewEngine>()
             .GetView(executingFilePath: null, "/Pages/Shared/_ToastMessages.cshtml", isMainPage: false);
         view.Success.Should().BeTrue("the partial is where every toast is drawn");
+        // GetView reports success and the view separately; a found view is never null.
+        var partial = view.View ?? throw new InvalidOperationException("The view engine found _ToastMessages but returned no view.");
 
         await using var writer = new StringWriter();
         var viewContext = new ViewContext(
             actionContext,
-            view.View,
+            partial,
             new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary()),
             tempData,
             writer,
             new HtmlHelperOptions());
 
-        await view.View.RenderAsync(viewContext);
+        await partial.RenderAsync(viewContext);
         return writer.ToString();
     }
 
