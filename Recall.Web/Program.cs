@@ -101,7 +101,15 @@ if (app.Environment.IsProduction()
 }
 
 // Bring the database schema up to the current model before serving traffic.
-await app.MigrateDatabaseAsync();
+// In Production an empty database (no applied migrations) stops the app
+// instead: it means the compose file points at the wrong volume, not that
+// the schema should be created (Database:AllowEmptyDatabase for a first install).
+if (!await app.MigrateDatabaseAsync())
+{
+    Environment.ExitCode = 1;
+    await app.DisposeAsync();   // flushes the log sinks, so the reason is on disk too
+    return;
+}
 
 //app.UseSerilogRequestLogging();
 
