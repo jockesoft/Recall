@@ -456,9 +456,13 @@ List<Shot> shots =
     new("not-found", "signed-out", Site.Anonymous, "/this-page-does-not-exist"),
 ];
 
+// Both at a Retina scale factor: a shot taken at scale 1 is drawn doubled on
+// a Retina screen, where every curve becomes a staircase (until 2026-11-23 the
+// desktop shots were, and their round buttons and photos looked jagged).
+// Every figure the capture measures is in CSS pixels, whatever the scale.
 Viewport[] viewports =
 [
-    new(1280, 800, DeviceScaleFactor: 1, IsMobile: false),
+    new(1280, 800, DeviceScaleFactor: 2, IsMobile: false),
     new(390, 844, DeviceScaleFactor: 2, IsMobile: true),
 ];
 
