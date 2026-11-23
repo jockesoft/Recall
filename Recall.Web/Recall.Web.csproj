@@ -29,7 +29,12 @@
       <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.15" />
       <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.11.1" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.4" />
-      <PackageReference Include="Quartz" Version="4.3.0" />
+      <PackageReference Include="Quartz" Version="4.8.1" />
+      <!-- Referenced directly, not only through the Redis cache package (which
+           asks for >= 2.7.27): RedisConnection and RedisCacheClearer use it, and
+           2.13.23 fixes a close with commands in flight answering a call with
+           the previous call's reply. Stay on 2.x: 3.x is a new major. -->
+      <PackageReference Include="StackExchange.Redis" Version="2.13.23" />
       <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
       <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
       <PackageReference Include="Serilog.Enrichers.Process" Version="3.0.0" />
