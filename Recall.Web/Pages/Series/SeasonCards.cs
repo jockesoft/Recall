@@ -13,7 +13,11 @@ public enum EpisodeMark
     /// <summary>Filled green with a check; pressing it unmarks.</summary>
     Watched,
 
-    /// <summary>Amber ring: may be marked (<see cref="AirDate.MayBeMarked"/>) and is not.</summary>
+    /// <summary>
+    /// May be marked (<see cref="AirDate.MayBeMarked"/>) and is not: a plain
+    /// ring, or the amber "ready" one for the episode the primary button
+    /// marks (<see cref="EpisodeRow.IsReady"/>).
+    /// </summary>
     Unwatched,
 
     /// <summary>A dashed circle with a clock, not a button.</summary>
@@ -24,6 +28,10 @@ public enum EpisodeMark
 /// <param name="Code">"E8": the season is the card's.</param>
 /// <param name="AiredText">"Fri, Oct 2", for a released episode.</param>
 /// <param name="Upcoming">The release time of an episode not released yet, in place of the runtime.</param>
+/// <param name="IsReady">
+/// The next episode, when the hero's primary button marks it: its control is
+/// the amber "ready" one. Every other unwatched episode's is a plain ring.
+/// </param>
 public sealed record EpisodeRow(
     int Id,
     string Code,
@@ -32,7 +40,8 @@ public sealed record EpisodeRow(
     string? AiredText,
     ReleaseTimeModel? Upcoming,
     int? RuntimeMinutes,
-    EpisodeMark Mark);
+    EpisodeMark Mark,
+    bool IsReady = false);
 
 /// <summary>
 /// One season of Series Details as a card (<c>details</c>/<c>summary</c>):
@@ -95,6 +104,8 @@ public sealed record SeasonCardView(SeasonCard Card, int SeriesId, bool SignedIn
 /// <item>Numbered seasons older than the <see cref="RecentSeasons"/> most
 /// recent are grouped behind "Show N earlier seasons"; the group is open when
 /// one of its seasons is.</item>
+/// <item>Only the episode the hero's primary button marks gets the amber
+/// "ready" control; the page passes it as <c>readyEpisodeId</c>.</item>
 /// <item>The counts are released regular episodes (the specials never count,
 /// and an episode TheTVDB flags as a movie is left out of them, as in all
 /// progress).</item>
@@ -114,7 +125,8 @@ public static class SeasonCards
         SeriesWatchProgress progress,
         int? askedSeason,
         DateTime now,
-        DateOnly today)
+        DateOnly today,
+        int? readyEpisodeId = null)
     {
         var watched = progress.WatchedEpisodeIds;
         var watchable = progress.OrderedEpisodes.ToDictionary(e => e.Id);
@@ -154,7 +166,7 @@ public static class SeasonCards
                 .Where(e => watchable.TryGetValue(e.Id, out var w) && w.IsReleasedBy(now))
                 .ToList();
 
-            var rows = episodes.Select(e => Row(series, e, watched, now, today)).ToList();
+            var rows = episodes.Select(e => Row(series, e, watched, now, today, readyEpisodeId)).ToList();
 
             return new SeasonCard(
                 number,
@@ -169,7 +181,8 @@ public static class SeasonCards
         }).ToList();
     }
 
-    private static EpisodeRow Row(SeriesAggregate series, EpisodeSummary episode, IReadOnlySet<int> watched, DateTime now, DateOnly today)
+    private static EpisodeRow Row(
+        SeriesAggregate series, EpisodeSummary episode, IReadOnlySet<int> watched, DateTime now, DateOnly today, int? readyEpisodeId)
     {
         var release = EpisodeRelease.MomentUtc(episode.Aired, series.AirsTime, series.OriginalCountry);
         var isReleased = release is not null && release.IsReleasedBy(now);
@@ -186,7 +199,8 @@ public static class SeasonCards
             isReleased && episode.Aired is { } aired ? DisplayDate.Format(aired, today) : null,
             !isReleased && release is not null ? new ReleaseTimeModel(release, today) : null,
             episode.RuntimeMinutes is > 0 ? episode.RuntimeMinutes : null,
-            mark);
+            mark,
+            IsReady: mark == EpisodeMark.Unwatched && episode.Id == readyEpisodeId);
     }
 
     /// <summary>The year the season started: its first air date, else TheTVDB's season year.</summary>

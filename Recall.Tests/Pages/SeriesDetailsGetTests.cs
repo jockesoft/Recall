@@ -243,6 +243,7 @@ public sealed class SeriesDetailsGetTests
         season.Percent.Should().Be(50);
         season.HasMarkable.Should().BeTrue();
         season.Episodes.Select(e => e.Mark).Should().Equal(EpisodeMark.Watched, EpisodeMark.Unwatched, EpisodeMark.NotAired);
+        season.Episodes.Select(e => e.IsReady).Should().Equal(false, true, false);
         season.Episodes[0].AiredText.Should().Be(DisplayDate.Format(Past, Today));
         season.Episodes[0].RuntimeMinutes.Should().Be(82);
         season.Episodes[2].AiredText.Should().BeNull();
@@ -272,6 +273,56 @@ public sealed class SeriesDetailsGetTests
         await _sut.OnGetAsync(SeriesId, CancellationToken.None);
 
         _sut.EpisodesSummary.Should().Be("2 seasons · 3 episodes · 3 h", "60 + 50 (the average) + 70; the special and next week's episode do not count");
+    }
+
+    // ---- the "ready" control --------------------------------------------------------------
+
+    private IEnumerable<int> ReadyEpisodes() => _sut.Seasons.SelectMany(s => s.Episodes).Where(e => e.IsReady).Select(e => e.Id);
+
+    [Test]
+    public async Task OnlyTheEpisodeThePrimaryButtonMarks_Should_BeReady_WhenNothingIsWatched()
+    {
+        SeriesExists();
+        SignedIn(tracked: true);
+
+        var hero = await LoadHeroAsync();
+
+        hero.Actions.Primary!.HiddenFields["episodeId"].Should().Be("11");
+        ReadyEpisodes().Should().Equal(11);
+        _sut.Seasons.SelectMany(s => s.Episodes).Where(e => e.Id != 11)
+            .Should().OnlyContain(e => e.Mark == EpisodeMark.Unwatched && !e.IsReady,
+                "every other aired, unwatched episode (the specials too) gets the plain ring");
+    }
+
+    [Test]
+    public async Task TheReadyEpisode_Should_BeTheNextOne_EvenInAnOlderSeason()
+    {
+        SeriesExists(Ep(11, 1, 1), Ep(21, 2, 1), Ep(22, 2, 2), Ep(31, 3, 1), Ep(41, 4, 1), Ep(51, 5, 1));
+        SignedIn(tracked: true, watched: [11, 31, 41, 51]);
+
+        var hero = await LoadHeroAsync();
+
+        hero.Actions.Primary!.Label.Should().Be("Mark S02E01 watched");
+        ReadyEpisodes().Should().Equal(21);
+        _sut.Seasons.Single(s => s.Number == 2).IsEarlier.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task NoEpisode_Should_BeReady_WhenThePrimaryButtonMarksNone()
+    {
+        SeriesExists();
+
+        SignedIn(tracked: false);
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        ReadyEpisodes().Should().BeEmpty("not in the library: the primary button adds it");
+
+        SignedIn(tracked: true, stoppedUtc: StoppedOn, watched: [11]);
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        ReadyEpisodes().Should().BeEmpty("stopped: the primary button resumes it");
+
+        SignedIn(tracked: true, watched: [11, 12, 21, 22]);
+        await _sut.OnGetAsync(SeriesId, CancellationToken.None);
+        ReadyEpisodes().Should().BeEmpty("up to date: only specials are left, and they are never next");
     }
 
     // ---- jump to next ------------------------------------------------------------------

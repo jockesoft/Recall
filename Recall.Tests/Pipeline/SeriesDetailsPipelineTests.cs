@@ -187,6 +187,9 @@ public sealed class SeriesDetailsPipelineTests
 
         var row = Regex.Match(html, "<li class=\"tvdb-ep [^\"]*\" id=\"episode-52\">.*?</li>", RegexOptions.Singleline).Value;
         row.Should().Contain("data-prior-check=\"true\"").And.Contain("aria-pressed=\"false\"").And.Contain("aria-label=\"E2 Episode 52 watched\"");
+        row.Should().NotContain("tvdb-ep-mark--ready", "only the next episode, S05E01, is the amber one");
+        Regex.Match(html, "<li class=\"tvdb-ep [^\"]*\" id=\"episode-51\">.*?</li>").Value
+            .Should().Contain("class=\"tvdb-ep-mark tvdb-ep-mark--ready\"").And.Contain("aria-label=\"E1 Episode 51 watched\"");
         row.Should().Contain("name=\"Anchor\" value=\"episode-52\"");
 
         var response = await _client.PostAsync(

@@ -123,6 +123,14 @@ public sealed partial class DetailsModel(
     /// </summary>
     public int? NextEpisodeId => WatchProgress?.NextUnwatchedEpisode?.Id;
 
+    /// <summary>
+    /// The episode the hero's primary button marks ("Mark S05E07 watched"):
+    /// the next episode of a series in the library that the user has not
+    /// stopped. Its row's control is the amber "ready" one; null otherwise
+    /// (not in the library, stopped, up to date, a visitor).
+    /// </summary>
+    public int? ReadyEpisodeId => IsTrackedByCurrentUser && StoppedUtc is null ? NextEpisodeId : null;
+
     /// <summary>"17 seasons · 343 episodes · 470 h": released regular episodes and how long they take.</summary>
     public string? EpisodesSummary { get; private set; }
 
@@ -868,7 +876,7 @@ public sealed partial class DetailsModel(
     private void BuildEpisodes(SeriesWatchProgress progress)
     {
         var series = Aggregate!;
-        Seasons = SeasonCards.Build(series, progress, Season, Now, Today);
+        Seasons = SeasonCards.Build(series, progress, Season, Now, Today, ReadyEpisodeId);
 
         var released = progress.OrderedEpisodes.Where(e => !e.IsSpecial && e.IsReleasedBy(Now)).Select(e => e.Id).ToList();
         var seasons = Seasons.Count(s => !s.IsSpecials);

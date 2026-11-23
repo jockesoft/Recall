@@ -919,7 +919,8 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 }
 
 /* The row's one round control. Watched: solid green with a check (brick on
-   hover: press to undo). Aired and not watched: an amber ring on a light
+   hover: press to undo). Aired and not watched: a plain ring, and for the one
+   episode the hero's primary button marks (--ready), an amber ring on a light
    amber fill. Not aired yet: a dashed circle with a clock, not a button. */
 .tvdb-ep-mark {
     appearance: none;
@@ -929,9 +930,9 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     width: 40px;
     height: 40px;
     padding: 0;
-    border: 2px solid var(--tvdb-signal-text);
+    border: 2px solid var(--tvdb-text-muted);
     border-radius: var(--tvdb-radius-round);
-    background: var(--tvdb-signal-tint);
+    background: transparent;
     color: transparent;
     font-size: var(--tvdb-text-lg);
     line-height: 1;
@@ -946,6 +947,19 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 
 .tvdb-ep-mark:hover,
 .tvdb-ep-mark:focus-visible {
+    border-color: var(--tvdb-ok-ink);
+    background: var(--tvdb-ok-tint);
+    color: var(--tvdb-ok-ink);
+}
+
+.tvdb-ep-mark--ready {
+    border-color: var(--tvdb-signal-text);
+    background: var(--tvdb-signal-tint);
+}
+
+.tvdb-ep-mark--ready:hover,
+.tvdb-ep-mark--ready:focus-visible {
+    border-color: var(--tvdb-signal-text);
     background: var(--tvdb-signal-tint-strong);
     color: var(--tvdb-signal-ink);
 }

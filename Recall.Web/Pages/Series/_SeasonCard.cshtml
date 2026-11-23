@@ -104,7 +104,7 @@
                                         <input type="hidden" name="Season" value="@card.Number" />
                                         <input type="hidden" name="Anchor" value="@anchor" />
                                         <button type="submit"
-                                                class="tvdb-ep-mark @(watched ? "tvdb-ep-mark--on" : "")"
+                                                class="tvdb-ep-mark @(watched ? "tvdb-ep-mark--on" : ep.IsReady ? "tvdb-ep-mark--ready" : "")"
                                                 aria-pressed="@(watched ? "true" : "false")"
                                                 aria-label="@label"
                                                 title="@(watched ? "Mark as unwatched" : "Mark as watched")">
