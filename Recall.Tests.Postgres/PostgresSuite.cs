@@ -21,7 +21,16 @@ namespace Recall.Tests.Postgres;
 public sealed class PostgresSuite
 {
     /// <summary>Same image as production (<c>compose.prod.yml</c>) and local development.</summary>
-    public const string Image = "postgres:18.1";
+    public const string DefaultImage = "dhi.io/postgres:18.7-debian13";
+
+    /// <summary>Overrides <see cref="DefaultImage"/>, e.g. to try another PostgreSQL version.</summary>
+    public const string ImageVariable = "RECALL_TEST_POSTGRES_IMAGE";
+
+    /// <summary><see cref="ImageVariable"/> when it is set and not blank, else <see cref="DefaultImage"/>.</summary>
+    public static string Image =>
+        Environment.GetEnvironmentVariable(ImageVariable) is { } image && !string.IsNullOrWhiteSpace(image)
+            ? image.Trim()
+            : DefaultImage;
 
     private const string TemplateDatabase = "recall_template";
 
