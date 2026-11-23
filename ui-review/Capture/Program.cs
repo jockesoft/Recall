@@ -34,8 +34,11 @@ const int AllWatched = 334824;   // Dark
 const int NotStarted = 370112;   // Mare of Easttown
 const int Stopped = 417223;      // Baby Reindeer
 const int NotInLibrary = 367506; // The Lord of the Rings: The Rings of Power: a long title, not tracked
-const int WatchedMovie = 287533; // Oppenheimer
-const int WatchlistMovie = 1305; // Heat
+const int WatchedMovie = 290272;     // Dune: Part Two
+const int NoArtMovie = 287533;      // Oppenheimer: watched, cached before background art was kept
+const int WatchlistMovie = 1305;    // Heat
+const int NotWatchedMovie = 219;    // Arrival: neither watched nor on the watchlist
+const int UnreleasedMovie = 356047; // Dune: Part Three, first released 2026-12-16: replace it with a later one after that date
 
 // Profile's push section in the states a browser can be in. Headless Chromium
 // cannot really subscribe (it has no push service), so the browser's side is
@@ -200,8 +203,18 @@ List<Shot> shots =
             cachedEpisodePath = new Uri(page.Url).PathAndQuery;
         }),
     new("episode-details", "unwatched", Site.SignedIn, $"/Series/Details/{NotStarted}", Prepare: OpenFirstEpisodeAsync),
+    new("movie-details", "not-watched", Site.SignedIn, $"/Movies/Details/{NotWatchedMovie}"),
     new("movie-details", "watched", Site.SignedIn, $"/Movies/Details/{WatchedMovie}"),
+    new("movie-details", "watched-menu", Site.SignedIn, $"/Movies/Details/{WatchedMovie}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // "Mark as unwatched" is in the "⋯" menu.
+            await page.Locator("#titleMenuButton").ClickAsync();
+            await page.Locator(".tvdb-title-actions .dropdown-menu.show").WaitForAsync();
+        }),
     new("movie-details", "watchlist", Site.SignedIn, $"/Movies/Details/{WatchlistMovie}"),
+    new("movie-details", "unreleased", Site.SignedIn, $"/Movies/Details/{UnreleasedMovie}"),
+    new("movie-details", "no-background-art", Site.SignedIn, $"/Movies/Details/{NoArtMovie}"),
     new("profile", "populated", Site.SignedIn, "/Account/Profile"),
     // This browser has notifications on: "On", "Turn off", and its row in the device list says "This device".
     new("profile", "push-enabled", Site.SignedIn, "/Account/Profile", ViewportOnly: true,
@@ -421,7 +434,7 @@ List<Shot> shots =
             await SettleAsync(page);
         }),
     new("episode-details", "load-error", Site.Anonymous, "/Episodes/Details/999999999", ViewportOnly: true),
-    new("movie-details", "signed-out", Site.Anonymous, $"/Movies/Details/{WatchedMovie}"),
+    new("movie-details", "signed-out", Site.Anonymous, $"/Movies/Details/{WatchlistMovie}"),
     new("digest-unsubscribe", "invalid-link", Site.Anonymous, "/Digest/Unsubscribe?token=not-a-real-token", ViewportOnly: true),
     new("privacy", "signed-out", Site.Anonymous, "/Privacy"),
     new("error", "signed-out", Site.Anonymous, "/Error"),
