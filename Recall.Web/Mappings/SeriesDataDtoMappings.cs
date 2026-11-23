@@ -16,10 +16,13 @@ public static class SeriesDataDtoMappings
     /// leaving them for their turn up to 30 days away.
     /// <list type="bullet">
     /// <item>1 (2026-10-02): <see cref="SeriesAggregate.Genres"/>.</item>
-    /// <item>2 (2026-11-23): <see cref="SeriesAggregate.Network"/>.</item>
     /// </list>
+    /// <see cref="SeriesAggregate.Network"/> (2026-11-23) was added without a
+    /// bump on purpose: it is a nicety on Series Details, and a backfill would
+    /// hold back the job's 12-hour refreshes of continuing series for hours;
+    /// it fills in as rows refresh on their normal schedule.
     /// </summary>
-    public const int AggregateVersion = 2;
+    public const int AggregateVersion = 1;
 
     // TheTVDB artwork type id of a series' 16:9 background ("fanart").
     private const int SeriesBackgroundArtworkType = 3;

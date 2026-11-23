@@ -123,6 +123,7 @@ public sealed class SeriesDetailsPipelineTests
         html.Should().MatchRegex("<img class=\"tvdb-hero__art\" src=\"[^\"]+fanart[^\"]+\" alt=\"\" fetchpriority=\"high\" loading=\"eager\"");
         html.Should().MatchRegex("<img src=\"[^\"]+posters[^\"]+\" alt=\"Poster for Hero Test Series\" fetchpriority=\"high\" loading=\"eager\"");
         html.Should().Contain("2020– · 5 seasons · Discovery");
+        html.Should().Contain("<dt>Network</dt> <dd>Discovery</dd>");
         html.Should().Contain("<a class=\"tvdb-back-link tvdb-hero__back\" href=\"/Library\">", "a series in the library leads back to the Library");
     }
 
