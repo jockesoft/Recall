@@ -31,7 +31,7 @@ public interface ITvdbSnapshotStore
     /// before the much older <paramref name="settledStaleBeforeUtc"/>, so
     /// nothing is served unchanged forever. Ahead of both, whatever their age:
     /// rows written by an older version of the mapping (today, rows without
-    /// TheTVDB genres; see <c>SeriesDataDtoMappings.AggregateVersion</c>).
+    /// the series' network; see <c>SeriesDataDtoMappings.AggregateVersion</c>).
     /// Within each group, series in someone's library come first, then oldest
     /// first. Feeds the background refresh job.
     /// </summary>

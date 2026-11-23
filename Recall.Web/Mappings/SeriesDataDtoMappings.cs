@@ -16,9 +16,10 @@ public static class SeriesDataDtoMappings
     /// leaving them for their turn up to 30 days away.
     /// <list type="bullet">
     /// <item>1 (2026-10-02): <see cref="SeriesAggregate.Genres"/>.</item>
+    /// <item>2 (2026-11-23): <see cref="SeriesAggregate.Network"/>.</item>
     /// </list>
     /// </summary>
-    public const int AggregateVersion = 1;
+    public const int AggregateVersion = 2;
 
     // TheTVDB artwork type id of a series' 16:9 background ("fanart").
     private const int SeriesBackgroundArtworkType = 3;
@@ -68,6 +69,7 @@ public static class SeriesDataDtoMappings
             NextAired = ParseDateOnly(dto.NextAired),
             OriginalCountry = dto.OriginalCountry,
             OriginalLanguage = dto.OriginalLanguage,
+            Network = NullIfBlank(dto.OriginalNetwork?.Name) ?? NullIfBlank(dto.LatestNetwork?.Name),
             Score = dto.Score,
             Year = dto.Year,
             AirsTime = dto.AirsTime,
@@ -272,4 +274,6 @@ public static class SeriesDataDtoMappings
 
         return DateOnly.TryParse(value, out var date) ? date : null;
     }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

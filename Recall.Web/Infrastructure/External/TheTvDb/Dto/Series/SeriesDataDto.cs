@@ -71,6 +71,14 @@ public sealed class SeriesDataDto
     [JsonPropertyName("originalLanguage")]
     public string? OriginalLanguage { get; init; }
 
+    /// <summary>The network the series first aired on.</summary>
+    [JsonPropertyName("originalNetwork")]
+    public CompanyDto? OriginalNetwork { get; init; }
+
+    /// <summary>The network that airs it now (differs from the original when a series moved).</summary>
+    [JsonPropertyName("latestNetwork")]
+    public CompanyDto? LatestNetwork { get; init; }
+
     [JsonPropertyName("overview")]
     public string? Overview { get; init; }
 
