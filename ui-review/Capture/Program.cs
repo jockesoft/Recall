@@ -13,6 +13,10 @@ using Microsoft.Playwright;
 // instances. Optional: --only <text> captures just the shots whose name
 // contains the text; --install downloads the Chromium build Playwright needs.
 //
+// Every shot also checks its collapsed cast and crew lists
+// (CheckCollapsedListsAsync): nobody may be drawn half outside a list, and
+// nothing may cover the last person shown. A problem fails the run.
+//
 // After the shots it times the toasts in a real browser (RunToastChecksAsync,
 // results in toast-checks.json): how long each kind stays, pausing, Escape.
 // A failed check fails the run. --only toast-checks runs just those. Then it
@@ -213,6 +217,17 @@ List<Shot> shots =
             await page.Locator(".tvdb-title-actions .dropdown-menu.show").WaitForAsync();
         }),
     new("movie-details", "watchlist", Site.SignedIn, $"/Movies/Details/{WatchlistMovie}"),
+    new("movie-details", "crew-expanded", Site.SignedIn, $"/Movies/Details/{WatchedMovie}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // "Show all N" renders the people the collapse left out.
+            var toggle = page.Locator("[data-cast]:has(#crewList) [data-cast-toggle]");
+            await toggle.ClickAsync();
+            await page.Locator("[data-cast].is-expanded #crewList").WaitForAsync();
+            if (await toggle.GetAttributeAsync("aria-expanded") != "true")
+                throw new InvalidOperationException("the button does not say the list is expanded");
+            await page.Locator("#crewList > li").Last.ScrollIntoViewIfNeededAsync();
+        }),
     new("movie-details", "unreleased", Site.SignedIn, $"/Movies/Details/{UnreleasedMovie}"),
     new("movie-details", "no-background-art", Site.SignedIn, $"/Movies/Details/{NoArtMovie}"),
     new("profile", "populated", Site.SignedIn, "/Account/Profile"),
@@ -467,7 +482,8 @@ foreach (var viewport in viewports)
         Console.WriteLine(
             $"{result.File,-58} {(result.Error is null ? "ok" : "FAILED: " + result.Error)}" +
             (result.OverflowPx > 0 ? $"  overflow {result.OverflowPx}px" : "") +
-            (result.Violations.Count > 0 ? $"  axe {result.Violations.Count}" : ""));
+            (result.Violations.Count > 0 ? $"  axe {result.Violations.Count}" : "") +
+            (result.CollapsedListProblems.Count > 0 ? $"  LIST: {string.Join("; ", result.CollapsedListProblems)}" : ""));
     }
 }
 
@@ -514,7 +530,12 @@ if (options.Only is null || PushChecksName.Contains(options.Only, StringComparis
     Console.WriteLine($"{pushChecks.Count(c => c.Passed)} of {pushChecks.Count} push checks passed");
 }
 
-return results.Any(r => r.Error is not null) || toastChecks.Any(c => !c.Passed) || pushChecks.Any(c => !c.Passed) ? 1 : 0;
+var listProblems = results.Sum(r => r.CollapsedListProblems.Count);
+Console.WriteLine(listProblems == 0
+    ? "collapsed lists: ok on every shot"
+    : $"collapsed lists: FAILED, {listProblems} problem(s) on {results.Count(r => r.CollapsedListProblems.Count > 0)} shot(s) (CollapsedListProblems in report.json)");
+
+return results.Any(r => r.Error is not null) || listProblems > 0 || toastChecks.Any(c => !c.Passed) || pushChecks.Any(c => !c.Passed) ? 1 : 0;
 
 // Profile's push section on the signed-in instance. The browser's permission
 // prompt is played by an init script that counts the calls, so the check sees
@@ -868,6 +889,7 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
         });
 
         await MeasureAsync(page, result);
+        await CheckCollapsedListsAsync(page, result);
 
         if (shot.Cleanup is not null)
             await shot.Cleanup(page);
@@ -971,6 +993,70 @@ static async Task LoadLazyImagesAsync(IPage page)
     catch (TimeoutException)
     {
     }
+}
+
+// A list collapsed behind "Show all" (the cast and crew lists, [data-cast])
+// must show whole people only: every item that is drawn lies fully inside the
+// list's box (one cut off by the box, or drawn outside it, is a problem; one
+// that is not rendered at all is fine), and nothing covers the last item shown
+// (a fixed overlay, such as an open modal or a toast, does not count).
+// Run after the screenshot: it scrolls each list's last item into view, since
+// elementFromPoint only sees the viewport.
+static async Task CheckCollapsedListsAsync(IPage page, ShotResult result)
+{
+    var problems = await page.EvaluateAsync<string[]>(
+        """
+        async () => {
+            const problems = [];
+            const drawn = el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+            // An overlay over the whole page (an open modal and its backdrop, the
+            // toasts) is fixed in place: it is not content overlapping the list.
+            const inOverlay = el => {
+                for (let node = el; node && node !== document.body; node = node.parentElement)
+                    if (getComputedStyle(node).position === 'fixed') return true;
+                return false;
+            };
+            const lists = Array.from(document.querySelectorAll('[data-cast]:not(.is-expanded) .tvdb-cast__list'));
+            for (const list of lists) {
+                const name = '#' + (list.id || 'list');
+                const box = list.getBoundingClientRect();
+                let last = null;
+                Array.from(list.children).forEach((item, index) => {
+                    if (!drawn(item)) return;
+                    // The item and its content: content can spill out of an item's own box.
+                    const rects = [item, ...item.querySelectorAll('*')].filter(drawn)
+                        .map(e => e.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0);
+                    if (rects.length === 0) return;
+                    const top = Math.min(...rects.map(r => r.top));
+                    const bottom = Math.max(...rects.map(r => r.bottom));
+                    if (top < box.top - 1 || bottom > box.bottom + 1) {
+                        problems.push(`${name}: item ${index + 1} is drawn partly or wholly outside the list's box`);
+                        return;
+                    }
+                    last = item;
+                });
+                if (!last) continue;
+
+                last.scrollIntoView({ block: 'center' });
+                await new Promise(r => requestAnimationFrame(() => r()));
+                const r = last.getBoundingClientRect();
+                const covered = [];
+                for (const fx of [0.15, 0.5, 0.85]) {
+                    for (const fy of [0.2, 0.5, 0.8]) {
+                        const x = r.left + r.width * fx, y = r.top + r.height * fy;
+                        const top = document.elementFromPoint(x, y);
+                        if (top && !last.contains(top) && !top.contains(last) && !inOverlay(top)) covered.push(top);
+                    }
+                }
+                if (covered.length > 0)
+                    problems.push(`${name}: the last item shown is covered (${covered.length} of 9 points)`);
+            }
+            window.scrollTo(0, 0);
+            return problems;
+        }
+        """);
+
+    result.CollapsedListProblems = problems.ToList();
 }
 
 static async Task MeasureAsync(IPage page, ShotResult result)
@@ -1119,6 +1205,7 @@ class ShotResult
     public List<string> ConsoleErrors { get; set; } = [];
     public List<string> FailedRequests { get; set; } = [];
     public List<Violation> Violations { get; set; } = [];
+    public List<string> CollapsedListProblems { get; set; } = [];
     public string? Error { get; set; }
 }
 
