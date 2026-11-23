@@ -1,0 +1,15 @@
+<Project>
+  <!-- Applies to every project under the repository root (the app, both test
+       projects and ui-review/Capture). See CLAUDE.md, "Build warnings". -->
+  <PropertyGroup>
+    <!-- A warning is fixed, not lived with: the build fails on any compiler,
+         analyzer or NuGet warning. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Except NuGet audit warnings (a package with a known vulnerability:
+         low, moderate, high, critical). An advisory published today must not
+         block an unrelated deploy; CI prints them as annotations instead
+         (the "NuGet audit" step in the workflows), and they are dealt with
+         by a dependency update. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+</Project>

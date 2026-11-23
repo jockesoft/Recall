@@ -3,6 +3,42 @@
   "defaultProvider": "unpkg",
   "libraries": [
     {
+      "library": "bootstrap@5.3.9",
+      "destination": "wwwroot/lib/bootstrap/",
+      "files": [
+        "LICENSE",
+        "dist/css/bootstrap.min.css",
+        "dist/css/bootstrap.min.css.map",
+        "dist/js/bootstrap.bundle.min.js",
+        "dist/js/bootstrap.bundle.min.js.map"
+      ]
+    },
+    {
+      "library": "jquery@3.8.0",
+      "destination": "wwwroot/lib/jquery/",
+      "files": [
+        "LICENSE.txt",
+        "dist/jquery.min.js",
+        "dist/jquery.min.map"
+      ]
+    },
+    {
+      "library": "jquery-validation@1.22.1",
+      "destination": "wwwroot/lib/jquery-validation/",
+      "files": [
+        "LICENSE.md",
+        "dist/jquery.validate.min.js"
+      ]
+    },
+    {
+      "library": "jquery-validation-unobtrusive@4.0.0",
+      "destination": "wwwroot/lib/jquery-validation-unobtrusive/",
+      "files": [
+        "LICENSE.txt",
+        "dist/jquery.validate.unobtrusive.min.js"
+      ]
+    },
+    {
       "library": "@phosphor-icons/web@2.1.2",
       "destination": "wwwroot/lib/phosphor-icons/",
       "files": [

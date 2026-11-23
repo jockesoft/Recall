@@ -1,4 +1,10 @@
 
+Requirements
+
+A .NET 10 SDK, 10.0.404 or later, as `global.json` says (.NET 10 is the LTS release the project
+stays on until .NET 12 LTS, November 2027). Docker, for Postgres, Valkey and the PostgreSQL test suite. The build
+treats warnings as errors (`Directory.Build.props`), except NuGet audit warnings about vulnerable packages.
+
 Initialize secrets for your web project
 ```
 dotnet user-secrets init --project ./Recall.Web
