@@ -36,6 +36,7 @@ public static class DomainImageNormalization
         aggregate with
         {
             ImageUrl = ArtworkUrl.Normalize(aggregate.ImageUrl),
+            BackgroundUrl = ArtworkUrl.Normalize(aggregate.BackgroundUrl),
             Characters = aggregate.Characters.Select(NormalizeCharacter).ToArray()
         };
 

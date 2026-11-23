@@ -62,6 +62,10 @@ public sealed class MovieDataDto
 
     [JsonPropertyName("first_release")]
     public MovieReleaseDto? FirstRelease { get; init; }
+
+    /// <summary>Posters, backgrounds and the rest; type 15 is a movie's 16:9 background.</summary>
+    [JsonPropertyName("artworks")]
+    public List<ArtworkDto>? Artworks { get; init; }
 }
 
 public sealed class MovieReleaseDto
