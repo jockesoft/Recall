@@ -50,8 +50,9 @@ ANONYMOUS_URL=http://localhost:7463   # environment "Test": DevAuthMiddleware st
 # Titles the dev database has no cached aggregate for; opened once through the
 # app so TheTVDB data for them lands in the clone. Short series on purpose:
 # every uncached episode costs one translation call.
-# Adolescence, Baby Reindeer, Mare of Easttown, Band of Brothers, The Penguin
-EXTRA_SERIES=(452467 417223 370112 74205 417648)
+# Adolescence, Baby Reindeer, Mare of Easttown, Band of Brothers, The Penguin,
+# The Lord of the Rings: The Rings of Power (a long title, left out of the library)
+EXTRA_SERIES=(452467 417223 370112 74205 417648 367506)
 # Heat, Interstellar, Dune: Part Two
 EXTRA_MOVIES=(1305 131079 290272)
 
