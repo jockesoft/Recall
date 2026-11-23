@@ -38,16 +38,30 @@ forwarding, which Valkey does not count as loopback (with protected mode on it r
 reads everything from Postgres instead). To replace an old Redis container: `docker rm -f my-redis`, then the
 command above; it only ever held cache.
 
-Start postgres container
+Start the Postgres container (PostgreSQL 18, from Docker Hardened Images, the same image as production and the
+PostgreSQL test suite). It keeps the name `local_postgres`, which `ui-review/review.sh` uses.
 ```
 docker run --name local_postgres \
   -p 5432:5432 \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=devpassword \
   -e POSTGRES_DB=recall_db \
-  -v pgdata:/var/lib/postgresql \
-  -d postgres:18.1
+  -v local_pgdata_dhi:/var/lib/postgresql \
+  -d dhi.io/postgres:18.7-debian13
 ```
+The hardened image runs as UID 70 and keeps its data in `/var/lib/postgresql/18/data`, so it cannot start on a volume
+made by the official `postgres` image (UID 999, `/var/lib/postgresql/18/docker`). To move an existing `local_postgres`
+over, dump first, start the new container on a new volume as above, and restore; the old volume stays as it was:
+```
+docker exec local_postgres pg_dump -U postgres recall_db | gzip > ~/recall_db_before_dhi.sql.gz
+docker stop local_postgres && docker rename local_postgres local_postgres_old
+# the docker run command above, then, once it accepts connections:
+until docker exec local_postgres pg_isready -h 127.0.0.1 -q; do sleep 1; done
+gunzip -c ~/recall_db_before_dhi.sql.gz \
+  | docker exec -i -e PGPASSWORD=devpassword local_postgres psql -h 127.0.0.1 -U postgres -d recall_db -v ON_ERROR_STOP=1 -q
+```
+Repeat the dump and restore for any other database in the container (create it first with `createdb`). When
+everything works, `docker rm local_postgres_old` and `docker volume rm pgdata`.
 
 If DB is empty in dev env. Add user:
 ```
