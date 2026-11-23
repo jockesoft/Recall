@@ -21,15 +21,22 @@ services:
       - ./dataprotection-keys:/home/nonroot/.aspnet/DataProtection-Keys
 #      - ./images/recipes:/app/wwwroot/images/recipes
     depends_on:
+      # restart: the app restarts whenever compose replaces the database
+      # container, so its startup checks (an empty database stops it) run
+      # against the database it now talks to, even when its own image is unchanged.
       postgres:
         condition: service_healthy
+        restart: true
       redis:
         condition: service_healthy
     networks:
       - recall_prodnet
 
+  # PostgreSQL on Docker's hardened image (runs as UID 70, has bash and
+  # pg_isready, so the healthcheck works as it did). Its data directory is
+  # /var/lib/postgresql/18/data (the image's PGDATA) on the volume below.
   postgres:
-    image: postgres:18.1
+    image: dhi.io/postgres:18.7-debian13
     container_name: ${POSTGRES_HOST:?POSTGRES_HOST must be set in .env.prod}
     restart: always
     healthcheck:
@@ -44,7 +51,7 @@ services:
     ports: # Not needed in prod?? According to AI but needed to be able to connect from host machine for testing/debugging. Can be removed if not needed.
       - "127.0.0.1:5433:${POSTGRES_PORT:?POSTGRES_PORT must be set in .env.prod}"
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata_dhi:/var/lib/postgresql
     networks:
       - recall_prodnet
 
@@ -70,6 +77,17 @@ services:
       - recall_prodnet
 
 volumes:
+  # The database since the move to the hardened image (README, "Switching
+  # production to DHI Postgres"). External: compose never creates or removes
+  # it, so a deploy cannot start on a new, empty volume by mistake (and the app
+  # refuses an empty database too). It is created by hand, once:
+  # docker volume create recall_pgdata_dhi
+  pgdata_dhi:
+    name: recall_pgdata_dhi
+    external: true
+  # The rollback copy: the postgres:18.1 data from before the switch, no longer
+  # mounted. Declared so it stays known to compose; never run "down -v", which
+  # would remove it. Delete it by hand a few weeks after the switch (README).
   pgdata:
 
 networks:

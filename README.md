@@ -38,16 +38,30 @@ forwarding, which Valkey does not count as loopback (with protected mode on it r
 reads everything from Postgres instead). To replace an old Redis container: `docker rm -f my-redis`, then the
 command above; it only ever held cache.
 
-Start postgres container
+Start the Postgres container (PostgreSQL 18, from Docker Hardened Images, the same image as production and the
+PostgreSQL test suite). It keeps the name `local_postgres`, which `ui-review/review.sh` uses.
 ```
 docker run --name local_postgres \
   -p 5432:5432 \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=devpassword \
   -e POSTGRES_DB=recall_db \
-  -v pgdata:/var/lib/postgresql \
-  -d postgres:18.1
+  -v local_pgdata_dhi:/var/lib/postgresql \
+  -d dhi.io/postgres:18.7-debian13
 ```
+The hardened image runs as UID 70 and keeps its data in `/var/lib/postgresql/18/data`, so it cannot start on a volume
+made by the official `postgres` image (UID 999, `/var/lib/postgresql/18/docker`). To move an existing `local_postgres`
+over, dump first, start the new container on a new volume as above, and restore; the old volume stays as it was:
+```
+docker exec local_postgres pg_dump -U postgres recall_db | gzip > ~/recall_db_before_dhi.sql.gz
+docker stop local_postgres && docker rename local_postgres local_postgres_old
+# the docker run command above, then, once it accepts connections:
+until docker exec local_postgres pg_isready -h 127.0.0.1 -q; do sleep 1; done
+gunzip -c ~/recall_db_before_dhi.sql.gz \
+  | docker exec -i -e PGPASSWORD=devpassword local_postgres psql -h 127.0.0.1 -U postgres -d recall_db -v ON_ERROR_STOP=1 -q
+```
+Repeat the dump and restore for any other database in the container (create it first with `createdb`). When
+everything works, `docker rm local_postgres_old` and `docker volume rm pgdata`.
 
 If DB is empty in dev env. Add user:
 ```
@@ -75,7 +89,8 @@ deploy:
    with "`NAME` must be set in .env.prod". Both previous files are then put back, so the folder still describes what
    is running and never holds one new file beside an old one;
 3. logs in to GHCR, runs `bash dump_db.sh` (a backup before every deploy), runs
-   `docker compose --env-file .env.prod -f compose.prod.yml up -d --pull always`, and prunes old images. Any failing
+   `docker compose --env-file .env.prod -f compose.prod.yml up -d --pull always --wait --wait-timeout 180` (the deploy
+   fails unless every container is running and healthy within three minutes), and prunes old images. Any failing
    step stops the deploy, a failed backup included.
 
 So a change that needs a new variable is deployed in two steps: add the variable to the server's `.env.prod` first,
@@ -98,6 +113,9 @@ Required by `compose.prod.yml` (the deploy fails without them):
 | `VALKEY_PASSWORD` | Password Valkey requires; the same value goes in `REDIS_CONNECTION` |
 
 `dump_db.sh` reads four of them too: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`.
+
+Not in `.env.prod` except on a new server's first start: `Database__AllowEmptyDatabase` (see "A new server's first
+start").
 
 Read by the app (the container gets the whole file):
 
@@ -227,6 +245,164 @@ set `REDIS_CONNECTION=redis:6379` again (the app also connects to a Redis withou
 one, but the setting should say what is true) and remove `VALKEY_PASSWORD`, then run the same `up -d --wait`.
 Nothing needs restoring.
 
+Switching production to DHI Postgres
+
+Done once, as the deploy user, in `~/recall-deploy`. The database moves from `postgres:18.1` on the compose volume
+`pgdata` to `dhi.io/postgres:18.7-debian13` on a new volume, `recall_pgdata_dhi`, by dump and restore. The hardened
+image runs as a different user (UID 70) and keeps its data in a different folder (`/var/lib/postgresql/18/data`), so
+it cannot start on the old volume. The old volume is left exactly as it is, as the rollback. The site is down from
+step 3 until the deploy in step 8 is healthy, which is about as long as a CI run.
+
+Run everything in one bash session. Step 1 sets the shell variables the later steps use; in a new session, run step 1
+again first. The values stay in `.env.prod`: nothing below spells one out.
+
+1. Read the database settings from `.env.prod`, and define two helpers: `sql <container> -c "…"` runs a query in
+   either Postgres container, and `ROWS` is the query that counts the rows of every table (the one `review.sh` uses,
+   one table per line so `diff` can say which one differs).
+   ```
+   cd ~/recall-deploy
+   env_value() { grep -E "^$1=" .env.prod | tail -n 1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
+   export POSTGRES_HOST="$(env_value POSTGRES_HOST)" POSTGRES_DB="$(env_value POSTGRES_DB)" \
+          POSTGRES_USER="$(env_value POSTGRES_USER)" POSTGRES_PASSWORD="$(env_value POSTGRES_PASSWORD)"
+   export PGPASSWORD="$POSTGRES_PASSWORD"
+   sql() { docker exec -i -e PGPASSWORD "$1" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-password -v ON_ERROR_STOP=1 -At "${@:2}"; }
+   ROWS="SELECT table_name || ' ' || (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM ' || quote_ident(table_name), false, true, '')))[1]::text FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;"
+   mkdir -p ~/pg-switch
+   ```
+
+2. Check, while the app still runs:
+   ```
+   ls -lt /var/backups/recall | head -3                     # last night's automatic dump is there
+   gunzip -t "$(ls -t /var/backups/recall/*.sql.gz | head -1)" && echo "latest dump OK"
+   curl -s http://127.0.0.1:8701/ | grep -o 'Version v1\.0\.[^ <]*' | tee ~/pg-switch/build-before.txt
+   docker inspect "$POSTGRES_HOST" --format '{{.Config.Image}} {{range .Mounts}}{{.Name}}{{end}}'
+   docker inspect "$POSTGRES_HOST" --format '{{range .Mounts}}{{.Name}}{{end}}' > ~/pg-switch/old-volume.txt
+   docker pull dhi.io/postgres:18.7-debian13               # now, rather than during the downtime
+   ```
+   The `inspect` line shows `postgres:18.1` and the old volume's name (`recall-deploy_pgdata`: compose puts the
+   project's name, the folder's, in front of `pgdata`); it is kept in `~/pg-switch/old-volume.txt` for step 11.
+
+3. Stop the app, so nothing is written from here on, and take the final dump. A copy goes to `~/pg-switch`, because
+   `dump_db.sh` deletes dumps after 9 days and this one is the state of the old volume.
+   ```
+   docker compose --env-file .env.prod -f compose.prod.yml stop recall
+   ./dump_db.sh
+   DUMP="$(ls -t /var/backups/recall/*.sql.gz | head -1)"; echo "$DUMP"
+   cp -p "$DUMP" ~/pg-switch/
+   ```
+
+4. Create the new volume and start a temporary Postgres on it: the hardened image, another container name, no
+   published port, the same database, user and password (`-e NAME` without a value takes it from step 1, so the
+   password is not on the command line). Wait with `-h 127.0.0.1`, which only answers once the first-start setup is
+   done and the real server runs.
+   ```
+   docker volume create recall_pgdata_dhi
+   docker run -d --name recall_postgres_new -e POSTGRES_DB -e POSTGRES_USER -e POSTGRES_PASSWORD \
+     -v recall_pgdata_dhi:/var/lib/postgresql dhi.io/postgres:18.7-debian13
+   until docker exec recall_postgres_new pg_isready -h 127.0.0.1 -q; do sleep 1; done
+   ```
+
+5. Restore the final dump into it. `ON_ERROR_STOP` stops at the first error; the exit code must be 0 (the log then
+   holds only the dump's one `set_config` result).
+   ```
+   gunzip -c "$DUMP" | docker exec -i -e PGPASSWORD recall_postgres_new \
+     psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-password -v ON_ERROR_STOP=1 -q > ~/pg-switch/restore.log
+   echo "restore exit code: $?"
+   ```
+
+6. Compare the two databases. The row counts must be identical (`diff` prints nothing), both must have the same
+   number of migrations and the same latest one, and both collations must be `en_US` UTF-8 from the C library
+   (`datlocprovider` `c`). The old image spells it `en_US.utf8` and the new one `en_US.UTF-8`; they are the same
+   locale.
+   ```
+   sql "$POSTGRES_HOST"     -c "$ROWS" > ~/pg-switch/rows-old.txt
+   sql recall_postgres_new -c "$ROWS" > ~/pg-switch/rows-new.txt
+   diff ~/pg-switch/rows-old.txt ~/pg-switch/rows-new.txt && echo "row counts match in $(wc -l < ~/pg-switch/rows-new.txt) tables"
+   for c in "$POSTGRES_HOST" recall_postgres_new; do
+     echo "== $c"
+     sql "$c" -c 'SELECT count(*), max("MigrationId") FROM "__EFMigrationsHistory";' \
+              -c "SELECT datcollate, datctype, datlocprovider, pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database();" \
+              -c 'SELECT version();'
+   done
+   ```
+
+7. Stop and remove the temporary container; the volume keeps the data. The old container keeps running, still on
+   the old volume: the deploy's backup in step 8 reads from it.
+   ```
+   docker stop recall_postgres_new && docker rm recall_postgres_new
+   ```
+
+8. Merge the pull request and push. The deploy copies the new `compose.prod.yml`, runs `dump_db.sh` against the old
+   container once more, and `up -d --pull always --wait` recreates `recall_postgres` on the hardened image and
+   `recall_pgdata_dhi` and starts the app again (compose restarts the app whenever it replaces the database container,
+   so the app's startup checks always see the new database). Wait for the workflow to finish green. If it fails at `--wait`, look
+   at `docker logs recall_app` and `docker logs "$POSTGRES_HOST"`, then roll back (step 10).
+
+9. Check after the deploy:
+   ```
+   docker compose --env-file .env.prod -f compose.prod.yml ps        # recall_app, recall_postgres and redis healthy
+   docker inspect "$POSTGRES_HOST" --format '{{.Config.Image}} {{range .Mounts}}{{.Name}}{{end}}'   # dhi.io/postgres:18.7-debian13 recall_pgdata_dhi
+   sql "$POSTGRES_HOST" -c 'SELECT version();'                       # PostgreSQL 18.7
+   docker logs recall_app 2>&1 | grep -E 'migration' | tail -1       # "Database schema is up to date; no migrations to apply."
+   docker logs recall_app 2>&1 | grep -c 'FTL'                       # 0: no Critical line
+   sql "$POSTGRES_HOST" -c "$ROWS" | diff ~/pg-switch/rows-old.txt - # see below
+   ```
+   Right after the start, the row counts are those of step 6. Once the app has run for a while its jobs change a few
+   tables (`cached_*`, `email`, `login_token`, `notification`, `notified_episode`, `digest_send`), and signing in adds
+   a `login_token` and an `email`; the tables of users' own data (`app_user`, `tracked_series`, `episode_watch`,
+   `user_rating`, …) only change when someone uses the site. Then sign in on the site (a code or the link from the
+   email), and check that a backup still works against the new image:
+   ```
+   ./dump_db.sh && gunzip -t "$(ls -t /var/backups/recall/*.sql.gz | head -1)" && echo "dump OK"
+   ```
+
+10. Rollback, while the old volume still exists. Right after the switch's deploy, `compose.prod.yml.prev` is the
+    previous file (after a later deploy, take `compose.prod.yml` from the commit before the merge instead):
+    ```
+    cp compose.prod.yml.prev compose.prod.yml
+    docker compose --env-file .env.prod -f compose.prod.yml up -d --wait
+    ```
+    This recreates `recall_postgres` on `postgres:18.1` and the old volume, which holds the data as it was in step 3.
+    Then revert the merge in the repository (`git revert -m 1 <merge commit>`) and push, so the next deploy does not
+    switch again. To try the switch again later, first `docker volume rm recall_pgdata_dhi`, then start from step 1.
+
+    Anything written after the switch (sign-ups, watches, ratings) is only in the new database. To keep it, move the
+    whole new database back instead: it holds everything the old one had plus those writes. Instead of the two
+    commands above:
+    ```
+    ./dump_db.sh                                       # the new database, with everything written since the switch
+    DUMP="$(ls -t /var/backups/recall/*.sql.gz | head -1)"; cp -p "$DUMP" ~/pg-switch/
+    docker compose --env-file .env.prod -f compose.prod.yml stop recall
+    cp compose.prod.yml.prev compose.prod.yml
+    docker compose --env-file .env.prod -f compose.prod.yml up -d --wait postgres
+    docker exec -e PGPASSWORD "$POSTGRES_HOST" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres --no-password -v ON_ERROR_STOP=1 \
+      -c "DROP DATABASE \"$POSTGRES_DB\" WITH (FORCE);" -c "CREATE DATABASE \"$POSTGRES_DB\" OWNER \"$POSTGRES_USER\";"
+    gunzip -c "$DUMP" | docker exec -i -e PGPASSWORD "$POSTGRES_HOST" \
+      psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-password -v ON_ERROR_STOP=1 -q > ~/pg-switch/rollback-restore.log
+    echo "restore exit code: $?"
+    docker compose --env-file .env.prod -f compose.prod.yml up -d --wait
+    ```
+    This replaces the old volume's database with the new one's; the old state is still in the step 3 dump in
+    `~/pg-switch`. Check the row counts as in step 9, then revert the merge as above.
+
+11. Delete the old volume a few weeks after the switch, once a rollback is out of the question (after that, only the
+    dumps go back to before it):
+    ```
+    OLD_VOLUME="$(cat ~/pg-switch/old-volume.txt)"; echo "$OLD_VOLUME"     # recall-deploy_pgdata, not recall_pgdata_dhi
+    docker ps -a --filter volume="$OLD_VOLUME" --format '{{.Names}}'       # nothing: no container uses it
+    docker volume rm "$OLD_VOLUME"
+    ```
+    Then remove the `pgdata:` entry from `compose.prod.yml` in the repository, and `~/pg-switch` from the server.
+
+A new server's first start
+
+`recall_pgdata_dhi` is declared `external` in `compose.prod.yml`: compose never creates or removes it, so it is created
+by hand once, `docker volume create recall_pgdata_dhi`, before the first `up`. In Production the app also refuses to
+start on a database with no applied migrations (a critical line, "has no applied migrations … Not starting", and the
+deploy's `--wait` fails), because on a running server that means the wrong volume, not a new install. For a genuine
+first install, add `Database__AllowEmptyDatabase=true` to `.env.prod` for the first start, which creates the schema,
+then remove it and run `docker compose --env-file .env.prod -f compose.prod.yml up -d --wait` again.
+
 Back up the production database
 
 Backups are made by `dump_db.sh` (`deploy/dump_db.sh` in the repository, shipped by every deploy to
@@ -258,13 +434,14 @@ Do not add `-t` to `docker exec` here: a terminal rewrites line endings and corr
 Restore a backup
 
 The dump is plain SQL without `DROP` statements, so restore it into an empty database, with the app
-container stopped. Replace the file name with the backup to restore.
+container stopped. Replace the file name with the backup to restore. `ON_ERROR_STOP` makes psql stop at the first
+error instead of carrying on with a half-restored database.
 ```
 set -a; . ./.env.prod; set +a
 
-gunzip -c /var/backups/recall/recall_db_YYYYMMDD_HHMMSS.sql.gz \
+gunzip -c /var/backups/recall/recall_db_YYYY-MM-DD_HH-MM-SS.sql.gz \
   | docker exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" recall_postgres \
-      psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+      psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q
 ```
 
 Weekly digest

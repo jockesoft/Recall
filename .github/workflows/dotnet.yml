@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v6
 
       # Docker Hardened Images (dhi.io) need a Docker Hub login to pull. The
-      # PostgreSQL suite's Testcontainers pull dhi.io/valkey with these
+      # PostgreSQL suite's Testcontainers pull dhi.io/postgres and dhi.io/valkey with these
       # credentials (it reads the runner's Docker config).
       - name: Log in to Docker Hardened Images
         uses: docker/login-action@v4
@@ -52,7 +52,7 @@ jobs:
       - name: Test with Coverage
         run: dotnet test Recall.Tests --configuration Release --no-restore --settings Recall.Tests/coverlet.runsettings --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
 
-      # Starts postgres:18.1 and dhi.io/valkey:9.1 containers through Testcontainers
+      # Starts dhi.io/postgres:18.7-debian13 and dhi.io/valkey:9.1 containers through Testcontainers
       # (the runner has Docker). CI=true makes an unreachable Docker a failure, not
       # a skipped suite.
       - name: Test against PostgreSQL

@@ -15,7 +15,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
-    # The PostgreSQL suite pulls dhi.io/valkey through Testcontainers, which
+    # The PostgreSQL suite pulls dhi.io/postgres and dhi.io/valkey through Testcontainers, which
     # needs a Docker Hub login for Docker Hardened Images.
     - name: Log in to Docker Hardened Images
       uses: docker/login-action@v4

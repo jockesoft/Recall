@@ -21,10 +21,16 @@ jobs:
         permissions:
             contents: read
 
-        # Services required for the Recall application
+        # Services required for the Recall application. Postgres is the hardened
+        # image production runs; dhi.io needs a Docker Hub login, which a service
+        # container gets through its own credentials (it starts before any step).
+        # The secrets must also exist in the repository's "copilot" environment.
         services:
             postgres:
-                image: postgres:16-alpine
+                image: dhi.io/postgres:18.7-debian13
+                credentials:
+                    username: ${{ secrets.DHI_USERNAME }}
+                    password: ${{ secrets.DHI_TOKEN }}
                 env:
                     POSTGRES_USER: postgres
                     POSTGRES_PASSWORD: postgres
