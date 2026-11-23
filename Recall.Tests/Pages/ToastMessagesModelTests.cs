@@ -244,4 +244,16 @@ public sealed class ToastMessagesModelTests
         toast.UndoWatched.Should().BeNull();
         toast.HasAction.Should().BeFalse();
     }
+
+    [Test]
+    public void LinkCopied_Should_BeAnInfoToast_ThatClosesItselfAfterFiveSeconds()
+    {
+        var toast = ToastMessagesModel.LinkCopied;
+
+        toast.Kind.Should().Be(ToastKind.Info);
+        toast.Text.Should().Be("Link copied.");
+        toast.CssClass.Should().Be("alert-info");
+        toast.HasAction.Should().BeFalse();
+        toast.DurationMilliseconds.Should().Be(5000);
+    }
 }

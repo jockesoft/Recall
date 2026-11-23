@@ -1,71 +1,14 @@
-@using Recall.Web.Extensions
 @using Recall.Web.Pages.Shared
 @{
-    // Every toast in the app is drawn here, from TempData. How long each stays
-    // is ToastDurations' call; js/tvdb-toasts.js (loaded by the layout) runs
-    // the countdown, the pausing and Escape.
+    // Every toast in the app is drawn here, from TempData, each by _Toast. How
+    // long each stays is ToastDurations' call; js/tvdb-toasts.js (loaded by the
+    // layout) runs the countdown, the pausing and Escape.
     var toasts = ToastMessagesModel.From(TempData).Toasts;
-}
-
-@functions {
-    // Razor writes a data-* attribute even when its value is null (as data-x=""),
-    // and the script and the stylesheet go by whether the attribute is there. So
-    // the three are written by hand, each only when it applies. The values are a
-    // number and two fixed words, never text from a page.
-    static Microsoft.AspNetCore.Html.IHtmlContent DataAttributes(ToastView toast)
-    {
-        var attributes = new List<string>();
-
-        if (toast.DurationMilliseconds is { } milliseconds)
-            attributes.Add($"data-toast-duration=\"{milliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}\"");
-
-        if (toast.HasAction)
-            attributes.Add("data-toast-actions=\"true\"");
-
-        if (toast.CaughtUpKind is PageModelToastExtensions.CaughtUpFinished or PageModelToastExtensions.CaughtUpUpToDate)
-            attributes.Add($"data-toast-kind=\"{toast.CaughtUpKind}\"");
-
-        return new Microsoft.AspNetCore.Html.HtmlString(string.Join(' ', attributes));
-    }
 }
 
 <div class="tvdb-toast-stack">
     @foreach (var toast in toasts)
     {
-        @* data-toast-duration (milliseconds) is absent on a toast that never closes itself,
-           and so is its countdown bar. role="alert" announces it; it never takes focus. *@
-        <div class="alert @toast.CssClass fade show tvdb-toast" role="alert" @DataAttributes(toast)>
-            <i class="@toast.Icon tvdb-toast-icon" aria-hidden="true"></i>
-            <span class="tvdb-toast-text">@toast.Text</span>
-            @if (toast.RateSeriesId is not null)
-            {
-                <a asp-page="/Series/Details" asp-route-id="@toast.RateSeriesId" asp-fragment="rating" class="tvdb-toast-action">Rate it</a>
-            }
-            @if (toast.UndoWatched is { } undo)
-            {
-                <form method="post" asp-page="/Series/Details" asp-page-handler="UndoWatched" asp-route-id="@undo.SeriesId" class="d-inline-flex">
-                    <input type="hidden" name="batch" value="@undo.Batch" />
-                    @if (undo.StoppedStamp is not null)
-                    {
-                        <input type="hidden" name="stoppedStamp" value="@undo.StoppedStamp" />
-                    }
-                    <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
-                    <button type="submit" class="tvdb-toast-action">Undo</button>
-                </form>
-            }
-            @if (toast.UndoStoppedSeriesId is not null)
-            {
-                <form method="post" asp-page="/Series/Details" asp-page-handler="ResumeWatching" asp-route-id="@toast.UndoStoppedSeriesId" class="d-inline-flex">
-                    <input type="hidden" name="undo" value="true" />
-                    <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
-                    <button type="submit" class="tvdb-toast-action">Undo</button>
-                </form>
-            }
-            <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
-            @if (toast.DurationMilliseconds is not null)
-            {
-                <span class="tvdb-toast-timer" aria-hidden="true"></span>
-            }
-        </div>
+        <partial name="_Toast" model="toast" />
     }
 </div>

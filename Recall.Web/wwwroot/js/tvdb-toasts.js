@@ -9,6 +9,10 @@
 // stylesheet: while the toast is hovered or has focus inside it, and while the
 // stack carries data-toast-paused, which this script sets when the tab is
 // hidden. With reduced motion the bar is invisible and still keeps the time.
+//
+// RecallToasts.show(name) shows a toast the page has drawn in advance, on the
+// server, inside <template data-toast-template="name"> (Share's "Link
+// copied."): this script never writes a toast's markup itself.
 (function () {
     var stack = document.querySelector('.tvdb-toast-stack');
     if (!stack || typeof bootstrap === 'undefined') return;
@@ -38,6 +42,18 @@
 
     // Each toast has its own timer; they close independently.
     toasts().forEach(start);
+
+    window.RecallToasts = {
+        show: function (name) {
+            var template = document.querySelector('template[data-toast-template="' + name + '"]');
+            var toast = template && template.content.querySelector('.tvdb-toast');
+            if (!toast) return;
+
+            var copy = toast.cloneNode(true);
+            stack.appendChild(copy);
+            start(copy);
+        }
+    };
 
     // A hidden tab reads nothing: every countdown waits until it is visible again.
     function syncVisibility() {

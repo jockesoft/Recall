@@ -17,6 +17,10 @@ public static class SeriesDataDtoMappings
     /// <list type="bullet">
     /// <item>1 (2026-10-02): <see cref="SeriesAggregate.Genres"/>.</item>
     /// </list>
+    /// <see cref="SeriesAggregate.Network"/> (2026-11-23) was added without a
+    /// bump on purpose: it is a nicety on Series Details, and a backfill would
+    /// hold back the job's 12-hour refreshes of continuing series for hours;
+    /// it fills in as rows refresh on their normal schedule.
     /// </summary>
     public const int AggregateVersion = 1;
 
@@ -68,6 +72,7 @@ public static class SeriesDataDtoMappings
             NextAired = ParseDateOnly(dto.NextAired),
             OriginalCountry = dto.OriginalCountry,
             OriginalLanguage = dto.OriginalLanguage,
+            Network = NullIfBlank(dto.OriginalNetwork?.Name) ?? NullIfBlank(dto.LatestNetwork?.Name),
             Score = dto.Score,
             Year = dto.Year,
             AirsTime = dto.AirsTime,
@@ -272,4 +277,6 @@ public static class SeriesDataDtoMappings
 
         return DateOnly.TryParse(value, out var date) ? date : null;
     }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

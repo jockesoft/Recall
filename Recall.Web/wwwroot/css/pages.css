@@ -487,13 +487,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     color: var(--tvdb-ok-ink);
 }
 
-/* A state that is not good news ("You stopped watching on Fri, Sep 4"): plain, not green. */
-.tvdb-title-state--neutral {
-    border-color: var(--tvdb-ink-line-strong);
-    background: var(--tvdb-paper-dim);
-    color: var(--tvdb-text-muted);
-}
-
 /* Shown to a visitor in place of the action row. */
 .tvdb-signin-card {
     display: flex;
@@ -568,119 +561,351 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     text-transform: uppercase;
 }
 
-/* A section of a detail page below the header. */
-.tvdb-section {
-    margin-top: var(--tvdb-space-6);
-    padding-top: var(--tvdb-space-5);
-    border-top: 1px solid var(--tvdb-ink-line);
-    scroll-margin-top: var(--tvdb-space-4);
-}
+/* ---- Series Details ---------------------------------------------------------------------
+   Under the hero: a row of section links, then the episodes (season cards)
+   beside a side column (overview, cast). Flex-wrap, no fixed widths: the
+   side column drops under the episodes when both no longer fit. */
 
-/* Season picker with its "⋯" menu. */
-.tvdb-season-bar {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--tvdb-space-3);
-    margin-bottom: var(--tvdb-space-4);
-}
-
-.tvdb-season-picker {
+.tvdb-section-links {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--tvdb-space-2);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--tvdb-space-1) var(--tvdb-space-4);
+    margin-bottom: var(--tvdb-space-5);
+    border-bottom: 1px solid var(--tvdb-ink-line);
 }
 
-/* Three states that must not be confused: plain (outline), fully watched (a
-   green check, still an outline) and selected (solid ink). */
-.tvdb-season-chip {
+.tvdb-section-links__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--tvdb-space-5);
+    margin: 0;
+}
+
+.tvdb-section-links a {
     display: inline-flex;
     align-items: center;
     gap: var(--tvdb-space-1);
+    min-height: 44px;
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    color: var(--tvdb-text);
+    text-decoration: none;
+}
+
+.tvdb-section-links a:hover,
+.tvdb-section-links a:focus-visible {
+    color: var(--tvdb-signal-text);
+    text-decoration: underline;
+}
+
+.tvdb-section-links a.tvdb-section-links__next {
+    color: var(--tvdb-signal-text);
+}
+
+.tvdb-series-layout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--tvdb-space-6);
+}
+
+.tvdb-series-layout__main {
+    flex: 999 1 560px;
+    min-width: 0;
+}
+
+.tvdb-series-layout__side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-6);
+    flex: 1 1 300px;
+    min-width: 0;
+}
+
+.tvdb-series-section,
+.tvdb-series-people {
+    scroll-margin-top: var(--tvdb-space-4);
+}
+
+.tvdb-series-people > .tvdb-cast:first-child {
+    margin-top: 0;
+}
+
+.tvdb-series-layout__side .tvdb-source-line {
+    margin-top: 0;
+}
+
+.tvdb-series-section__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--tvdb-space-1) var(--tvdb-space-3);
+    margin-bottom: var(--tvdb-space-3);
+}
+
+.tvdb-series-section__head h2 {
+    margin-bottom: 0;
+}
+
+.tvdb-series-section__figures {
+    margin: 0;
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+}
+
+/* The Overview's facts: label left, value right, a rule under each. */
+.tvdb-fact-list {
+    margin: var(--tvdb-space-4) 0 0;
+}
+
+.tvdb-fact-list > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0 var(--tvdb-space-3);
+    padding-block: var(--tvdb-space-2);
+    border-bottom: 1px solid var(--tvdb-ink-line);
+    font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-fact-list dt {
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+    align-self: center;
+}
+
+.tvdb-fact-list dd {
+    margin: 0;
+    text-align: right;
+}
+
+/* Season cards (the _SeasonCard partial): a details/summary each. */
+.tvdb-season-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-3);
+}
+
+.tvdb-season-card {
+    position: relative;
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-lg);
+    background: var(--tvdb-paper);
+    scroll-margin-top: var(--tvdb-space-4);
+}
+
+.tvdb-season-card--specials {
+    border-style: dashed;
+    border-color: var(--tvdb-ink-line-strong);
+}
+
+.tvdb-season-card__summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--tvdb-space-1) var(--tvdb-space-4);
+    min-height: 56px;
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    border-radius: var(--tvdb-radius-lg);
+    cursor: pointer;
+    list-style: none;
+}
+
+.tvdb-season-card__summary::-webkit-details-marker {
+    display: none;
+}
+
+.tvdb-season-card__summary:hover {
+    background: var(--tvdb-wash);
+}
+
+/* Room for the "⋯" menu, which sits over the summary's right end. */
+.tvdb-season-card.has-menu .tvdb-season-card__summary {
+    padding-right: calc(var(--tvdb-space-4) + 36px + var(--tvdb-space-2));
+}
+
+.tvdb-season-card__title {
+    flex: 1 1 auto;
+    font-weight: 600;
+}
+
+.tvdb-season-card__note {
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-season-card__progress {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-season-card__bar {
+    display: block;
+    width: 5rem;
+    height: 4px;
+    overflow: hidden;
+    border-radius: var(--tvdb-radius-pill);
+    background: var(--tvdb-ink-line);
+}
+
+.tvdb-season-card__bar > span {
+    display: block;
+    width: var(--tvdb-bar, 0%);
+    height: 100%;
+    background: var(--tvdb-signal);
+}
+
+.tvdb-season-card__progress.is-complete {
+    color: var(--tvdb-ok-ink);
+    font-weight: 600;
+}
+
+.tvdb-season-card__progress.is-complete .tvdb-season-card__bar > span {
+    background: var(--tvdb-ok);
+}
+
+.tvdb-season-card__caret {
+    flex: none;
+    color: var(--tvdb-text-muted);
+    transition: transform var(--tvdb-ease);
+}
+
+.tvdb-season-card__details[open] > summary .tvdb-season-card__caret {
+    transform: rotate(180deg);
+}
+
+.tvdb-season-card__menu {
+    position: absolute;
+    top: 10px;
+    right: var(--tvdb-space-3);
+}
+
+.tvdb-season-card__empty {
+    margin: 0;
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    border-top: 1px solid var(--tvdb-ink-line);
+}
+
+/* "Show N earlier seasons": the seasons before the three latest. */
+.tvdb-earlier-seasons {
+    margin-bottom: var(--tvdb-space-3);
+}
+
+.tvdb-earlier-seasons__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
     min-height: 36px;
     padding: 0 var(--tvdb-space-3);
     border: 1px solid var(--tvdb-ink-line-strong);
-    border-radius: var(--tvdb-radius-pill);
+    border-radius: var(--tvdb-radius-md);
     font-size: var(--tvdb-text-sm);
     font-weight: 500;
-    color: var(--tvdb-text);
-    text-decoration: none;
-    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
+    cursor: pointer;
+    list-style: none;
 }
 
-.tvdb-season-chip:hover,
-.tvdb-season-chip:focus-visible {
+.tvdb-earlier-seasons__toggle::-webkit-details-marker {
+    display: none;
+}
+
+.tvdb-earlier-seasons__toggle:hover {
     border-color: var(--tvdb-text);
-    color: var(--tvdb-text);
 }
 
-.tvdb-season-chip.is-complete .ph {
-    color: var(--tvdb-ok-ink);
+.tvdb-earlier-seasons[open] > .tvdb-earlier-seasons__toggle .ph {
+    transform: rotate(180deg);
 }
 
-.tvdb-season-chip.is-selected {
-    background: var(--tvdb-ink);
-    border-color: var(--tvdb-ink);
-    color: var(--tvdb-on-ink);
+.tvdb-earlier-seasons[open] > .tvdb-season-cards {
+    margin-top: var(--tvdb-space-3);
 }
 
-.tvdb-season-chip.is-selected.is-complete .ph {
-    color: var(--tvdb-ok);
+.tvdb-earlier-seasons__hide,
+.tvdb-earlier-seasons[open] .tvdb-earlier-seasons__show {
+    display: none;
 }
 
-/* One episode in a season's list. Desktop: title and overview on the left,
-   date and runtime in a column, then the dot. Phone: the facts go under the
-   title, so a date is never squeezed into a narrow column. */
-.tvdb-episode {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-        "title facts"
-        "overview facts";
-    column-gap: var(--tvdb-space-4);
-    row-gap: var(--tvdb-space-1);
-    align-items: start;
+.tvdb-earlier-seasons[open] .tvdb-earlier-seasons__hide {
+    display: inline;
 }
 
-.tvdb-episode.has-control {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas:
-        "title facts control"
-        "overview facts control";
+/* Episode rows inside a season card. */
+.tvdb-ep-list {
+    margin: 0;
 }
 
-.tvdb-episode__title {
-    grid-area: title;
+.tvdb-ep {
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    border-top: 1px solid var(--tvdb-ink-line);
+    scroll-margin-top: var(--tvdb-space-6);
+}
+
+.tvdb-ep:last-child {
+    border-radius: 0 0 var(--tvdb-radius-lg) var(--tvdb-radius-lg);
+}
+
+.tvdb-ep.is-watched {
+    background: var(--tvdb-ok-wash);
+}
+
+.tvdb-ep:target {
+    box-shadow: inset 3px 0 0 var(--tvdb-signal);
+}
+
+.tvdb-ep__main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tvdb-ep__title {
     display: flex;
     align-items: baseline;
     gap: var(--tvdb-space-2);
 }
 
-.tvdb-episode__title .tvdb-mono {
+.tvdb-ep__title a {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tvdb-ep__code {
     flex: none;
     font-weight: 400;
     color: var(--tvdb-text-muted);
 }
 
-.tvdb-episode__facts {
-    grid-area: facts;
+.tvdb-ep__meta {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-wrap: wrap;
     font-size: var(--tvdb-text-sm);
     line-height: var(--tvdb-leading-snug);
     color: var(--tvdb-text-muted);
-    white-space: nowrap;
 }
 
-.tvdb-episode__watched {
-    color: var(--tvdb-ok-ink);
+.tvdb-ep__meta > * + *::before {
+    content: "·";
+    margin: 0 var(--tvdb-space-2);
 }
 
-.tvdb-episode__overview {
-    grid-area: overview;
+.tvdb-ep__overview {
     display: -webkit-box;
-    margin: 0;
+    margin: var(--tvdb-space-1) 0 0;
     overflow: hidden;
     font-size: var(--tvdb-text-sm);
     line-height: 1.5;
@@ -689,57 +914,79 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     -webkit-box-orient: vertical;
 }
 
-.tvdb-episode__control {
-    grid-area: control;
-    align-self: center;
+.tvdb-ep__control {
+    flex: none;
 }
 
-@media (max-width: 575.98px) {
-    .tvdb-episode,
-    .tvdb-episode.has-control {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas:
-            "title"
-            "facts"
-            "overview";
-    }
+/* The row's one round control. Watched: solid green with a check (brick on
+   hover: press to undo). Aired and not watched: a plain ring, and for the one
+   episode the hero's primary button marks (--ready), an amber ring on a light
+   amber fill. Not aired yet: a dashed circle with a clock, not a button. */
+.tvdb-ep-mark {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 2px solid var(--tvdb-text-muted);
+    border-radius: var(--tvdb-radius-round);
+    background: transparent;
+    color: transparent;
+    font-size: var(--tvdb-text-lg);
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
+}
 
-    .tvdb-episode.has-control {
-        grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas:
-            "title control"
-            "facts control"
-            "overview control";
-    }
+.tvdb-ep-mark .ph {
+    font-size: 1em;
+    vertical-align: 0;
+}
 
-    .tvdb-episode__facts {
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: baseline;
-        white-space: normal;
-    }
+.tvdb-ep-mark:hover,
+.tvdb-ep-mark:focus-visible {
+    border-color: var(--tvdb-ok-ink);
+    background: var(--tvdb-ok-tint);
+    color: var(--tvdb-ok-ink);
+}
 
-    .tvdb-episode__facts > * {
-        white-space: nowrap;
-    }
+.tvdb-ep-mark--ready {
+    border-color: var(--tvdb-signal-text);
+    background: var(--tvdb-signal-tint);
+}
 
-    .tvdb-episode__facts > * + *::before {
-        content: "·";
-        margin: 0 var(--tvdb-space-2);
-    }
+.tvdb-ep-mark--ready:hover,
+.tvdb-ep-mark--ready:focus-visible {
+    border-color: var(--tvdb-signal-text);
+    background: var(--tvdb-signal-tint-strong);
+    color: var(--tvdb-signal-ink);
+}
 
-    /* "Watched …" takes its own line rather than wrapping behind a separator. */
-    .tvdb-episode__facts > .tvdb-episode__watched {
-        flex-basis: 100%;
-    }
+.tvdb-ep-mark--on {
+    border-color: var(--tvdb-ok);
+    background: var(--tvdb-ok);
+    color: var(--tvdb-on-ok);
+}
 
-    .tvdb-episode__facts > .tvdb-episode__watched::before {
-        content: none;
-    }
+.tvdb-ep-mark--on:hover,
+.tvdb-ep-mark--on:focus-visible {
+    border-color: var(--tvdb-danger);
+    background: var(--tvdb-danger);
+    color: var(--tvdb-on-danger);
+}
 
-    .tvdb-episode__control {
-        align-self: start;
-    }
+.tvdb-ep-mark--upcoming {
+    border: 1px dashed var(--tvdb-ink-line-strong);
+    background: transparent;
+    color: var(--tvdb-text-muted);
+    cursor: default;
+}
+
+.tvdb-ep-mark--upcoming:hover {
+    background: transparent;
+    color: var(--tvdb-text-muted);
 }
 
 /* Episode Details. Desktop: the still with the episode's facts under it on the

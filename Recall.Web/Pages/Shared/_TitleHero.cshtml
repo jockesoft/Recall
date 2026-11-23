@@ -1,0 +1,112 @@
+@model Recall.Web.Pages.Shared.TitleHeroModel
+@* The top of a detail page (TitleHeroModel), on the dark frame above the
+   panel, as wide as the page. The background art is decoration (empty alt)
+   under a shade that ends in the frame's colour, so the text over it reads
+   the same whatever the picture; without art the shade is all there is.
+   Loaded eagerly: it is the first thing on the page. *@
+
+<div class="tvdb-hero @(string.IsNullOrWhiteSpace(Model.BackgroundUrl) ? "" : "has-art")">
+    @if (!string.IsNullOrWhiteSpace(Model.BackgroundUrl))
+    {
+        <img class="tvdb-hero__art" src="@Model.BackgroundUrl" alt="" fetchpriority="high" loading="eager" decoding="async" />
+    }
+
+    <div class="tvdb-hero__inner">
+        @if (Model.Back.UseHistory)
+        {
+            <a asp-page="@Model.Back.Page" class="tvdb-back-link tvdb-hero__back"
+               onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> @Model.Back.Text</a>
+        }
+        else
+        {
+            <a asp-page="@Model.Back.Page" class="tvdb-back-link tvdb-hero__back"><i class="@Icons.Back" aria-hidden="true"></i> @Model.Back.Text</a>
+        }
+
+        <div class="tvdb-hero__title-row">
+            <div class="tvdb-hero__poster tvdb-media @(string.IsNullOrWhiteSpace(Model.PosterUrl) ? "is-empty" : "")">
+                @if (!string.IsNullOrWhiteSpace(Model.PosterUrl))
+                {
+                    <img src="@Model.PosterUrl" alt="Poster for @Model.Name" fetchpriority="high" loading="eager" />
+                }
+            </div>
+
+            <div class="tvdb-hero__head">
+                @if (Model.Genres.Count > 0 || Model.Status is not null)
+                {
+                    <ul class="tvdb-hero__chips list-unstyled" aria-label="Genres and status">
+                        @foreach (var genre in Model.Genres)
+                        {
+                            <li class="tvdb-hero-chip">@genre</li>
+                        }
+                        @if (Model.Status is { } status)
+                        {
+                            <li class="tvdb-hero-chip tvdb-hero-chip--status @(status.Active ? "is-active" : "")">@status.Text</li>
+                        }
+                    </ul>
+                }
+
+                <h1 class="tvdb-hero__title">@Model.Name</h1>
+
+                @if (!string.IsNullOrWhiteSpace(Model.Meta))
+                {
+                    <p class="tvdb-hero__meta">@Model.Meta</p>
+                }
+
+                <div class="tvdb-hero__ratings">
+                    @if (Model.ImdbRating is not null)
+                    {
+                        <span class="tvdb-hero__rating">
+                            <i class="@Icons.Star" aria-hidden="true"></i>
+                            <span class="tvdb-mono">@Model.ImdbRating</span> IMDb
+                        </span>
+                    }
+                    @if (Model.ImdbRating is not null && Model.RecallRating is not null)
+                    {
+                        <span class="tvdb-hero__sep" aria-hidden="true">·</span>
+                    }
+                    @if (Model.RecallRating is not null)
+                    {
+                        <span class="tvdb-hero__rating" title="The average of @Model.RecallRatingCount Recall rating@(Model.RecallRatingCount == 1 ? "" : "s")">
+                            <i class="@Icons.Star" aria-hidden="true"></i>
+                            <span class="tvdb-mono">@Model.RecallRating</span> Recall
+                            <span class="visually-hidden">(@Model.RecallRatingCount rating@(Model.RecallRatingCount == 1 ? "" : "s"))</span>
+                        </span>
+                    }
+
+                    @if (Model.Rating is { } rating)
+                    {
+                        @* A disclosure, so it works without script; the pills are the
+                           existing forms. js/tvdb-series.js opens it for a link to #rating. *@
+                        <details class="tvdb-rating-disclosure">
+                            <summary class="tvdb-hero-chip tvdb-hero-chip--button @(rating.CurrentValue is null ? "" : "is-rated")">
+                                <i class="@Icons.Star" aria-hidden="true"></i> @Model.RatingChipText
+                            </summary>
+                            <div class="tvdb-rating-disclosure__panel tvdb-surface-paper">
+                                <partial name="_RatingWidget" model="rating" />
+                            </div>
+                        </details>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (Model.Progress is { } progress)
+        {
+            <div class="tvdb-hero__progress">
+                <div class="tvdb-hero__progress-head">
+                    <span class="tvdb-hero__progress-count">@progress.CountText</span>
+                    <span>@progress.LeftText</span>
+                </div>
+                @* --tvdb-bar is the data (a percentage), the one inline style the theme allows. *@
+                <div class="progress tvdb-hero__bar" role="progressbar" aria-label="Episodes watched"
+                     aria-valuemin="0" aria-valuemax="@progress.ReleasedCount" aria-valuenow="@progress.WatchedCount"
+                     aria-valuetext="@progress.WatchedCount of @progress.ReleasedCount episodes watched, @progress.Percent%">
+                    <div class="progress-bar" style="--tvdb-bar: @(progress.Percent)%"></div>
+                </div>
+                <p class="tvdb-hero__last">@progress.LastWatchedText</p>
+            </div>
+        }
+
+        <partial name="_TitleActions" model="Model.Actions" />
+    </div>
+</div>

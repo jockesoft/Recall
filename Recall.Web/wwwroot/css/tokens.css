@@ -79,6 +79,19 @@
     --tvdb-scrim-caption: rgba(10, 13, 18, 0.78);   /* under caption text on a still */
     --tvdb-text-shadow-on-art: 0 1px 2px rgba(10, 13, 18, 0.7);
 
+    /* The title hero (Series Details): behind it the title's background art,
+       under a shade that never lets less than 80% ink through where text sits
+       and ends in the frame's colour, so its text passes contrast over any
+       picture (on-ink-muted is 4.9:1 over a white one). Without art the
+       hero is the plain gradient. */
+    --tvdb-hero-bg: linear-gradient(180deg, var(--tvdb-ink-2) 0%, var(--tvdb-ink) 100%);
+    --tvdb-hero-shade:
+        linear-gradient(90deg, var(--tvdb-ink) 0%, rgba(21, 27, 36, 0) 14%, rgba(21, 27, 36, 0) 86%, var(--tvdb-ink) 100%),
+        linear-gradient(180deg, rgba(21, 27, 36, 0.8) 0%, rgba(21, 27, 36, 0.88) 55%, var(--tvdb-ink) 100%);
+    --tvdb-on-ink-line: rgba(241, 236, 226, 0.28);   /* chip and button edges on ink */
+    --tvdb-on-ink-wash: rgba(241, 236, 226, 0.06);   /* a quiet fill on ink */
+    --tvdb-ok-on-ink: #9cc79c;                       /* "Continuing", "Up to date" on ink */
+
     /* ---- Placeholder art (the landing page's product preview) ---------------
        Abstract fills in the theme colours, standing in for posters and stills
        where real artwork must not be used. */

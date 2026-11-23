@@ -21,6 +21,15 @@ public record SeriesAggregate
 
     public string? OriginalCountry { get; init; }
     public string? OriginalLanguage { get; init; }
+
+    /// <summary>
+    /// The network the series first aired on ("Discovery"), else the one that
+    /// airs it now. Null when TheTVDB names none, and on a row cached before
+    /// this was mapped (2026-11-23) until that row is next refreshed on its
+    /// normal schedule: there was no mapping-version bump for it.
+    /// </summary>
+    public string? Network { get; init; }
+
     public double? Score { get; init; }
     public string? Year { get; init; }
 

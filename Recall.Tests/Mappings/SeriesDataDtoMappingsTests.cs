@@ -57,6 +57,39 @@ public class SeriesDataDtoMappingsTests
     }
 
     [Test]
+    public void ToAggregate_Should_KeepTheOriginalNetwork_AndFallBackToTheLatest()
+    {
+        var both = new SeriesDataDto
+        {
+            Id = 1,
+            Name = "Show",
+            OriginalNetwork = new CompanyDto { Id = 7, Name = " Discovery " },
+            LatestNetwork = new CompanyDto { Id = 8, Name = "Max" }
+        };
+        var latestOnly = new SeriesDataDto
+        {
+            Id = 2,
+            Name = "Show",
+            OriginalNetwork = new CompanyDto { Id = 7, Name = " " },
+            LatestNetwork = new CompanyDto { Id = 8, Name = "Max" }
+        };
+
+        both.ToAggregate().Network.Should().Be("Discovery");
+        latestOnly.ToAggregate().Network.Should().Be("Max");
+        new SeriesDataDto { Id = 3, Name = "Show" }.ToAggregate().Network.Should().BeNull();
+    }
+
+    [Test]
+    public void TheNetwork_Should_BeReadFromTheExtendedRecord()
+    {
+        const string json = """{ "id": 78957, "name": "Deadliest Catch", "originalNetwork": { "id": 15, "name": "Discovery" }, "latestNetwork": { "id": 15, "name": "Discovery" } }""";
+
+        var dto = System.Text.Json.JsonSerializer.Deserialize<SeriesDataDto>(json)!;
+
+        dto.ToAggregate().Network.Should().Be("Discovery");
+    }
+
+    [Test]
     public void ToAggregate_Should_PickTheBestScoredBackground_AsItsThumbnail()
     {
         var dto = new SeriesDataDto

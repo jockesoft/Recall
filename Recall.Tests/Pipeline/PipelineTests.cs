@@ -51,6 +51,7 @@ public sealed class PipelineTests
         html.Should().NotContain("handler=MarkSeasonWatched");
         html.Should().Contain("Sign in to track this series", "a visitor gets the sign-in card in place of the action row");
         html.Should().Contain("/Account/Login?returnUrl=");
+        html.Should().NotContain("<dt>Network</dt>", "the series has no network yet (cached before it was kept), so the row is left out");
     }
 
     [Test]

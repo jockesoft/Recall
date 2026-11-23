@@ -33,6 +33,7 @@ const int UpToDate = 403245;     // Silo
 const int AllWatched = 334824;   // Dark
 const int NotStarted = 370112;   // Mare of Easttown
 const int Stopped = 417223;      // Baby Reindeer
+const int NotInLibrary = 367506; // The Lord of the Rings: The Rings of Power: a long title, not tracked
 const int WatchedMovie = 287533; // Oppenheimer
 const int WatchlistMovie = 1305; // Heat
 
@@ -107,7 +108,7 @@ List<Shot> shots =
         Prepare: async page =>
         {
             // No confirmation: the toast carries the Undo.
-            await page.GetByRole(AriaRole.Button, new() { Name = "Stop watching" }).ClickAsync();
+            await StopWatchingAsync(page);
             await page.Locator(".tvdb-toast-stack .alert-success .tvdb-toast-action").WaitForAsync();
         },
         // Undo, so the series is being watched again for the shots that follow.
@@ -116,14 +117,42 @@ List<Shot> shots =
             await page.Locator(".tvdb-toast-stack").GetByRole(AriaRole.Button, new() { Name = "Undo" }).ClickAsync();
             await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
         }),
-    new("series-details", "watching", Site.SignedIn, $"/Series/Details/{Watching}"),
+    // The hero with background art and the next episode as the primary button.
+    new("series-details", "next", Site.SignedIn, $"/Series/Details/{NotStarted}"),
+    // Breaking Bad: watching, more than three seasons, and cached before background art was kept.
+    new("series-details", "no-background-art", Site.SignedIn, $"/Series/Details/{Watching}"),
+    new("series-details", "many-seasons", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // The seasons before the three latest are behind a disclosure; open it.
+            var earlier = page.Locator(".tvdb-earlier-seasons");
+            if (await earlier.GetAttributeAsync("open") is null)
+                await earlier.Locator("> summary").ClickAsync();
+            await earlier.ScrollIntoViewIfNeededAsync();
+        }),
+    new("series-details", "more-menu", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            // The "⋯" menu of the action row, opened with the keyboard.
+            await page.Locator("#titleMenuButton").FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await page.Locator(".tvdb-title-actions .dropdown-menu.show").WaitForAsync();
+        }),
+    new("series-details", "rating-open", Site.SignedIn, $"/Series/Details/{NotStarted}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await page.Locator(".tvdb-rating-disclosure > summary").ClickAsync();
+            await page.Locator(".tvdb-rating-disclosure[open] .tvdb-rating-pills").WaitForAsync();
+        }),
     new("series-details", "up-to-date", Site.SignedIn, $"/Series/Details/{UpToDate}"),
     new("series-details", "all-watched", Site.SignedIn, $"/Series/Details/{AllWatched}"),
+    // A long title, and "Add to library": the series is not in the library.
+    new("series-details", "not-in-library", Site.SignedIn, $"/Series/Details/{NotInLibrary}"),
     new("series-details", "prior-episodes-modal", Site.SignedIn, $"/Series/Details/{NotStarted}", ViewportOnly: true,
         Prepare: async page =>
         {
             // Marking a later episode while earlier ones are unwatched asks what to do.
-            await page.Locator("button.tvdb-watch-dot[data-episode-id]").Nth(2).ClickAsync();
+            await page.Locator("form[data-prior-check='true'] button").Nth(2).ClickAsync();
             await page.Locator(".modal.show").WaitForAsync();
         }),
     new("series-details", "toast-success-undo", Site.SignedIn, $"/Series/Details/{NotStarted}", ViewportOnly: true,
@@ -149,14 +178,17 @@ List<Shot> shots =
     new("series-details", "season-menu", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
         Prepare: async page =>
         {
-            await page.Locator("#seasonMenuButton").ScrollIntoViewIfNeededAsync();
-            await page.Locator("#seasonMenuButton").ClickAsync();
-            await page.Locator(".dropdown-menu.show").WaitForAsync();
+            // The "⋯" of the open season card.
+            var menu = page.Locator(".tvdb-season-card:has(> details[open]) .tvdb-season-card__menu button").First;
+            await menu.ScrollIntoViewIfNeededAsync();
+            await menu.ClickAsync();
+            await page.Locator(".tvdb-season-card__menu .dropdown-menu.show").WaitForAsync();
         }),
     new("series-details", "remove-confirm", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
         Prepare: async page =>
         {
-            await page.GetByRole(AriaRole.Button, new() { Name = "Remove from library" }).ClickAsync();
+            await page.Locator("#titleMenuButton").ClickAsync();
+            await page.Locator("#removeFromLibrary").ClickAsync();
             await page.Locator("#removeFromLibraryModal.show").WaitForAsync();
         }),
     new("episode-details", "watched", Site.SignedIn, $"/Series/Details/{AllWatched}",
@@ -304,7 +336,7 @@ List<Shot> shots =
     new("toasts", "countdown-undo", Site.SignedIn, $"/Series/Details/{Watching}", ViewportOnly: true,
         Prepare: async page =>
         {
-            await page.GetByRole(AriaRole.Button, new() { Name = "Stop watching" }).ClickAsync();
+            await StopWatchingAsync(page);
             await page.Locator(".tvdb-toast-stack .alert-success .tvdb-toast-action").WaitForAsync();
             await page.WaitForTimeoutAsync(4000);
         },
@@ -378,6 +410,7 @@ List<Shot> shots =
         }),
     new("verify", "invalid-link", Site.Anonymous, "/Account/Verify?token=not-a-real-token"),
     new("series-details", "signed-out", Site.Anonymous, $"/Series/Details/{Watching}"),
+    new("series-details", "long-title", Site.Anonymous, $"/Series/Details/{NotInLibrary}"),
     new("episode-details", "signed-out", Site.Anonymous, $"/Series/Details/{AllWatched}",
         Prepare: async page =>
         {
@@ -622,7 +655,8 @@ async Task<List<ToastCheck>> RunToastChecksAsync()
     {
         await page.GotoAsync($"{baseUrl}/Series/Details/{Watching}");
         await MouseAwayAsync(page);
-        await page.GetByRole(AriaRole.Button, new() { Name = "Stop watching" }).ClickAsync();
+        await StopWatchingAsync(page);
+        await MouseAwayAsync(page);
         var toast = page.Locator(".tvdb-toast.alert-success");
         await toast.Locator(".tvdb-toast-action").WaitForAsync();
         var shown = System.Diagnostics.Stopwatch.StartNew();
@@ -856,8 +890,17 @@ static async Task ShowPushSectionAsync(IPage page, string state)
 }
 
 // A rating is the simplest toast without an action: "Rating saved."
+// The rating pills are behind the hero's "Rate" disclosure.
+static async Task OpenRatingAsync(IPage page)
+{
+    var disclosure = page.Locator(".tvdb-rating-disclosure");
+    if (await disclosure.GetAttributeAsync("open") is null)
+        await disclosure.Locator("> summary").ClickAsync();
+}
+
 static async Task RateAsync(IPage page)
 {
+    await OpenRatingAsync(page);
     await page.GetByRole(AriaRole.Button, new() { Name = "Rate this series 7 out of 10" }).ClickAsync();
     await page.Locator(".tvdb-toast.alert-success").WaitForAsync();
 }
@@ -865,8 +908,16 @@ static async Task RateAsync(IPage page)
 // Takes the rating away again, so the series is as the seed left it.
 static async Task ClearRatingAsync(IPage page)
 {
+    await OpenRatingAsync(page);
     await page.Locator("button.tvdb-rating-clear").ClickAsync();
     await page.Locator(".tvdb-toast.alert-info").WaitForAsync();
+}
+
+// "Stop watching" is in the action row's "⋯" menu.
+static async Task StopWatchingAsync(IPage page)
+{
+    await page.Locator("#titleMenuButton").ClickAsync();
+    await page.Locator("#stopWatching").ClickAsync();
 }
 
 static async Task SettleAsync(IPage page)
@@ -960,38 +1011,27 @@ static async Task MeasureAsync(IPage page, ShotResult result)
 // "Mark season watched" lives in the season's "⋯" menu.
 static async Task MarkSeasonWatchedAsync(IPage page)
 {
-    await page.Locator("#seasonMenuButton").ClickAsync();
+    await page.Locator(".tvdb-season-card:has(> details[open]) .tvdb-season-card__menu button").First.ClickAsync();
     await page.GetByRole(AriaRole.Button, new() { Name = "Mark season watched" }).ClickAsync();
 }
 
-// Unmarks the last watched episode of the season shown, then marks it again with the header's
-// "Mark SxxEyy watched" button: the mark that brings the series back to up to date (or finished).
+// Unmarks the last watched episode, then marks it again with the hero's "Mark SxxEyy watched"
+// button: the mark that brings the series back to up to date (or finished).
 static async Task RewatchLastEpisodeAsync(IPage page)
 {
-    // A series that is up to date opens on its latest season, which may hold only episodes still
-    // to air: step back through the seasons to the last one with something watched.
-    var watched = page.Locator("button.tvdb-watch-dot--on");
-    if (await watched.CountAsync() == 0)
-    {
-        var seasonLinks = await page.Locator("a[href*='season=']").EvaluateAllAsync<string[]>(
-            "links => [...new Set(links.map(a => a.getAttribute('href')))]");
-        foreach (var href in seasonLinks.OrderByDescending(h => int.Parse(System.Text.RegularExpressions.Regex.Match(h, @"season=(\d+)").Groups[1].Value)))
-        {
-            await page.GotoAsync(new Uri(new Uri(page.Url), href).ToString());
-            if (await watched.CountAsync() > 0)
-                break;
-        }
-    }
-
-    await watched.Last.ClickAsync();
+    // The last watched episode may be in a closed season card: open them all first.
+    await page.EvaluateAsync("() => document.querySelectorAll('.tvdb-season-cards details, .tvdb-earlier-seasons').forEach(d => d.open = true)");
+    // A regular episode: a special never changes whether the series is up to date.
+    await page.Locator(".tvdb-season-card:not(.tvdb-season-card--specials) button.tvdb-ep-mark--on").Last.ClickAsync();
     await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
-    await page.Locator(".tvdb-title button.btn-primary").ClickAsync();
+    await page.Locator("#primaryAction").ClickAsync();
     await page.Locator(".tvdb-toast-stack .alert-success[data-toast-kind]").WaitForAsync();
 }
 
 static async Task OpenFirstEpisodeAsync(IPage page)
 {
-    await page.Locator("a[href^='/Episodes/Details/']").First.ClickAsync();
+    // The first episode of the season card that is open.
+    await page.Locator(".tvdb-season-card details[open] a[href^='/Episodes/Details/']").First.ClickAsync();
     await page.WaitForURLAsync("**/Episodes/Details/**");
     await SettleAsync(page);
 }
