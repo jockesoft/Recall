@@ -2056,12 +2056,18 @@ dl.row dd a.tvdb-inline-edit {
     background: var(--tvdb-on-ink-wash);
 }
 
+/* Words people read, so the UI face, not mono; the count is the figure that matters. */
 .tvdb-hero__progress-head {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     gap: var(--tvdb-space-1) var(--tvdb-space-3);
+    font-family: var(--tvdb-font-ui);
     font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-hero__progress-count {
+    font-weight: 600;
 }
 
 .tvdb-hero__bar {
