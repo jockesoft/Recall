@@ -38,7 +38,7 @@ const int WatchedMovie = 290272;     // Dune: Part Two
 const int NoArtMovie = 287533;      // Oppenheimer: watched, cached before background art was kept
 const int WatchlistMovie = 1305;    // Heat
 const int NotWatchedMovie = 219;    // Arrival: neither watched nor on the watchlist
-const int UnreleasedMovie = 356047; // Dune: Part Three, first released 2026-12-16: replace it with a later one after that date
+const int UnreleasedMovie = 356047; // Dune: Part Three: the seed moves its release to a year after the run
 
 // Profile's push section in the states a browser can be in. Headless Chromium
 // cannot really subscribe (it has no push service), so the browser's side is

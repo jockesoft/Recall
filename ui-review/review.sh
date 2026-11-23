@@ -54,7 +54,7 @@ ANONYMOUS_URL=http://localhost:7463   # environment "Test": DevAuthMiddleware st
 # The Lord of the Rings: The Rings of Power (a long title, left out of the library)
 EXTRA_SERIES=(452467 417223 370112 74205 417648 367506)
 # Heat, Interstellar, Dune: Part Two, Arrival (neither watched nor listed),
-# Dune: Part Three (not released yet: first release 2026-12-16)
+# Dune: Part Three (not released yet: the seed moves its release a year ahead)
 EXTRA_MOVIES=(1305 131079 290272 219 356047)
 
 psql_db() { docker exec -i -e PGPASSWORD=devpassword "$PG_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1 -q -At -d "$1" "${@:2}"; }
