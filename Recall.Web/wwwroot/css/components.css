@@ -2215,7 +2215,8 @@ dl.row dd a.tvdb-inline-edit {
     color: var(--tvdb-like);
 }
 
-/* On a phone the primary takes the whole line, and the squares sit under it. */
+/* On a phone the primary takes the whole line, and the squares sit under it,
+   sharing that line equally (each still at least 56px tall). */
 @media (max-width: 575.98px) {
     .tvdb-title-actions__row {
         flex-wrap: wrap;
@@ -2223,6 +2224,19 @@ dl.row dd a.tvdb-inline-edit {
 
     .tvdb-title-actions__primary {
         flex-basis: 100%;
+    }
+
+    .tvdb-title-actions__row > :not(.tvdb-title-actions__primary):not(template) {
+        display: flex;
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .tvdb-title-actions__row .tvdb-square-button,
+    .tvdb-title-actions__row .tvdb-heart {
+        width: 100%;
+        height: auto;
+        min-height: 56px;
     }
 }
 
