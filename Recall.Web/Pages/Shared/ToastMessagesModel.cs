@@ -19,6 +19,15 @@ public sealed class ToastMessagesModel
     /// <summary>In the order they are stacked; the last one is the newest (the one Escape closes).</summary>
     public IReadOnlyList<ToastView> Toasts { get; }
 
+    /// <summary>
+    /// The one toast the browser shows by itself, after Share copied the page's
+    /// address (where the Web Share API is missing). It is drawn by <c>_Toast</c>
+    /// into a <c>&lt;template data-toast-template="link-copied"&gt;</c> beside the
+    /// Share button, and <c>RecallToasts.show</c> (js/tvdb-toasts.js) moves a
+    /// copy into the stack: the same markup and timing as a toast from TempData.
+    /// </summary>
+    public static ToastView LinkCopied { get; } = new(ToastKind.Info, "Link copied.") { Icon = Icons.Info };
+
     public static ToastMessagesModel From(ITempDataDictionary tempData)
     {
         var toasts = new List<ToastView>();
