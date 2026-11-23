@@ -66,8 +66,30 @@
 }
 
 <div class="tvdb-shell">
-    <div class="tvdb-eyebrow mb-1">@DisplayDate.Format(Model.Today, Model.Today)</div>
-    <h1 class="mb-4">Your channel</h1>
+    @* The title on the left, the three figures on the right; on a phone the
+       figures wrap below as one row of three tiles. *@
+    <div class="tvdb-dashboard-head">
+        <div>
+            <div class="tvdb-eyebrow mb-1">@DisplayDate.Format(Model.Today, Model.Today)</div>
+            <h1 class="mb-0">Your channel</h1>
+        </div>
+
+        @if (hasLibrary)
+        {
+            @* Each figure links to the place that explains it. *@
+            <ul class="tvdb-stat-row tvdb-dashboard-head__stats list-unstyled">
+                @foreach (var stat in Model.Stats)
+                {
+                    <li>
+                        <a href="@(Url.Page(stat.Page, new { section = stat.Section }) + (stat.Fragment is null ? "" : "#" + stat.Fragment))" class="tvdb-stat-item">
+                            <span class="tvdb-stat-item__value">@stat.Value</span>
+                            <span class="tvdb-stat-item__label">@stat.Label</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
 
     @if (!hasLibrary)
     {
@@ -82,28 +104,6 @@
     }
     else
     {
-        @* One compact row, on phones too. Each stat links to the place that explains it. *@
-        <ul class="tvdb-stat-row list-unstyled tvdb-page-section">
-            <li>
-                <a asp-page="/Library" class="tvdb-stat-item">
-                    <span class="tvdb-stat-item__value">@Model.TrackedSeriesCount</span>
-                    <span class="tvdb-stat-item__label">Tracked series</span>
-                </a>
-            </li>
-            <li>
-                <a href="#upcoming" class="tvdb-stat-item">
-                    <span class="tvdb-stat-item__value">@Model.UpcomingThisWeekCount</span>
-                    <span class="tvdb-stat-item__label">Airing this week</span>
-                </a>
-            </li>
-            <li>
-                <a asp-page="/Library" asp-fragment="watching" class="tvdb-stat-item">
-                    <span class="tvdb-stat-item__value">@Model.UnwatchedCount</span>
-                    <span class="tvdb-stat-item__label">Unwatched episodes</span>
-                </a>
-            </li>
-        </ul>
-
         @if (Model.ShowDigestPrompt)
         {
             @* Shown once: either button settles it, and the switch stays in Profile. *@
@@ -129,24 +129,55 @@
         @if (Model.CatchUpEpisodes.Count > 0 || Model.DormantSeriesCount > 0)
         {
             <section class="tvdb-page-section" aria-labelledby="continueWatchingHeading">
-                <h2 id="continueWatchingHeading">Continue watching</h2>
+                <div class="tvdb-section-head">
+                    <h2 id="continueWatchingHeading">Continue watching</h2>
+                    @if (Model.CatchUpEpisodes.Count > 0)
+                    {
+                        <a asp-page="/Library" asp-route-section="@DashboardModel.LibraryWatchingSection"
+                           class="tvdb-section-head__link tvdb-catchup-seeall-link" id="continueWatchingSeeAll">
+                            See all in Library <i class="@Icons.Forward" aria-hidden="true"></i>
+                        </a>
+                    }
+                </div>
                 @if (Model.CatchUpEpisodes.Count > 0)
                 {
-                    <div class="tvdb-catchup-grid">
-                        @foreach (var ep in Model.CatchUpEpisodes)
+                    var cards = Model.CatchUpEpisodes
+                        .Select((ep, index) => new CatchUpCardModel
                         {
-                            <partial name="_CatchUpCard" model="@(new CatchUpCardModel
-                                     {
-                                         SeriesId = ep.SeriesId,
-                                         SeriesName = ep.SeriesName,
-                                         EpisodeId = ep.EpisodeId,
-                                         SeasonNumber = ep.SeasonNumber,
-                                         EpisodeNumber = ep.EpisodeNumber,
-                                         EpisodeName = ep.Name,
-                                         ImageUrl = ep.ImageUrl
-                                     })" />
+                            SeriesId = ep.SeriesId,
+                            SeriesName = ep.SeriesName,
+                            EpisodeId = ep.EpisodeId,
+                            SeasonNumber = ep.SeasonNumber,
+                            EpisodeNumber = ep.EpisodeNumber,
+                            EpisodeName = ep.Name,
+                            ImageUrl = ep.ImageUrl,
+                            IsUpNext = index == 0
+                        })
+                        .ToList();
+
+                    @* Both layouts are on the page; the stylesheet shows one. From
+                       576px: every series as a card. On a phone: the first as the
+                       card (with "Up next"), the rest as compact rows, then a
+                       full-width "See all in Library". *@
+                    <div class="tvdb-catchup-grid">
+                        @foreach (var card in cards)
+                        {
+                            <partial name="_CatchUpCard" model="card" />
                         }
                     </div>
+
+                    @if (cards.Count > 1)
+                    {
+                        <ul class="tvdb-catchup-rows list-unstyled" aria-label="More to continue">
+                            @foreach (var card in cards.Skip(1))
+                            {
+                                <partial name="_CatchUpRow" model="card" />
+                            }
+                        </ul>
+                    }
+
+                    <a asp-page="/Library" asp-route-section="@DashboardModel.LibraryWatchingSection"
+                       class="btn btn-outline-dark tvdb-catchup-seeall">See all in Library</a>
                 }
                 else
                 {

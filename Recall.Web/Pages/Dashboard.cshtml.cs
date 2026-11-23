@@ -55,6 +55,12 @@ public sealed record CatchUpItem
     public string? ImageUrl { get; init; }
 }
 
+/// <summary>
+/// One of the three figures in the Dashboard's header, and where it leads:
+/// a page, optionally one of its sections (<c>?section=</c>) or a fragment.
+/// </summary>
+public sealed record DashboardStat(int Value, string Label, string Page, string? Section = null, string? Fragment = null);
+
 // ---------------------------------------------------------------------------
 // Page model
 // ---------------------------------------------------------------------------
@@ -77,6 +83,31 @@ public sealed class DashboardModel(
 
     private const int UpcomingWindowDays = 30;
     private const int ThisWeekWindowDays = 7;
+
+    /// <summary>
+    /// How many series "Continue watching" shows: the first ones of the queue
+    /// (<see cref="ContinueWatchingOrder"/>). The rest are in the Library's
+    /// Watching section, which "See all in Library" opens.
+    /// </summary>
+    public const int ContinueWatchingLimit = 9;
+
+    /// <summary>The Library's one-section view of Watching (<c>/Library?section=watching</c>).</summary>
+    public const string LibraryWatchingSection = "watching";
+
+    /// <summary>The series in the queue before <see cref="ContinueWatchingLimit"/> (dormant ones left out).</summary>
+    public int ContinueWatchingTotal { get; private set; }
+
+    /// <summary>
+    /// The header's three figures, each a link to what explains it: Tracked to
+    /// the Library, Airing this week to Upcoming below, Unwatched to the
+    /// Library's Watching section.
+    /// </summary>
+    public IReadOnlyList<DashboardStat> Stats =>
+    [
+        new(TrackedSeriesCount, "Tracked series", "/Library"),
+        new(UpcomingThisWeekCount, "Airing this week", "/Dashboard", Fragment: "upcoming"),
+        new(UnwatchedCount, "Unwatched episodes", "/Library", Section: LibraryWatchingSection)
+    ];
 
     public int TrackedSeriesCount { get; private set; }
     public int UpcomingThisWeekCount { get; private set; }
@@ -205,8 +236,11 @@ public sealed class DashboardModel(
 
         var orderedCatchUp = queue.Active.ToList();
         DormantSeriesCount = queue.Dormant.Count;
+        ContinueWatchingTotal = orderedCatchUp.Count;
 
-        CatchUpEpisodes = await WithArtAsync(orderedCatchUp, aggregates.ToDictionary(a => a.TvdbId), cancellationToken);
+        // Images only for the series shown: the rest cost no lookup.
+        CatchUpEpisodes = await WithArtAsync(
+            orderedCatchUp.Take(ContinueWatchingLimit).ToList(), aggregates.ToDictionary(a => a.TvdbId), cancellationToken);
         UpcomingThisWeekCount = upcoming.Count(e => e.Release.GroupDate <= thisWeekCutoff);
         UnwatchedCount = unwatchedTotal;
     }

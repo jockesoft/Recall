@@ -7,6 +7,12 @@
             <img src="@Model.ImageUrl" alt="" loading="lazy" />
         }
 
+        @if (Model.IsUpNext)
+        {
+            @* Shown on phones only, where this is the one card. *@
+            <span class="tvdb-catchup-upnext">Up next</span>
+        }
+
         @* Stretched link — the whole still opens the episode. Sits under the
            caption + button, which raise themselves above it. *@
         <a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeId"
