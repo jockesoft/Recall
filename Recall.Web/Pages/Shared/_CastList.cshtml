@@ -1,13 +1,13 @@
 @model Recall.Web.Pages.Shared.CastListModel
-@* A headed list of people, collapsed until "Show all" is pressed. The cast is
-   portrait cards: one full row on wider screens, one sideways-scrolling row on
-   a phone. The crew (Compact) is a list in columns, showing its first few rows.
-   The button only appears when something is cut off (decided in the browser,
-   since it depends on the width). *@
+@* A headed list of people (round photo or initials, name, character or jobs),
+   in two columns, or one (Column). Collapsed until "Show all" is pressed: the
+   stylesheet shows the first six or eight and does not render the rest, and
+   the button appears only when someone is hidden (tvdb-cast.js: the count
+   depends on the width). *@
 @if (Model.People.Count > 0)
 {
     var showAll = Model.ShowAllLabel ?? $"Show all {Model.People.Count}";
-    <section class="tvdb-cast @(Model.Compact ? "tvdb-cast--compact" : "") @(Model.Column ? "tvdb-cast--column" : "") @(Model.TwoColumns ? "tvdb-cast--two-columns" : "")" data-cast>
+    <section class="tvdb-cast @(Model.Column ? "tvdb-cast--column" : "")" data-cast>
         <div class="tvdb-cast__head">
             <h2 class="mb-0">@Model.Heading <span class="tvdb-count">@Model.People.Count</span></h2>
             <button type="button" class="btn btn-outline-dark btn-sm tvdb-cast__toggle" data-cast-toggle
@@ -17,7 +17,7 @@
             </button>
         </div>
 
-        <ul class="tvdb-cast__list list-unstyled" id="@Model.Id" tabindex="0" aria-label="@Model.Heading">
+        <ul class="tvdb-cast__list list-unstyled" id="@Model.Id" aria-label="@Model.Heading">
             @foreach (var person in Model.People)
             {
                 <li class="tvdb-person">

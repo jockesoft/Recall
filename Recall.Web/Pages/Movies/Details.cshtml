@@ -132,14 +132,14 @@ else
             @if (Model.Cast.Count > 0)
             {
                 <div id="cast" class="tvdb-detail-people tvdb-movie-layout__cast">
-                    <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Compact = true, Column = true, ShowAllLabel = "Show all cast" })" />
+                    <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Column = true, ShowAllLabel = "Show all cast" })" />
                 </div>
             }
 
             @if (Model.Crew.Count > 0)
             {
                 <div id="crew" class="tvdb-detail-people tvdb-movie-layout__crew">
-                    <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Compact = true, TwoColumns = true })" />
+                    <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew })" />
                 </div>
             }
         </div>

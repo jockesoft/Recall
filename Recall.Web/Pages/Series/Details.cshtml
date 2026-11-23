@@ -163,8 +163,8 @@ else
                 @if (Model.Cast.Count > 0 || Model.Crew.Count > 0)
                 {
                     <div id="cast" class="tvdb-detail-people">
-                        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Compact = true, Column = true, ShowAllLabel = "Show all cast" })" />
-                        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Compact = true, Column = true })" />
+                        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Column = true, ShowAllLabel = "Show all cast" })" />
+                        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Column = true })" />
                     </div>
                 }
 

@@ -2252,10 +2252,12 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 /* ---- Cast and crew (the _CastList partial) ---------------------------------------------
-   Collapsed until "Show all" is pressed (tvdb-cast.js decides whether the
-   button is needed). Cast: portrait cards, one full row; on phones one row
-   that scrolls sideways. Crew (--compact): name and jobs beside a small round
-   photo, in columns, showing the first few rows. */
+   A list of people: a 40px round photo (or initials) with the name and the
+   character or jobs beside it. In two columns from 576px, or in one at every
+   width (--column, a side column). Collapsed until "Show all" is pressed,
+   by count, never by height: the first six people in one column, the first
+   eight in two (full rows), and the rest not rendered at all. tvdb-cast.js
+   offers the button only when someone is hidden. */
 
 .tvdb-cast {
     margin-top: var(--tvdb-space-6);
@@ -2269,20 +2271,30 @@ dl.row dd a.tvdb-inline-edit {
     margin-bottom: var(--tvdb-space-3);
 }
 
-/* Rows beyond the first get no height and are clipped, so the collapsed list
-   is always exactly one full row whatever the width. */
 .tvdb-cast__list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-    grid-template-rows: auto;
-    grid-auto-rows: 0;
-    column-gap: var(--tvdb-space-3);
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: var(--tvdb-space-5);
     margin: 0;
-    overflow: hidden;
 }
 
-.tvdb-cast.is-expanded .tvdb-cast__list {
-    grid-auto-rows: auto;
+@media (min-width: 576px) {
+    .tvdb-cast:not(.tvdb-cast--column) .tvdb-cast__list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* The collapse: six in one column... */
+.tvdb-cast:not(.is-expanded) .tvdb-person:nth-child(n + 7) {
+    display: none;
+}
+
+/* ...eight (four full rows) in two. */
+@media (min-width: 576px) {
+    .tvdb-cast:not(.tvdb-cast--column):not(.is-expanded) .tvdb-person:nth-child(7),
+    .tvdb-cast:not(.tvdb-cast--column):not(.is-expanded) .tvdb-person:nth-child(8) {
+        display: grid;
+    }
 }
 
 .tvdb-cast.is-expanded .tvdb-cast__toggle .ph {
@@ -2290,18 +2302,20 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 .tvdb-person {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: var(--tvdb-space-3);
+    align-content: center;
+    align-items: center;
     min-width: 0;
-    padding-bottom: var(--tvdb-space-4);
+    padding-bottom: var(--tvdb-space-3);
 }
 
 .tvdb-person__photo {
-    display: block;
-    width: 100%;
-    aspect-ratio: 4 / 5;
-    margin-bottom: var(--tvdb-space-2);
-    border-radius: var(--tvdb-radius-md);
+    grid-row: 1 / span 2;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--tvdb-radius-round);
     object-fit: cover;
     object-position: center 20%;
     background: var(--tvdb-ink-2);
@@ -2311,14 +2325,14 @@ dl.row dd a.tvdb-inline-edit {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: var(--tvdb-font-display);
-    font-size: var(--tvdb-text-2xl);
-    font-weight: 800;
-    letter-spacing: 0.04em;
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
     color: var(--tvdb-on-ink-muted);
 }
 
-.tvdb-person__name {
+.tvdb-person__name,
+.tvdb-person__detail {
+    grid-column: 2;
     overflow-wrap: anywhere;
 }
 
@@ -2326,104 +2340,11 @@ dl.row dd a.tvdb-inline-edit {
     font-size: var(--tvdb-text-xs);
     line-height: var(--tvdb-leading-snug);
     color: var(--tvdb-text-muted);
-    overflow-wrap: anywhere;
 }
 
-/* The crew: a 40px round photo (or initials) with name and jobs beside it. */
-.tvdb-cast--compact .tvdb-cast__list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(4, auto);
-    column-gap: var(--tvdb-space-5);
-}
-
-.tvdb-cast--compact .tvdb-person {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr);
-    column-gap: var(--tvdb-space-3);
-    align-content: center;
-    align-items: center;
-    padding-bottom: var(--tvdb-space-3);
-}
-
-.tvdb-cast--compact .tvdb-person__photo {
+/* A person with no character or job listed: the name centres on the avatar. */
+.tvdb-person__name:last-child {
     grid-row: 1 / span 2;
-    width: 40px;
-    height: 40px;
-    aspect-ratio: auto;
-    margin-bottom: 0;
-    border-radius: var(--tvdb-radius-round);
-}
-
-.tvdb-cast--compact .tvdb-person__photo--initials {
-    font-family: var(--tvdb-font-ui);
-    font-size: var(--tvdb-text-sm);
-    font-weight: 600;
-    letter-spacing: 0;
-}
-
-.tvdb-cast--compact .tvdb-person__name,
-.tvdb-cast--compact .tvdb-person__detail {
-    grid-column: 2;
-}
-
-/* A person with no job listed: the name centres on the avatar. */
-.tvdb-cast--compact .tvdb-person__name:last-child {
-    grid-row: 1 / span 2;
-}
-
-@media (min-width: 992px) {
-    .tvdb-cast--compact .tvdb-cast__list {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 575.98px) {
-    .tvdb-cast:not(.tvdb-cast--compact) .tvdb-cast__list {
-        display: flex;
-        gap: var(--tvdb-space-3);
-        overflow-x: auto;
-        scroll-snap-type: x proximity;
-        /* Bleed to the panel's edge so the row visibly continues. */
-        margin-inline: calc(-1 * var(--tvdb-shell-pad));
-        padding-inline: var(--tvdb-shell-pad);
-        scroll-padding-inline: var(--tvdb-shell-pad);
-    }
-
-    /* Three and a bit cards across, so the fourth always peeks in at the edge
-       and says the row scrolls. */
-    .tvdb-cast:not(.tvdb-cast--compact) .tvdb-person {
-        flex: 0 0 clamp(4.75rem, calc((100% - 3 * var(--tvdb-space-3)) / 3.4), 6.5rem);
-        scroll-snap-align: start;
-    }
-
-    .tvdb-cast:not(.tvdb-cast--compact) .tvdb-cast__toggle {
-        display: none;
-    }
-
-    .tvdb-cast--compact .tvdb-cast__list {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: repeat(6, auto);
-    }
-}
-
-/* The compact list in a side column (Series Details): one column, six
-   people until "Show all" is pressed, at every width. */
-.tvdb-cast--compact.tvdb-cast--column .tvdb-cast__list {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(6, auto);
-}
-
-/* At most two columns (Movie Details' crew in the main column). */
-@media (min-width: 992px) {
-    .tvdb-cast--compact.tvdb-cast--two-columns .tvdb-cast__list {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-/* A row cut off by the collapse has no height: its content must hang below
-   the list's edge (and be clipped), not centre on it over the row above. */
-.tvdb-cast--compact.tvdb-cast--column .tvdb-person {
-    align-content: start;
 }
 
 /* ---- Toasts (the _ToastMessages partial) --------------------------------------------------

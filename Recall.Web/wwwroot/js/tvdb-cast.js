@@ -1,7 +1,8 @@
 // Cast and crew lists (Pages/Shared/_CastList.cshtml). A list is collapsed
-// until "Show all" is pressed: the cast to one row of cards, the crew to its
-// first few rows. The button is only offered when something is cut off, which
-// depends on how many fit at this width.
+// until "Show all" is pressed: the stylesheet shows the first six or eight
+// people and does not render the rest (by count, never by height, so nobody is
+// ever half shown). The button is offered only when someone is hidden, which
+// depends on the width (one column or two).
 (function () {
     var sections = document.querySelectorAll('[data-cast]');
     if (sections.length === 0) return;
@@ -14,16 +15,10 @@
 
         function update() {
             var expanded = section.classList.contains('is-expanded');
-            // Collapsed, the list clips its extra rows: more content than box means there is more to show.
-            var clipped = list.scrollHeight > list.clientHeight + 1;
-            toggle.hidden = !expanded && !clipped;
-
-            // People in a cut-off row are not on screen, so keep their links out
-            // of the tab order too. (A sideways-scrolling row cuts nothing off.)
-            var bottom = list.getBoundingClientRect().bottom;
-            Array.prototype.forEach.call(list.children, function (item) {
-                item.inert = !expanded && clipped && item.getBoundingClientRect().top >= bottom - 1;
+            var hidden = Array.prototype.some.call(list.children, function (item) {
+                return getComputedStyle(item).display === 'none';
             });
+            toggle.hidden = !expanded && !hidden;
         }
 
         toggle.addEventListener('click', function () {
@@ -35,6 +30,5 @@
 
         update();
         window.addEventListener('resize', update);
-        window.addEventListener('load', update);
     });
 })();
