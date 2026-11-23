@@ -896,4 +896,58 @@ public class DashboardModelTests
 
         _sut.TempData[PageModelToastExtensions.UndoWatchedStoppedKey].Should().Be(stoppedOn.Ticks.ToString());
     }
+
+    // ---- the redesign: the limit, "See all" and the header's links ---------------------
+
+    [Test]
+    public async Task ContinueWatching_Should_ShowAtMostNineSeries_InTheQueuesOrder_AndCountTheRest()
+    {
+        // Twelve series, each with an unwatched episode and no still, watched one day apart.
+        var series = Enumerable.Range(1, 12)
+            .Select(i => new SeriesAggregate { TvdbId = i, Name = $"Show {i:D2}", Episodes = [Ep(i * 10, 1, 1, Today.AddDays(-9))] })
+            .ToArray();
+        SetUpSeries(series);
+        _watches
+            .Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Range(1, 12).ToDictionary(i => i, i => Now.AddDays(-i)));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        DashboardModel.ContinueWatchingLimit.Should().Be(9);
+        _sut.CatchUpEpisodes.Select(c => c.SeriesId).Should().Equal([1, 2, 3, 4, 5, 6, 7, 8, 9], "the first nine of the queue, most recently watched first");
+        _sut.ContinueWatchingTotal.Should().Be(12, "the other three are in the Library's Watching section");
+        _tvDb.Verify(x => x.GetEpisodeDetailsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(9),
+            "only the series shown have their image looked up");
+    }
+
+    [Test]
+    public async Task ContinueWatching_Should_ShowEverySeries_WhenThereAreNineOrFewer()
+    {
+        SetUpSeries(Enumerable.Range(1, 4)
+            .Select(i => new SeriesAggregate { TvdbId = i, Name = $"Show {i}", Episodes = [Ep(i * 10, 1, 1, Today.AddDays(-9))] })
+            .ToArray());
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.CatchUpEpisodes.Should().HaveCount(4);
+        _sut.ContinueWatchingTotal.Should().Be(4);
+    }
+
+    [Test]
+    public async Task TheHeadersStats_Should_LinkToWhatExplainsThem()
+    {
+        SetUpSeries(new SeriesAggregate
+        {
+            TvdbId = 1, Name = "Show",
+            Episodes = [Ep(11, 1, 1, Today.AddDays(-9)), Ep(12, 1, 2, Today.AddDays(-2)), Ep(13, 1, 3, Today.AddDays(3))]
+        });
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Stats.Should().Equal(
+            new DashboardStat(1, "Tracked series", "Tracked", "/Library"),
+            new DashboardStat(1, "Airing this week", "This week", "/Dashboard", Fragment: "upcoming"),
+            new DashboardStat(2, "Unwatched episodes", "Unwatched", "/Library", Section: "watching"));
+        DashboardModel.LibraryWatchingSection.Should().Be("watching", "the Library's one-section view of Watching, where \"See all\" leads");
+    }
 }

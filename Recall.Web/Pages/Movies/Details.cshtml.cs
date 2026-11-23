@@ -231,6 +231,7 @@ public sealed class DetailsModel(
                 },
             Like = new LikeToggleModel
             {
+                Placement = LikePlacement.ActionRow,
                 Handler = "ToggleMovieLike",
                 RouteId = movie.TvdbId,
                 IsLiked = IsLikedByCurrentUser,

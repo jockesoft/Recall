@@ -310,39 +310,6 @@ main:focus {
     }
 }
 
-/* The signed-in user's avatar (the _Avatar partial): initials on amber. */
-.tvdb-avatar {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--tvdb-radius-round);
-    background: var(--tvdb-signal);
-    color: var(--tvdb-on-signal);
-    font-family: var(--tvdb-font-ui);
-    font-size: var(--tvdb-text-sm);
-    font-weight: 600;
-    line-height: 1;
-    letter-spacing: 0.02em;
-    user-select: none;
-}
-
-.tvdb-avatar--md {
-    width: 40px;
-    height: 40px;
-    font-size: var(--tvdb-text-md);
-}
-
-.tvdb-avatar--lg {
-    width: 64px;
-    height: 64px;
-    font-family: var(--tvdb-font-display);
-    font-size: var(--tvdb-text-2xl);
-    font-weight: 800;
-}
-
 /* Phone menu: who is signed in, on one row; the account links follow as rows. */
 .nav-identity {
     display: flex;
@@ -385,13 +352,13 @@ main:focus {
     padding: var(--tvdb-space-1);
 }
 
-.nav-avatar .tvdb-avatar {
+.nav-avatar .tvdb-round-avatar {
     transition: box-shadow var(--tvdb-ease);
 }
 
-.nav-avatar:hover .tvdb-avatar,
-.nav-avatar:focus-visible .tvdb-avatar,
-.nav-avatar.show .tvdb-avatar {
+.nav-avatar:hover .tvdb-round-avatar,
+.nav-avatar:focus-visible .tvdb-round-avatar,
+.nav-avatar.show .tvdb-round-avatar {
     box-shadow: 0 0 0 2px var(--tvdb-ink-2), 0 0 0 4px var(--tvdb-signal);
 }
 
@@ -477,20 +444,23 @@ main:focus {
     display: none;
 }
 
+/* Whole pixels: a circle for one digit, a pill for more (a rem size here gave
+   17.59px, and a circle at a fractional size blurs its edge). */
 .nav-bell-badge {
     position: absolute;
     top: 0;
     right: 0;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    padding: 0 var(--tvdb-space-1);
-    border-radius: var(--tvdb-radius-pill);
+    box-sizing: border-box;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
     background: var(--tvdb-signal);
     color: var(--tvdb-on-signal);
     font-family: var(--tvdb-font-mono);
     font-size: var(--tvdb-text-xs);
     font-weight: 500;
-    line-height: 1.1rem;
+    line-height: 18px;
     text-align: center;
     box-shadow: 0 0 0 2px var(--tvdb-ink-2);
 }

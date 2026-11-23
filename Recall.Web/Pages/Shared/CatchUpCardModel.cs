@@ -40,8 +40,23 @@ public sealed class CatchUpCardModel
     /// </summary>
     public string StopWatchingHandler { get; init; } = "StopWatching";
 
+    /// <summary>
+    /// The first of the queue: on a phone it is the one full card, with a small
+    /// "Up next" label; the others are compact rows (_CatchUpRow).
+    /// </summary>
+    public bool IsUpNext { get; init; }
+
     /// <summary>The id of the card's menu button, unique on the page (one card per series).</summary>
     public string MenuId => $"catchUpMenu{SeriesId}";
+
+    /// <summary>The id of the compact row's menu button (the row and the card are both on the page).</summary>
+    public string RowMenuId => $"catchUpRowMenu{SeriesId}";
+
+    /// <summary>"S08E10", the row's code; null when neither number is known.</summary>
+    public string? ShortCode =>
+        SeasonNumber is null && EpisodeNumber is null
+            ? null
+            : $"S{SeasonNumber?.ToString("D2") ?? "??"}E{EpisodeNumber?.ToString("D2") ?? "??"}";
 
     /// <summary>"S02 &bull; E06" style code, or null when neither number is known.</summary>
     public string? SlateCode =>

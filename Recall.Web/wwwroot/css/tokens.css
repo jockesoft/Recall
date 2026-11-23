@@ -92,6 +92,12 @@
     --tvdb-on-ink-wash: rgba(241, 236, 226, 0.06);   /* a quiet fill on ink */
     --tvdb-ok-on-ink: #9cc79c;                       /* "Continuing", "Up to date" on ink */
 
+    /* Round buttons on a picture (.tvdb-round-button--on-image): a dark fill
+       behind a light 2px ring, so the edge is drawn by the ring, not by the
+       blurred backdrop's clip, and reads the same over any image. */
+    --tvdb-round-on-image-bg: rgba(10, 13, 18, 0.72);
+    --tvdb-round-on-image-ring: rgba(241, 236, 226, 0.9);
+
     /* ---- Placeholder art (the landing page's product preview) ---------------
        Abstract fills in the theme colours, standing in for posters and stills
        where real artwork must not be used. */

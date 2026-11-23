@@ -7,6 +7,12 @@
             <img src="@Model.ImageUrl" alt="" loading="lazy" />
         }
 
+        @if (Model.IsUpNext)
+        {
+            @* Shown on phones only, where this is the one card. *@
+            <span class="tvdb-catchup-upnext">Up next</span>
+        }
+
         @* Stretched link — the whole still opens the episode. Sits under the
            caption + button, which raise themselves above it. *@
         <a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeId"
@@ -24,7 +30,7 @@
         @* Rarely used actions for the series. The menu is positioned "fixed" so
            the frame's rounded clipping does not cut it off. *@
         <div class="dropdown tvdb-catchup-menu">
-            <button type="button" class="tvdb-watch-badge tvdb-watch-badge--menu" id="@Model.MenuId"
+            <button type="button" class="tvdb-round-button tvdb-round-button--md tvdb-round-button--on-image" id="@Model.MenuId"
                     data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
                     aria-label="More actions for @Model.SeriesName" title="More actions">
                 <i class="@Icons.More" aria-hidden="true"></i>
@@ -41,7 +47,7 @@
         <form method="post" asp-page-handler="@Model.MarkWatchedHandler"
               asp-route-seriesId="@Model.SeriesId" asp-route-episodeId="@Model.EpisodeId"
               class="tvdb-catchup-check">
-            <button type="submit" class="tvdb-watch-badge"
+            <button type="submit" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-image"
                     title="Mark as watched"
                     aria-label="Mark @Model.EpisodeName as watched">
                 <i class="@Icons.Check" aria-hidden="true"></i>

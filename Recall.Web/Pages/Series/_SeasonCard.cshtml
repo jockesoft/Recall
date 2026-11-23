@@ -89,7 +89,7 @@
                             <div class="tvdb-ep__control">
                                 @if (ep.Mark == EpisodeMark.NotAired)
                                 {
-                                    <span class="tvdb-ep-mark tvdb-ep-mark--upcoming" role="img" aria-label="Not aired yet" title="Not aired yet">
+                                    <span class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-paper tvdb-ep-mark tvdb-ep-mark--upcoming" role="img" aria-label="Not aired yet" title="Not aired yet">
                                         <i class="@Icons.NotAiredYet" aria-hidden="true"></i>
                                     </span>
                                 }
@@ -104,7 +104,7 @@
                                         <input type="hidden" name="Season" value="@card.Number" />
                                         <input type="hidden" name="Anchor" value="@anchor" />
                                         <button type="submit"
-                                                class="tvdb-ep-mark @(watched ? "tvdb-ep-mark--on" : ep.IsReady ? "tvdb-ep-mark--ready" : "")"
+                                                class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-paper tvdb-ep-mark @(watched ? "tvdb-ep-mark--on" : ep.IsReady ? "tvdb-ep-mark--ready" : "")"
                                                 aria-pressed="@(watched ? "true" : "false")"
                                                 aria-label="@label"
                                                 title="@(watched ? "Mark as unwatched" : "Mark as watched")">
@@ -124,7 +124,7 @@
     {
         var menuId = $"seasonMenu{card.Number}";
         <div class="dropdown tvdb-season-card__menu">
-            <button type="button" class="tvdb-icon-button" id="@menuId"
+            <button type="button" class="tvdb-round-button tvdb-round-button--md tvdb-round-button--on-paper" id="@menuId"
                     data-bs-toggle="dropdown" aria-expanded="false"
                     aria-label="Actions for @card.Title" title="Season actions">
                 <i class="@Icons.More" aria-hidden="true"></i>

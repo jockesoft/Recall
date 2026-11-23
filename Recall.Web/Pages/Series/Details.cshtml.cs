@@ -302,6 +302,7 @@ public sealed partial class DetailsModel(
             MenuLabel = $"More actions for {series.Name}",
             Like = new LikeToggleModel
             {
+                Placement = LikePlacement.ActionRow,
                 Handler = "ToggleSeriesLike",
                 RouteId = series.TvdbId,
                 HiddenFields = seasonField,

@@ -93,6 +93,171 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 
 /* ---- Dashboard ---------------------------------------------------------------- */
 
+/* The title on the left and the three figures on the right, in one row from
+   576px; on a phone the figures wrap below as one row of three equal tiles
+   (the .tvdb-stat-row grid). */
+.tvdb-dashboard-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--tvdb-space-4);
+    margin-bottom: var(--tvdb-space-6);
+}
+
+.tvdb-dashboard-head__stats {
+    margin: 0;
+}
+
+@media (max-width: 575.98px) {
+    .tvdb-dashboard-head__stats {
+        flex: 1 1 100%;
+    }
+}
+
+/* The stats' labels: short on a phone, one line each; full from 576px. */
+.tvdb-stat-item__short {
+    white-space: nowrap;
+}
+
+.tvdb-stat-item__full {
+    display: none;
+}
+
+@media (min-width: 576px) {
+    .tvdb-stat-item__short {
+        display: none;
+    }
+
+    .tvdb-stat-item__full {
+        display: inline;
+    }
+}
+
+.tvdb-section-head > h2 {
+    margin-bottom: 0;
+}
+
+/* Continue watching: both layouts are in the page. From 576px every series is
+   a card (_CatchUpCard); on a phone only the first is, with "Up next", and the
+   others are compact rows (_CatchUpRow), then a full-width "See all". */
+.tvdb-catchup-rows,
+.tvdb-catchup-seeall,
+.tvdb-catchup-upnext {
+    display: none;
+}
+
+@media (max-width: 575.98px) {
+    .tvdb-catchup-grid > :nth-child(n + 2),
+    .tvdb-catchup-seeall-link {
+        display: none;
+    }
+
+    .tvdb-catchup-rows {
+        display: flex;
+        flex-direction: column;
+        margin: var(--tvdb-space-3) 0 0;
+    }
+
+    .tvdb-catchup-seeall {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        margin-top: var(--tvdb-space-3);
+    }
+
+    .tvdb-catchup-upnext {
+        display: inline-flex;
+    }
+}
+
+/* The small amber label on the phone's one card. */
+.tvdb-catchup-upnext {
+    position: absolute;
+    top: var(--tvdb-space-3);
+    left: var(--tvdb-space-3);
+    z-index: 2;
+    align-items: center;
+    padding: 0.15rem var(--tvdb-space-2);
+    border-radius: var(--tvdb-radius-pill);
+    background: var(--tvdb-signal);
+    color: var(--tvdb-on-signal);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+/* A compact row: a 96px still, the series and the episode on one line each,
+   the "⋯" and the 44px check (both cream-panel rings). */
+.tvdb-catchup-row {
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    padding: var(--tvdb-space-2) 0;
+    border-top: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-catchup-row:last-child {
+    border-bottom: 1px solid var(--tvdb-ink-line);
+}
+
+.tvdb-catchup-row__still {
+    position: relative;
+    flex: 0 0 96px;
+    width: 96px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--tvdb-radius-sm);
+    background: var(--tvdb-media-bg);
+}
+
+.tvdb-catchup-row__still img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tvdb-catchup-row__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.tvdb-catchup-row__series,
+.tvdb-catchup-row__episode {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.tvdb-catchup-row__series {
+    font-weight: 600;
+}
+
+.tvdb-catchup-row__episode {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-text-muted);
+}
+
+.tvdb-catchup-row__menu,
+.tvdb-catchup-row__check {
+    flex: none;
+    margin: 0;
+}
+
+.tvdb-catchup-row__check .tvdb-round-button:hover,
+.tvdb-catchup-row__check .tvdb-round-button:focus-visible {
+    border-color: var(--tvdb-ok-ink);
+    background: var(--tvdb-ok-tint);
+    color: var(--tvdb-ok-ink);
+}
+
 /* Under Continue watching: the series left out because they haven't been watched in a while. */
 .tvdb-dormant-link {
     margin: var(--tvdb-space-3) 0 0;
@@ -865,31 +1030,14 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     flex: none;
 }
 
-/* The row's one round control. Watched: solid green with a check (brick on
-   hover: press to undo). Aired and not watched: a plain ring, and for the one
-   episode the hero's primary button marks (--ready), an amber ring on a light
-   amber fill. Not aired yet: a dashed circle with a clock, not a button. */
+/* The row's one round control, a .tvdb-round-button--lg on paper: these are
+   its states' colours. Aired and not watched: the plain ring with the icon
+   hidden until hover, and for the one episode the hero's primary button
+   marks (--ready), an amber ring on a light amber fill. Watched: solid green
+   with a check (brick on hover: press to undo). Not aired yet: a dashed
+   circle with a clock, not a button. */
 .tvdb-ep-mark {
-    appearance: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border: 2px solid var(--tvdb-text-muted);
-    border-radius: var(--tvdb-radius-round);
-    background: transparent;
     color: transparent;
-    font-size: var(--tvdb-text-lg);
-    line-height: 1;
-    cursor: pointer;
-    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
-}
-
-.tvdb-ep-mark .ph {
-    font-size: 1em;
-    vertical-align: 0;
 }
 
 .tvdb-ep-mark:hover,
@@ -925,13 +1073,15 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 }
 
 .tvdb-ep-mark--upcoming {
-    border: 1px dashed var(--tvdb-ink-line-strong);
+    border-style: dashed;
+    border-color: var(--tvdb-ink-line-strong);
     background: transparent;
     color: var(--tvdb-text-muted);
     cursor: default;
 }
 
 .tvdb-ep-mark--upcoming:hover {
+    border-color: var(--tvdb-ink-line-strong);
     background: transparent;
     color: var(--tvdb-text-muted);
 }
