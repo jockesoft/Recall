@@ -29,7 +29,7 @@ public static class TitleSummary
         return parts.Count == 0 ? null : string.Join(Separator, parts);
     }
 
-    /// <summary>"2023 · 3h 9m".</summary>
+    /// <summary>"2023 · 3 h 0 min · Universal Pictures": year, runtime, the first studio.</summary>
     public static string? ForMovie(MovieAggregate movie)
     {
         var parts = new List<string>();
@@ -41,15 +41,18 @@ public static class TitleSummary
         if (movie.RuntimeMinutes is > 0)
             parts.Add(Runtime(movie.RuntimeMinutes.Value));
 
+        if (movie.Studios.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) is { } studio)
+            parts.Add(studio);
+
         return parts.Count == 0 ? null : string.Join(Separator, parts);
     }
 
-    /// <summary>"3h 9m", "45m".</summary>
+    /// <summary>A movie's length: "3 h 0 min", "2 h 50 min", "45 min".</summary>
     public static string Runtime(int minutes)
     {
         var hours = minutes / 60;
         var rest = minutes % 60;
-        return hours > 0 ? $"{hours}h {rest}m" : $"{rest}m";
+        return hours > 0 ? $"{hours} h {rest} min" : $"{rest} min";
     }
 
     private static string? Years(SeriesAggregate series)

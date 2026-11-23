@@ -2203,6 +2203,17 @@ dl.row dd a.tvdb-inline-edit {
     background: var(--tvdb-ink-3);
 }
 
+/* A square toggle that is on (a movie on the watchlist). */
+.tvdb-square-button[aria-pressed="true"] {
+    border-color: var(--tvdb-signal-edge);
+    background: var(--tvdb-signal-tint);
+    color: var(--tvdb-signal);
+}
+
+.tvdb-square-form {
+    display: flex;
+}
+
 .tvdb-title-actions .tvdb-heart:hover,
 .tvdb-title-actions .tvdb-heart:focus-visible {
     border-color: var(--tvdb-like);

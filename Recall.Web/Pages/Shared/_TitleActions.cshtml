@@ -1,7 +1,7 @@
 @model Recall.Web.Pages.Shared.TitleActionsModel
 @* The action row of a detail page (TitleActionsModel): one full-width primary
-   button or a quiet status box, then three square icon buttons: "⋯" (a menu
-   of the secondary actions), the heart and Share. A visitor gets the sign-in
+   button or a quiet status box, then the square icon buttons: "⋯" (a menu
+   of the secondary actions), a movie's watchlist toggle, the heart and Share. A visitor gets the sign-in
    card instead of the whole row. Sits on the dark frame, in the hero. *@
 
 @if (!Model.IsAuthenticated)
@@ -95,6 +95,27 @@
                     }
                 </ul>
             </div>
+        }
+
+        @if (Model.Watchlist is { } toggle)
+        {
+            if (toggle.IsPressed)
+            {
+                <button type="button" class="tvdb-square-button" id="@toggle.Id" aria-pressed="true"
+                        aria-label="@toggle.CurrentLabel" title="@toggle.CurrentLabel"
+                        data-bs-toggle="modal" data-bs-target="#@toggle.PressedModalId">
+                    <i class="@toggle.PressedIcon" aria-hidden="true"></i>
+                </button>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="@toggle.Handler" asp-route-id="@toggle.RouteId" class="tvdb-square-form">
+                    <button type="submit" class="tvdb-square-button" id="@toggle.Id" aria-pressed="false"
+                            aria-label="@toggle.CurrentLabel" title="@toggle.CurrentLabel">
+                        <i class="@toggle.Icon" aria-hidden="true"></i>
+                    </button>
+                </form>
+            }
         }
 
         @if (Model.Like is not null)
