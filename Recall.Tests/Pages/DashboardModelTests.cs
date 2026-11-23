@@ -945,9 +945,9 @@ public class DashboardModelTests
         await _sut.OnGetAsync(CancellationToken.None);
 
         _sut.Stats.Should().Equal(
-            new DashboardStat(1, "Tracked series", "/Library"),
-            new DashboardStat(1, "Airing this week", "/Dashboard", Fragment: "upcoming"),
-            new DashboardStat(2, "Unwatched episodes", "/Library", Section: "watching"));
+            new DashboardStat(1, "Tracked series", "Tracked", "/Library"),
+            new DashboardStat(1, "Airing this week", "This week", "/Dashboard", Fragment: "upcoming"),
+            new DashboardStat(2, "Unwatched episodes", "Unwatched", "/Library", Section: "watching"));
         DashboardModel.LibraryWatchingSection.Should().Be("watching", "the Library's one-section view of Watching, where \"See all\" leads");
     }
 }

@@ -83,7 +83,14 @@
                     <li>
                         <a href="@(Url.Page(stat.Page, new { section = stat.Section }) + (stat.Fragment is null ? "" : "#" + stat.Fragment))" class="tvdb-stat-item">
                             <span class="tvdb-stat-item__value">@stat.Value</span>
-                            <span class="tvdb-stat-item__label">@stat.Label</span>
+                            @* A phone shows the short label on one line; the full one
+                               follows it as hidden text, so the link's name has both
+                               ("1 This week, Airing this week") and starts with what is
+                               visible. From 576px the full label is the visible one. *@
+                            <span class="tvdb-stat-item__label">
+                                <span class="tvdb-stat-item__short">@stat.ShortLabel<span class="visually-hidden">, @stat.Label</span></span>
+                                <span class="tvdb-stat-item__full">@stat.Label</span>
+                            </span>
                         </a>
                     </li>
                 }

@@ -59,7 +59,11 @@ public sealed record CatchUpItem
 /// One of the three figures in the Dashboard's header, and where it leads:
 /// a page, optionally one of its sections (<c>?section=</c>) or a fragment.
 /// </summary>
-public sealed record DashboardStat(int Value, string Label, string Page, string? Section = null, string? Fragment = null);
+/// <param name="ShortLabel">
+/// The label on a phone, one line ("This week"); <paramref name="Label"/> is
+/// the full one, shown from 576px and always part of the link's name.
+/// </param>
+public sealed record DashboardStat(int Value, string Label, string ShortLabel, string Page, string? Section = null, string? Fragment = null);
 
 // ---------------------------------------------------------------------------
 // Page model
@@ -104,9 +108,9 @@ public sealed class DashboardModel(
     /// </summary>
     public IReadOnlyList<DashboardStat> Stats =>
     [
-        new(TrackedSeriesCount, "Tracked series", "/Library"),
-        new(UpcomingThisWeekCount, "Airing this week", "/Dashboard", Fragment: "upcoming"),
-        new(UnwatchedCount, "Unwatched episodes", "/Library", Section: LibraryWatchingSection)
+        new(TrackedSeriesCount, "Tracked series", "Tracked", "/Library"),
+        new(UpcomingThisWeekCount, "Airing this week", "This week", "/Dashboard", Fragment: "upcoming"),
+        new(UnwatchedCount, "Unwatched episodes", "Unwatched", "/Library", Section: LibraryWatchingSection)
     ];
 
     public int TrackedSeriesCount { get; private set; }

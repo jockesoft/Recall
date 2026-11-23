@@ -107,6 +107,11 @@ public sealed class DashboardPipelineTests
         Regex.Matches(stats, "href=\"([^\"]+)\"").Select(m => m.Groups[1].Value)
             .Should().Equal("/Library", "/Dashboard#upcoming", "/Library?section=watching");
         stats.Should().Contain("Tracked series").And.Contain("Airing this week").And.Contain("Unwatched episodes");
+        // The phone's short label comes first, the full one hidden after it, so the
+        // link's name starts with what a phone shows and keeps the full wording.
+        stats.Should().Contain("<span class=\"tvdb-stat-item__short\">This week<span class=\"visually-hidden\">, Airing this week</span></span>");
+        stats.Should().Contain("<span class=\"tvdb-stat-item__short\">Tracked<span class=\"visually-hidden\">, Tracked series</span></span>");
+        stats.Should().Contain("<span class=\"tvdb-stat-item__short\">Unwatched<span class=\"visually-hidden\">, Unwatched episodes</span></span>");
     }
 
     [Test]
@@ -126,6 +131,8 @@ public sealed class DashboardPipelineTests
         Regex.Matches(rows, "class=\"tvdb-catchup-row\"").Count.Should().Be(2, "the first series is the card; the rest are rows");
         rows.Should().Contain("<span class=\"tvdb-mono\">S08E10</span>");
         rows.Should().Contain("class=\"tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-paper\"").And.Contain("aria-label=\"Mark Episode of");
+        rows.Should().MatchRegex("class=\"tvdb-round-button tvdb-round-button--lg tvdb-round-button--plain\" id=\"catchUpRowMenu\\d+\" data-bs-toggle=\"dropdown\" aria-expanded=\"false\" aria-label=\"More actions for Dashboard Show \\d+\"",
+            "the row's \"⋯\" has no ring, a 44px target and its name");
         rows.Should().Contain("loading=\"lazy\"");
     }
 

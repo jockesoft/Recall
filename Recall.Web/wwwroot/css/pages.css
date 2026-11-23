@@ -115,6 +115,25 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     }
 }
 
+/* The stats' labels: short on a phone, one line each; full from 576px. */
+.tvdb-stat-item__short {
+    white-space: nowrap;
+}
+
+.tvdb-stat-item__full {
+    display: none;
+}
+
+@media (min-width: 576px) {
+    .tvdb-stat-item__short {
+        display: none;
+    }
+
+    .tvdb-stat-item__full {
+        display: inline;
+    }
+}
+
 .tvdb-section-head > h2 {
     margin-bottom: 0;
 }

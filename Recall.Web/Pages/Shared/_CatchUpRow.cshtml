@@ -1,7 +1,8 @@
 @model Recall.Web.Pages.Shared.CatchUpCardModel
 @* One series of "Continue watching" as a compact row, for phones (the cards
    are for wider screens; both are on the page and the stylesheet shows one):
-   the still, the series and the next episode, the "⋯" menu and the check.
+   the still, the series and the next episode, the "⋯" menu (a plain icon
+   button, 44px for touch) and the check (a ringed one).
    The same image rule, actions and names as _CatchUpCard. *@
 
 <li class="tvdb-catchup-row">
@@ -25,7 +26,7 @@
     </div>
 
     <div class="dropdown tvdb-catchup-row__menu">
-        <button type="button" class="tvdb-round-button tvdb-round-button--md tvdb-round-button--on-paper" id="@Model.RowMenuId"
+        <button type="button" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--plain" id="@Model.RowMenuId"
                 data-bs-toggle="dropdown" aria-expanded="false"
                 aria-label="More actions for @Model.SeriesName" title="More actions">
             <i class="@Icons.More" aria-hidden="true"></i>

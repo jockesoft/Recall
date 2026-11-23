@@ -348,7 +348,8 @@
    .tvdb-round-button: an icon button. 44px (--lg) for a primary action (a
    card's check, an episode row's control), 36px (--md) for a secondary one
    ("⋯", the heart). On a picture (--on-image): a dark, slightly blurred fill
-   with a 2px light ring. On the cream panel (--on-paper): a 2px neutral ring.
+   with a 2px light ring. On the cream panel (--on-paper): a 2px neutral ring;
+   or, where a ring would crowd one beside it, no ring at all (--plain).
    A component class beside it (.tvdb-ep-mark, .tvdb-heart, ...) adds its
    states' colours; the shape and the ring width are always these.
 
@@ -420,6 +421,18 @@
 .tvdb-round-button--on-paper:focus-visible,
 .tvdb-round-button--on-paper.show {
     border-color: var(--tvdb-text);
+    background: var(--tvdb-paper-dim);
+}
+
+/* No ring and no fill (a phone row's "⋯", which sits beside a ringed
+   check): only the icon, on a light circle on hover, with the same touch target. */
+.tvdb-round-button--plain {
+    color: var(--tvdb-text);
+}
+
+.tvdb-round-button--plain:hover,
+.tvdb-round-button--plain:focus-visible,
+.tvdb-round-button--plain.show {
     background: var(--tvdb-paper-dim);
 }
 
