@@ -341,6 +341,139 @@
     background: var(--bs-secondary-bg);
 }
 
+/* ---- Round elements ---------------------------------------------------------
+   Every circle in the app is one of two shared classes, in whole-pixel sizes,
+   so its edge is drawn the same way everywhere.
+
+   .tvdb-round-button: an icon button. 44px (--lg) for a primary action (a
+   card's check, an episode row's control), 36px (--md) for a secondary one
+   ("⋯", the heart). On a picture (--on-image): a dark, slightly blurred fill
+   with a 2px light ring. On the cream panel (--on-paper): a 2px neutral ring.
+   A component class beside it (.tvdb-ep-mark, .tvdb-heart, ...) adds its
+   states' colours; the shape and the ring width are always these.
+
+   .tvdb-round-avatar: a photo (an <img>, object-fit: cover) or initials, in
+   the sizes the app uses: 32px (--sm, the navbar), 40px (--md, people and the
+   phone menu), 64px (--lg, Profile). Only initials have a fill: a fill under a
+   photo would tint its anti-aliased edge. */
+
+.tvdb-round-button {
+    --tvdb-round-size: 36px;
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: var(--tvdb-round-size);
+    height: var(--tvdb-round-size);
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: var(--tvdb-radius-round);
+    background: transparent;
+    font-size: var(--tvdb-text-md);
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-round-button--lg {
+    --tvdb-round-size: 44px;
+    font-size: var(--tvdb-text-lg);
+}
+
+.tvdb-round-button--md {
+    --tvdb-round-size: 36px;
+}
+
+.tvdb-round-button .ph,
+.tvdb-round-button .ph-fill {
+    font-size: 1em;
+    vertical-align: 0;
+}
+
+.tvdb-round-button--on-image {
+    border-color: var(--tvdb-round-on-image-ring);
+    background: var(--tvdb-round-on-image-bg);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    color: var(--tvdb-on-ink);
+}
+
+.tvdb-round-button--on-image:hover,
+.tvdb-round-button--on-image:focus-visible,
+.tvdb-round-button--on-image.show {
+    border-color: var(--tvdb-on-ink);
+    background: var(--tvdb-scrim-strong);
+}
+
+.tvdb-round-button--on-image:focus-visible {
+    outline-color: var(--tvdb-on-ink);
+}
+
+.tvdb-round-button--on-paper {
+    border-color: var(--tvdb-text-muted);
+    color: var(--tvdb-text);
+}
+
+.tvdb-round-button--on-paper:hover,
+.tvdb-round-button--on-paper:focus-visible,
+.tvdb-round-button--on-paper.show {
+    border-color: var(--tvdb-text);
+    background: var(--tvdb-paper-dim);
+}
+
+.tvdb-round-avatar {
+    --tvdb-round-size: 40px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: var(--tvdb-round-size);
+    height: var(--tvdb-round-size);
+    overflow: hidden;
+    border-radius: var(--tvdb-radius-round);
+    font-family: var(--tvdb-font-ui);
+    font-size: var(--tvdb-text-sm);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+
+img.tvdb-round-avatar {
+    display: block;
+    object-fit: cover;
+    object-position: center 20%;
+}
+
+.tvdb-round-avatar--sm { --tvdb-round-size: 32px; }
+.tvdb-round-avatar--md { --tvdb-round-size: 40px; }
+
+.tvdb-round-avatar--lg {
+    --tvdb-round-size: 64px;
+    font-family: var(--tvdb-font-display);
+    font-size: var(--tvdb-text-2xl);
+    font-weight: 800;
+}
+
+/* Initials of a person (cast and crew). */
+.tvdb-round-avatar--initials {
+    background: var(--tvdb-ink-2);
+    color: var(--tvdb-on-ink-muted);
+}
+
+/* The signed-in user's initials, on amber. */
+.tvdb-round-avatar--user {
+    background: var(--tvdb-signal);
+    color: var(--tvdb-on-signal);
+}
+
+.tvdb-round-avatar--user.tvdb-round-avatar--md {
+    font-size: var(--tvdb-text-md);
+}
+
 /* ---- Empty state (the _EmptyState partial) --------------------------------- */
 
 .tvdb-empty-state {
@@ -536,32 +669,6 @@ h1.tvdb-empty-state__title {
     font-size: var(--tvdb-text-xs);
     color: var(--tvdb-on-ink-faint);
     text-align: center;
-}
-
-/* Small round button that holds only an icon ("⋯"). */
-.tvdb-icon-button {
-    appearance: none;
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border: 1px solid var(--tvdb-ink-line-strong);
-    border-radius: var(--tvdb-radius-round);
-    background: transparent;
-    color: var(--tvdb-text);
-    font-size: var(--tvdb-text-lg);
-    cursor: pointer;
-    transition: background var(--tvdb-ease), border-color var(--tvdb-ease);
-}
-
-.tvdb-icon-button:hover,
-.tvdb-icon-button:focus-visible,
-.tvdb-icon-button.show {
-    background: var(--tvdb-paper-dim);
-    border-color: var(--tvdb-text-muted);
 }
 
 /* A removal that is offered quietly: plain text, confirmed in a modal. */
@@ -893,22 +1000,13 @@ dl.row dd a.tvdb-inline-edit {
     }
 }
 
+/* A pill is a .tvdb-round-button--md: the shape is shared, the colours are its own. */
 .tvdb-rating-pill {
-    appearance: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: var(--tvdb-radius-round);
-    border: 1px solid var(--tvdb-ink-line-strong);
+    border-color: var(--tvdb-ink-line-strong);
     background: var(--tvdb-paper-dim);
     color: var(--tvdb-text-muted);
     font-family: var(--tvdb-font-mono);
     font-size: var(--tvdb-text-sm);
-    cursor: pointer;
-    transition: color var(--tvdb-ease), border-color var(--tvdb-ease), background var(--tvdb-ease);
 }
 
 .tvdb-rating-pill:hover,
@@ -953,146 +1051,46 @@ dl.row dd a.tvdb-inline-edit {
     display: inline-flex;
 }
 
-.tvdb-heart {
-    appearance: none;
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border-radius: var(--tvdb-radius-round);
-    border: 1px solid var(--tvdb-ink-line-strong);
-    background: var(--tvdb-paper-dim);
-    color: var(--tvdb-text-muted);
-    font-size: var(--tvdb-text-lg);
-    cursor: pointer;
-    transition: color var(--tvdb-ease), border-color var(--tvdb-ease), background var(--tvdb-ease);
-}
-
+/* The heart's colours. Its shape comes from where it is (LikeToggleModel.Placement):
+   a .tvdb-round-button on paper or on a picture, or the action row's square. */
 .tvdb-heart .ph,
 .tvdb-heart .ph-fill {
     font-size: 1em;
     vertical-align: 0;
 }
 
+.tvdb-round-button--on-paper.tvdb-heart {
+    color: var(--tvdb-text-muted);
+}
+
 .tvdb-heart:hover,
 .tvdb-heart:focus-visible {
     color: var(--tvdb-like);
+}
+
+.tvdb-round-button--on-paper.tvdb-heart:hover,
+.tvdb-round-button--on-paper.tvdb-heart:focus-visible {
     border-color: var(--tvdb-like);
 }
 
-.tvdb-heart--on {
+.tvdb-round-button--on-paper.tvdb-heart--on {
     color: var(--tvdb-like);
     border-color: var(--tvdb-like-edge);
     background: var(--tvdb-like-tint);
 }
 
-/* ---- Watched controls ------------------------------------------------------------- */
-
-/* The one watched control of an episode row: an empty ring until watched. */
-.tvdb-watch-dot {
-    appearance: none;
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: var(--tvdb-radius-round);
-    border: 1px solid var(--tvdb-text-muted);
-    background: transparent;
-    color: transparent;
-    font-size: var(--tvdb-text-md);
-    line-height: 1;
-    cursor: pointer;
-    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
+.tvdb-round-button--on-image.tvdb-heart--on {
+    color: var(--tvdb-like);
 }
 
-.tvdb-watch-dot .ph {
-    font-size: 1em;
-    vertical-align: 0;
-}
-
-.tvdb-watch-dot:hover,
-.tvdb-watch-dot:focus-visible {
+/* ---- Watched controls on a still ------------------------------------------------
+   A Dashboard card's check is a .tvdb-round-button--on-image that turns green
+   when it is about to mark (the "⋯" beside it does not: it marks nothing). */
+.tvdb-catchup-check .tvdb-round-button:hover,
+.tvdb-catchup-check .tvdb-round-button:focus-visible {
     border-color: var(--tvdb-ok);
-    color: var(--tvdb-ok-ink);
-}
-
-/* Not aired yet: not a button, a clock (the row says when it airs). */
-.tvdb-watch-dot--upcoming {
-    border-style: dashed;
-    border-color: var(--tvdb-ink-line-strong);
-    color: var(--tvdb-text-muted);
-    cursor: default;
-}
-
-.tvdb-watch-dot--upcoming:hover {
-    border-color: var(--tvdb-ink-line-strong);
-    color: var(--tvdb-text-muted);
-}
-
-.tvdb-watch-dot--on {
     background: var(--tvdb-ok);
-    border-color: var(--tvdb-ok);
     color: var(--tvdb-on-ok);
-}
-
-.tvdb-watch-dot--on:hover,
-.tvdb-watch-dot--on:focus-visible {
-    background: var(--tvdb-danger);
-    border-color: var(--tvdb-danger);
-    color: var(--tvdb-on-danger);
-}
-
-/* Round "mark watched" button that sits on top of a still. */
-.tvdb-watch-badge {
-    appearance: none;
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: var(--tvdb-radius-round);
-    border: 1px solid var(--tvdb-on-ink-faint);
-    background: var(--tvdb-scrim);
-    backdrop-filter: blur(3px);
-    color: var(--tvdb-on-ink);
-    font-size: var(--tvdb-text-md);
-    line-height: 1;
-    cursor: pointer;
-    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
-}
-
-.tvdb-watch-badge:hover,
-.tvdb-watch-badge:focus-visible {
-    background: var(--tvdb-ok);
-    border-color: var(--tvdb-ok);
-    color: var(--tvdb-on-ok);
-}
-
-.tvdb-watch-badge:focus-visible {
-    outline-color: var(--tvdb-on-ink);
-    outline-offset: -4px;
-}
-
-/* The same round button holding a "⋯" menu: it opens something, it does not
-   mark anything, so it does not turn green. */
-.tvdb-watch-badge--menu {
-    font-size: var(--tvdb-text-lg);
-}
-
-.tvdb-watch-badge--menu:hover,
-.tvdb-watch-badge--menu:focus-visible,
-.tvdb-watch-badge--menu.show {
-    background: var(--tvdb-scrim-strong);
-    border-color: var(--tvdb-on-ink);
-    color: var(--tvdb-on-ink);
 }
 
 /* ---- Filter bar --------------------------------------------------------------------- */
@@ -1444,28 +1442,7 @@ dl.row dd a.tvdb-inline-edit {
     z-index: 2;
 }
 
-.tvdb-series-card-like .tvdb-heart {
-    width: 36px;
-    height: 36px;
-    border-color: transparent;
-    background: var(--tvdb-scrim);
-    color: var(--tvdb-on-ink);
-    font-size: var(--tvdb-text-md);
-    backdrop-filter: blur(2px);
-}
-
-.tvdb-series-card-like .tvdb-heart:hover,
-.tvdb-series-card-like .tvdb-heart:focus-visible,
-.tvdb-series-card-like .tvdb-heart--on {
-    color: var(--tvdb-like);
-    border-color: transparent;
-    background: var(--tvdb-scrim-strong);
-}
-
-.tvdb-series-card-like .tvdb-heart:focus-visible {
-    outline-color: var(--tvdb-on-ink);
-    outline-offset: -3px;
-}
+/* The heart is a .tvdb-round-button--on-image (LikeToggleModel.Placement.Image). */
 
 /* ---- Catch-up card (the _CatchUpCard partial) ----------------------------------------- */
 
@@ -2311,23 +2288,9 @@ dl.row dd a.tvdb-inline-edit {
     padding-bottom: var(--tvdb-space-3);
 }
 
+/* A .tvdb-round-avatar--md: a photo, or initials. */
 .tvdb-person__photo {
     grid-row: 1 / span 2;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--tvdb-radius-round);
-    object-fit: cover;
-    object-position: center 20%;
-    background: var(--tvdb-ink-2);
-}
-
-.tvdb-person__photo--initials {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--tvdb-text-sm);
-    font-weight: 600;
-    color: var(--tvdb-on-ink-muted);
 }
 
 .tvdb-person__name,

@@ -865,31 +865,14 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     flex: none;
 }
 
-/* The row's one round control. Watched: solid green with a check (brick on
-   hover: press to undo). Aired and not watched: a plain ring, and for the one
-   episode the hero's primary button marks (--ready), an amber ring on a light
-   amber fill. Not aired yet: a dashed circle with a clock, not a button. */
+/* The row's one round control, a .tvdb-round-button--lg on paper: these are
+   its states' colours. Aired and not watched: the plain ring with the icon
+   hidden until hover, and for the one episode the hero's primary button
+   marks (--ready), an amber ring on a light amber fill. Watched: solid green
+   with a check (brick on hover: press to undo). Not aired yet: a dashed
+   circle with a clock, not a button. */
 .tvdb-ep-mark {
-    appearance: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border: 2px solid var(--tvdb-text-muted);
-    border-radius: var(--tvdb-radius-round);
-    background: transparent;
     color: transparent;
-    font-size: var(--tvdb-text-lg);
-    line-height: 1;
-    cursor: pointer;
-    transition: background var(--tvdb-ease), border-color var(--tvdb-ease), color var(--tvdb-ease);
-}
-
-.tvdb-ep-mark .ph {
-    font-size: 1em;
-    vertical-align: 0;
 }
 
 .tvdb-ep-mark:hover,
@@ -925,13 +908,15 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 }
 
 .tvdb-ep-mark--upcoming {
-    border: 1px dashed var(--tvdb-ink-line-strong);
+    border-style: dashed;
+    border-color: var(--tvdb-ink-line-strong);
     background: transparent;
     color: var(--tvdb-text-muted);
     cursor: default;
 }
 
 .tvdb-ep-mark--upcoming:hover {
+    border-color: var(--tvdb-ink-line-strong);
     background: transparent;
     color: var(--tvdb-text-muted);
 }

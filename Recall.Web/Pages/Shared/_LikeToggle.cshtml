@@ -1,4 +1,13 @@
 @model Recall.Web.Pages.Shared.LikeToggleModel
+@{
+    // The shape comes from where the heart is; its colours from .tvdb-heart.
+    var ShapeClass = Model.Placement switch
+    {
+        LikePlacement.Image => "tvdb-round-button tvdb-round-button--md tvdb-round-button--on-image",
+        LikePlacement.ActionRow => "",
+        _ => "tvdb-round-button tvdb-round-button--md tvdb-round-button--on-paper"
+    };
+}
 
 <form method="post" asp-page-handler="@Model.Handler" asp-route-id="@Model.RouteId" class="d-inline tvdb-like-form">
     @foreach (var field in Model.HiddenFields)
@@ -7,7 +16,7 @@
     }
 
     <button type="submit"
-            class="tvdb-heart @(Model.IsLiked ? "tvdb-heart--on" : "")"
+            class="@ShapeClass tvdb-heart @(Model.IsLiked ? "tvdb-heart--on" : "")"
             aria-pressed="@(Model.IsLiked ? "true" : "false")"
             title="@(Model.IsLiked ? $"Unlike this {Model.TargetNoun}" : $"Like this {Model.TargetNoun}")"
             aria-label="@(Model.IsLiked ? $"Liked. Click to unlike this {Model.TargetNoun}." : $"Like this {Model.TargetNoun}")">

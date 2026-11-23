@@ -20,4 +20,20 @@ public sealed class LikeToggleModel
 
     /// <summary>Noun used in the tooltip / aria-label, e.g. "series" or "episode".</summary>
     public string TargetNoun { get; init; } = "item";
+
+    /// <summary>Where the heart sits, which decides its shape (see <see cref="LikePlacement"/>).</summary>
+    public LikePlacement Placement { get; init; } = LikePlacement.Paper;
+}
+
+/// <summary>The heart's shape, by where it sits.</summary>
+public enum LikePlacement
+{
+    /// <summary>On the cream panel (Episode Details): a 36px round button with a neutral ring.</summary>
+    Paper,
+
+    /// <summary>On a picture (a poster card): a 36px round button, dark with a light ring.</summary>
+    Image,
+
+    /// <summary>In a detail page's action row (_TitleActions): one of its 56px squares.</summary>
+    ActionRow
 }

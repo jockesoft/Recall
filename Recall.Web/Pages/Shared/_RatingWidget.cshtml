@@ -15,7 +15,7 @@
                 var isCurrent = Model.CurrentValue == i;
                 var isFilled = Model.CurrentValue is { } current && i <= current;
                 <button type="submit" name="value" value="@i"
-                        class="tvdb-rating-pill @(isFilled ? "is-filled" : "") @(isCurrent ? "is-current" : "")"
+                        class="tvdb-round-button tvdb-round-button--md tvdb-rating-pill @(isFilled ? "is-filled" : "") @(isCurrent ? "is-current" : "")"
                         title="Rate @i / 10"
                         aria-pressed="@(isCurrent ? "true" : "false")"
                         aria-label="Rate this @Model.TargetNoun @i out of 10">@i</button>

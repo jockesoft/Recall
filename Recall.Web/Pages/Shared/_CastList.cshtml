@@ -23,11 +23,11 @@
                 <li class="tvdb-person">
                     @if (!string.IsNullOrWhiteSpace(person.ImageUrl))
                     {
-                        <img src="@person.ImageUrl" alt="" class="tvdb-person__photo" loading="lazy" />
+                        <img src="@person.ImageUrl" alt="" class="tvdb-person__photo tvdb-round-avatar tvdb-round-avatar--md" loading="lazy" />
                     }
                     else
                     {
-                        <span class="tvdb-person__photo tvdb-person__photo--initials" aria-hidden="true">@person.Initials</span>
+                        <span class="tvdb-person__photo tvdb-round-avatar tvdb-round-avatar--md tvdb-round-avatar--initials" aria-hidden="true">@person.Initials</span>
                     }
 
                     @if (!string.IsNullOrWhiteSpace(person.Url))
