@@ -33,7 +33,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          # The SDK global.json names (the latest .NET 10 patch, rolling forward within its band).
+          # The SDK global.json names (10.0.404 at least; any later .NET 10 SDK is accepted).
           global-json-file: global.json
 
       - name: Cache NuGet packages
