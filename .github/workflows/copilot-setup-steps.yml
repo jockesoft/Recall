@@ -47,7 +47,7 @@ jobs:
         # If you do not check out your code, Copilot will do this for you.
         steps:
             - name: Checkout code
-              uses: actions/checkout@v5
+              uses: actions/checkout@v7
 
             # The cache (Valkey, as in production) is started on host port 6380, where the
             # development connection string in appsettings.json expects it (as locally). It is started here rather than as a
@@ -75,7 +75,7 @@ jobs:
                   exit 1
 
             - name: Set up .NET 10
-              uses: actions/setup-dotnet@v4
+              uses: actions/setup-dotnet@v6
               with:
                   # The SDK global.json names (the latest .NET 10 patch, rolling forward within its band).
                   global-json-file: global.json
