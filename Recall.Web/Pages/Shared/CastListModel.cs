@@ -15,15 +15,10 @@ public sealed class CastListModel
     public required IReadOnlyList<CastPerson> People { get; init; }
 
     /// <summary>
-    /// False (the cast): portrait cards. True (the crew): a compact list of
-    /// name and jobs beside a small round photo, since most crew have no photo
-    /// and a wall of initials tiles says nothing.
-    /// </summary>
-    public bool Compact { get; init; }
-
-    /// <summary>
-    /// The compact list in a narrow side column (Series Details): one column,
-    /// the first six people until "Show all" is pressed.
+    /// One column at every width (a side column: Series Details' cast and
+    /// crew, Movie Details' cast), showing six people until "Show all" is
+    /// pressed. Otherwise two columns from 576px, showing eight (four full rows),
+    /// and six in the one column below it.
     /// </summary>
     public bool Column { get; init; }
 

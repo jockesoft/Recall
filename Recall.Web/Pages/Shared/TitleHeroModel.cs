@@ -9,7 +9,7 @@ namespace Recall.Web.Pages.Shared;
 /// frame above the panel. The title's background art behind a shade, the way
 /// back, the poster beside the chips, the title, a meta line and the ratings,
 /// the user's progress, and the action row (<see cref="TitleActionsModel"/>).
-/// Series Details today; Movie Details is to use it too.
+/// Series Details and Movie Details.
 /// </summary>
 public sealed class TitleHeroModel
 {
@@ -41,7 +41,7 @@ public sealed class TitleHeroModel
     /// <summary>The user's own rating, behind the "Your rating" chip; null for a visitor.</summary>
     public RatingWidgetModel? Rating { get; init; }
 
-    /// <summary>Only for a title in the user's library with something released.</summary>
+    /// <summary>Only for a series in the user's library with something released; a movie has none.</summary>
     public TitleProgressModel? Progress { get; init; }
 
     public required TitleActionsModel Actions { get; init; }
@@ -56,7 +56,11 @@ public sealed class TitleHeroModel
 /// <param name="UseHistory">Go back in the browser's history when there is any, rather than to <paramref name="Page"/>.</param>
 public sealed record TitleBackLink(string Text, string Page, bool UseHistory);
 
-/// <summary>TheTVDB's status of a series. <paramref name="Active"/>: still being made (green).</summary>
+/// <summary>
+/// The title's status beside the genres: a series' ("Continuing", "Ended"), a
+/// movie's ("Released", "Coming Fri, Mar 6"). <paramref name="Active"/>:
+/// something is still to come (green).
+/// </summary>
 public sealed record TitleStatusChip(string Text, bool Active);
 
 /// <summary>
@@ -91,8 +95,9 @@ public sealed record TitleProgressModel(
 /// <summary>
 /// Input for <c>_TitleActions.cshtml</c>: the action row of a detail page.
 /// One full-width primary button (or, when there is nothing to do, a quiet
-/// status box), then three square icon buttons: a "⋯" menu, the heart and
-/// Share. A visitor gets the sign-in card instead of the whole row.
+/// status box), then the square icon buttons: a "⋯" menu, a movie's
+/// watchlist toggle, the heart and Share. A visitor gets the sign-in card
+/// instead of the whole row.
 /// </summary>
 public sealed class TitleActionsModel
 {
@@ -119,10 +124,61 @@ public sealed class TitleActionsModel
     /// <summary>The menu button's accessible name: "More actions for Breaking Bad".</summary>
     public required string MenuLabel { get; init; }
 
+    /// <summary>A movie's watchlist button (a square toggle); null where it does not apply.</summary>
+    public TitleToggleSquare? Watchlist { get; init; }
+
     public LikeToggleModel? Like { get; init; }
 
     /// <summary>The name shared with the page's address (the canonical URL, read from the page).</summary>
     public required string ShareTitle { get; init; }
+}
+
+/// <summary>The one amber button of the action row: a POST to a page handler.</summary>
+public sealed class TitleAction
+{
+    public required string Label { get; init; }
+
+    /// <summary>A second, smaller line under the label ("Aired Fri, Nov 20 · 82 min", "2 h 50 min").</summary>
+    public string? Detail { get; init; }
+
+    public required string Handler { get; init; }
+
+    public required int RouteId { get; init; }
+
+    public IDictionary<string, string> HiddenFields { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Icon class, from <c>Icons</c>.</summary>
+    public string? Icon { get; init; }
+}
+
+/// <summary>
+/// A square toggle in the action row (a movie's watchlist): <c>aria-pressed</c>,
+/// and a name that says the state ("Add to watchlist" / "On your watchlist").
+/// Off, it posts to <see cref="Handler"/>; on, it opens the confirmation
+/// <see cref="PressedModalId"/>, since turning it off removes something.
+/// </summary>
+public sealed class TitleToggleSquare
+{
+    public required bool IsPressed { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string PressedLabel { get; init; }
+
+    public required string Icon { get; init; }
+
+    public required string PressedIcon { get; init; }
+
+    public required string Handler { get; init; }
+
+    public required int RouteId { get; init; }
+
+    public required string PressedModalId { get; init; }
+
+    /// <summary>The button's id, for a test or a script to find it.</summary>
+    public string? Id { get; init; }
+
+    public string CurrentLabel => IsPressed ? PressedLabel : Label;
 }
 
 /// <summary>A sentence before the primary button.</summary>

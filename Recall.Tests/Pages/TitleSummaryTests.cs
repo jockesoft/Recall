@@ -50,17 +50,18 @@ public sealed class TitleSummaryTests
     }
 
     [Test]
-    public void ForMovie_Should_ShowYearAndRuntime()
+    public void ForMovie_Should_ShowYear_Runtime_AndTheFirstStudio()
     {
-        var movie = new MovieAggregate { ReleaseDate = new DateOnly(2023, 7, 19), RuntimeMinutes = 189 };
+        var movie = new MovieAggregate { ReleaseDate = new DateOnly(2023, 7, 19), RuntimeMinutes = 180, Studios = ["Universal Pictures", "Syncopy"] };
 
-        TitleSummary.ForMovie(movie).Should().Be("2023 · 3h 9m");
+        TitleSummary.ForMovie(movie).Should().Be("2023 · 3 h 0 min · Universal Pictures");
     }
 
     [Test]
     public void ForMovie_Should_LeaveOutWhatIsUnknown()
     {
-        TitleSummary.ForMovie(new MovieAggregate { RuntimeMinutes = 45 }).Should().Be("45m");
+        TitleSummary.ForMovie(new MovieAggregate { RuntimeMinutes = 45 }).Should().Be("45 min");
+        TitleSummary.Runtime(170).Should().Be("2 h 50 min");
         TitleSummary.ForMovie(new MovieAggregate { Year = "1995" }).Should().Be("1995");
         TitleSummary.ForMovie(new MovieAggregate()).Should().BeNull();
     }

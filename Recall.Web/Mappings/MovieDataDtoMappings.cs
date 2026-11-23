@@ -8,6 +8,21 @@ namespace Recall.Web.Mappings;
 
 public static class MovieDataDtoMappings
 {
+    // TheTVDB artwork type id of a movie's 16:9 background (a series' is 3).
+    private const int MovieBackgroundArtworkType = 15;
+
+    /// <summary>
+    /// The best-scored background, as its thumbnail (the full image is 1920
+    /// wide, far more than the hero needs) or the full image when there is none.
+    /// </summary>
+    private static string? PickBackground(IReadOnlyList<ArtworkDto>? artworks) =>
+        (artworks ?? [])
+            .Where(a => a.Type == MovieBackgroundArtworkType)
+            .OrderByDescending(a => a.Score ?? 0)
+            .ThenBy(a => a.Id)
+            .Select(a => !string.IsNullOrWhiteSpace(a.Thumbnail) ? a.Thumbnail : a.Image)
+            .FirstOrDefault(url => !string.IsNullOrWhiteSpace(url));
+
     /// <summary>
     /// The translation DTO shape (name/overview/tagline) is identical for series and
     /// movies on TheTVDB's API, so <see cref="SeriesTranslationDataDto"/> is reused here
@@ -30,7 +45,9 @@ public static class MovieDataDtoMappings
             Overview = !string.IsNullOrWhiteSpace(translatedOverview) ? translatedOverview : null,
             Slug = dto.Slug,
             ImageUrl = ArtworkUrl.Normalize(dto.Image),
+            BackgroundUrl = ArtworkUrl.Normalize(PickBackground(dto.Artworks)),
             ReleaseDate = ParseDateOnly(dto.FirstRelease?.Date),
+            ReleaseDetail = string.IsNullOrWhiteSpace(dto.FirstRelease?.Detail) ? null : dto.FirstRelease.Detail.Trim(),
             Year = dto.Year,
             RuntimeMinutes = dto.Runtime,
             OriginalCountry = dto.OriginalCountry,

@@ -12,6 +12,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
 using Recall.Web.Services.External.TheTvDb;
+using System.Globalization;
 
 namespace Recall.Web.Pages.Movies;
 
@@ -66,42 +67,168 @@ public sealed class DetailsModel(
 
     public IReadOnlyList<CastPerson> Crew { get; private set; } = [];
 
+    /// <summary>IMDb's rating from the OMDb snapshot ("7.3"); null when unknown.</summary>
+    public string? ImdbRating => OmdbValue(Omdb?.ImdbRating);
+
+    /// <summary>IMDb's vote count from the OMDb snapshot ("1,234,567").</summary>
+    public string? ImdbVotes => OmdbValue(Omdb?.ImdbVotes);
+
+    /// <summary>OMDb's awards line, when it has one.</summary>
+    public string? OmdbAwards => OmdbValue(Omdb?.Awards);
+
     /// <summary>
-    /// The top of the page (see <c>_TitleHeader.cshtml</c>): "Mark as watched"
-    /// is the primary button, the watchlist is secondary, and a movie that is
-    /// already on the watchlist says so quietly (removing it is at the bottom
-    /// of the details).
+    /// Not released yet: the first release is after today (UTC) or, with no
+    /// date, TheTVDB's status is something other than "Released" ("Announced",
+    /// "Filming / Post-Production"). Such a movie cannot be marked watched here.
     /// </summary>
-    public TitleHeaderModel BuildHeader(string? returnUrl = null)
+    public bool IsUnreleased => Movie is { } movie
+        && (movie.ReleaseDate is { } date
+            ? date > Today
+            : movie.Status?.Name is { } status && !string.Equals(status, ReleasedStatus, StringComparison.OrdinalIgnoreCase));
+
+    private const string ReleasedStatus = "Released";
+
+    /// <summary>The confirmation behind "Remove from watchlist" (the "⋯" menu, and the pressed watchlist button).</summary>
+    public const string RemoveFromWatchlistModalId = "removeFromWatchlistModal";
+
+    /// <summary>
+    /// The top of the page (<c>_TitleHero</c>, with <c>_TitleActions</c>), as
+    /// on Series Details but with no progress block. The primary button is
+    /// "Mark as watched"; a watched movie says so in a quiet box instead (and
+    /// "Mark as unwatched" is in the "⋯" menu), and one not released yet says
+    /// when it is. The watchlist is a square toggle beside the heart.
+    /// </summary>
+    public TitleHeroModel BuildHero(string? returnUrl = null)
     {
         var movie = Movie!;
 
-        var primary = new TitleAction
-        {
-            Label = WatchedOnUtc is { } watched ? $"Watched {DisplayDate.Format(watched, Today)}" : "Mark as watched",
-            Handler = "ToggleMovieWatched",
-            RouteId = movie.TvdbId,
-            Icon = Icons.Check,
-            IsOn = IsWatchedByCurrentUser
-        };
-
-        // A watched movie can't be on the watchlist, so the choice isn't offered.
-        var canAddToWatchlist = !IsWatchedByCurrentUser && !IsOnWatchlist;
-
-        return new TitleHeaderModel
+        return new TitleHeroModel
         {
             Name = movie.Name,
-            ImageUrl = movie.ImageUrl,
+            PosterUrl = movie.ImageUrl,
+            BackgroundUrl = movie.BackgroundUrl,
+            Back = IsOnWatchlist || IsWatchedByCurrentUser
+                ? new TitleBackLink("Library", "/Library", UseHistory: false)
+                : new TitleBackLink("Back", "/Search", UseHistory: true),
             Genres = movie.Genres,
-            Summary = TitleSummary.ForMovie(movie),
-            Noun = "movie",
+            Status = StatusChip(),
+            Meta = TitleSummary.ForMovie(movie),
+            ImdbRating = ImdbRating,
+            RecallRating = RecallRatingCount > 0 && RecallRatingAverage is { } average
+                ? average.ToString("0.0", CultureInfo.InvariantCulture)
+                : null,
+            RecallRatingCount = RecallRatingCount,
+            Rating = IsAuthenticated
+                ? new RatingWidgetModel
+                {
+                    RateHandler = "RateMovie",
+                    ClearHandler = "ClearMovieRating",
+                    RouteId = movie.TvdbId,
+                    CurrentValue = CurrentUserRating,
+                    TargetNoun = "movie"
+                }
+                : null,
+            Actions = BuildActions(returnUrl)
+        };
+    }
+
+    /// <summary>
+    /// "Released"; for a movie not released yet, "In cinemas Fri, Mar 6" when
+    /// TheTVDB says the first release is theatrical, else "Coming Fri, Mar 6";
+    /// without a date, TheTVDB's status ("Announced").
+    /// </summary>
+    private TitleStatusChip? StatusChip()
+    {
+        var movie = Movie!;
+
+        if (!IsUnreleased)
+            return movie.ReleaseDate is not null || movie.Status?.Name is not null ? new TitleStatusChip(ReleasedStatus, Active: false) : null;
+
+        if (movie.ReleaseDate is not { } date)
+            return string.IsNullOrWhiteSpace(movie.Status?.Name) ? null : new TitleStatusChip(movie.Status.Name, Active: true);
+
+        var theatrical = movie.ReleaseDetail?.Contains("theat", StringComparison.OrdinalIgnoreCase) == true
+                         || movie.ReleaseDetail?.Contains("cinema", StringComparison.OrdinalIgnoreCase) == true;
+        return new TitleStatusChip($"{(theatrical ? "In cinemas" : "Coming")} {DisplayDate.Format(date, Today)}", Active: true);
+    }
+
+    private TitleActionsModel BuildActions(string? returnUrl)
+    {
+        var movie = Movie!;
+        TitleAction? primary = null;
+        TitleStatusBox? status;
+
+        if (WatchedOnUtc is { } watched)
+        {
+            status = new TitleStatusBox($"Watched {DisplayDate.Format(watched, Today)}", Icons.Check);
+        }
+        else if (IsUnreleased)
+        {
+            status = new TitleStatusBox(
+                movie.ReleaseDate is { } date ? $"Releases {DisplayDate.Format(date, Today)}" : "Not released yet",
+                Icons.NotAiredYet);
+        }
+        else
+        {
+            status = null;
+            primary = new TitleAction
+            {
+                Label = "Mark as watched",
+                Detail = movie.RuntimeMinutes is > 0 and var minutes ? TitleSummary.Runtime(minutes) : null,
+                Handler = "ToggleMovieWatched",
+                RouteId = movie.TvdbId,
+                Icon = Icons.Check
+            };
+        }
+
+        var menu = new List<TitleMenuItem>();
+        if (IsWatchedByCurrentUser)
+        {
+            menu.Add(new TitleMenuItem
+            {
+                Label = "Mark as unwatched",
+                Icon = Icons.MarkUnwatched,
+                Handler = "ToggleMovieWatched",
+                RouteId = movie.TvdbId,
+                Id = "markUnwatched"
+            });
+        }
+
+        if (IsOnWatchlist)
+        {
+            menu.Add(new TitleMenuItem
+            {
+                Label = "Remove from watchlist",
+                Icon = Icons.Delete,
+                ModalId = RemoveFromWatchlistModalId,
+                Id = "removeFromWatchlist"
+            });
+        }
+
+        return new TitleActionsModel
+        {
             IsAuthenticated = IsAuthenticated,
+            Noun = "movie",
             ReturnUrl = returnUrl,
             Primary = primary,
-            State = IsOnWatchlist ? new TitleState("On your watchlist", Icons.OnWatchlist) : null,
-            Secondary = canAddToWatchlist
-                ? [new TitleAction { Label = "Add to watchlist", Handler = "ToggleWatchlist", RouteId = movie.TvdbId, Icon = Icons.Watchlist }]
-                : [],
+            Status = status,
+            Menu = menu,
+            MenuLabel = $"More actions for {movie.Name}",
+            // A watched movie cannot go on the watchlist (IMovieTrackingService), so it has no toggle.
+            Watchlist = IsWatchedByCurrentUser
+                ? null
+                : new TitleToggleSquare
+                {
+                    IsPressed = IsOnWatchlist,
+                    Label = "Add to watchlist",
+                    PressedLabel = "On your watchlist",
+                    Icon = Icons.Watchlist,
+                    PressedIcon = Icons.OnWatchlist,
+                    Handler = "ToggleWatchlist",
+                    RouteId = movie.TvdbId,
+                    PressedModalId = RemoveFromWatchlistModalId,
+                    Id = "watchlistToggle"
+                },
             Like = new LikeToggleModel
             {
                 Handler = "ToggleMovieLike",
@@ -109,16 +236,15 @@ public sealed class DetailsModel(
                 IsLiked = IsLikedByCurrentUser,
                 TargetNoun = "movie"
             },
-            Rating = new RatingWidgetModel
-            {
-                RateHandler = "RateMovie",
-                ClearHandler = "ClearMovieRating",
-                RouteId = movie.TvdbId,
-                CurrentValue = CurrentUserRating,
-                TargetNoun = "movie"
-            }
+            ShareTitle = movie.Name
         };
     }
+
+    /// <summary>OMDb uses the literal string "N/A" for missing values.</summary>
+    private static string? OmdbValue(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : raw.Trim();
 
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
     {

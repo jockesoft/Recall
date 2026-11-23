@@ -22,6 +22,43 @@ public class MovieDataDtoMappingsTests
     }
 
     [Test]
+    public void ToAggregate_Should_PickTheBestScoredBackground_AsItsThumbnail()
+    {
+        var dto = new MovieDataDto
+        {
+            Id = 1305,
+            Name = "Heat",
+            Artworks =
+            [
+                new ArtworkDto { Id = 1, Type = 14, Score = 900, Image = "/banners/movies/1305/posters/1305.jpg" },
+                new ArtworkDto { Id = 2, Type = 15, Score = 10, Image = "/banners/movies/1305/backgrounds/low.jpg", Thumbnail = "/banners/movies/1305/backgrounds/low_t.jpg" },
+                new ArtworkDto { Id = 3, Type = 15, Score = 100, Image = "/banners/movies/1305/backgrounds/1305.jpg", Thumbnail = "/banners/movies/1305/backgrounds/1305_t.jpg" }
+            ]
+        };
+
+        dto.ToAggregate().BackgroundUrl.Should().Be($"{ArtworksBaseUrl}/banners/movies/1305/backgrounds/1305_t.jpg");
+    }
+
+    [Test]
+    public void ToAggregate_Should_UseTheFullBackground_WithoutAThumbnail_AndNone_WithoutABackground()
+    {
+        var full = new MovieDataDto { Id = 1, Name = "Movie", Artworks = [new ArtworkDto { Id = 1, Type = 15, Image = "https://example.test/background.jpg" }] };
+        var posterOnly = new MovieDataDto { Id = 2, Name = "Movie", Artworks = [new ArtworkDto { Id = 1, Type = 14, Image = "https://example.test/poster.jpg" }] };
+
+        full.ToAggregate().BackgroundUrl.Should().Be("https://example.test/background.jpg");
+        posterOnly.ToAggregate().BackgroundUrl.Should().BeNull("a series' background type (3) and a poster are not a movie's background");
+    }
+
+    [Test]
+    public void ToAggregate_Should_KeepTheFirstReleasesDetail_WhenTheTvDbGivesOne()
+    {
+        new MovieDataDto { Id = 1, Name = "Movie", FirstRelease = new MovieReleaseDto { Date = "2026-03-06", Detail = " Theatrical " } }
+            .ToAggregate().ReleaseDetail.Should().Be("Theatrical");
+        new MovieDataDto { Id = 1, Name = "Movie", FirstRelease = new MovieReleaseDto { Date = "2026-03-06" } }
+            .ToAggregate().ReleaseDetail.Should().BeNull();
+    }
+
+    [Test]
     public void ToAggregate_Should_PreferTranslatedNameAndOverview_OverRawDtoValues()
     {
         var dto = new MovieDataDto { Id = 1, Name = "Raw Name" };

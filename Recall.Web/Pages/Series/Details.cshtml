@@ -62,16 +62,16 @@ else
             }
         </nav>
 
-        <div class="tvdb-series-layout">
-            <div class="tvdb-series-layout__main">
+        <div class="tvdb-detail-layout">
+            <div class="tvdb-detail-layout__main">
                 @if (Model.Seasons.Count > 0)
                 {
-                    <section id="episodes" class="tvdb-series-section" aria-labelledby="episodesHeading">
-                        <div class="tvdb-series-section__head">
+                    <section id="episodes" class="tvdb-detail-section" aria-labelledby="episodesHeading">
+                        <div class="tvdb-detail-section__head">
                             <h2 id="episodesHeading">Episodes</h2>
                             @if (Model.EpisodesSummary is not null)
                             {
-                                <p class="tvdb-series-section__figures tvdb-mono">@Model.EpisodesSummary</p>
+                                <p class="tvdb-detail-section__figures tvdb-mono">@Model.EpisodesSummary</p>
                             }
                         </div>
 
@@ -102,8 +102,8 @@ else
                 }
             </div>
 
-            <div class="tvdb-series-layout__side">
-                <section id="overview" class="tvdb-series-section" aria-labelledby="overviewHeading">
+            <div class="tvdb-detail-layout__side">
+                <section id="overview" class="tvdb-detail-section" aria-labelledby="overviewHeading">
                     <h2 id="overviewHeading">Overview</h2>
                     @if (!string.IsNullOrWhiteSpace(series.Overview))
                     {
@@ -162,9 +162,9 @@ else
 
                 @if (Model.Cast.Count > 0 || Model.Crew.Count > 0)
                 {
-                    <div id="cast" class="tvdb-series-people">
-                        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Compact = true, Column = true, ShowAllLabel = "Show all cast" })" />
-                        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Compact = true, Column = true })" />
+                    <div id="cast" class="tvdb-detail-people">
+                        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Column = true, ShowAllLabel = "Show all cast" })" />
+                        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Column = true })" />
                     </div>
                 }
 

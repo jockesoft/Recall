@@ -1,13 +1,6 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Movies.DetailsModel
-@using Recall.Web.Pages.Shared
 @functions {
-    // OMDb uses the literal string "N/A" for missing values.
-    static string? OmdbValue(string? raw) =>
-        string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : raw.Trim();
-
     static string FormatUsd(decimal value) => "$" + value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
 
     static string Truncate(string text, int maxLength) =>
@@ -20,23 +13,16 @@
         ? Truncate(movie.Overview, 300)
         : $"Details and cast for {(movie?.Name ?? "this movie")} on Recall.nu.";
     ViewData["Robots"] = movie is not null ? "index, follow" : "noindex, nofollow";
-
-    var imdbId = movie?.RemoteIds
-        .FirstOrDefault(r => string.Equals(r.SourceName, "imdb", StringComparison.OrdinalIgnoreCase))?.Id;
-
-    var omdbAwards = OmdbValue(Model.Omdb?.Awards);
-    var omdbRating = OmdbValue(Model.Omdb?.ImdbRating);
-    var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
 @Html.AntiForgeryToken()
 
-<div class="tvdb-shell">
-    <a asp-page="/Search" class="tvdb-back-link"
-       onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> Back</a>
+@if (movie is null)
+{
+    <div class="tvdb-shell">
+        <a asp-page="/Search" class="tvdb-back-link"
+           onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> Back</a>
 
-    @if (movie is null)
-    {
         <partial name="_EmptyState" model="@(new EmptyStateModel
                  {
                      Icon = Icons.Problem,
@@ -46,97 +32,117 @@
                      ActionText = "Search for a movie",
                      ActionPage = "/Search"
                  })" />
-    }
-    else
-    {
-        var today = Model.Today;
-        var hasProductionFacts = movie.Studios.Count > 0 || movie.Budget.HasValue || movie.BoxOffice.HasValue;
+    </div>
+}
+else
+{
+    var today = Model.Today;
+    var imdbId = movie.RemoteIds
+        .FirstOrDefault(r => string.Equals(r.SourceName, "imdb", StringComparison.OrdinalIgnoreCase))?.Id;
+    var hasPeople = Model.Cast.Count > 0 || Model.Crew.Count > 0;
 
-        <div class="tvdb-title">
-            <partial name="_TitleHeader" model="@Model.BuildHeader(ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
+    <partial name="_TitleHero" model="@Model.BuildHero(ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
 
-            <div class="tvdb-title__details">
-                <dl class="row tvdb-facts">
-                    @if (movie.ReleaseDate.HasValue)
-                    {
-                        <dt class="col-5 col-sm-3">Released</dt>
-                        <dd class="col-7 col-sm-9">@DisplayDate.Format(movie.ReleaseDate.Value, today)</dd>
-                    }
+    <div class="tvdb-shell">
+        @* Anchors, not tabs: everything stays on the page. *@
+        <nav class="tvdb-section-links" aria-label="Sections">
+            <ul class="tvdb-section-links__list list-unstyled">
+                <li><a href="#overview">Overview</a></li>
+                @if (hasPeople)
+                {
+                    <li><a href="#@(Model.Cast.Count > 0 ? "cast" : "crew")">Cast &amp; crew</a></li>
+                }
+            </ul>
+        </nav>
 
-                    @if (omdbRating is not null)
-                    {
-                        <dt class="col-5 col-sm-3">IMDb rating</dt>
-                        <dd class="col-7 col-sm-9">
-                            <span class="tvdb-rating">
-                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
-                                <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
-                                @if (omdbVotes is not null)
-                                {
-                                    <span class="tvdb-rating-votes">@omdbVotes votes</span>
-                                }
-                            </span>
-                        </dd>
-                    }
-
-                    @if (Model.RecallRatingCount > 0)
-                    {
-                        <dt class="col-5 col-sm-3">Recall rating</dt>
-                        <dd class="col-7 col-sm-9">
-                            <span class="tvdb-rating">
-                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
-                                <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
-                                <span class="tvdb-rating-votes">@Model.RecallRatingCount rating@(Model.RecallRatingCount == 1 ? "" : "s")</span>
-                            </span>
-                        </dd>
-                    }
-                </dl>
-
+        @* One column below 992px (overview, cast, crew); from 992px a grid: the
+           overview and then the crew on the left, the cast on the right. *@
+        <div class="tvdb-movie-layout">
+            <section id="overview" class="tvdb-detail-section tvdb-movie-layout__overview" aria-labelledby="overviewHeading">
+                <h2 id="overviewHeading">Overview</h2>
                 @if (!string.IsNullOrWhiteSpace(movie.Overview))
                 {
-                    <h2 class="tvdb-section-title">Overview</h2>
                     <p class="tvdb-prose">@movie.Overview</p>
                 }
 
-                @if (omdbAwards is not null)
+                <dl class="tvdb-fact-list">
+                    @if (movie.ReleaseDate is { } released)
+                    {
+                        <div>
+                            <dt>Release date</dt>
+                            <dd>@DisplayDate.Format(released, today)</dd>
+                        </div>
+                    }
+                    @if (movie.RuntimeMinutes is > 0 and var minutes)
+                    {
+                        <div>
+                            <dt>Runtime</dt>
+                            <dd>@TitleSummary.Runtime(minutes)</dd>
+                        </div>
+                    }
+                    @if (movie.Studios.Count > 0)
+                    {
+                        <div>
+                            <dt>Studio</dt>
+                            <dd>@string.Join(", ", movie.Studios)</dd>
+                        </div>
+                    }
+                    @if (movie.Budget is { } budget)
+                    {
+                        <div>
+                            <dt>Budget</dt>
+                            <dd class="tvdb-mono">@FormatUsd(budget)</dd>
+                        </div>
+                    }
+                    @if (movie.BoxOffice is { } boxOffice)
+                    {
+                        <div>
+                            <dt>Box office</dt>
+                            <dd class="tvdb-mono">@FormatUsd(boxOffice)</dd>
+                        </div>
+                    }
+                    @if (Model.ImdbRating is { } imdb)
+                    {
+                        <div>
+                            <dt>IMDb</dt>
+                            <dd>
+                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
+                                <span class="tvdb-mono">@imdb</span>&#8202;/&#8202;10
+                                @if (Model.ImdbVotes is { } votes)
+                                {
+                                    <span class="tvdb-meta">· @votes votes</span>
+                                }
+                            </dd>
+                        </div>
+                    }
+                </dl>
+
+                @if (Model.OmdbAwards is { } awards)
                 {
                     <div class="tvdb-awards">
                         <i class="@Icons.Award" aria-hidden="true"></i>
                         <div>
-                            <p class="mb-0">@omdbAwards</p>
+                            <p class="mb-0">@awards</p>
                             <span class="tvdb-awards-src">via OMDb</span>
                         </div>
                     </div>
                 }
+            </section>
 
-                @if (hasProductionFacts)
-                {
-                    <dl class="tvdb-facts-quiet">
-                        @if (movie.Studios.Count > 0)
-                        {
-                            <div><dt>Studio</dt><dd>@string.Join(", ", movie.Studios)</dd></div>
-                        }
-                        @if (movie.Budget.HasValue)
-                        {
-                            <div><dt>Budget</dt><dd class="tvdb-mono">@FormatUsd(movie.Budget.Value)</dd></div>
-                        }
-                        @if (movie.BoxOffice.HasValue)
-                        {
-                            <div><dt>Box office</dt><dd class="tvdb-mono">@FormatUsd(movie.BoxOffice.Value)</dd></div>
-                        }
-                    </dl>
-                }
+            @if (Model.Cast.Count > 0)
+            {
+                <div id="cast" class="tvdb-detail-people tvdb-movie-layout__cast">
+                    <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Column = true, ShowAllLabel = "Show all cast" })" />
+                </div>
+            }
 
-                @if (Model.IsOnWatchlist)
-                {
-                    <button type="button" class="tvdb-quiet-action" data-bs-toggle="modal" data-bs-target="#removeFromWatchlistModal">
-                        Remove from watchlist
-                    </button>
-                }
-            </div>
+            @if (Model.Crew.Count > 0)
+            {
+                <div id="crew" class="tvdb-detail-people tvdb-movie-layout__crew">
+                    <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew })" />
+                </div>
+            }
         </div>
-
-        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast })" />
-        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Compact = true })" />
 
         <p class="tvdb-source-line">
             <a class="tvdb-metalink" href="https://www.thetvdb.com/movies/@movie.Slug" target="_blank" rel="noopener">TheTVDB <span class="tvdb-mono">@movie.TvdbId</span></a>
@@ -145,24 +151,25 @@
                 <a class="tvdb-metalink" href="https://www.imdb.com/title/@imdbId" target="_blank" rel="noopener">IMDb <span class="tvdb-mono">@imdbId</span></a>
             }
         </p>
+    </div>
 
-        @if (Model.IsOnWatchlist)
-        {
-            <partial name="_ConfirmModal" model="@(new ConfirmModalModel
-                     {
-                         Id = "removeFromWatchlistModal",
-                         Title = "Remove from watchlist?",
-                         Text = $"{movie.Name} leaves your watchlist. You can add it again at any time.",
-                         ConfirmLabel = "Remove",
-                         Handler = "ToggleWatchlist",
-                         RouteId = movie.TvdbId
-                     })" />
-        }
+    @if (Model.IsOnWatchlist)
+    {
+        <partial name="_ConfirmModal" model="@(new ConfirmModalModel
+                 {
+                     Id = Recall.Web.Pages.Movies.DetailsModel.RemoveFromWatchlistModalId,
+                     Title = "Remove from watchlist?",
+                     Text = $"{movie.Name} leaves your watchlist. You can add it again at any time.",
+                     ConfirmLabel = "Remove",
+                     Handler = "ToggleWatchlist",
+                     RouteId = movie.TvdbId
+                 })" />
     }
-</div>
+}
 
 @section Scripts {
     <script src="~/js/tvdb-cast.js" asp-append-version="true"></script>
+    <script src="~/js/tvdb-share.js" asp-append-version="true"></script>
 }
 
 @section Head {

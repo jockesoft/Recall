@@ -120,6 +120,17 @@ INSERT INTO user_movie_watch (id, user_id, movie_tvdb_id, watched_utc, created_u
 VALUES (gen_random_uuid(), :dev, 290272, now() - interval '6 days', now(), now())   -- Dune: Part Two
 ON CONFLICT (user_id, movie_tvdb_id) DO NOTHING;
 
+-- Not released yet, for good: Dune: Part Three's first release is moved to a
+-- year after the run, in the clone only, so Movie Details always shows it as
+-- coming ("Releases …", no way to mark it watched). The page decides from the
+-- release date alone when there is one; the year follows it for the meta line.
+UPDATE cached_movie_aggregate
+SET payload = payload
+    || jsonb_build_object(
+           'releaseDate', to_char(current_date + interval '1 year', 'YYYY-MM-DD'),
+           'year', to_char(current_date + interval '1 year', 'YYYY'))
+WHERE tvdb_id = 356047;
+
 -- ---- Likes and ratings -----------------------------------------------------
 
 INSERT INTO user_like (id, user_id, target_type, target_tvdb_id, series_tvdb_id, created_utc, updated_utc)

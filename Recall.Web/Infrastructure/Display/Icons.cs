@@ -26,6 +26,8 @@ public static class Icons
     public const string Add = "ph ph-plus";
     public const string Watchlist = "ph ph-bookmark-simple";
     public const string OnWatchlist = "ph-fill ph-bookmark-simple";
+    /// <summary>"Mark as unwatched" in a movie's "⋯" menu.</summary>
+    public const string MarkUnwatched = "ph ph-eye-slash";
     public const string More = "ph ph-dots-three";
     public const string Stopped = "ph ph-pause-circle";
     public const string Resume = "ph ph-play";

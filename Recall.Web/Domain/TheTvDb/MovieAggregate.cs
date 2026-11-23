@@ -8,7 +8,22 @@ public sealed record MovieAggregate
     public string? Overview { get; init; }
     public string? ImageUrl { get; init; }
 
+    /// <summary>
+    /// The movie's 16:9 background art, sized for the hero: TheTVDB's
+    /// thumbnail of its best-scored background (artwork type 15). Null when
+    /// the movie has none, and on a row cached before this was mapped
+    /// (2026-11-23) until it is next refreshed.
+    /// </summary>
+    public string? BackgroundUrl { get; init; }
+
+    /// <summary>The first release's date (TheTVDB's <c>first_release</c>).</summary>
     public DateOnly? ReleaseDate { get; init; }
+
+    /// <summary>
+    /// What the first release was, when TheTVDB says ("Theatrical", "Digital",
+    /// "Premiere"); usually it does not.
+    /// </summary>
+    public string? ReleaseDetail { get; init; }
     public string? Year { get; init; }
     public int? RuntimeMinutes { get; init; }
 
