@@ -77,7 +77,8 @@ jobs:
             - name: Set up .NET 10
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: "10.0.x"
+                  # The SDK global.json names (the latest .NET 10 patch, rolling forward within its band).
+                  global-json-file: global.json
 
             - name: Restore dependencies
               run: dotnet restore
