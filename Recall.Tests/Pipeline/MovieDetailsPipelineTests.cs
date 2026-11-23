@@ -56,7 +56,11 @@ public sealed class MovieDetailsPipelineTests
                 Status = new MovieStatus { Name = "Released" },
                 Genres = ["Crime"],
                 Studios = ["Warner Bros. Pictures"],
-                Characters = [new Character { Id = 1, PeopleId = 1, PersonName = "Ada Actor", Name = "The Lead", PeopleType = "Actor" }]
+                Characters =
+                [
+                    new Character { Id = 1, PeopleId = 1, PersonName = "Ada Actor", Name = "The Lead", PeopleType = "Actor" },
+                    new Character { Id = 2, PeopleId = 2, PersonName = "Dee Rector", PeopleType = "Director" }
+                ]
             });
 
         _factory = _baseFactory.WithWebHostBuilder(builder =>
@@ -118,6 +122,17 @@ public sealed class MovieDetailsPipelineTests
         html.Should().NotContain("<dt>Box office</dt>", "the movie has no box office figure");
         html.Should().NotContain("<dt>IMDb</dt>", "OMDb has nothing for it");
         html.Should().Contain("Sign in to track this movie");
+
+        // Overview, then cast, then crew: the one-column order below 992px, which
+        // the stylesheet's grid areas rearrange from 992px (crew under the overview).
+        var overview = html.IndexOf("id=\"overview\" class=\"tvdb-detail-section tvdb-movie-layout__overview\"", StringComparison.Ordinal);
+        var cast = html.IndexOf("id=\"cast\" class=\"tvdb-detail-people tvdb-movie-layout__cast\"", StringComparison.Ordinal);
+        var crew = html.IndexOf("id=\"crew\" class=\"tvdb-detail-people tvdb-movie-layout__crew\"", StringComparison.Ordinal);
+        overview.Should().BePositive();
+        cast.Should().BeGreaterThan(overview);
+        crew.Should().BeGreaterThan(cast);
+        html.Should().MatchRegex("class=\"tvdb-cast tvdb-cast--compact\\s+tvdb-cast--two-columns\" data-cast> <div class=\"tvdb-cast__head\"> <h2 class=\"mb-0\">Crew");
+        html.Should().Contain("Show all cast").And.Contain("Show all 1");
         html.Should().Contain("\"@type\":\"Movie\"", "the structured data is still there");
     }
 

@@ -50,92 +50,96 @@ else
                 <li><a href="#overview">Overview</a></li>
                 @if (hasPeople)
                 {
-                    <li><a href="#cast">Cast &amp; crew</a></li>
+                    <li><a href="#@(Model.Cast.Count > 0 ? "cast" : "crew")">Cast &amp; crew</a></li>
                 }
             </ul>
         </nav>
 
-        <div class="tvdb-detail-layout">
-            <div class="tvdb-detail-layout__main">
-                <section id="overview" class="tvdb-detail-section" aria-labelledby="overviewHeading">
-                    <h2 id="overviewHeading">Overview</h2>
-                    @if (!string.IsNullOrWhiteSpace(movie.Overview))
-                    {
-                        <p class="tvdb-prose">@movie.Overview</p>
-                    }
+        @* One column below 992px (overview, cast, crew); from 992px a grid: the
+           overview and then the crew on the left, the cast on the right. *@
+        <div class="tvdb-movie-layout">
+            <section id="overview" class="tvdb-detail-section tvdb-movie-layout__overview" aria-labelledby="overviewHeading">
+                <h2 id="overviewHeading">Overview</h2>
+                @if (!string.IsNullOrWhiteSpace(movie.Overview))
+                {
+                    <p class="tvdb-prose">@movie.Overview</p>
+                }
 
-                    <dl class="tvdb-fact-list">
-                        @if (movie.ReleaseDate is { } released)
-                        {
-                            <div>
-                                <dt>Release date</dt>
-                                <dd>@DisplayDate.Format(released, today)</dd>
-                            </div>
-                        }
-                        @if (movie.RuntimeMinutes is > 0 and var minutes)
-                        {
-                            <div>
-                                <dt>Runtime</dt>
-                                <dd>@TitleSummary.Runtime(minutes)</dd>
-                            </div>
-                        }
-                        @if (movie.Studios.Count > 0)
-                        {
-                            <div>
-                                <dt>Studio</dt>
-                                <dd>@string.Join(", ", movie.Studios)</dd>
-                            </div>
-                        }
-                        @if (movie.Budget is { } budget)
-                        {
-                            <div>
-                                <dt>Budget</dt>
-                                <dd class="tvdb-mono">@FormatUsd(budget)</dd>
-                            </div>
-                        }
-                        @if (movie.BoxOffice is { } boxOffice)
-                        {
-                            <div>
-                                <dt>Box office</dt>
-                                <dd class="tvdb-mono">@FormatUsd(boxOffice)</dd>
-                            </div>
-                        }
-                        @if (Model.ImdbRating is { } imdb)
-                        {
-                            <div>
-                                <dt>IMDb</dt>
-                                <dd>
-                                    <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
-                                    <span class="tvdb-mono">@imdb</span>&#8202;/&#8202;10
-                                    @if (Model.ImdbVotes is { } votes)
-                                    {
-                                        <span class="tvdb-meta">· @votes votes</span>
-                                    }
-                                </dd>
-                            </div>
-                        }
-                    </dl>
-
-                    @if (Model.OmdbAwards is { } awards)
+                <dl class="tvdb-fact-list">
+                    @if (movie.ReleaseDate is { } released)
                     {
-                        <div class="tvdb-awards">
-                            <i class="@Icons.Award" aria-hidden="true"></i>
-                            <div>
-                                <p class="mb-0">@awards</p>
-                                <span class="tvdb-awards-src">via OMDb</span>
-                            </div>
+                        <div>
+                            <dt>Release date</dt>
+                            <dd>@DisplayDate.Format(released, today)</dd>
                         </div>
                     }
-                </section>
-            </div>
+                    @if (movie.RuntimeMinutes is > 0 and var minutes)
+                    {
+                        <div>
+                            <dt>Runtime</dt>
+                            <dd>@TitleSummary.Runtime(minutes)</dd>
+                        </div>
+                    }
+                    @if (movie.Studios.Count > 0)
+                    {
+                        <div>
+                            <dt>Studio</dt>
+                            <dd>@string.Join(", ", movie.Studios)</dd>
+                        </div>
+                    }
+                    @if (movie.Budget is { } budget)
+                    {
+                        <div>
+                            <dt>Budget</dt>
+                            <dd class="tvdb-mono">@FormatUsd(budget)</dd>
+                        </div>
+                    }
+                    @if (movie.BoxOffice is { } boxOffice)
+                    {
+                        <div>
+                            <dt>Box office</dt>
+                            <dd class="tvdb-mono">@FormatUsd(boxOffice)</dd>
+                        </div>
+                    }
+                    @if (Model.ImdbRating is { } imdb)
+                    {
+                        <div>
+                            <dt>IMDb</dt>
+                            <dd>
+                                <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
+                                <span class="tvdb-mono">@imdb</span>&#8202;/&#8202;10
+                                @if (Model.ImdbVotes is { } votes)
+                                {
+                                    <span class="tvdb-meta">· @votes votes</span>
+                                }
+                            </dd>
+                        </div>
+                    }
+                </dl>
 
-            @if (hasPeople)
-            {
-                <div class="tvdb-detail-layout__side">
-                    <div id="cast" class="tvdb-detail-people">
-                        <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Compact = true, Column = true, ShowAllLabel = "Show all cast" })" />
-                        <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Compact = true, Column = true })" />
+                @if (Model.OmdbAwards is { } awards)
+                {
+                    <div class="tvdb-awards">
+                        <i class="@Icons.Award" aria-hidden="true"></i>
+                        <div>
+                            <p class="mb-0">@awards</p>
+                            <span class="tvdb-awards-src">via OMDb</span>
+                        </div>
                     </div>
+                }
+            </section>
+
+            @if (Model.Cast.Count > 0)
+            {
+                <div id="cast" class="tvdb-detail-people tvdb-movie-layout__cast">
+                    <partial name="_CastList" model="@(new CastListModel { Heading = "Cast", Id = "castList", People = Model.Cast, Compact = true, Column = true, ShowAllLabel = "Show all cast" })" />
+                </div>
+            }
+
+            @if (Model.Crew.Count > 0)
+            {
+                <div id="crew" class="tvdb-detail-people tvdb-movie-layout__crew">
+                    <partial name="_CastList" model="@(new CastListModel { Heading = "Crew", Id = "crewList", People = Model.Crew, Compact = true, TwoColumns = true })" />
                 </div>
             }
         </div>

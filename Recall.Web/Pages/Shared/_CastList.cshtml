@@ -7,7 +7,7 @@
 @if (Model.People.Count > 0)
 {
     var showAll = Model.ShowAllLabel ?? $"Show all {Model.People.Count}";
-    <section class="tvdb-cast @(Model.Compact ? "tvdb-cast--compact" : "") @(Model.Column ? "tvdb-cast--column" : "")" data-cast>
+    <section class="tvdb-cast @(Model.Compact ? "tvdb-cast--compact" : "") @(Model.Column ? "tvdb-cast--column" : "") @(Model.TwoColumns ? "tvdb-cast--two-columns" : "")" data-cast>
         <div class="tvdb-cast__head">
             <h2 class="mb-0">@Model.Heading <span class="tvdb-count">@Model.People.Count</span></h2>
             <button type="button" class="btn btn-outline-dark btn-sm tvdb-cast__toggle" data-cast-toggle

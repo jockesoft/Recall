@@ -602,6 +602,36 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     text-align: right;
 }
 
+/* ---- Movie Details: one column below 992px (overview, cast, crew); from
+   992px grid areas, with the overview and then the crew (two columns) in the
+   main column and the cast in the side column. */
+.tvdb-movie-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-6);
+}
+
+.tvdb-movie-layout .tvdb-cast {
+    margin-top: 0;
+}
+
+@media (min-width: 992px) {
+    .tvdb-movie-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 19rem);
+        grid-template-areas:
+            "overview cast"
+            "crew cast";
+        grid-template-rows: auto 1fr;
+        align-items: start;
+        gap: var(--tvdb-space-6);
+    }
+
+    .tvdb-movie-layout__overview { grid-area: overview; }
+    .tvdb-movie-layout__cast { grid-area: cast; }
+    .tvdb-movie-layout__crew { grid-area: crew; }
+}
+
 /* ---- Series Details: season cards (the _SeasonCard partial), a details/summary each. */
 .tvdb-season-cards {
     display: flex;

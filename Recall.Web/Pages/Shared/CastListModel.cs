@@ -27,6 +27,12 @@ public sealed class CastListModel
     /// </summary>
     public bool Column { get; init; }
 
+    /// <summary>
+    /// The compact list in at most two columns at every width (Movie Details'
+    /// crew, in the main column), where it would otherwise take three from 992px.
+    /// </summary>
+    public bool TwoColumns { get; init; }
+
     /// <summary>The "Show all" button's text; "Show all N" when not set.</summary>
     public string? ShowAllLabel { get; init; }
 }

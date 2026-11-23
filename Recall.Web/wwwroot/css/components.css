@@ -2413,6 +2413,13 @@ dl.row dd a.tvdb-inline-edit {
     grid-template-rows: repeat(6, auto);
 }
 
+/* At most two columns (Movie Details' crew in the main column). */
+@media (min-width: 992px) {
+    .tvdb-cast--compact.tvdb-cast--two-columns .tvdb-cast__list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 /* A row cut off by the collapse has no height: its content must hang below
    the list's edge (and be clipped), not centre on it over the row above. */
 .tvdb-cast--compact.tvdb-cast--column .tvdb-person {
