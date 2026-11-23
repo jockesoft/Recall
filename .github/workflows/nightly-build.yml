@@ -32,6 +32,18 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
 
+    - name: NuGet audit
+      # Packages with a known vulnerability are warnings, never errors
+      # (Directory.Build.props), so a new advisory cannot block a build.
+      # This step makes them visible: one annotation per package on the run.
+      run: |
+        dotnet list package --vulnerable --include-transitive 2>&1 | tee nuget-audit.txt
+        if grep -q "has the following vulnerable packages" nuget-audit.txt; then
+          grep -E '^ +>' nuget-audit.txt | sed -E 's/^ +> +//' | while read -r line; do
+            echo "::warning title=NuGet audit::Vulnerable package: $line"
+          done
+        fi
+
     - name: Build (Release)
       run: dotnet build --configuration Release --no-restore
 
