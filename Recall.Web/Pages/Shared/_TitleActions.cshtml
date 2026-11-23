@@ -1,0 +1,115 @@
+@model Recall.Web.Pages.Shared.TitleActionsModel
+@* The action row of a detail page (TitleActionsModel): one full-width primary
+   button or a quiet status box, then three square icon buttons: "⋯" (a menu
+   of the secondary actions), the heart and Share. A visitor gets the sign-in
+   card instead of the whole row. Sits on the dark frame, in the hero. *@
+
+@if (!Model.IsAuthenticated)
+{
+    <div class="tvdb-signin-card tvdb-surface-paper">
+        <p class="mb-0">Sign in to track this @Model.Noun.</p>
+        <a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl" class="btn btn-primary">
+            <i class="@Icons.SignIn me-1" aria-hidden="true"></i> Sign in
+        </a>
+    </div>
+    return;
+}
+
+<div class="tvdb-title-actions">
+    @if (Model.Notice is { } notice)
+    {
+        @* Explains the button that follows it ("You stopped watching on …", then "Resume watching"). *@
+        <p class="tvdb-title-actions__notice"><i class="@notice.Icon" aria-hidden="true"></i> @notice.Text</p>
+    }
+
+    <div class="tvdb-title-actions__row">
+        @if (Model.Primary is { } primary)
+        {
+            <form method="post" asp-page-handler="@primary.Handler" asp-route-id="@primary.RouteId" class="tvdb-title-actions__primary">
+                @foreach (var field in primary.HiddenFields)
+                {
+                    <input type="hidden" name="@field.Key" value="@field.Value" />
+                }
+                <button type="submit" class="btn btn-primary tvdb-primary-action" id="primaryAction">
+                    <span class="tvdb-primary-action__label">
+                        @if (primary.Icon is not null)
+                        {
+                            <i class="@primary.Icon" aria-hidden="true"></i>
+                        }
+                        @primary.Label
+                    </span>
+                    @if (primary.Detail is not null)
+                    {
+                        <span class="tvdb-primary-action__detail">@primary.Detail</span>
+                    }
+                </button>
+            </form>
+        }
+        else if (Model.Status is { } status)
+        {
+            <div class="tvdb-status-box tvdb-title-actions__primary">
+                <i class="@status.Icon tvdb-status-box__icon" aria-hidden="true"></i>
+                <div class="tvdb-status-box__text">
+                    <span class="tvdb-status-box__label">@status.Text</span>
+                    @if (status.Detail is not null || status.Release is not null)
+                    {
+                        <span class="tvdb-status-box__detail">@status.Detail @if (status.Release is not null)
+                            {
+                                <partial name="_ReleaseTime" model="status.Release" />
+                            }</span>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.Menu.Count > 0)
+        {
+            <div class="dropdown">
+                <button type="button" class="tvdb-square-button" id="titleMenuButton"
+                        data-bs-toggle="dropdown" aria-expanded="false" aria-label="@Model.MenuLabel" title="More actions">
+                    <i class="@Icons.More" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="titleMenuButton">
+                    @foreach (var item in Model.Menu)
+                    {
+                        <li>
+                            @if (item.ModalId is not null)
+                            {
+                                <button type="button" class="dropdown-item" id="@item.Id" data-bs-toggle="modal" data-bs-target="#@item.ModalId">
+                                    <i class="@item.Icon tvdb-icon--fw" aria-hidden="true"></i> @item.Label&hellip;
+                                </button>
+                            }
+                            else
+                            {
+                                <form method="post" asp-page-handler="@item.Handler" asp-route-id="@item.RouteId">
+                                    @foreach (var field in item.HiddenFields)
+                                    {
+                                        <input type="hidden" name="@field.Key" value="@field.Value" />
+                                    }
+                                    <button type="submit" class="dropdown-item" id="@item.Id">
+                                        <i class="@item.Icon tvdb-icon--fw" aria-hidden="true"></i> @item.Label
+                                    </button>
+                                </form>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (Model.Like is not null)
+        {
+            <partial name="_LikeToggle" model="Model.Like" />
+        }
+
+        @* Web Share where the browser has it; otherwise the address is copied and
+           the "Link copied." toast below is shown (js/tvdb-share.js). *@
+        <button type="button" class="tvdb-square-button" data-share data-share-title="@Model.ShareTitle"
+                aria-label="Share @Model.ShareTitle" title="Share">
+            <i class="@Icons.Share" aria-hidden="true"></i>
+        </button>
+        <template data-toast-template="link-copied">
+            <partial name="_Toast" model="ToastMessagesModel.LinkCopied" />
+        </template>
+    </div>
+</div>

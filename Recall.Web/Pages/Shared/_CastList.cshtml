@@ -6,12 +6,13 @@
    since it depends on the width). *@
 @if (Model.People.Count > 0)
 {
-    <section class="tvdb-cast @(Model.Compact ? "tvdb-cast--compact" : "")" data-cast>
+    var showAll = Model.ShowAllLabel ?? $"Show all {Model.People.Count}";
+    <section class="tvdb-cast @(Model.Compact ? "tvdb-cast--compact" : "") @(Model.Column ? "tvdb-cast--column" : "")" data-cast>
         <div class="tvdb-cast__head">
             <h2 class="mb-0">@Model.Heading <span class="tvdb-count">@Model.People.Count</span></h2>
             <button type="button" class="btn btn-outline-dark btn-sm tvdb-cast__toggle" data-cast-toggle
                     aria-expanded="false" aria-controls="@Model.Id" hidden>
-                <span data-cast-toggle-label data-more="Show all @Model.People.Count" data-less="Show fewer">Show all @Model.People.Count</span>
+                <span data-cast-toggle-label data-more="@showAll" data-less="Show fewer">@showAll</span>
                 <i class="@Icons.Expand ms-1" aria-hidden="true"></i>
             </button>
         </div>

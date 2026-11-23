@@ -1149,7 +1149,7 @@ dl.row dd a.tvdb-inline-edit {
    row, notification, push device) has a title at body size; a card (poster, upcoming,
    liked episode, person) has one a step smaller. Both are the UI face,
    semibold. */
-.tvdb-episode__title,
+.tvdb-ep__title,
 .tvdb-result__title,
 .tvdb-import-row__title,
 .tvdb-bar-list__name,
@@ -1862,6 +1862,364 @@ dl.row dd a.tvdb-inline-edit {
     color: var(--tvdb-text-muted);
 }
 
+/* ---- Title hero (the _TitleHero partial) ------------------------------------------------
+   The top of a detail page, on the dark frame and as wide as the page (it
+   reaches the container's edges, so on a phone the screen's). The background
+   art is an <img> under --tvdb-hero-shade; without art the hero is
+   --tvdb-hero-bg. The content lines up with the panel below it. */
+
+.tvdb-hero {
+    position: relative;
+    isolation: isolate;
+    margin-inline: calc(var(--bs-gutter-x) * -0.5);
+    margin-bottom: var(--tvdb-space-4);
+    overflow: hidden;
+    background: var(--tvdb-hero-bg);
+    color: var(--tvdb-on-ink);
+}
+
+.tvdb-hero__art {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+}
+
+.tvdb-hero.has-art::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--tvdb-hero-shade);
+}
+
+.tvdb-hero__inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-4);
+    max-width: var(--tvdb-width-full);
+    margin: 0 auto;
+    padding: var(--tvdb-space-4) var(--tvdb-shell-pad) var(--tvdb-space-5);
+}
+
+.tvdb-hero__back {
+    align-self: flex-start;
+    margin-bottom: 0;
+    color: var(--tvdb-on-ink-muted);
+}
+
+.tvdb-hero__back:hover,
+.tvdb-hero__back:focus-visible {
+    color: var(--tvdb-on-ink);
+}
+
+/* Poster beside the heading block; on a phone the block wraps under it. */
+.tvdb-hero__title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--tvdb-space-4) var(--tvdb-space-5);
+}
+
+.tvdb-hero__poster {
+    flex: 0 0 132px;
+    width: 132px;
+    min-height: 0;
+    margin-inline: 0;
+    border-radius: var(--tvdb-radius-md);
+    box-shadow: var(--tvdb-shadow-lg);
+}
+
+.tvdb-hero__head {
+    flex: 1 1 18rem;
+    min-width: 0;
+}
+
+.tvdb-hero__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2);
+    margin: 0 0 var(--tvdb-space-2);
+}
+
+.tvdb-hero-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-1);
+    padding: 0.2rem var(--tvdb-space-2);
+    border: 1px solid var(--tvdb-on-ink-line);
+    border-radius: var(--tvdb-radius-pill);
+    background: var(--tvdb-on-ink-wash);
+    font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-on-ink);
+}
+
+.tvdb-hero-chip--status {
+    color: var(--tvdb-on-ink-muted);
+}
+
+.tvdb-hero-chip--status.is-active {
+    border-color: var(--tvdb-ok-edge);
+    color: var(--tvdb-ok-on-ink);
+}
+
+.tvdb-hero__title {
+    margin: 0 0 var(--tvdb-space-1);
+    font-size: clamp(var(--tvdb-text-2xl), 5vw, var(--tvdb-text-3xl));
+    overflow-wrap: anywhere;
+    text-shadow: var(--tvdb-text-shadow-on-art);
+}
+
+.tvdb-hero__meta {
+    margin: 0 0 var(--tvdb-space-2);
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-on-ink-muted);
+}
+
+.tvdb-hero__ratings {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-hero__rating {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--tvdb-space-1);
+    white-space: nowrap;
+}
+
+.tvdb-hero__rating .ph-fill,
+.tvdb-hero-chip--button .ph-fill {
+    align-self: center;
+    color: var(--tvdb-signal);
+}
+
+.tvdb-hero__sep {
+    color: var(--tvdb-on-ink-faint);
+}
+
+/* "Your rating 9" / "Rate": a disclosure with the 1-10 pills on paper. Open,
+   it takes the whole line, so the pills never squeeze beside the ratings. */
+.tvdb-rating-disclosure[open] {
+    flex-basis: 100%;
+}
+
+.tvdb-hero-chip--button {
+    min-height: 36px;
+    padding-inline: var(--tvdb-space-3);
+    cursor: pointer;
+    list-style: none;
+    transition: border-color var(--tvdb-ease), background var(--tvdb-ease);
+}
+
+.tvdb-hero-chip--button::-webkit-details-marker {
+    display: none;
+}
+
+.tvdb-hero-chip--button:hover,
+.tvdb-rating-disclosure[open] > .tvdb-hero-chip--button {
+    border-color: var(--tvdb-on-ink);
+}
+
+.tvdb-hero-chip--button.is-rated {
+    border-color: var(--tvdb-signal-edge);
+}
+
+/* Closed, the panel is not laid out at all (some browsers measure the hidden content). */
+.tvdb-rating-disclosure:not([open]) > .tvdb-rating-disclosure__panel {
+    display: none;
+}
+
+.tvdb-rating-disclosure__panel {
+    width: fit-content;
+    max-width: 100%;
+    margin-top: var(--tvdb-space-2);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-paper);
+    box-shadow: var(--tvdb-shadow-md);
+}
+
+/* Progress through the series: counts, a bar, the last watch. */
+.tvdb-hero__progress {
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    border: 1px solid var(--tvdb-line);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-on-ink-wash);
+}
+
+.tvdb-hero__progress-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--tvdb-space-1) var(--tvdb-space-3);
+    font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-hero__bar {
+    --bs-progress-height: 6px;
+    --bs-progress-bg: var(--tvdb-on-ink-line);
+    margin-block: var(--tvdb-space-2);
+}
+
+.tvdb-hero__bar .progress-bar {
+    width: var(--tvdb-bar, 0%);
+}
+
+.tvdb-hero__last {
+    margin: 0;
+    font-size: var(--tvdb-text-xs);
+    color: var(--tvdb-on-ink-muted);
+}
+
+/* ---- Title actions (the _TitleActions partial) -------------------------------------------
+   One full-width primary button (or the quiet status box), then three 56px
+   square icon buttons: "⋯", the heart and Share. On the dark frame. */
+
+.tvdb-title-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-title-actions__notice {
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+    margin: 0;
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-on-ink-muted);
+}
+
+.tvdb-title-actions__row {
+    display: flex;
+    align-items: stretch;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-title-actions__primary {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tvdb-primary-action {
+    --bs-btn-font-size: var(--tvdb-text-md);
+    --bs-btn-font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 56px;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.tvdb-primary-action__label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+}
+
+.tvdb-primary-action__detail {
+    font-size: var(--tvdb-text-xs);
+    font-weight: 400;
+}
+
+.tvdb-status-box {
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    min-height: 56px;
+    padding: var(--tvdb-space-2) var(--tvdb-space-4);
+    border: 1px solid var(--tvdb-ok-edge);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-ok-tint);
+}
+
+.tvdb-status-box__icon {
+    flex: none;
+    font-size: var(--tvdb-text-xl);
+    color: var(--tvdb-ok-on-ink);
+}
+
+.tvdb-status-box__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: var(--tvdb-leading-snug);
+}
+
+.tvdb-status-box__label {
+    font-weight: 600;
+}
+
+.tvdb-status-box__detail {
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-on-ink-muted);
+}
+
+.tvdb-square-button,
+.tvdb-title-actions .tvdb-heart {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: 1px solid var(--tvdb-on-ink-line);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-on-ink-wash);
+    color: var(--tvdb-on-ink);
+    font-size: var(--tvdb-text-xl);
+    cursor: pointer;
+    transition: border-color var(--tvdb-ease), background var(--tvdb-ease), color var(--tvdb-ease);
+}
+
+.tvdb-square-button .ph {
+    font-size: 1em;
+    vertical-align: 0;
+}
+
+.tvdb-square-button:hover,
+.tvdb-square-button:focus-visible,
+.tvdb-square-button.show {
+    border-color: var(--tvdb-on-ink);
+    background: var(--tvdb-ink-3);
+}
+
+.tvdb-title-actions .tvdb-heart:hover,
+.tvdb-title-actions .tvdb-heart:focus-visible {
+    border-color: var(--tvdb-like);
+    color: var(--tvdb-like);
+}
+
+.tvdb-title-actions .tvdb-heart--on {
+    border-color: var(--tvdb-like-edge);
+    background: var(--tvdb-like-tint);
+    color: var(--tvdb-like);
+}
+
+/* On a phone the primary takes the whole line, and the squares sit under it. */
+@media (max-width: 575.98px) {
+    .tvdb-title-actions__row {
+        flex-wrap: wrap;
+    }
+
+    .tvdb-title-actions__primary {
+        flex-basis: 100%;
+    }
+}
+
 /* ---- Cast and crew (the _CastList partial) ---------------------------------------------
    Collapsed until "Show all" is pressed (tvdb-cast.js decides whether the
    button is needed). Cast: portrait cards, one full row; on phones one row
@@ -2015,6 +2373,19 @@ dl.row dd a.tvdb-inline-edit {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: repeat(6, auto);
     }
+}
+
+/* The compact list in a side column (Series Details): one column, six
+   people until "Show all" is pressed, at every width. */
+.tvdb-cast--compact.tvdb-cast--column .tvdb-cast__list {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(6, auto);
+}
+
+/* A row cut off by the collapse has no height: its content must hang below
+   the list's edge (and be clipped), not centre on it over the row above. */
+.tvdb-cast--compact.tvdb-cast--column .tvdb-person {
+    align-content: start;
 }
 
 /* ---- Toasts (the _ToastMessages partial) --------------------------------------------------

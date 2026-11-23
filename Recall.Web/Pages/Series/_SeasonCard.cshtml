@@ -1,0 +1,154 @@
+@model Recall.Web.Pages.Series.SeasonCardView
+@* One season of Series Details (SeasonCards): a details/summary card, so it
+   opens and closes without script. The summary says what the season is and
+   how far the user is; the "⋯" menu with the season's own actions sits beside
+   it, outside the summary's click target. *@
+@{
+    var card = Model.Card;
+    var seriesId = Model.SeriesId;
+    var hasMenu = Model.SignedIn && (card.HasMarkable || card.WatchedCount > 0);
+}
+
+<div class="tvdb-season-card @(card.IsSpecials ? "tvdb-season-card--specials" : "") @(hasMenu ? "has-menu" : "")" id="@card.Anchor">
+    <details class="tvdb-season-card__details" open="@card.IsOpen">
+        <summary class="tvdb-season-card__summary">
+            <span class="tvdb-season-card__title">@card.Summary</span>
+
+            @if (card.IsSpecials)
+            {
+                <span class="tvdb-season-card__note">not counted in progress</span>
+            }
+            else if (Model.SignedIn && card.ReleasedCount > 0)
+            {
+                <span class="tvdb-season-card__progress @(card.AllWatched ? "is-complete" : "")">
+                    <span class="tvdb-season-card__bar" aria-hidden="true"><span style="--tvdb-bar: @(card.Percent)%"></span></span>
+                    @if (card.AllWatched)
+                    {
+                        <span class="tvdb-season-card__count"><i class="@Icons.Check" aria-hidden="true"></i> All watched</span>
+                    }
+                    else
+                    {
+                        <span class="tvdb-season-card__count tvdb-mono">
+                            <span aria-hidden="true">@card.WatchedReleasedCount/@card.ReleasedCount</span>
+                            <span class="visually-hidden">@card.WatchedReleasedCount of @card.ReleasedCount aired episodes watched</span>
+                        </span>
+                    }
+                </span>
+            }
+
+            <i class="@Icons.Expand tvdb-season-card__caret" aria-hidden="true"></i>
+        </summary>
+
+        @if (card.Episodes.Count == 0)
+        {
+            <p class="tvdb-meta tvdb-season-card__empty">No episodes listed for this season yet.</p>
+        }
+        else
+        {
+            <ul class="tvdb-ep-list list-unstyled">
+                @foreach (var ep in card.Episodes)
+                {
+                    var anchor = SeasonCards.EpisodeAnchor(ep.Id);
+                    <li class="tvdb-ep @(ep.Mark == EpisodeMark.Watched ? "is-watched" : "") @(Model.SignedIn ? "has-control" : "")" id="@anchor">
+                        <div class="tvdb-ep__main">
+                            <div class="tvdb-ep__title">
+                                <span class="tvdb-mono tvdb-ep__code">@ep.Code</span>
+                                <a asp-page="/Episodes/Details" asp-route-id="@ep.Id" class="tvdb-link-plain">@ep.Name</a>
+                            </div>
+
+                            @if (ep.AiredText is not null || ep.Upcoming is not null || ep.RuntimeMinutes is not null)
+                            {
+                                <div class="tvdb-ep__meta">
+                                    @if (ep.Upcoming is not null)
+                                    {
+                                        <span>Airs <partial name="_ReleaseTime" model="ep.Upcoming" /></span>
+                                    }
+                                    else
+                                    {
+                                        if (ep.AiredText is not null)
+                                        {
+                                            <span>@ep.AiredText</span>
+                                        }
+                                        if (ep.RuntimeMinutes is { } minutes)
+                                        {
+                                            <span>@minutes min</span>
+                                        }
+                                    }
+                                </div>
+                            }
+
+                            @if (ep.Overview is not null)
+                            {
+                                <p class="tvdb-ep__overview">@ep.Overview</p>
+                            }
+                        </div>
+
+                        @if (Model.SignedIn)
+                        {
+                            var label = $"{ep.Code} {ep.Name} watched";
+                            <div class="tvdb-ep__control">
+                                @if (ep.Mark == EpisodeMark.NotAired)
+                                {
+                                    <span class="tvdb-ep-mark tvdb-ep-mark--upcoming" role="img" aria-label="Not aired yet" title="Not aired yet">
+                                        <i class="@Icons.NotAiredYet" aria-hidden="true"></i>
+                                    </span>
+                                }
+                                else
+                                {
+                                    var watched = ep.Mark == EpisodeMark.Watched;
+                                    @* Unwatched: js/tvdb-series.js asks first whether to mark the
+                                       earlier episodes too; without script the form marks this one. *@
+                                    <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@seriesId"
+                                          data-prior-check="@(watched ? "false" : "true")" data-episode-id="@ep.Id">
+                                        <input type="hidden" name="episodeId" value="@ep.Id" />
+                                        <input type="hidden" name="Season" value="@card.Number" />
+                                        <input type="hidden" name="Anchor" value="@anchor" />
+                                        <button type="submit"
+                                                class="tvdb-ep-mark @(watched ? "tvdb-ep-mark--on" : "")"
+                                                aria-pressed="@(watched ? "true" : "false")"
+                                                aria-label="@label"
+                                                title="@(watched ? "Mark as unwatched" : "Mark as watched")">
+                                            <i class="@Icons.Check" aria-hidden="true"></i>
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </details>
+
+    @if (hasMenu)
+    {
+        var menuId = $"seasonMenu{card.Number}";
+        <div class="dropdown tvdb-season-card__menu">
+            <button type="button" class="tvdb-icon-button" id="@menuId"
+                    data-bs-toggle="dropdown" aria-expanded="false"
+                    aria-label="Actions for @card.Title" title="Season actions">
+                <i class="@Icons.More" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="@menuId">
+                @if (card.HasMarkable)
+                {
+                    <li>
+                        <form method="post" asp-page-handler="MarkSeasonWatched" asp-route-id="@seriesId">
+                            <input type="hidden" name="Season" value="@card.Number" />
+                            <input type="hidden" name="Anchor" value="@card.Anchor" />
+                            <button type="submit" class="dropdown-item">Mark season watched</button>
+                        </form>
+                    </li>
+                }
+                @if (card.WatchedCount > 0)
+                {
+                    <li>
+                        <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#unwatch@(card.Anchor)">
+                            Mark season unwatched&hellip;
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+</div>

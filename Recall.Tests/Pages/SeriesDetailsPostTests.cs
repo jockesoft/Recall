@@ -78,6 +78,28 @@ public class SeriesDetailsPostTests
         redirect.RouteValues["season"].Should().Be(2);
     }
 
+    // ---- back to the card or row the form came from ----------------------------
+
+    [TestCase("episode-123", "episode-123")]
+    [TestCase("season-2", "season-2")]
+    [TestCase(null, null)]
+    [TestCase("javascript:alert(1)", null)]
+    [TestCase("overview", null)]
+    [TestCase("season-2#x", null)]
+    public async Task AMarkFromTheEpisodeList_Should_ReturnToItsRow_AndIgnoreAnyOtherAnchor(string? posted, string? fragment)
+    {
+        SignIn();
+        _progress
+            .Setup(x => x.ToggleEpisodeWatchedAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EpisodeWatchResult(EpisodeWatchOutcome.MarkedUnwatched));
+        _sut.Anchor = posted;
+
+        var result = await _sut.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default);
+
+        AssertRedirectsBackToTheSeason(result);
+        ((RedirectToPageResult)result).Fragment.Should().Be(fragment);
+    }
+
     // ---- sign-in guard ---------------------------------------------------------
 
     private static IEnumerable<TestCaseData> GuardedHandlers()

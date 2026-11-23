@@ -20,6 +20,15 @@ public sealed class CastListModel
     /// and a wall of initials tiles says nothing.
     /// </summary>
     public bool Compact { get; init; }
+
+    /// <summary>
+    /// The compact list in a narrow side column (Series Details): one column,
+    /// the first six people until "Show all" is pressed.
+    /// </summary>
+    public bool Column { get; init; }
+
+    /// <summary>The "Show all" button's text; "Show all N" when not set.</summary>
+    public string? ShowAllLabel { get; init; }
 }
 
 /// <summary>

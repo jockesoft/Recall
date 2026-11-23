@@ -1,8 +1,8 @@
 namespace Recall.Web.Pages.Shared;
 
 /// <summary>
-/// Input for <c>_TitleHeader.cshtml</c>, the top of Series/Details and
-/// Movies/Details: poster, title, genres, a one-line summary, then the action
+/// Input for <c>_TitleHeader.cshtml</c>, the top of Movies/Details (Series
+/// Details has moved to <c>_TitleHero</c>, which Movie Details is to follow): poster, title, genres, a one-line summary, then the action
 /// row and the rating. The page decides what the actions are; the partial
 /// decides how they look and where they sit at each width.
 /// </summary>
@@ -43,6 +43,9 @@ public sealed class TitleAction
 {
     public required string Label { get; init; }
 
+    /// <summary>A second, smaller line under the label ("Aired Fri, Nov 20 · 82 min"); used by <c>_TitleActions</c>.</summary>
+    public string? Detail { get; init; }
+
     public required string Handler { get; init; }
 
     public required int RouteId { get; init; }
@@ -59,10 +62,5 @@ public sealed class TitleAction
     public bool IsOn { get; init; }
 }
 
-/// <summary>A quiet, non-interactive status in the action row.</summary>
-/// <param name="Neutral">
-/// True for a state that is not an achievement ("You stopped watching on …"):
-/// drawn plain instead of green, and placed before the primary button, which
-/// it explains (on a phone, on its own row above it).
-/// </param>
-public sealed record TitleState(string Text, string Icon, bool Neutral = false);
+/// <summary>A quiet, non-interactive status in the action row ("On your watchlist").</summary>
+public sealed record TitleState(string Text, string Icon);

@@ -12,7 +12,9 @@ using Recall.Web.Pages.Shared;
 using Recall.Web.Infrastructure.Display;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
+using System.Globalization;
 
 namespace Recall.Web.Pages.Series;
 
@@ -21,7 +23,7 @@ namespace Recall.Web.Pages.Series;
 /// actions are only shown and only take effect when signed in.
 /// </summary>
 [EnableRateLimiting(InfrastructureServiceCollectionExtensions.PublicDetailsPolicy)]
-public sealed class DetailsModel(
+public sealed partial class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
     ITrackedSeriesRepository trackedSeriesRepository,
@@ -46,8 +48,20 @@ public sealed class DetailsModel(
     /// <summary>OMDb enrichment for this series, when the background job has stored it.</summary>
     public OmdbSeries? Omdb { get; private set; }
 
+    /// <summary>
+    /// A season to open besides the default one: where a mark made in the
+    /// episode list sends the user back to.
+    /// </summary>
     [BindProperty(SupportsGet = true)]
     public int? Season { get; set; }
+
+    /// <summary>
+    /// Posted by the episode list's forms ("season-3", "episode-123"): the
+    /// redirect after the action ends at that card or row, not at the top of
+    /// the page. Anything else is ignored.
+    /// </summary>
+    [BindProperty]
+    public string? Anchor { get; set; }
 
     public bool IsAuthenticated => currentUserService.IsAuthenticated;
 
@@ -93,39 +107,101 @@ public sealed class DetailsModel(
     /// </summary>
     public SeriesWatchProgress? WatchProgress { get; private set; }
 
-    /// <summary>The series' seasons in the order the picker shows them: numbered seasons, then the specials.</summary>
-    public IReadOnlyList<int> SeasonNumbers { get; private set; } = [];
+    /// <summary>
+    /// The seasons as cards, in page order: numbered seasons, then the
+    /// specials (see <see cref="SeasonCards"/>). Earlier seasons are flagged
+    /// for the "Show N earlier seasons" group.
+    /// </summary>
+    public IReadOnlyList<SeasonCard> Seasons { get; private set; } = [];
+
+    /// <summary>The cards behind "Show N earlier seasons".</summary>
+    public int EarlierSeasonCount => Seasons.Count(s => s.IsEarlier);
 
     /// <summary>
-    /// The season whose episodes are listed: the one asked for in the URL, or
-    /// <see cref="WatchProgressCalculator.DefaultSeason"/> (for a visitor who
-    /// is not signed in, that is the first season).
+    /// The next episode to watch, for "Jump to next": its row is in an open
+    /// card. Null for a visitor and when nothing released is left.
     /// </summary>
-    public int? SelectedSeason { get; private set; }
+    public int? NextEpisodeId => WatchProgress?.NextUnwatchedEpisode?.Id;
+
+    /// <summary>"17 seasons · 343 episodes · 470 h": released regular episodes and how long they take.</summary>
+    public string? EpisodesSummary { get; private set; }
 
     public IReadOnlyList<CastPerson> Cast { get; private set; } = [];
 
     public IReadOnlyList<CastPerson> Crew { get; private set; } = [];
 
+    /// <summary>IMDb's rating from the OMDb snapshot ("7.3"); null when unknown.</summary>
+    public string? ImdbRating => OmdbValue(Omdb?.ImdbRating);
+
+    /// <summary>IMDb's vote count from the OMDb snapshot ("1,234,567").</summary>
+    public string? ImdbVotes => OmdbValue(Omdb?.ImdbVotes);
+
+    /// <summary>OMDb's awards line, when it has one.</summary>
+    public string? OmdbAwards => OmdbValue(Omdb?.Awards);
+
+    /// <summary>The network for the Overview's facts.</summary>
+    public string? Network => Aggregate?.Network;
+
     /// <summary>
-    /// The top of the page (see <c>_TitleHeader.cshtml</c>). For a series in
-    /// the library the one primary button is the next episode to watch, or a
-    /// quiet "Up to date"; for any other series it is "Add to library". A
-    /// series the user stopped watching says so, and its one button is
-    /// "Resume watching" in place of the next episode.
+    /// The next regular episode not released yet (the soonest by release
+    /// moment), for the Overview's "Next episode" and the up-to-date box.
     /// </summary>
-    /// <param name="omdbGenres">
-    /// OMDb's genres, shown only while the series has none of TheTVDB's (a row
-    /// cached before series carried them, see <see cref="SeriesAggregate.Genres"/>).
-    /// </param>
-    public TitleHeaderModel BuildHeader(IReadOnlyList<string> omdbGenres, string? returnUrl = null)
+    public (WatchableEpisode Episode, ReleaseMoment Release)? NextRelease { get; private set; }
+
+    /// <summary>
+    /// The top of the page (<c>_TitleHero</c>, with <c>_TitleActions</c>). For
+    /// a series in the library the one primary button is the next episode to
+    /// watch, or a quiet "Up to date" box; for any other series it is "Add to
+    /// library". A series the user stopped watching says so, and its button
+    /// is "Resume watching". Stop watching and Remove from library are in the
+    /// "⋯" menu.
+    /// </summary>
+    public TitleHeroModel BuildHero(string? returnUrl = null)
     {
         var series = Aggregate!;
-        var genres = series.Genres.Count > 0 ? series.Genres : omdbGenres;
+        var genres = series.Genres.Count > 0 ? series.Genres : OmdbGenres();
         var seasonField = new Dictionary<string, string> { ["Season"] = Season?.ToString() ?? string.Empty };
 
+        return new TitleHeroModel
+        {
+            Name = series.Name,
+            PosterUrl = series.ImageUrl,
+            BackgroundUrl = series.BackgroundUrl,
+            Back = IsTrackedByCurrentUser
+                ? new TitleBackLink("Library", "/Library", UseHistory: false)
+                : new TitleBackLink("Back", "/Search", UseHistory: true),
+            Genres = genres,
+            Status = string.IsNullOrWhiteSpace(series.Status?.Name)
+                ? null
+                : new TitleStatusChip(series.Status.Name, Active: series.Status.KeepUpdated == true),
+            Meta = TitleSummary.ForSeries(series),
+            ImdbRating = ImdbRating,
+            RecallRating = RecallRatingCount > 0 && RecallRatingAverage is { } average
+                ? average.ToString("0.0", CultureInfo.InvariantCulture)
+                : null,
+            RecallRatingCount = RecallRatingCount,
+            Rating = IsAuthenticated
+                ? new RatingWidgetModel
+                {
+                    RateHandler = "RateSeries",
+                    ClearHandler = "ClearSeriesRating",
+                    RouteId = series.TvdbId,
+                    HiddenFields = seasonField,
+                    CurrentValue = CurrentUserRating,
+                    TargetNoun = "series"
+                }
+                : null,
+            Progress = BuildProgress(),
+            Actions = BuildActions(returnUrl, seasonField)
+        };
+    }
+
+    private TitleActionsModel BuildActions(string? returnUrl, Dictionary<string, string> seasonField)
+    {
+        var series = Aggregate!;
+        TitleNotice? notice = null;
         TitleAction? primary = null;
-        TitleState? state = null;
+        TitleStatusBox? status = null;
 
         if (!IsTrackedByCurrentUser)
         {
@@ -140,7 +216,7 @@ public sealed class DetailsModel(
         }
         else if (StoppedUtc is { } stoppedUtc)
         {
-            state = new TitleState($"You stopped watching on {DisplayDate.Format(stoppedUtc, Today)}", Icons.Stopped, Neutral: true);
+            notice = new TitleNotice($"You stopped watching on {DisplayDate.Format(stoppedUtc, Today)}", Icons.Stopped);
             primary = new TitleAction
             {
                 Label = "Resume watching",
@@ -155,41 +231,67 @@ public sealed class DetailsModel(
             primary = new TitleAction
             {
                 Label = $"Mark {next.SlateCode()} watched",
+                Detail = NextEpisodeDetail(next),
                 Handler = "ToggleEpisodeWatched",
                 RouteId = series.TvdbId,
                 HiddenFields =
                 {
-                    ["episodeId"] = next.Id.ToString(),
-                    ["Season"] = next.SeasonNumber?.ToString() ?? string.Empty
+                    ["episodeId"] = next.Id.ToString(CultureInfo.InvariantCulture),
+                    ["Season"] = next.SeasonNumber?.ToString(CultureInfo.InvariantCulture) ?? string.Empty
                 },
                 Icon = Icons.Check
             };
         }
         else
         {
-            // No aired regular episode is left. "Up to date" is for a series
+            // No released regular episode is left. "Up to date" is for a series
             // the user has started; one never started has simply had nothing
             // to watch yet (announced, or only specials so far), which is also
             // why the Library keeps it under Watching (SeriesLibraryStateRule).
-            state = WatchProgress switch
-            {
-                { HasStarted: true } => new TitleState("Up to date", Icons.Success),
-                not null => new TitleState("In your library · nothing aired yet", Icons.Success),
-                _ => new TitleState("In your library", Icons.Success)
-            };
+            var (detail, release) = NextRelease is { } upcoming
+                ? ($"{upcoming.Episode.SlateCode()} airs", new ReleaseTimeModel(upcoming.Release, Today))
+                : (series.Status?.KeepUpdated == false ? "The series has ended" : "Nothing announced yet", (ReleaseTimeModel?)null);
+
+            status = WatchProgress is { HasStarted: true }
+                ? new TitleStatusBox("Up to date", Icons.UpToDate, detail, release)
+                : new TitleStatusBox("In your library · nothing aired yet", Icons.NotAiredYet, detail, release);
         }
 
-        return new TitleHeaderModel
+        var menu = new List<TitleMenuItem>();
+        if (CanStopWatching)
         {
-            Name = series.Name,
-            ImageUrl = series.ImageUrl,
-            Genres = genres,
-            Summary = TitleSummary.ForSeries(series),
-            Noun = "series",
+            menu.Add(new TitleMenuItem
+            {
+                Label = "Stop watching",
+                Icon = Icons.Stopped,
+                Handler = "StopWatching",
+                RouteId = series.TvdbId,
+                HiddenFields = seasonField,
+                Id = "stopWatching"
+            });
+        }
+
+        if (IsTrackedByCurrentUser)
+        {
+            menu.Add(new TitleMenuItem
+            {
+                Label = "Remove from library",
+                Icon = Icons.Delete,
+                ModalId = RemoveFromLibraryModalId,
+                Id = "removeFromLibrary"
+            });
+        }
+
+        return new TitleActionsModel
+        {
             IsAuthenticated = IsAuthenticated,
+            Noun = "series",
             ReturnUrl = returnUrl,
+            Notice = notice,
             Primary = primary,
-            State = state,
+            Status = status,
+            Menu = menu,
+            MenuLabel = $"More actions for {series.Name}",
             Like = new LikeToggleModel
             {
                 Handler = "ToggleSeriesLike",
@@ -198,17 +300,54 @@ public sealed class DetailsModel(
                 IsLiked = IsLikedByCurrentUser,
                 TargetNoun = "series"
             },
-            Rating = new RatingWidgetModel
-            {
-                RateHandler = "RateSeries",
-                ClearHandler = "ClearSeriesRating",
-                RouteId = series.TvdbId,
-                HiddenFields = seasonField,
-                CurrentValue = CurrentUserRating,
-                TargetNoun = "series"
-            }
+            ShareTitle = series.Name
         };
     }
+
+    /// <summary>The confirmation behind "Remove from library" in the "⋯" menu.</summary>
+    public const string RemoveFromLibraryModalId = "removeFromLibraryModal";
+
+    /// <summary>"Aired Fri, Nov 20 · 82 min": the episode's runtime, else the series' average.</summary>
+    private string? NextEpisodeDetail(WatchableEpisode next)
+    {
+        var parts = new List<string>();
+        if (next.Aired is { } aired)
+            parts.Add($"Aired {DisplayDate.Format(aired, Today)}");
+        if (SeasonCards.Minutes(Aggregate!, [next.Id]) is { } minutes)
+            parts.Add($"{minutes.ToString(CultureInfo.InvariantCulture)} min");
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// The hero's progress: only for a series in the library with something
+    /// released. Remaining time is the unwatched released regular episodes'
+    /// runtimes, each falling back to the series' average.
+    /// </summary>
+    private TitleProgressModel? BuildProgress()
+    {
+        if (!IsTrackedByCurrentUser || WatchProgress is not { ReleasedCount: > 0 } progress)
+            return null;
+
+        var unwatched = progress.OrderedEpisodes
+            .Where(e => !e.IsSpecial && e.IsReleasedBy(Now) && !progress.WatchedEpisodeIds.Contains(e.Id))
+            .Select(e => e.Id);
+
+        return new TitleProgressModel(
+            progress.WatchedReleasedCount,
+            progress.ReleasedCount,
+            SeasonCards.Minutes(Aggregate!, unwatched),
+            WatchedDatesByEpisodeId.Count > 0 ? DisplayDate.Format(WatchedDatesByEpisodeId.Values.Max(), Today) : null);
+    }
+
+    private IReadOnlyList<string> OmdbGenres() =>
+        (OmdbValue(Omdb?.Genre) ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>OMDb uses the literal string "N/A" for missing values.</summary>
+    private static string? OmdbValue(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : raw.Trim();
 
     public async Task<IActionResult> OnGetAsync([FromRoute] int id, CancellationToken cancellationToken)
         => await LoadPageAsync(id, cancellationToken);
@@ -228,7 +367,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update your library right now.");
         }
 
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     public async Task<IActionResult> OnPostToggleSeriesLikeAsync([FromRoute] int id, CancellationToken cancellationToken)
@@ -246,7 +385,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update your like right now.");
         }
 
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     public async Task<IActionResult> OnPostRateSeriesAsync(
@@ -258,7 +397,7 @@ public sealed class DetailsModel(
             return SignInRequired(id, "rate a series");
 
         if (value is < 1 or > 10)
-            return RedirectToPage(new { id, season = Season });
+            return BackToPage(id, Season);
 
         try
         {
@@ -271,7 +410,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not save your rating right now.");
         }
 
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     public async Task<IActionResult> OnPostClearSeriesRatingAsync([FromRoute] int id, CancellationToken cancellationToken)
@@ -290,7 +429,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update your rating right now.");
         }
 
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     /// <summary>
@@ -328,7 +467,7 @@ public sealed class DetailsModel(
         CancellationToken cancellationToken)
     {
         if (episodeId <= 0)
-            return RedirectToPage(new { id, season = Season });
+            return BackToPage(id, Season);
 
         if (!currentUserService.TryGetUserId(out var userId))
             return SignInRequired(id, "track watched episodes");
@@ -363,7 +502,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update watched status right now.");
         }
 
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     /// <summary>
@@ -376,7 +515,7 @@ public sealed class DetailsModel(
         CancellationToken cancellationToken)
     {
         if (episodeId <= 0)
-            return RedirectToPage(new { id, season = Season });
+            return BackToPage(id, Season);
 
         if (!currentUserService.TryGetUserId(out var userId))
             return SignInRequired(id, "track watched episodes");
@@ -413,7 +552,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update watched status right now.");
         }
 
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     /// <summary>Marks every aired episode of the selected season watched.</summary>
@@ -454,7 +593,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update watched status right now.");
         }
 
-        return RedirectToPage(new { id, season });
+        return BackToPage(id, season);
     }
 
     /// <summary>Removes the watched mark from every episode of the selected season.</summary>
@@ -480,7 +619,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update watched status right now.");
         }
 
-        return RedirectToPage(new { id, season });
+        return BackToPage(id, season);
     }
 
     /// <summary>What an Undo says when there is nothing (left) to remove.</summary>
@@ -509,7 +648,7 @@ public sealed class DetailsModel(
         IActionResult Back() =>
             !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
                 ? LocalRedirect(returnUrl)
-                : RedirectToPage(new { id, season = Season });
+                : BackToPage(id, Season);
 
         if (!currentUserService.TryGetUserId(out var userId))
         {
@@ -573,7 +712,7 @@ public sealed class DetailsModel(
             this.SetErrorToast("Could not update your library right now.");
         }
 
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     /// <summary>
@@ -591,7 +730,7 @@ public sealed class DetailsModel(
         IActionResult Back() =>
             !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
                 ? LocalRedirect(returnUrl)
-                : RedirectToPage(new { id, season = Season });
+                : BackToPage(id, Season);
 
         if (!currentUserService.TryGetUserId(out var userId))
         {
@@ -620,13 +759,24 @@ public sealed class DetailsModel(
     }
 
     /// <summary>
+    /// Back to this page after a POST, with the season to open and, when the
+    /// form came from the episode list, the card or row to scroll to.
+    /// </summary>
+    private RedirectToPageResult BackToPage(int id, int? season) =>
+        RedirectToPage(pageName: null, pageHandler: null, routeValues: new { id, season },
+            fragment: Anchor is { } anchor && AnchorPattern().IsMatch(anchor) ? anchor : null);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(season|episode)-\d{1,10}$")]
+    private static partial System.Text.RegularExpressions.Regex AnchorPattern();
+
+    /// <summary>
     /// What every POST handler here returns to an anonymous caller: the page is
     /// public, so <c>[Authorize]</c> can't guard its handlers.
     /// </summary>
     private IActionResult SignInRequired(int id, string toDoWhat)
     {
         this.SetErrorToast($"You need to be signed in to {toDoWhat}.");
-        return RedirectToPage(new { id, season = Season });
+        return BackToPage(id, Season);
     }
 
     private async Task<IActionResult> LoadPageAsync(int id, CancellationToken cancellationToken)
@@ -667,19 +817,10 @@ public sealed class DetailsModel(
 
             (Cast, Crew) = CastBuilder.Build(Aggregate.Characters);
 
-            SeasonNumbers = Aggregate.Seasons
-                .Select(s => s.Number)
-                .Where(n => n.HasValue)
-                .Select(n => n!.Value)
-                .Distinct()
-                .OrderBy(n => EpisodeOrderingExtensions.SeasonRank(n))
-                .ThenBy(n => n)
-                .ToList();
-
             if (!currentUserService.TryGetUserId(out var userId))
             {
-                // Nothing is watched for a visitor, so the default is the first season.
-                SelectSeason(watchProgressService.BuildProgress(id, Aggregate.ToWatchableEpisodes(), new HashSet<int>()));
+                // Nothing is watched for a visitor, so the first season opens.
+                BuildEpisodes(watchProgressService.BuildProgress(id, Aggregate.ToWatchableEpisodes(), new HashSet<int>()));
                 return Page();
             }
 
@@ -696,7 +837,7 @@ public sealed class DetailsModel(
             CanStopWatching = tracked is not null
                               && SeriesLibraryStateRule.CanStop(
                                   SeriesLibraryStateRule.Of(Aggregate, WatchProgress, SeriesLibraryStateRule.IsStopped(tracked)));
-            SelectSeason(WatchProgress);
+            BuildEpisodes(WatchProgress);
             return Page();
         }
         catch (TheTvDbApiException ex)
@@ -723,20 +864,28 @@ public sealed class DetailsModel(
         return Page();
     }
 
-    private void SelectSeason(SeriesWatchProgress progress)
+    /// <summary>The season cards, the Episodes heading's figures and the next release.</summary>
+    private void BuildEpisodes(SeriesWatchProgress progress)
     {
-        var fallback = WatchProgressCalculator.DefaultSeason(progress)
-                       ?? (SeasonNumbers.Count > 0 ? SeasonNumbers[0] : (int?)null);
+        var series = Aggregate!;
+        Seasons = SeasonCards.Build(series, progress, Season, Now, Today);
 
-        SelectedSeason = Season is { } asked && SeasonNumbers.Contains(asked)
-            ? asked
-            : fallback is { } season && SeasonNumbers.Contains(season)
-                ? season
-                : SeasonNumbers.Count > 0 ? SeasonNumbers[0] : Season;
+        var released = progress.OrderedEpisodes.Where(e => !e.IsSpecial && e.IsReleasedBy(Now)).Select(e => e.Id).ToList();
+        var seasons = Seasons.Count(s => !s.IsSpecials);
+        var parts = new List<string>();
+        if (seasons > 0)
+            parts.Add(StatsFormat.Count(seasons, "season"));
+        parts.Add(StatsFormat.Count(released.Count, "episode"));
+        if (released.Count > 0 && SeasonCards.Minutes(series, released) is { } minutes)
+            parts.Add(StatsFormat.Duration(minutes));
+        EpisodesSummary = string.Join(" · ", parts);
+
+        NextRelease = progress.OrderedEpisodes
+            .Where(e => !e.IsSpecial && e.Release is not null && !e.IsReleasedBy(Now))
+            .OrderBy(e => e.Release!.Utc)
+            .Select(e => ((WatchableEpisode, ReleaseMoment)?)(e, e.Release!))
+            .FirstOrDefault();
     }
-
-    /// <summary>Short label for a season chip: "S01", or "Specials" for season 0.</summary>
-    public string GetSeasonName(int season) => season == 0 ? "Specials" : "S" + season.ToString("D2");
 
     /// <summary>Spoken-length name: "Season 1", or "Specials".</summary>
     public string GetSeasonTitle(int season) => season == 0 ? "Specials" : $"Season {season}";

@@ -2,12 +2,15 @@ using Recall.Web.Domain.TheTvDb;
 
 namespace Recall.Web.Pages.Shared;
 
-/// <summary>The one-line summary under a title: years, status, size.</summary>
+/// <summary>The one-line summary under a title: years, size, and for a series its network.</summary>
 public static class TitleSummary
 {
     private const string Separator = " · ";
 
-    /// <summary>"2008–2013 · Ended · 5 seasons"; "2022– · Continuing · 2 seasons" while it runs.</summary>
+    /// <summary>
+    /// "2008–2013 · 5 seasons · AMC"; "2010– · 17 seasons · Discovery" while it
+    /// runs. The status is not here: the hero shows it as a chip.
+    /// </summary>
     public static string? ForSeries(SeriesAggregate series)
     {
         var parts = new List<string>();
@@ -15,13 +18,13 @@ public static class TitleSummary
         if (Years(series) is { } years)
             parts.Add(years);
 
-        if (!string.IsNullOrWhiteSpace(series.Status?.Name))
-            parts.Add(series.Status.Name);
-
         // Specials are extras, not a season.
         var seasons = series.Seasons.Select(s => s.Number).Where(n => n is > 0).Distinct().Count();
         if (seasons > 0)
             parts.Add(seasons == 1 ? "1 season" : $"{seasons} seasons");
+
+        if (!string.IsNullOrWhiteSpace(series.Network))
+            parts.Add(series.Network);
 
         return parts.Count == 0 ? null : string.Join(Separator, parts);
     }
