@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
@@ -92,7 +93,9 @@ List<Shot> shots =
         },
         Cleanup: _ => RunReviewScriptAsync(options, "continue-watching-many", "off")),
     // A mark from the expanded list (the last series, beyond the first nine): the page comes back
-    // expanded, at that card or row, with the Undo toast. Undone afterwards.
+    // expanded, at the same place in the list (now another series': the marked one has moved to the
+    // top), with the Undo toast; and the marked series' card has its picture, by the shared image
+    // rule, not the placeholder. Undone afterwards.
     new("dashboard", "expanded-mark", Site.SignedIn, "/Dashboard", ViewportOnly: true,
         Prepare: async page =>
         {
@@ -102,27 +105,71 @@ List<Shot> shots =
             await page.Locator("#continueWatchingList.is-expanded").WaitForAsync();
             var check = page.Locator(".tvdb-catchup-check button:visible, .tvdb-catchup-row__check button:visible").Last;
             await check.ScrollIntoViewIfNeededAsync();
+
+            // The place pressed ("catchup-row-12") and the series marked, read from the check's form.
+            var pressed = await check.EvaluateAsync<JsonElement>(
+                """
+                button => ({
+                    place: button.closest('.tvdb-catchup-card, .tvdb-catchup-row').id,
+                    last: !!button.form.querySelector('input[name=last]'),
+                    series: new URL(button.form.action).searchParams.get('seriesId'),
+                })
+                """);
+            var place = pressed.GetProperty("place").GetString()!;
+            var series = pressed.GetProperty("series").GetString()!;
+            var placeNumber = int.Parse(place[(place.LastIndexOf('-') + 1)..], CultureInfo.InvariantCulture);
+
             await check.ClickAsync();
             await page.Locator(".tvdb-toast-action").WaitForAsync();
-            if (!page.Url.Contains("all=true", StringComparison.Ordinal) || !page.Url.Contains("#catchup-", StringComparison.Ordinal)
+
+            var hash = new Uri(page.Url).Fragment;
+            var returnedNumber = int.TryParse(hash[(hash.LastIndexOf('-') + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : -1;
+            var samePlace = hash.StartsWith("#catchup-", StringComparison.Ordinal)
+                && (returnedNumber == placeNumber || (pressed.GetProperty("last").GetBoolean() && returnedNumber == placeNumber - 1));
+            if (!page.Url.Contains("all=true", StringComparison.Ordinal) || !samePlace
                 || await page.Locator("#continueWatchingList.is-expanded").CountAsync() != 1)
-                throw new InvalidOperationException($"A mark from the expanded list came back to {page.Url}, not expanded at its row.");
-            // The series has just been watched, so it has moved up the queue (on a phone, maybe from a
-            // row to the card): its card or its row, whichever is drawn, must be on screen.
-            var onScreen = await page.EvaluateAsync<bool>(
+                throw new InvalidOperationException($"A mark at {place} of the expanded list came back to {page.Url}, not expanded at the same place.");
+
+            // The page stays where it was: the card or row now at that place (whichever is drawn at
+            // this width) is on screen, and the page is not back at the top. Waited for, briefly: the
+            // browser scrolls to the fragment once the page has loaded.
+            const string atThePlace =
                 """
-                () => {
-                    const id = location.hash.replace(/^#catchup-(card|row)-/, '');
-                    return ['card', 'row'].map(kind => document.getElementById('catchup-' + kind + '-' + id))
-                        .some(el => {
-                            if (!el || el.getClientRects().length === 0) return false;
-                            const r = el.getBoundingClientRect();
-                            return r.bottom > 0 && r.top < innerHeight;
-                        });
+                number => {
+                    const drawn = el => !!el && el.getClientRects().length > 0;
+                    const el = ['card', 'row'].map(kind => document.getElementById('catchup-' + kind + '-' + number)).find(drawn);
+                    const r = el ? el.getBoundingClientRect() : null;
+                    return !!r && r.bottom > 0 && r.top < innerHeight && window.scrollY >= 200;
                 }
-                """);
-            if (!onScreen)
-                throw new InvalidOperationException($"After a mark from the expanded list ({page.Url}) the marked series is not on screen.");
+                """;
+            try
+            {
+                await page.WaitForFunctionAsync(atThePlace, returnedNumber, new() { Timeout = 5000 });
+            }
+            catch (TimeoutException)
+            {
+                var scrolled = await page.EvaluateAsync<double>("() => window.scrollY");
+                throw new InvalidOperationException($"After a mark at {place} the page is not at that place ({page.Url}, scrolled {scrolled:0}px).");
+            }
+
+            // The marked series (now first) shows a picture: its card has an image that loads, not the placeholder.
+            var art = await page.EvaluateAsync<string>(
+                """
+                async seriesId => {
+                    const card = Array.from(document.querySelectorAll('.tvdb-catchup-card'))
+                        .find(c => c.querySelector('a.tvdb-catchup-show')?.getAttribute('href') === '/Series/Details/' + seriesId);
+                    if (!card) return 'no card';
+                    if (card.querySelector('.tvdb-catchup-media.is-empty')) return 'the placeholder';
+                    const img = card.querySelector('.tvdb-catchup-media img');
+                    if (!img) return 'no image';
+                    const probe = new Image();
+                    probe.src = img.currentSrc || img.src;
+                    try { await probe.decode(); } catch { return 'an image that does not load: ' + probe.src; }
+                    return probe.naturalWidth > 0 ? 'ok' : 'an empty image: ' + probe.src;
+                }
+                """, series);
+            if (art != "ok")
+                throw new InvalidOperationException($"After the mark, series {series}'s card shows {art}.");
         },
         Cleanup: async page =>
         {
@@ -958,6 +1005,12 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
         if (!shot.ViewportOnly)
             await LoadLazyImagesAsync(page);
 
+        // Every shot, the viewport ones too: after a Prepare that navigated (a
+        // mark's redirect) an image the browser has not fetched before is still
+        // loading, and the shot would show an empty frame where the page has a
+        // picture (the "missing art" of dashboard_expanded-mark until 2026-11-24).
+        await WaitForImagesOnScreenAsync(page);
+
         await FreezeToastCountdownsAsync(page);
 
         await page.ScreenshotAsync(new()
@@ -1060,6 +1113,29 @@ static async Task SettleAsync(IPage page)
     }
 
     await page.EvaluateAsync("() => document.fonts.ready");
+}
+
+// The images drawn in the viewport, lazy ones included (on screen, they load),
+// must have finished loading (or failed: MeasureAsync reports broken ones).
+static async Task WaitForImagesOnScreenAsync(IPage page)
+{
+    try
+    {
+        await page.WaitForFunctionAsync(
+            """
+            () => Array.from(document.images)
+                .filter(i => {
+                    if (i.getClientRects().length === 0) return false;
+                    const r = i.getBoundingClientRect();
+                    return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+                })
+                .every(i => i.complete)
+            """, null, new() { Timeout = 15000 });
+    }
+    catch (TimeoutException)
+    {
+        // A slow image must not fail the shot.
+    }
 }
 
 // Images are loading="lazy": scroll through the page so a full-page
