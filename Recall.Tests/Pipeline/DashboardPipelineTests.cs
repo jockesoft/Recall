@@ -161,9 +161,13 @@ public sealed class DashboardPipelineTests
 
         Regex.Matches(html, "<input type=\"hidden\" name=\"all\" value=\"false\" data-catchup-all />").Count.Should().Be(42,
             "every mark and stop form of the 11 cards and 10 rows posts the state back");
-        html.Should().Contain("<li class=\"tvdb-catchup-row\" id=\"catchup-row-202\">")
-            .And.Contain("<input type=\"hidden\" name=\"Anchor\" value=\"catchup-row-202\" />")
-            .And.Contain("<div class=\"tvdb-catchup-card\" id=\"catchup-card-211\">");
+        // Named by place, not by series: a mark returns to the same place in the list.
+        html.Should().Contain("<li class=\"tvdb-catchup-row\" id=\"catchup-row-2\">")
+            .And.Contain("<input type=\"hidden\" name=\"Anchor\" value=\"catchup-row-2\" />")
+            .And.Contain("<div class=\"tvdb-catchup-card\" id=\"catchup-card-11\">")
+            .And.NotContain("id=\"catchup-row-1\"", "the first place is the phone's card");
+        Regex.Matches(html, "<input type=\"hidden\" name=\"last\" value=\"true\" />").Count.Should().Be(4,
+            "only the last series' forms (its card's and its row's mark and stop) say it is the last");
     }
 
     [Test]

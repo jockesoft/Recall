@@ -67,7 +67,7 @@ public enum LibrarySection
 public sealed record LibrarySectionView(LibrarySection Section, string Slug, string Title, IReadOnlyList<LibraryCardItem> Items);
 
 [Authorize]
-public sealed partial class LibraryModel(
+public sealed class LibraryModel(
     ICurrentUserService currentUserService,
     ITrackedSeriesRepository trackedSeriesRepository,
     IWatchProgressService watchProgressService,
@@ -121,7 +121,7 @@ public sealed partial class LibraryModel(
     /// <summary>The sections in page order, empty ones included.</summary>
     public IReadOnlyList<LibrarySectionView> Sections =>
     [
-        new(LibrarySection.Watching, "watching", "Watching", Watching),
+        new(LibrarySection.Watching, WatchingSlug, "Watching", Watching),
         new(LibrarySection.Dormant, "dormant", "Haven't watched in a while", Dormant),
         new(LibrarySection.ToWatch, "to-watch", "To Watch", ToWatch),
         new(LibrarySection.UpToDate, "up-to-date", "Up to Date", UpToDate),
@@ -139,15 +139,24 @@ public sealed partial class LibraryModel(
     private object? BackToView => SelectedSection is { } selected ? new { section = selected.Slug } : null;
 
     /// <summary>
-    /// The card a mark came from ("series-card-123"), posted with the check, so
-    /// the page returns at that card, in whichever section it is in by then.
-    /// Anything else is ignored.
+    /// The Watching card a mark came from, named by its place in the list
+    /// ("watching-card-5"), posted with the check, so the page returns to the
+    /// same place in Watching (<see cref="ListPosition"/>), whichever series is
+    /// there by then: the marked one has moved to the top, or, caught up, to
+    /// another section. Anything else is ignored.
     /// </summary>
     [BindProperty]
     public string? Anchor { get; set; }
 
-    /// <summary>The element id of a series' card on this page ("series-card-123"): every series is in one section only.</summary>
-    public static string CardAnchor(int seriesTvdbId) => $"series-card-{seriesTvdbId}";
+    /// <summary>Posted by the last Watching card's check: when that series leaves Watching, the page returns to the new last card.</summary>
+    [BindProperty(Name = "last")]
+    public bool AnchorIsLast { get; set; }
+
+    private const string WatchingCardPrefix = "watching-card";
+    private const string WatchingSlug = "watching";
+
+    /// <summary>The element id of the Watching card at <paramref name="position"/> (1-based): "watching-card-5".</summary>
+    public static string WatchingCardAnchor(int position) => ListPosition.Id(WatchingCardPrefix, position);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -402,6 +411,8 @@ public sealed partial class LibraryModel(
             return RedirectToPage(BackToView);
         }
 
+        var leftWatching = false;
+
         try
         {
             var result = await watchProgressService.MarkEpisodeWatchedUndoablyAsync(userId, seriesId, episodeId, cancellationToken);
@@ -409,6 +420,8 @@ public sealed partial class LibraryModel(
             switch (result.Outcome)
             {
                 case EpisodeWatchOutcome.MarkedWatched when result.Batch is { InsertedCount: > 0 } batch:
+                    // Caught up: nothing aired is left, so the series is under Up to date or Watched now.
+                    leftWatching = result.CaughtUp is not null;
                     this.SetSuccessToastWithWatchedUndo(
                         await OneTapMarkToast.DescribeAsync(theTvDbService, logger, nameof(LibraryModel), seriesId, episodeId, result.ResumedWatching, cancellationToken),
                         seriesId,
@@ -436,9 +449,8 @@ public sealed partial class LibraryModel(
             pageName: null,
             pageHandler: null,
             routeValues: BackToView,
-            fragment: Anchor is { } anchor && AnchorPattern().IsMatch(anchor) ? anchor : null);
+            fragment: ListPosition.ReturnTo(Anchor, [WatchingCardPrefix], leftWatching, AnchorIsLast,
+                // Watching emptied: its section on the full page (it stays, with its empty line).
+                emptyFallback: SelectedSection is null ? WatchingSlug : null));
     }
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"^series-card-\d{1,10}$")]
-    private static partial System.Text.RegularExpressions.Regex AnchorPattern();
 }

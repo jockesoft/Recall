@@ -740,7 +740,7 @@ public class LibraryModelTests
         _progress
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId)));
-        _sut.Anchor = "series-card-1";
+        _sut.Anchor = "watching-card-4";
 
         var result = await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
 
@@ -753,7 +753,8 @@ public class LibraryModelTests
         var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
         redirect.PageName.Should().BeNull("back to the Library");
         redirect.RouteValues.Should().BeNull();
-        redirect.Fragment.Should().Be("series-card-1", "the page comes back at the card");
+        redirect.Fragment.Should().Be("watching-card-4",
+            "the page comes back to the same place in Watching, not to the top where the series has moved");
     }
 
     [Test]
@@ -779,18 +780,44 @@ public class LibraryModelTests
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId)));
         _sut.Section = "watching";
-        _sut.Anchor = "series-card-1";
+        _sut.Anchor = "watching-card-2";
 
         var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
 
         var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
         redirect.RouteValues.Should().Contain("section", "watching");
-        redirect.Fragment.Should().Be("series-card-1");
+        redirect.Fragment.Should().Be("watching-card-2");
+    }
+
+    [TestCase("watching-card-5", false, false, "watching-card-5")]
+    [TestCase("watching-card-5", false, true, "watching-card-5")]
+    [TestCase("watching-card-5", true, false, "watching-card-5")]
+    [TestCase("watching-card-5", true, true, "watching-card-4")]
+    [TestCase("watching-card-1", true, true, "watching")]
+    public async Task MarkWatched_Should_ReturnToTheSamePlace_OrTheNewLast_WhenTheLastHasLeftWatching(
+        string anchor, bool caughtUp, bool wasLast, string expected)
+    {
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId),
+                caughtUp ? new SeriesCaughtUp(1, "Severance", Finished: false, UserHasRated: false) : null));
+        _sut.Anchor = anchor;
+        _sut.AnchorIsLast = wasLast;
+
+        var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+
+        // Caught up, the series is under Up to date now: its place in Watching is
+        // the next one's, or, when it was the last, gone (the new last one; the
+        // section when Watching is empty).
+        result.Should().BeOfType<RedirectToPageResult>().Which.Fragment.Should().Be(expected);
     }
 
     [TestCase(null)]
     [TestCase("watching")]
-    [TestCase("series-card-")]
+    [TestCase("watching-card-")]
+    [TestCase("series-card-1")]
+    [TestCase("catchup-card-1")]
     [TestCase("javascript:alert(1)")]
     public async Task MarkWatched_Should_DropAnAnchorThatIsNotACard(string? anchor)
     {

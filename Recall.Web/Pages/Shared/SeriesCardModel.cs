@@ -84,9 +84,17 @@ public sealed class SeriesCardModel
 
     /// <summary>
     /// The card's element id, where a POST from it returns to. Null renders
-    /// none; give one only where the series is on the page once (the Library).
+    /// none. The Library's Watching cards are named by their place in the list
+    /// ("watching-card-5", <see cref="ListPosition"/>), so a mark returns to
+    /// the same place, whichever series is there by then.
     /// </summary>
     public string? ElementId { get; init; }
+
+    /// <summary>
+    /// The last card of its list: the check says so (<c>last</c>), so that
+    /// when the series leaves the list the page returns to the new last one.
+    /// </summary>
+    public bool IsLastInList { get; init; }
 
     /// <summary>
     /// The episode the round check in the poster's bottom-right corner marks

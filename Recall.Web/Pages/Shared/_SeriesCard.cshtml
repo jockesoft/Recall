@@ -52,6 +52,10 @@
                 {
                     <input type="hidden" name="Anchor" value="@Model.ElementId" />
                 }
+                @if (Model.IsLastInList)
+                {
+                    <input type="hidden" name="last" value="true" />
+                }
                 <button type="submit" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-image"
                         title="Mark as watched" aria-label="@Model.MarkLabel">
                     <i class="@Icons.Check" aria-hidden="true"></i>

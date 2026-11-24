@@ -18,7 +18,9 @@
 }
 
 @functions {
-    static SeriesCardModel ToCardModel(LibraryCardItem item, IDictionary<string, string> likeFields) => new()
+    // A Watching card is named by its place in the list (1-based), where its
+    // check returns to; the other cards have no id.
+    static SeriesCardModel ToCardModel(LibraryCardItem item, IDictionary<string, string> likeFields, int? watchingPosition = null, bool isLast = false) => new()
     {
         LikeHiddenFields = likeFields,
         TvdbId = item.TvdbId,
@@ -34,7 +36,8 @@
         IsMovie = item.Type == SearchResultType.Movie,
         ShowLike = item.Type == SearchResultType.Series,
         IsLiked = item.IsLiked,
-        ElementId = item.Type == SearchResultType.Series ? LibraryModel.CardAnchor(item.TvdbId) : null,
+        ElementId = watchingPosition is { } position ? LibraryModel.WatchingCardAnchor(position) : null,
+        IsLastInList = isLast,
         MarkEpisodeId = item.NextEpisodeId,
         MarkEpisodeCode = item.NextEpisodeCode,
         MarkHiddenFields = likeFields
@@ -71,9 +74,10 @@
         {
             <div data-library-section>
                 <div class="tvdb-series-grid">
-                    @foreach (var item in selected.Items)
+                    @{ var isWatching = selected.Section == LibrarySection.Watching; }
+                    @foreach (var (item, index) in selected.Items.Select((item, index) => (item, index)))
                     {
-                        <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
+                        <partial name="_SeriesCard" model="@ToCardModel(item, likeFields, isWatching ? index + 1 : null, isWatching && index == selected.Items.Count - 1)" />
                     }
                 </div>
             </div>
@@ -167,9 +171,10 @@
                     else if (part.Items.Count > 0)
                     {
                         <div class="tvdb-series-grid @(isRow ? "tvdb-series-grid--row-on-phone" : null)">
-                            @foreach (var item in part.Items)
+                            @foreach (var (item, index) in part.Items.Select((item, index) => (item, index)))
                             {
-                                <partial name="_SeriesCard" model="@ToCardModel(item, likeFields)" />
+                                var isWatching = part.Section == LibrarySection.Watching;
+                                <partial name="_SeriesCard" model="@ToCardModel(item, likeFields, isWatching ? index + 1 : null, isWatching && index == part.Items.Count - 1)" />
                             }
                         </div>
                     }

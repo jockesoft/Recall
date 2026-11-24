@@ -1493,6 +1493,19 @@ dl.row dd a.tvdb-inline-edit {
 @media (min-width: 576px) { .tvdb-catchup-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 992px) { .tvdb-catchup-grid { grid-template-columns: repeat(3, 1fr); } }
 
+/* A mark returns to its place in the list (ListPosition): a little room above it. */
+.tvdb-catchup-card,
+.tvdb-catchup-row,
+.tvdb-series-card-wrap[id] {
+    scroll-margin-top: var(--tvdb-space-4);
+}
+
+/* ...and straight there. Bootstrap scrolls smoothly, which on a page that has
+   just loaded is a glide down from the top after every tick. */
+:root:has(.tvdb-catchup-card:target, .tvdb-catchup-row:target, .tvdb-series-card-wrap:target) {
+    scroll-behavior: auto;
+}
+
 .tvdb-catchup-media {
     position: relative;
     aspect-ratio: 16 / 9;

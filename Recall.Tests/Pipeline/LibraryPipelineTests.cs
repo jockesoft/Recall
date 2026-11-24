@@ -21,7 +21,8 @@ namespace Recall.Tests.Pipeline;
 /// <summary>
 /// The Library rendered by the real app: a Watching card carries the round
 /// check that marks the series' next episode, with its name and the form that
-/// brings the page back to the card; a card with no released next episode, and
+/// brings the page back to the same place in Watching (the cards are named by
+/// their place); a card with no released next episode, and
 /// a card in another section, has none. What the page model decides is tested
 /// in <c>LibraryModelTests</c>.
 /// </summary>
@@ -124,12 +125,17 @@ public sealed class LibraryPipelineTests
 
         var card = Card(html, Behind);
         card.Should().Contain($"<form method=\"post\" action=\"/Library?seriesId={Behind}&episodeId={Behind * 100 + 2}&handler=MarkWatched\">");
-        card.Should().Contain($"<input type=\"hidden\" name=\"Anchor\" value=\"series-card-{Behind}\" />",
-            "the page comes back to the card");
+        card.Should().StartWith(" id=\"watching-card-1\">", "watched most recently, it is first in Watching");
+        card.Should().Contain("<input type=\"hidden\" name=\"Anchor\" value=\"watching-card-1\" />",
+            "the page comes back to the same place in Watching");
+        card.Should().NotContain("name=\"last\"", "it is not the last card");
         card.Should().Contain("<button type=\"submit\" class=\"tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-image\" title=\"Mark as watched\" aria-label=\"Mark Library Behind S01E02 watched\">");
 
         Card(html, NotStarted).Should().Contain("aria-label=\"Mark Library Not Started S01E01 watched\"",
             "a series never started marks its first episode");
+        Card(html, NotStarted).Should().StartWith(" id=\"watching-card-2\">");
+        Card(html, NothingAired).Should().StartWith(" id=\"watching-card-3\">", "every Watching card is named by its place");
+        Card(html, UpToDate).Should().StartWith(">", "a card in another section has no id");
     }
 
     [TestCase(UpToDate)]
@@ -164,9 +170,11 @@ public sealed class LibraryPipelineTests
             .Should().BeEmpty();
     }
 
-    /// <summary>One series' card, from its opening tag to the next card (or the end of its grid).</summary>
+    /// <summary>One series' card, from the end of its class attributes (its id, if any) to the next card (or the end of its grid).</summary>
     private static string Card(string html, int seriesId) =>
-        Regex.Match(html, $"<div class=\"tvdb-series-card-wrap\" data-content-type=\"series\" id=\"series-card-{seriesId}\">(.*?)(?=<div class=\"tvdb-series-card-wrap\"|</section>)").Groups[1].Value;
+        Regex.Matches(html, "<div class=\"tvdb-series-card-wrap\" data-content-type=\"series\"(.*?)(?=<div class=\"tvdb-series-card-wrap\"|</section>)")
+            .Select(m => m.Groups[1].Value)
+            .SingleOrDefault(card => card.Contains($"href=\"/Series/Details/{seriesId}\"", StringComparison.Ordinal)) ?? "";
 
     /// <summary>The page with its whitespace collapsed and its entities decoded, for plain matching.</summary>
     private async Task<string> PageAsync(string path)

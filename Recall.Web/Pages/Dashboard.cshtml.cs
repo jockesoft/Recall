@@ -71,7 +71,7 @@ public sealed record DashboardStat(int Value, string Label, string ShortLabel, s
 // ---------------------------------------------------------------------------
 
 [Authorize]
-public sealed partial class DashboardModel(
+public sealed class DashboardModel(
     ITheTvDbService theTvDbService,
     ITrackedSeriesRepository libraryRepository,
     IEpisodeWatchRepository watchedRepository,
@@ -115,11 +115,20 @@ public sealed partial class DashboardModel(
     public bool ShowAll { get; set; }
 
     /// <summary>
-    /// Posted by a card's or row's forms ("catchup-card-123", "catchup-row-123"):
-    /// the redirect after the action ends at that card or row. Anything else is ignored.
+    /// Posted by a card's or row's forms, which are named by their place in the
+    /// list ("catchup-card-5", "catchup-row-5"): the redirect after the action
+    /// returns to that place (<see cref="ListPosition"/>), whichever series is
+    /// there by then. Anything else is ignored.
     /// </summary>
     [BindProperty]
     public string? Anchor { get; set; }
+
+    /// <summary>Posted by the last card's or row's forms: when that series leaves the list, the page returns to the new last one.</summary>
+    [BindProperty(Name = "last")]
+    public bool AnchorIsLast { get; set; }
+
+    /// <summary>The section, where a mark returns when it emptied the list.</summary>
+    public const string ContinueWatchingSection = "continueWatching";
 
     /// <summary>
     /// The header's three figures, each a link to what explains it: Tracked to
@@ -353,6 +362,7 @@ public sealed partial class DashboardModel(
     public async Task<IActionResult> OnPostMarkWatchedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
     {
         var userId = currentUserService.UserId  ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+        var leftTheList = false;
 
         try
         {
@@ -361,6 +371,8 @@ public sealed partial class DashboardModel(
             switch (result.Outcome)
             {
                 case EpisodeWatchOutcome.MarkedWatched when result.Batch is { InsertedCount: > 0 } batch:
+                    // Caught up: the series has no next episode, so it has left the list.
+                    leftTheList = result.CaughtUp is not null;
                     this.SetSuccessToastWithWatchedUndo(
                         await OneTapMarkToast.DescribeAsync(theTvDbService, logger, nameof(DashboardModel), seriesId, episodeId, result.ResumedWatching, cancellationToken),
                         seriesId,
@@ -384,19 +396,30 @@ public sealed partial class DashboardModel(
             this.SetErrorToast("Could not update watched status right now.");
         }
 
-        return BackToList();
+        return BackToList(leftTheList);
     }
 
     /// <summary>
     /// Back to the Dashboard after a card's or row's action: expanded when it
-    /// was posted from an expanded list, at the card or row it came from.
+    /// was posted from an expanded list, at the same place in the list
+    /// (<see cref="ListPosition"/>), not at the series' new place: ticking one
+    /// series after another never sends the page back to the top.
     /// </summary>
-    private RedirectToPageResult BackToList() =>
-        RedirectToPage(pageName: null, pageHandler: null, routeValues: ShowAll ? new { all = "true" } : null,
-            fragment: Anchor is { } anchor && AnchorPattern().IsMatch(anchor) ? anchor : null);
+    /// <param name="leftTheList">The series has left the list (caught up, stopped).</param>
+    private RedirectToPageResult BackToList(bool leftTheList)
+    {
+        var fragment = ListPosition.ReturnTo(
+            Anchor, AnchorPrefixes, leftTheList, AnchorIsLast, emptyFallback: ContinueWatchingSection);
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^catchup-(card|row)-\d{1,10}$")]
-    private static partial System.Text.RegularExpressions.Regex AnchorPattern();
+        // On a phone the first place is the card, which has no row: the place
+        // before the second row is the card.
+        if (fragment == ListPosition.Id(CatchUpCardModel.RowPrefix, 1))
+            fragment = ListPosition.Id(CatchUpCardModel.CardPrefix, 1);
+
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: ShowAll ? new { all = "true" } : null, fragment: fragment);
+    }
+
+    private static readonly string[] AnchorPrefixes = [CatchUpCardModel.CardPrefix, CatchUpCardModel.RowPrefix];
 
 
     /// <summary>
@@ -408,9 +431,13 @@ public sealed partial class DashboardModel(
     {
         var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
+        var leftTheList = false;
+
         try
         {
-            this.SetStopWatchingToast(await watchProgressService.StopWatchingAsync(userId, seriesId, cancellationToken), seriesId);
+            var result = await watchProgressService.StopWatchingAsync(userId, seriesId, cancellationToken);
+            leftTheList = result.Outcome is StopWatchingOutcome.Stopped or StopWatchingOutcome.AlreadyStopped;
+            this.SetStopWatchingToast(result, seriesId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -418,6 +445,6 @@ public sealed partial class DashboardModel(
             this.SetErrorToast("Could not update your library right now.");
         }
 
-        return BackToList();
+        return BackToList(leftTheList);
     }
 }

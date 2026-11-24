@@ -159,6 +159,8 @@
                             EpisodeName = ep.Name,
                             ImageUrl = ep.ImageUrl,
                             IsUpNext = index == 0,
+                            Position = index + 1,
+                            IsLast = index == Model.CatchUpEpisodes.Count - 1,
                             ShowAll = Model.ShowAll
                         })
                         .ToList();

@@ -936,20 +936,61 @@ public class DashboardModelTests
     }
 
     [Test]
-    public async Task MarkWatched_FromAnExpandedList_Should_ReturnExpanded_AtTheRowThatWasMarked()
+    public async Task MarkWatched_FromAnExpandedList_Should_ReturnExpanded_AtTheSamePlace()
     {
         _progress
             .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId)));
         _sut.ShowAll = true;
-        _sut.Anchor = "catchup-row-1";
+        _sut.Anchor = "catchup-row-12";
 
         var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
 
         var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
         redirect.PageName.Should().BeNull("back to the Dashboard");
         redirect.RouteValues.Should().ContainKey("all").WhoseValue.Should().Be("true", "the address the script and the GET form write: ?all=true");
-        redirect.Fragment.Should().Be("catchup-row-1");
+        redirect.Fragment.Should().Be("catchup-row-12",
+            "the same place in the list, now another series': the marked one has moved to the top");
+    }
+
+    [TestCase("catchup-card-5", false, false, "catchup-card-5")]
+    [TestCase("catchup-card-5", false, true, "catchup-card-5")]
+    [TestCase("catchup-card-5", true, false, "catchup-card-5")]
+    [TestCase("catchup-card-5", true, true, "catchup-card-4")]
+    [TestCase("catchup-row-5", true, true, "catchup-row-4")]
+    [TestCase("catchup-row-2", true, true, "catchup-card-1")]
+    [TestCase("catchup-card-1", true, true, DashboardModel.ContinueWatchingSection)]
+    public async Task MarkWatched_Should_ReturnToTheSamePlace_OrTheNewLast_WhenTheLastHasLeft(
+        string anchor, bool caughtUp, bool wasLast, string expected)
+    {
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId),
+                caughtUp ? new SeriesCaughtUp(1, "Chernobyl", Finished: true, UserHasRated: false) : null));
+        _sut.Anchor = anchor;
+        _sut.AnchorIsLast = wasLast;
+
+        var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+
+        // Caught up, the series has left the list: the place is taken by the
+        // next one, or, when it was the last, gone, so the page returns to the
+        // new last one (on a phone the first place is the card).
+        result.Should().BeOfType<RedirectToPageResult>().Which.Fragment.Should().Be(expected);
+    }
+
+    [Test]
+    public async Task MarkWatched_ThatIsRefused_Should_StillReturnToTheSamePlace()
+    {
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.NotAired, WatchedBatch.Empty));
+        _sut.Anchor = "catchup-card-3";
+        _sut.AnchorIsLast = true;
+
+        var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>().Which.Fragment.Should().Be("catchup-card-3");
     }
 
     [Test]
@@ -970,6 +1011,8 @@ public class DashboardModelTests
     [TestCase("javascript:alert(1)")]
     [TestCase("upcoming")]
     [TestCase("catchup-row-")]
+    [TestCase("catchup-card-0")]
+    [TestCase("series-card-5")]
     public async Task MarkWatched_Should_DropAnAnchorThatIsNotACardOrRow(string anchor)
     {
         _progress
@@ -995,7 +1038,35 @@ public class DashboardModelTests
 
         var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
         redirect.RouteValues.Should().ContainKey("all").WhoseValue.Should().Be("true");
-        redirect.Fragment.Should().Be("catchup-card-7");
+        redirect.Fragment.Should().Be("catchup-card-7", "the same place, now the next series'");
+    }
+
+    [Test]
+    public async Task StopWatching_TheLast_Should_ReturnToTheNewLast()
+    {
+        _progress
+            .Setup(x => x.StopWatchingAsync(UserId, 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StopWatchingResult(StopWatchingOutcome.Stopped, "Silo"));
+        _sut.Anchor = "catchup-card-7";
+        _sut.AnchorIsLast = true;
+
+        var result = await _sut.OnPostStopWatchingAsync(7, CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>().Which.Fragment.Should().Be("catchup-card-6");
+    }
+
+    [Test]
+    public async Task StopWatching_ThatIsRefused_Should_ReturnToTheSamePlace()
+    {
+        _progress
+            .Setup(x => x.StopWatchingAsync(UserId, 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StopWatchingResult(StopWatchingOutcome.Finished, "Silo"));
+        _sut.Anchor = "catchup-card-7";
+        _sut.AnchorIsLast = true;
+
+        var result = await _sut.OnPostStopWatchingAsync(7, CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>().Which.Fragment.Should().Be("catchup-card-7", "nothing left the list");
     }
 
     [Test]

@@ -41,20 +41,25 @@
         });
     }
 
-    // After a mark the page returns at the card or row that was marked. A
-    // marked series has just been watched, so it moves up the queue: on a
-    // phone it may now be the card where it was a row (or, at another width,
-    // the other way round), and the address names one that is gone or not
-    // drawn. Then land on the series' other one; for a series that has just
-    // been caught up and left the list, at the section.
+    // After a mark (or a stop) the page returns to the same place in the list,
+    // named by position ("catchup-row-5"), not to the series' new place: the
+    // browser scrolls there by itself. A place can be one that is not drawn at
+    // this width (the card at place 5 on a phone, where the rows are shown),
+    // so land on the other one at that place; and, when the list has become
+    // shorter than the place, on the last one drawn.
     var match = /^#catchup-(card|row)-(\d+)$/.exec(window.location.hash);
     if (match) {
-        var drawn = function (el) { return el && el.getClientRects().length > 0; };
+        var drawn = function (el) { return !!el && el.getClientRects().length > 0; };
         var named = document.getElementById(match[0].slice(1));
         if (!drawn(named)) {
             var other = document.getElementById('catchup-' + (match[1] === 'card' ? 'row' : 'card') + '-' + match[2]);
-            var target = drawn(other) ? other : document.getElementById('continueWatching');
-            if (target) target.scrollIntoView({ block: drawn(other) ? 'center' : 'start' });
+            var items = list
+                ? Array.prototype.filter.call(list.querySelectorAll('.tvdb-catchup-card, .tvdb-catchup-row'), drawn)
+                : [];
+            var target = drawn(other) ? other
+                : items.length > 0 ? items[items.length - 1]
+                : document.getElementById('continueWatching');
+            if (target) target.scrollIntoView({ block: 'start', behavior: 'instant' });
         }
     }
 })();
