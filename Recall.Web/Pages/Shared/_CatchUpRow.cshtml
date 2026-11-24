@@ -1,11 +1,12 @@
 @model Recall.Web.Pages.Shared.CatchUpCardModel
 @* One series of "Continue watching" as a compact row, for phones (the cards
    are for wider screens; both are on the page and the stylesheet shows one):
-   the still, the series and the next episode, the "⋯" menu (a plain icon
-   button, 44px for touch) and the check (a ringed one).
+   the still beside two lines: the series name, the whole width on its own,
+   then the next episode with the "⋯" menu (a plain icon button, 44px for
+   touch) and the check (a ringed one) beside it.
    The same image rule, actions and names as _CatchUpCard. *@
 
-<li class="tvdb-catchup-row">
+<li class="tvdb-catchup-row" id="@Model.RowId">
     <div class="tvdb-catchup-row__still @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
         @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
         {
@@ -13,17 +14,15 @@
         }
     </div>
 
-    <div class="tvdb-catchup-row__text">
-        <a asp-page="/Series/Details" asp-route-id="@Model.SeriesId" class="tvdb-catchup-row__series tvdb-link-plain">@Model.SeriesName</a>
-        <a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeId" class="tvdb-catchup-row__episode tvdb-link-plain">
-            @if (Model.ShortCode is not null)
-            {
-                <span class="tvdb-mono">@Model.ShortCode</span>
-                <span aria-hidden="true">·</span>
-            }
-            @Model.EpisodeName
-        </a>
-    </div>
+    <a asp-page="/Series/Details" asp-route-id="@Model.SeriesId" class="tvdb-catchup-row__series tvdb-link-plain">@Model.SeriesName</a>
+    <a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeId" class="tvdb-catchup-row__episode tvdb-link-plain">
+        @if (Model.ShortCode is not null)
+        {
+            <span class="tvdb-mono">@Model.ShortCode</span>
+            <span aria-hidden="true">·</span>
+        }
+        @Model.EpisodeName
+    </a>
 
     <div class="dropdown tvdb-catchup-row__menu">
         <button type="button" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--plain" id="@Model.RowMenuId"
@@ -34,6 +33,8 @@
         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="@Model.RowMenuId">
             <li>
                 <form method="post" asp-page-handler="@Model.StopWatchingHandler" asp-route-seriesId="@Model.SeriesId">
+                    <input type="hidden" name="all" value="@(Model.ShowAll ? "true" : "false")" data-catchup-all />
+                    <input type="hidden" name="Anchor" value="@Model.RowId" />
                     <button type="submit" class="dropdown-item">Stop watching</button>
                 </form>
             </li>
@@ -43,6 +44,8 @@
     <form method="post" asp-page-handler="@Model.MarkWatchedHandler"
           asp-route-seriesId="@Model.SeriesId" asp-route-episodeId="@Model.EpisodeId"
           class="tvdb-catchup-row__check">
+        <input type="hidden" name="all" value="@(Model.ShowAll ? "true" : "false")" data-catchup-all />
+        <input type="hidden" name="Anchor" value="@Model.RowId" />
         <button type="submit" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-paper"
                 title="Mark as watched"
                 aria-label="Mark @Model.EpisodeName as watched">

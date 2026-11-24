@@ -46,6 +46,19 @@ public sealed class CatchUpCardModel
     /// </summary>
     public bool IsUpNext { get; init; }
 
+    /// <summary>
+    /// Whether the list is expanded: posted back with every action (the
+    /// "all" field), so the page returns as it was. tvdb-dashboard.js keeps
+    /// the field in step when the list is expanded in place.
+    /// </summary>
+    public bool ShowAll { get; init; }
+
+    /// <summary>The card's id, where a mark from it returns to ("catchup-card-123").</summary>
+    public string CardId => $"catchup-card-{SeriesId}";
+
+    /// <summary>The compact row's id, where a mark from it returns to ("catchup-row-123").</summary>
+    public string RowId => $"catchup-row-{SeriesId}";
+
     /// <summary>The id of the card's menu button, unique on the page (one card per series).</summary>
     public string MenuId => $"catchUpMenu{SeriesId}";
 
