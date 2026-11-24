@@ -140,7 +140,18 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 
 /* Continue watching: both layouts are in the page. From 576px every series is
    a card (_CatchUpCard); on a phone only the first is, with "Up next", and the
-   others are compact rows (_CatchUpRow), then a full-width "See all". */
+   others are compact rows (_CatchUpRow), then a full-width "See all" or
+   "Show all N". Every series is rendered; collapsed, the list shows the first
+   nine by count (nine cards, or the card and eight rows) and leaves the rest
+   unrendered, like the cast lists; .is-expanded shows them all. */
+.tvdb-catchup:not(.is-expanded) .tvdb-catchup-grid > :nth-child(n + 10) {
+    display: none;
+}
+
+.tvdb-catchup-toggle {
+    margin-top: var(--tvdb-space-4);
+}
+
 .tvdb-catchup-rows,
 .tvdb-catchup-seeall,
 .tvdb-catchup-upnext {
@@ -157,6 +168,18 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
         display: flex;
         flex-direction: column;
         margin: var(--tvdb-space-3) 0 0;
+    }
+
+    .tvdb-catchup:not(.is-expanded) .tvdb-catchup-row:nth-child(n + 9) {
+        display: none;
+    }
+
+    .tvdb-catchup-toggle {
+        margin-top: var(--tvdb-space-3);
+    }
+
+    .tvdb-catchup-toggle > .btn {
+        width: 100%;
     }
 
     .tvdb-catchup-seeall {
@@ -189,12 +212,18 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     pointer-events: none;
 }
 
-/* A compact row: a 96px still, the series and the episode on one line each,
-   the "⋯" and the 44px check (both cream-panel rings). */
+/* A compact row: a 96px still beside two lines. The series name has the whole
+   width of the first; the second is the episode ("S08E10 · title") with the
+   plain "⋯" and the ringed 44px check beside it. Each line ends in an
+   ellipsis when it must. */
 .tvdb-catchup-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) auto auto;
+    grid-template-areas:
+        "still series series series"
+        "still episode menu check";
     align-items: center;
-    gap: var(--tvdb-space-3);
+    column-gap: var(--tvdb-space-3);
     padding: var(--tvdb-space-2) 0;
     border-top: 1px solid var(--tvdb-ink-line);
 }
@@ -204,8 +233,8 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 }
 
 .tvdb-catchup-row__still {
+    grid-area: still;
     position: relative;
-    flex: 0 0 96px;
     width: 96px;
     aspect-ratio: 16 / 9;
     overflow: hidden;
@@ -220,34 +249,35 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     object-fit: cover;
 }
 
-.tvdb-catchup-row__text {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-width: 0;
-    line-height: var(--tvdb-leading-snug);
-}
-
 .tvdb-catchup-row__series,
 .tvdb-catchup-row__episode {
     display: block;
+    min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    line-height: var(--tvdb-leading-snug);
 }
 
 .tvdb-catchup-row__series {
+    grid-area: series;
+    align-self: end;
     font-weight: 600;
 }
 
 .tvdb-catchup-row__episode {
+    grid-area: episode;
     font-size: var(--tvdb-text-sm);
     color: var(--tvdb-text-muted);
 }
 
-.tvdb-catchup-row__menu,
+.tvdb-catchup-row__menu {
+    grid-area: menu;
+    margin: 0;
+}
+
 .tvdb-catchup-row__check {
-    flex: none;
+    grid-area: check;
     margin: 0;
 }
 

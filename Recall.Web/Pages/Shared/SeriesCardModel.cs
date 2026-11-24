@@ -82,6 +82,41 @@ public sealed class SeriesCardModel
     /// </summary>
     public string? MetaText { get; init; }
 
+    /// <summary>
+    /// The card's element id, where a POST from it returns to. Null renders
+    /// none. The Library's Watching cards are named by their place in the list
+    /// ("watching-card-5", <see cref="ListPosition"/>), so a mark returns to
+    /// the same place, whichever series is there by then.
+    /// </summary>
+    public string? ElementId { get; init; }
+
+    /// <summary>
+    /// The last card of its list: the check says so (<c>last</c>), so that
+    /// when the series leaves the list the page returns to the new last one.
+    /// </summary>
+    public bool IsLastInList { get; init; }
+
+    /// <summary>
+    /// The episode the round check in the poster's bottom-right corner marks
+    /// watched (the series' next episode, a Library Watching card). Null gives
+    /// no check. The host page needs <c>OnPost{MarkHandler}Async(int seriesId,
+    /// int episodeId, ...)</c> and an <c>Anchor</c> property for
+    /// <see cref="ElementId"/>.
+    /// </summary>
+    public int? MarkEpisodeId { get; init; }
+
+    /// <summary>"S02E06", the episode the check marks, for its name: "Mark Severance S02E06 watched".</summary>
+    public string? MarkEpisodeCode { get; init; }
+
+    /// <summary>Page handler the check posts to.</summary>
+    public string MarkHandler { get; init; } = "MarkWatched";
+
+    /// <summary>Extra hidden fields the mark handler needs (the Library's one-section view posts its section).</summary>
+    public IDictionary<string, string> MarkHiddenFields { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>The check's accessible name.</summary>
+    public string MarkLabel => string.IsNullOrWhiteSpace(MarkEpisodeCode) ? $"Mark {Name} next episode watched" : $"Mark {Name} {MarkEpisodeCode} watched";
+
     /// <summary>"Series · 2008", "Movie · watched Sep 25", "Stopped Sep 4", or just the type when there is nothing to add.</summary>
     public string MetaLine
     {

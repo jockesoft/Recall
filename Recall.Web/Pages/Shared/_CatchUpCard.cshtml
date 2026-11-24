@@ -1,6 +1,6 @@
 @model Recall.Web.Pages.Shared.CatchUpCardModel
 
-<div class="tvdb-catchup-card">
+<div class="tvdb-catchup-card" id="@Model.CardId">
     <div class="tvdb-catchup-media @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
         @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
         {
@@ -38,6 +38,12 @@
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="@Model.MenuId">
                 <li>
                     <form method="post" asp-page-handler="@Model.StopWatchingHandler" asp-route-seriesId="@Model.SeriesId">
+                        <input type="hidden" name="all" value="@(Model.ShowAll ? "true" : "false")" data-catchup-all />
+                        <input type="hidden" name="Anchor" value="@Model.CardId" />
+                        @if (Model.IsLast)
+                        {
+                            <input type="hidden" name="last" value="true" />
+                        }
                         <button type="submit" class="dropdown-item">Stop watching</button>
                     </form>
                 </li>
@@ -47,6 +53,12 @@
         <form method="post" asp-page-handler="@Model.MarkWatchedHandler"
               asp-route-seriesId="@Model.SeriesId" asp-route-episodeId="@Model.EpisodeId"
               class="tvdb-catchup-check">
+            <input type="hidden" name="all" value="@(Model.ShowAll ? "true" : "false")" data-catchup-all />
+            <input type="hidden" name="Anchor" value="@Model.CardId" />
+            @if (Model.IsLast)
+            {
+                <input type="hidden" name="last" value="true" />
+            }
             <button type="submit" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-image"
                     title="Mark as watched"
                     aria-label="Mark @Model.EpisodeName as watched">

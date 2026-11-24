@@ -7,6 +7,7 @@
 #   ./review.sh capture    run the Playwright capture (Capture/), writes screenshots/
 #   ./review.sh import-progress on|off   add or remove an import that is still running (used by the capture)
 #   ./review.sh stats-sparse on|off      give the empty clone's user a bulk-marked and imported history only, or take it away (used by the capture)
+#   ./review.sh continue-watching-many on|off   put seven finished or up-to-date series back in Continue watching, or restore them (used by the capture)
 #   ./review.sh stop       stop the app instances
 #   ./review.sh teardown   stop, drop the clones, clear the Redis database used
 #   ./review.sh all        setup, start, capture, teardown
@@ -240,14 +241,34 @@ stats_sparse() { # on|off
   fi
 }
 
+# More than nine series in Continue watching, for the Dashboard's "Show all N":
+# put in place for one screenshot and undone again, from a backup table, so
+# the Stats chart and the other shots keep the seed's history.
+continue_watching_many() { # on|off
+  psql_db "$SEEDED_DB" -c "
+    DO \$\$ BEGIN
+      IF to_regclass('public.ui_review_cw_backup') IS NOT NULL THEN
+        DELETE FROM episode_watch w
+        USING (SELECT DISTINCT user_id, series_tvdb_id FROM ui_review_cw_backup) b
+        WHERE w.user_id = b.user_id AND w.series_tvdb_id = b.series_tvdb_id;
+        INSERT INTO episode_watch SELECT * FROM ui_review_cw_backup;
+        DROP TABLE ui_review_cw_backup;
+      END IF;
+    END \$\$;"
+  if [ "${1:-}" = "on" ]; then
+    psql_db "$SEEDED_DB" < "$ROOT/ui-review/continue-watching-many.sql"
+  fi
+}
+
 case "${1:-}" in
   setup) setup ;;
   import-progress) import_progress "${2:-off}" ;;
   stats-sparse) stats_sparse "${2:-off}" ;;
+  continue-watching-many) continue_watching_many "${2:-off}" ;;
   start) start ;;
   capture) shift; capture "$@" ;;
   stop) stop_apps ;;
   teardown) teardown ;;
   all) setup; start; capture; teardown ;;
-  *) sed -n '2,21p' "$0"; exit 1 ;;
+  *) sed -n '2,22p' "$0"; exit 1 ;;
 esac

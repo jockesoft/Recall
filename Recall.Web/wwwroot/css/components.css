@@ -1100,7 +1100,9 @@ dl.row dd a.tvdb-inline-edit {
    A Dashboard card's check is a .tvdb-round-button--on-image that turns green
    when it is about to mark (the "⋯" beside it does not: it marks nothing). */
 .tvdb-catchup-check .tvdb-round-button:hover,
-.tvdb-catchup-check .tvdb-round-button:focus-visible {
+.tvdb-catchup-check .tvdb-round-button:focus-visible,
+.tvdb-series-card-mark .tvdb-round-button:hover,
+.tvdb-series-card-mark .tvdb-round-button:focus-visible {
     border-color: var(--tvdb-ok);
     background: var(--tvdb-ok);
     color: var(--tvdb-on-ok);
@@ -1457,6 +1459,29 @@ dl.row dd a.tvdb-inline-edit {
 
 /* The heart is a .tvdb-round-button--on-image (LikeToggleModel.Placement.Image). */
 
+/* The one-tap check of a Library Watching card: a 44px --on-image button in the
+   poster's bottom-right corner, above the progress bar (4px) and clear of the
+   title and the lines under it. The overlay is the poster's size and lets
+   clicks through to the card everywhere but the button. */
+.tvdb-series-card-mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    aspect-ratio: 2 / 3;
+    padding: var(--tvdb-space-2) var(--tvdb-space-2) calc(4px + var(--tvdb-space-2));
+    pointer-events: none;
+}
+
+.tvdb-series-card-mark > form {
+    margin: 0;
+    pointer-events: auto;
+}
+
 /* ---- Catch-up card (the _CatchUpCard partial) ----------------------------------------- */
 
 .tvdb-catchup-grid {
@@ -1467,6 +1492,19 @@ dl.row dd a.tvdb-inline-edit {
 
 @media (min-width: 576px) { .tvdb-catchup-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 992px) { .tvdb-catchup-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* A mark returns to its place in the list (ListPosition): a little room above it. */
+.tvdb-catchup-card,
+.tvdb-catchup-row,
+.tvdb-series-card-wrap[id] {
+    scroll-margin-top: var(--tvdb-space-4);
+}
+
+/* ...and straight there. Bootstrap scrolls smoothly, which on a page that has
+   just loaded is a glide down from the top after every tick. */
+:root:has(.tvdb-catchup-card:target, .tvdb-catchup-row:target, .tvdb-series-card-wrap:target) {
+    scroll-behavior: auto;
+}
 
 .tvdb-catchup-media {
     position: relative;

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Pages.Shared;
 using Recall.Web.Services;
 using Recall.Web.Services.Digest;
 using Recall.Web.Services.WatchTracking;
@@ -89,17 +90,45 @@ public sealed class DashboardModel(
     private const int ThisWeekWindowDays = 7;
 
     /// <summary>
-    /// How many series "Continue watching" shows: the first ones of the queue
-    /// (<see cref="ContinueWatchingOrder"/>). The rest are in the Library's
-    /// Watching section, which "See all in Library" opens.
+    /// How many series "Continue watching" shows before "Show all N": the first
+    /// ones of the queue (<see cref="ContinueWatchingOrder"/>). Every series is
+    /// on the page; the stylesheet hides the rest by count until the list is
+    /// expanded (in place, or with <c>?all=true</c> without script).
     /// </summary>
     public const int ContinueWatchingLimit = 9;
 
     /// <summary>The Library's one-section view of Watching (<c>/Library?section=watching</c>).</summary>
     public const string LibraryWatchingSection = "watching";
 
-    /// <summary>The series in the queue before <see cref="ContinueWatchingLimit"/> (dormant ones left out).</summary>
-    public int ContinueWatchingTotal { get; private set; }
+    /// <summary>Every series in the queue (dormant ones left out): the N of "Show all N".</summary>
+    public int ContinueWatchingTotal => CatchUpEpisodes.Count;
+
+    /// <summary>Whether there are more than <see cref="ContinueWatchingLimit"/>, so "Show all N" is offered.</summary>
+    public bool HasMoreToContinue => ContinueWatchingTotal > ContinueWatchingLimit;
+
+    /// <summary>
+    /// Continue watching expanded (<c>?all=true</c>): the page's state without
+    /// script, and what a mark posted from an expanded list sends back, so the
+    /// page returns expanded.
+    /// </summary>
+    [BindProperty(SupportsGet = true, Name = "all")]
+    public bool ShowAll { get; set; }
+
+    /// <summary>
+    /// Posted by a card's or row's forms, which are named by their place in the
+    /// list ("catchup-card-5", "catchup-row-5"): the redirect after the action
+    /// returns to that place (<see cref="ListPosition"/>), whichever series is
+    /// there by then. Anything else is ignored.
+    /// </summary>
+    [BindProperty]
+    public string? Anchor { get; set; }
+
+    /// <summary>Posted by the last card's or row's forms: when that series leaves the list, the page returns to the new last one.</summary>
+    [BindProperty(Name = "last")]
+    public bool AnchorIsLast { get; set; }
+
+    /// <summary>The section, where a mark returns when it emptied the list.</summary>
+    public const string ContinueWatchingSection = "continueWatching";
 
     /// <summary>
     /// The header's three figures, each a link to what explains it: Tracked to
@@ -240,11 +269,11 @@ public sealed class DashboardModel(
 
         var orderedCatchUp = queue.Active.ToList();
         DormantSeriesCount = queue.Dormant.Count;
-        ContinueWatchingTotal = orderedCatchUp.Count;
 
-        // Images only for the series shown: the rest cost no lookup.
-        CatchUpEpisodes = await WithArtAsync(
-            orderedCatchUp.Take(ContinueWatchingLimit).ToList(), aggregates.ToDictionary(a => a.TvdbId), cancellationToken);
+        // Every series is on the page (the rest are hidden until expanded), so
+        // every one gets its image; only an episode without a still in the
+        // series aggregate costs a lookup of its own record.
+        CatchUpEpisodes = await WithArtAsync(orderedCatchUp, aggregates.ToDictionary(a => a.TvdbId), cancellationToken);
         UpcomingThisWeekCount = upcoming.Count(e => e.Release.GroupDate <= thisWeekCutoff);
         UnwatchedCount = unwatchedTotal;
     }
@@ -333,6 +362,7 @@ public sealed class DashboardModel(
     public async Task<IActionResult> OnPostMarkWatchedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
     {
         var userId = currentUserService.UserId  ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
+        var leftTheList = false;
 
         try
         {
@@ -341,8 +371,10 @@ public sealed class DashboardModel(
             switch (result.Outcome)
             {
                 case EpisodeWatchOutcome.MarkedWatched when result.Batch is { InsertedCount: > 0 } batch:
+                    // Caught up: the series has no next episode, so it has left the list.
+                    leftTheList = result.CaughtUp is not null;
                     this.SetSuccessToastWithWatchedUndo(
-                        await DescribeMarkedAsync(seriesId, episodeId, result.ResumedWatching, cancellationToken),
+                        await OneTapMarkToast.DescribeAsync(theTvDbService, logger, nameof(DashboardModel), seriesId, episodeId, result.ResumedWatching, cancellationToken),
                         seriesId,
                         batch,
                         undoSingle: true,
@@ -364,25 +396,31 @@ public sealed class DashboardModel(
             this.SetErrorToast("Could not update watched status right now.");
         }
 
-        return RedirectToPage();
+        return BackToList(leftTheList);
     }
 
     /// <summary>
-    /// "Marked Severance S02E06 as watched." — from the (cached) aggregate; a plain sentence when it can't be read.
-    /// A stopped series has no card here, so <paramref name="resumedWatching"/> is only ever set by a
-    /// page loaded before the series was stopped; the toast still says the mark resumed it.
+    /// Back to the Dashboard after a card's or row's action: expanded when it
+    /// was posted from an expanded list, at the same place in the list
+    /// (<see cref="ListPosition"/>), not at the series' new place: ticking one
+    /// series after another never sends the page back to the top.
     /// </summary>
-    private async Task<string> DescribeMarkedAsync(
-        int seriesId, int episodeId, string? resumedWatching, CancellationToken cancellationToken)
+    /// <param name="leftTheList">The series has left the list (caught up, stopped).</param>
+    private RedirectToPageResult BackToList(bool leftTheList)
     {
-        var aggregate = await theTvDbService.TryGetSeriesAggregateAsync(seriesId, logger, nameof(DashboardModel), cancellationToken);
-        var episode = aggregate?.ToWatchableEpisodes().FirstOrDefault(e => e.Id == episodeId);
-        var clause = MarkLibraryEffect.Clause(null, resumedWatching);
+        var fragment = ListPosition.ReturnTo(
+            Anchor, AnchorPrefixes, leftTheList, AnchorIsLast, emptyFallback: ContinueWatchingSection);
 
-        return aggregate is null || episode is null
-            ? $"Marked as watched{clause}."
-            : $"Marked {aggregate.Name} {episode.SlateCode()} as watched{clause}.";
+        // On a phone the first place is the card, which has no row: the place
+        // before the second row is the card.
+        if (fragment == ListPosition.Id(CatchUpCardModel.RowPrefix, 1))
+            fragment = ListPosition.Id(CatchUpCardModel.CardPrefix, 1);
+
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: ShowAll ? new { all = "true" } : null, fragment: fragment);
     }
+
+    private static readonly string[] AnchorPrefixes = [CatchUpCardModel.CardPrefix, CatchUpCardModel.RowPrefix];
+
 
     /// <summary>
     /// "Stop watching" in a Continue watching card's menu. No confirmation: the
@@ -393,9 +431,13 @@ public sealed class DashboardModel(
     {
         var userId = currentUserService.UserId ?? throw new InvalidOperationException("No authenticated user id found on the current request.");
 
+        var leftTheList = false;
+
         try
         {
-            this.SetStopWatchingToast(await watchProgressService.StopWatchingAsync(userId, seriesId, cancellationToken), seriesId);
+            var result = await watchProgressService.StopWatchingAsync(userId, seriesId, cancellationToken);
+            leftTheList = result.Outcome is StopWatchingOutcome.Stopped or StopWatchingOutcome.AlreadyStopped;
+            this.SetStopWatchingToast(result, seriesId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -403,6 +445,6 @@ public sealed class DashboardModel(
             this.SetErrorToast("Could not update your library right now.");
         }
 
-        return RedirectToPage();
+        return BackToList(leftTheList);
     }
 }

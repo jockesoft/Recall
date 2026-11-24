@@ -3,11 +3,12 @@
    in two columns, or one (Column). Collapsed until "Show all" is pressed: the
    stylesheet shows the first six or eight and does not render the rest, and
    the button appears only when someone is hidden (tvdb-cast.js: the count
-   depends on the width). *@
+   depends on the width). data-collapsible and data-collapsible-list mark it
+   for the UI review's collapsed-list check, like Continue watching. *@
 @if (Model.People.Count > 0)
 {
     var showAll = Model.ShowAllLabel ?? $"Show all {Model.People.Count}";
-    <section class="tvdb-cast @(Model.Column ? "tvdb-cast--column" : "")" data-cast>
+    <section class="tvdb-cast @(Model.Column ? "tvdb-cast--column" : "")" data-cast data-collapsible>
         <div class="tvdb-cast__head">
             <h2 class="mb-0">@Model.Heading <span class="tvdb-count">@Model.People.Count</span></h2>
             <button type="button" class="btn btn-outline-dark btn-sm tvdb-cast__toggle" data-cast-toggle
@@ -17,7 +18,7 @@
             </button>
         </div>
 
-        <ul class="tvdb-cast__list list-unstyled" id="@Model.Id" aria-label="@Model.Heading">
+        <ul class="tvdb-cast__list list-unstyled" id="@Model.Id" aria-label="@Model.Heading" data-collapsible-list>
             @foreach (var person in Model.People)
             {
                 <li class="tvdb-person">

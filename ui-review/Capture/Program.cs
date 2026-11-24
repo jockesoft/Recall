@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
@@ -13,9 +14,10 @@ using Microsoft.Playwright;
 // instances. Optional: --only <text> captures just the shots whose name
 // contains the text; --install downloads the Chromium build Playwright needs.
 //
-// Every shot also checks its collapsed cast and crew lists
-// (CheckCollapsedListsAsync): nobody may be drawn half outside a list, and
-// nothing may cover the last person shown. A problem fails the run.
+// Every shot also checks its lists collapsed by count, the cast and crew lists
+// and the Dashboard's Continue watching (CheckCollapsedListsAsync): nothing may
+// be drawn half outside a list, and nothing may cover the last item shown. A
+// problem fails the run.
 //
 // After the shots it times the toasts in a real browser (RunToastChecksAsync,
 // results in toast-checks.json): how long each kind stays, pausing, Escape.
@@ -67,6 +69,124 @@ List<Shot> shots =
 [
     // ---- Signed in, with a full library --------------------------------------
     new("dashboard", "populated", Site.SignedIn, "/Dashboard"),
+    // More than nine series in Continue watching (continue-watching-many.sql, put in place for the
+    // shot and undone after it): collapsed, the first nine and "Show all N"; then expanded in place.
+    new("dashboard", "continue-watching-collapsed", Site.SignedIn, "/Dashboard",
+        Prepare: async page =>
+        {
+            await RunReviewScriptAsync(options, "continue-watching-many", "on");
+            await page.ReloadAsync();
+            await page.Locator("#continueWatchingToggle[aria-expanded=false]").WaitForAsync();
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "continue-watching-many", "off")),
+    new("dashboard", "continue-watching-expanded", Site.SignedIn, "/Dashboard",
+        Prepare: async page =>
+        {
+            await RunReviewScriptAsync(options, "continue-watching-many", "on");
+            await page.ReloadAsync();
+            var toggle = page.Locator("#continueWatchingToggle");
+            await toggle.ScrollIntoViewIfNeededAsync();
+            await toggle.ClickAsync();
+            await page.Locator("#continueWatchingList.is-expanded").WaitForAsync();
+            if (await toggle.GetAttributeAsync("aria-expanded") != "true" || !page.Url.Contains("all=true"))
+                throw new InvalidOperationException("\"Show all\" did not expand the list in place.");
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "continue-watching-many", "off")),
+    // A mark from the expanded list (the last series, beyond the first nine): the page comes back
+    // expanded, at the same place in the list (now another series': the marked one has moved to the
+    // top), with the Undo toast; and the marked series' card has its picture, by the shared image
+    // rule, not the placeholder. Undone afterwards.
+    new("dashboard", "expanded-mark", Site.SignedIn, "/Dashboard", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await RunReviewScriptAsync(options, "continue-watching-many", "on");
+            await page.ReloadAsync();
+            await page.Locator("#continueWatchingToggle").ClickAsync();
+            await page.Locator("#continueWatchingList.is-expanded").WaitForAsync();
+            var check = page.Locator(".tvdb-catchup-check button:visible, .tvdb-catchup-row__check button:visible").Last;
+            await check.ScrollIntoViewIfNeededAsync();
+
+            // The place pressed ("catchup-row-12") and the series marked, read from the check's form.
+            var pressed = await check.EvaluateAsync<JsonElement>(
+                """
+                button => ({
+                    place: button.closest('.tvdb-catchup-card, .tvdb-catchup-row').id,
+                    last: !!button.form.querySelector('input[name=last]'),
+                    series: new URL(button.form.action).searchParams.get('seriesId'),
+                })
+                """);
+            var place = pressed.GetProperty("place").GetString()!;
+            var series = pressed.GetProperty("series").GetString()!;
+            var placeNumber = int.Parse(place[(place.LastIndexOf('-') + 1)..], CultureInfo.InvariantCulture);
+
+            await check.ClickAsync();
+            await page.Locator(".tvdb-toast-action").WaitForAsync();
+
+            var hash = new Uri(page.Url).Fragment;
+            var returnedNumber = int.TryParse(hash[(hash.LastIndexOf('-') + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : -1;
+            var samePlace = hash.StartsWith("#catchup-", StringComparison.Ordinal)
+                && (returnedNumber == placeNumber || (pressed.GetProperty("last").GetBoolean() && returnedNumber == placeNumber - 1));
+            if (!page.Url.Contains("all=true", StringComparison.Ordinal) || !samePlace
+                || await page.Locator("#continueWatchingList.is-expanded").CountAsync() != 1)
+                throw new InvalidOperationException($"A mark at {place} of the expanded list came back to {page.Url}, not expanded at the same place.");
+
+            // The page stays where it was: the card or row now at that place (whichever is drawn at
+            // this width) is on screen, and the page is not back at the top. Waited for, briefly: the
+            // browser scrolls to the fragment once the page has loaded.
+            const string atThePlace =
+                """
+                number => {
+                    const drawn = el => !!el && el.getClientRects().length > 0;
+                    const el = ['card', 'row'].map(kind => document.getElementById('catchup-' + kind + '-' + number)).find(drawn);
+                    const r = el ? el.getBoundingClientRect() : null;
+                    return !!r && r.bottom > 0 && r.top < innerHeight && window.scrollY >= 200;
+                }
+                """;
+            try
+            {
+                await page.WaitForFunctionAsync(atThePlace, returnedNumber, new() { Timeout = 5000 });
+            }
+            catch (TimeoutException)
+            {
+                var scrolled = await page.EvaluateAsync<double>("() => window.scrollY");
+                throw new InvalidOperationException($"After a mark at {place} the page is not at that place ({page.Url}, scrolled {scrolled:0}px).");
+            }
+
+            // The marked series (now first) shows a picture: its card has an image that loads, not the placeholder.
+            var art = await page.EvaluateAsync<string>(
+                """
+                async seriesId => {
+                    const card = Array.from(document.querySelectorAll('.tvdb-catchup-card'))
+                        .find(c => c.querySelector('a.tvdb-catchup-show')?.getAttribute('href') === '/Series/Details/' + seriesId);
+                    if (!card) return 'no card';
+                    if (card.querySelector('.tvdb-catchup-media.is-empty')) return 'the placeholder';
+                    const img = card.querySelector('.tvdb-catchup-media img');
+                    if (!img) return 'no image';
+                    const probe = new Image();
+                    probe.src = img.currentSrc || img.src;
+                    try { await probe.decode(); } catch { return 'an image that does not load: ' + probe.src; }
+                    return probe.naturalWidth > 0 ? 'ok' : 'an empty image: ' + probe.src;
+                }
+                """, series);
+            if (art != "ok")
+                throw new InvalidOperationException($"After the mark, series {series}'s card shows {art}.");
+        },
+        Cleanup: async page =>
+        {
+            try
+            {
+                var undo = page.Locator(".tvdb-toast-action");
+                if (await undo.CountAsync() > 0)
+                {
+                    await undo.First.ClickAsync();
+                    await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
+                }
+            }
+            finally
+            {
+                await RunReviewScriptAsync(options, "continue-watching-many", "off");
+            }
+        }),
     new("search", "empty", Site.SignedIn, "/Search"),
     new("search", "results", Site.SignedIn, "/Search?Query=dark"),
     new("search", "show-more", Site.SignedIn, "/Search?Query=dark",
@@ -80,6 +200,8 @@ List<Shot> shots =
     // The Gentlemen is a series the seed stops: its badge says "Stopped", not "In library".
     new("search", "stopped", Site.SignedIn, "/Search?Query=the+gentlemen", ViewportOnly: true),
     new("library", "populated", Site.SignedIn, "/Library"),
+    // Watching on its own: every card with a released next episode has the round check.
+    new("library", "section-watching", Site.SignedIn, "/Library?section=watching"),
     new("library", "section-watched", Site.SignedIn, "/Library?section=watched"),
     new("library", "section-dormant", Site.SignedIn, "/Library?section=dormant"),
     new("library", "dormant-expanded", Site.SignedIn, "/Library",
@@ -883,6 +1005,12 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
         if (!shot.ViewportOnly)
             await LoadLazyImagesAsync(page);
 
+        // Every shot, the viewport ones too: after a Prepare that navigated (a
+        // mark's redirect) an image the browser has not fetched before is still
+        // loading, and the shot would show an empty frame where the page has a
+        // picture (the "missing art" of dashboard_expanded-mark until 2026-11-24).
+        await WaitForImagesOnScreenAsync(page);
+
         await FreezeToastCountdownsAsync(page);
 
         await page.ScreenshotAsync(new()
@@ -901,6 +1029,20 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
     catch (Exception ex)
     {
         result.Error = ex.Message.Split('\n')[0];
+
+        // A shot that changed the data (a mark, a script turned on) puts it back
+        // even when it failed, so the shots after it see the seed as it was.
+        if (shot.Cleanup is not null)
+        {
+            try
+            {
+                await shot.Cleanup(page);
+            }
+            catch (Exception cleanupEx)
+            {
+                result.Error += $" (cleanup failed too: {cleanupEx.Message.Split('\n')[0]})";
+            }
+        }
     }
 
     return result;
@@ -973,6 +1115,29 @@ static async Task SettleAsync(IPage page)
     await page.EvaluateAsync("() => document.fonts.ready");
 }
 
+// The images drawn in the viewport, lazy ones included (on screen, they load),
+// must have finished loading (or failed: MeasureAsync reports broken ones).
+static async Task WaitForImagesOnScreenAsync(IPage page)
+{
+    try
+    {
+        await page.WaitForFunctionAsync(
+            """
+            () => Array.from(document.images)
+                .filter(i => {
+                    if (i.getClientRects().length === 0) return false;
+                    const r = i.getBoundingClientRect();
+                    return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+                })
+                .every(i => i.complete)
+            """, null, new() { Timeout = 15000 });
+    }
+    catch (TimeoutException)
+    {
+        // A slow image must not fail the shot.
+    }
+}
+
 // Images are loading="lazy": scroll through the page so a full-page
 // screenshot does not show empty frames below the fold.
 static async Task LoadLazyImagesAsync(IPage page)
@@ -999,7 +1164,9 @@ static async Task LoadLazyImagesAsync(IPage page)
     }
 }
 
-// A list collapsed behind "Show all" (the cast and crew lists, [data-cast])
+// A list collapsed behind "Show all" ([data-collapsible] without .is-expanded,
+// around one or more [data-collapsible-list]: the cast and crew lists, and the
+// Dashboard's Continue watching cards and phone rows)
 // must show whole people only: every item that is drawn lies fully inside the
 // list's box (one cut off by the box, or drawn outside it, is a problem; one
 // that is not rendered at all is fine), and nothing covers the last item shown
@@ -1020,9 +1187,9 @@ static async Task CheckCollapsedListsAsync(IPage page, ShotResult result)
                     if (getComputedStyle(node).position === 'fixed') return true;
                 return false;
             };
-            const lists = Array.from(document.querySelectorAll('[data-cast]:not(.is-expanded) .tvdb-cast__list'));
+            const lists = Array.from(document.querySelectorAll('[data-collapsible]:not(.is-expanded) [data-collapsible-list]'));
             for (const list of lists) {
-                const name = '#' + (list.id || 'list');
+                const name = list.id ? '#' + list.id : '.' + list.className.trim().split(/\s+/)[0];
                 const box = list.getBoundingClientRect();
                 let last = null;
                 Array.from(list.children).forEach((item, index) => {

@@ -135,10 +135,10 @@
 
         @if (Model.CatchUpEpisodes.Count > 0 || Model.DormantSeriesCount > 0)
         {
-            <section class="tvdb-page-section" aria-labelledby="continueWatchingHeading">
+            <section class="tvdb-page-section" id="continueWatching" aria-labelledby="continueWatchingHeading">
                 <div class="tvdb-section-head">
                     <h2 id="continueWatchingHeading">Continue watching</h2>
-                    @if (Model.CatchUpEpisodes.Count > 0)
+                    @if (Model.CatchUpEpisodes.Count > 0 && !Model.HasMoreToContinue)
                     {
                         <a asp-page="/Library" asp-route-section="@DashboardModel.LibraryWatchingSection"
                            class="tvdb-section-head__link tvdb-catchup-seeall-link" id="continueWatchingSeeAll">
@@ -158,33 +158,59 @@
                             EpisodeNumber = ep.EpisodeNumber,
                             EpisodeName = ep.Name,
                             ImageUrl = ep.ImageUrl,
-                            IsUpNext = index == 0
+                            IsUpNext = index == 0,
+                            Position = index + 1,
+                            IsLast = index == Model.CatchUpEpisodes.Count - 1,
+                            ShowAll = Model.ShowAll
                         })
                         .ToList();
 
                     @* Both layouts are on the page; the stylesheet shows one. From
                        576px: every series as a card. On a phone: the first as the
-                       card (with "Up next"), the rest as compact rows, then a
-                       full-width "See all in Library". *@
-                    <div class="tvdb-catchup-grid">
-                        @foreach (var card in cards)
+                       card (with "Up next"), the rest as compact rows.
+                       Every series is rendered; while the list is collapsed the
+                       stylesheet shows the first nine (by count, like the cast
+                       lists) and "Show all N" reveals the rest in place. Without
+                       script the button is a GET to ?all=true. *@
+                    <div class="tvdb-catchup @(Model.ShowAll ? "is-expanded" : "")" id="continueWatchingList" data-collapsible data-catchup>
+                        <div class="tvdb-catchup-grid" data-collapsible-list>
+                            @foreach (var card in cards)
+                            {
+                                <partial name="_CatchUpCard" model="card" />
+                            }
+                        </div>
+
+                        @if (cards.Count > 1)
                         {
-                            <partial name="_CatchUpCard" model="card" />
+                            <ul class="tvdb-catchup-rows list-unstyled" aria-label="More to continue" data-collapsible-list>
+                                @foreach (var card in cards.Skip(1))
+                                {
+                                    <partial name="_CatchUpRow" model="card" />
+                                }
+                            </ul>
                         }
                     </div>
 
-                    @if (cards.Count > 1)
+                    @if (Model.HasMoreToContinue)
                     {
-                        <ul class="tvdb-catchup-rows list-unstyled" aria-label="More to continue">
-                            @foreach (var card in cards.Skip(1))
+                        var showAllLabel = $"Show all {Model.ContinueWatchingTotal}";
+                        <form method="get" action="@(Url.Page("/Dashboard"))#continueWatching" class="tvdb-catchup-toggle" data-catchup-toggle-form>
+                            @if (!Model.ShowAll)
                             {
-                                <partial name="_CatchUpRow" model="card" />
+                                <input type="hidden" name="all" value="true" />
                             }
-                        </ul>
+                            <button type="submit" class="btn btn-outline-dark" id="continueWatchingToggle"
+                                    aria-expanded="@(Model.ShowAll ? "true" : "false")" aria-controls="continueWatchingList"
+                                    data-more="@showAllLabel" data-less="Show fewer">
+                                @(Model.ShowAll ? "Show fewer" : showAllLabel)
+                            </button>
+                        </form>
                     }
-
-                    <a asp-page="/Library" asp-route-section="@DashboardModel.LibraryWatchingSection"
-                       class="btn btn-outline-dark tvdb-catchup-seeall">See all in Library</a>
+                    else
+                    {
+                        <a asp-page="/Library" asp-route-section="@DashboardModel.LibraryWatchingSection"
+                           class="btn btn-outline-dark tvdb-catchup-seeall">See all in Library</a>
+                    }
                 }
                 else
                 {
@@ -249,3 +275,7 @@
         }
     }
 </div>
+
+@section Scripts {
+    <script src="~/js/tvdb-dashboard.js" asp-append-version="true"></script>
+}

@@ -131,8 +131,8 @@ public sealed class MovieDetailsPipelineTests
         overview.Should().BePositive();
         cast.Should().BeGreaterThan(overview);
         crew.Should().BeGreaterThan(cast);
-        html.Should().Contain("<section class=\"tvdb-cast \" data-cast> <div class=\"tvdb-cast__head\"> <h2 class=\"mb-0\">Crew", "the crew is the two-column list");
-        html.Should().Contain("<section class=\"tvdb-cast tvdb-cast--column\" data-cast> <div class=\"tvdb-cast__head\"> <h2 class=\"mb-0\">Cast", "the cast is the one-column list");
+        html.Should().Contain("<section class=\"tvdb-cast \" data-cast data-collapsible> <div class=\"tvdb-cast__head\"> <h2 class=\"mb-0\">Crew", "the crew is the two-column list");
+        html.Should().Contain("<section class=\"tvdb-cast tvdb-cast--column\" data-cast data-collapsible> <div class=\"tvdb-cast__head\"> <h2 class=\"mb-0\">Cast", "the cast is the one-column list");
         html.Should().Contain("Show all cast").And.Contain("Show all 1");
         html.Should().Contain("\"@type\":\"Movie\"", "the structured data is still there");
     }
