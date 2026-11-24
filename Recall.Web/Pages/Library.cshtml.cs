@@ -7,6 +7,7 @@ using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Display;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Pages.Shared;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
 
@@ -22,6 +23,12 @@ namespace Recall.Web.Pages;
 /// </list>
 /// </summary>
 /// <param name="MetaLine">Replaces the card's whole meta line ("Stopped Sep 4"); null gives the usual "Series · 2008".</param>
+/// <param name="NextEpisodeId">
+/// The next episode to watch, which the card's check marks: set for a series in
+/// Watching (the main list, not the dormant group) whose next episode is released;
+/// null gives no check.
+/// </param>
+/// <param name="NextEpisodeCode">That episode's code ("S02E06"), for the check's name.</param>
 public sealed record LibraryCardItem(
     SearchResultType Type,
     int TvdbId,
@@ -33,7 +40,9 @@ public sealed record LibraryCardItem(
     bool IsLiked,
     string? Caption,
     string? ProgressText = null,
-    string? MetaLine = null);
+    string? MetaLine = null,
+    int? NextEpisodeId = null,
+    string? NextEpisodeCode = null);
 
 /// <summary>The Library's sections, in the order the page shows them.</summary>
 public enum LibrarySection
@@ -58,7 +67,7 @@ public enum LibrarySection
 public sealed record LibrarySectionView(LibrarySection Section, string Slug, string Title, IReadOnlyList<LibraryCardItem> Items);
 
 [Authorize]
-public sealed class LibraryModel(
+public sealed partial class LibraryModel(
     ICurrentUserService currentUserService,
     ITrackedSeriesRepository trackedSeriesRepository,
     IWatchProgressService watchProgressService,
@@ -129,6 +138,17 @@ public sealed class LibraryModel(
     /// <summary>Route values that bring a POST back to the view it came from.</summary>
     private object? BackToView => SelectedSection is { } selected ? new { section = selected.Slug } : null;
 
+    /// <summary>
+    /// The card a mark came from ("series-card-123"), posted with the check, so
+    /// the page returns at that card, in whichever section it is in by then.
+    /// Anything else is ignored.
+    /// </summary>
+    [BindProperty]
+    public string? Anchor { get; set; }
+
+    /// <summary>The element id of a series' card on this page ("series-card-123"): every series is in one section only.</summary>
+    public static string CardAnchor(int seriesTvdbId) => $"series-card-{seriesTvdbId}";
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         if (!currentUserService.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserService.ExternalUserId))
@@ -180,7 +200,12 @@ public sealed class LibraryModel(
                 nothingToWatch);
 
             Watching = queue.Active;
-            Dormant = queue.Dormant;
+
+            // The dormant group has no check: like the Dashboard, which leaves
+            // those series out of Continue watching, it is not the queue.
+            Dormant = queue.Dormant
+                .Select(i => i with { NextEpisodeId = null, NextEpisodeCode = null })
+                .ToList();
             UpToDate = upToDate.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
             Watched = watched.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
             Stopped = stopped
@@ -255,7 +280,12 @@ public sealed class LibraryModel(
                     break;
 
                 case SeriesLibraryState.Watching:
-                    watching.Add(item with { ProgressText = progress.CurrentSeason?.Label });
+                    watching.Add(item with
+                    {
+                        ProgressText = progress.CurrentSeason?.Label,
+                        NextEpisodeId = progress.NextUnwatchedEpisode?.Id,
+                        NextEpisodeCode = progress.NextUnwatchedEpisode?.SlateCode()
+                    });
 
                     // Never started and nothing aired yet: in the list, but
                     // there is nothing to have "not watched in a while".
@@ -356,4 +386,59 @@ public sealed class LibraryModel(
 
         return RedirectToPage(BackToView);
     }
+
+    /// <summary>
+    /// The check on a Watching card: marks the series' next episode watched,
+    /// with the Undo toast (and the caught-up sentence when it applies), the
+    /// same as the Dashboard's one-tap mark. Comes back to the view it was
+    /// pressed on, at the card, which is in its new section when the series
+    /// has just become up to date.
+    /// </summary>
+    public async Task<IActionResult> OnPostMarkWatchedAsync(int seriesId, int episodeId, CancellationToken cancellationToken)
+    {
+        if (currentUserService.UserId is not { } userId)
+        {
+            this.SetErrorToast("You need to be signed in to mark an episode as watched.");
+            return RedirectToPage(BackToView);
+        }
+
+        try
+        {
+            var result = await watchProgressService.MarkEpisodeWatchedUndoablyAsync(userId, seriesId, episodeId, cancellationToken);
+
+            switch (result.Outcome)
+            {
+                case EpisodeWatchOutcome.MarkedWatched when result.Batch is { InsertedCount: > 0 } batch:
+                    this.SetSuccessToastWithWatchedUndo(
+                        await OneTapMarkToast.DescribeAsync(theTvDbService, logger, nameof(LibraryModel), seriesId, episodeId, result.ResumedWatching, cancellationToken),
+                        seriesId,
+                        batch,
+                        undoSingle: true,
+                        caughtUp: result.CaughtUp,
+                        today: Today,
+                        resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
+                    break;
+                case EpisodeWatchOutcome.EpisodeNotInSeries:
+                    this.SetErrorToast("That episode doesn't belong to this series.");
+                    break;
+                case EpisodeWatchOutcome.NotAired:
+                    this.SetErrorToast("You can't mark an episode as watched before it has aired.");
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed marking episode {EpisodeId} of series {SeriesId} watched from the library.", episodeId, seriesId);
+            this.SetErrorToast("Could not update watched status right now.");
+        }
+
+        return RedirectToPage(
+            pageName: null,
+            pageHandler: null,
+            routeValues: BackToView,
+            fragment: Anchor is { } anchor && AnchorPattern().IsMatch(anchor) ? anchor : null);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^series-card-\d{1,10}$")]
+    private static partial System.Text.RegularExpressions.Regex AnchorPattern();
 }

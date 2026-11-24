@@ -33,7 +33,11 @@
         DetailsPage = item.Type == SearchResultType.Movie ? "/Movies/Details" : "/Series/Details",
         IsMovie = item.Type == SearchResultType.Movie,
         ShowLike = item.Type == SearchResultType.Series,
-        IsLiked = item.IsLiked
+        IsLiked = item.IsLiked,
+        ElementId = item.Type == SearchResultType.Series ? LibraryModel.CardAnchor(item.TvdbId) : null,
+        MarkEpisodeId = item.NextEpisodeId,
+        MarkEpisodeCode = item.NextEpisodeCode,
+        MarkHiddenFields = likeFields
     };
 }
 

@@ -7,7 +7,7 @@
     var isComplete = showProgress && watched >= Model.ReleasedEpisodes;
 }
 
-<div class="tvdb-series-card-wrap" data-content-type="@Model.ContentType">
+<div class="tvdb-series-card-wrap" data-content-type="@Model.ContentType" id="@Model.ElementId">
     <a asp-page="@Model.DetailsPage" asp-route-id="@Model.TvdbId" class="tvdb-series-card">
         <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
             @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
@@ -35,6 +35,30 @@
 
         <span class="tvdb-series-year">@Model.MetaLine</span>
     </a>
+
+    @if (Model.MarkEpisodeId is { } markEpisodeId)
+    {
+        @* The one-tap mark, in the poster's bottom-right corner above the
+           progress bar: an overlay the size of the poster that lets clicks
+           through to the card except on the button. *@
+        <div class="tvdb-series-card-mark">
+            <form method="post" asp-page-handler="@Model.MarkHandler"
+                  asp-route-seriesId="@Model.TvdbId" asp-route-episodeId="@markEpisodeId">
+                @foreach (var field in Model.MarkHiddenFields)
+                {
+                    <input type="hidden" name="@field.Key" value="@field.Value" />
+                }
+                @if (Model.ElementId is not null)
+                {
+                    <input type="hidden" name="Anchor" value="@Model.ElementId" />
+                }
+                <button type="submit" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-image"
+                        title="Mark as watched" aria-label="@Model.MarkLabel">
+                    <i class="@Icons.Check" aria-hidden="true"></i>
+                </button>
+            </form>
+        </div>
+    }
 
     @if (Model.ShowLike)
     {

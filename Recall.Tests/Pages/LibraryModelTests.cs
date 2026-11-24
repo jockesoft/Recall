@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Recall.Tests.TestSupport;
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Pages;
@@ -29,6 +30,7 @@ public class LibraryModelTests
     private Mock<ITrackedMovieRepository> _watchlist = null!;
     private Mock<ITheTvDbService> _tvDb = null!;
     private Mock<ILikeRepository> _likes = null!;
+    private Mock<IWatchProgressService> _progress = null!;
     private LibraryModel _sut = null!;
     private LibraryOptions _libraryOptions = null!;
 
@@ -52,7 +54,7 @@ public class LibraryModelTests
         _tvDb = new Mock<ITheTvDbService>();
         _likes = new Mock<ILikeRepository>();
 
-        var progress = new Mock<IWatchProgressService>();
+        var progress = _progress = new Mock<IWatchProgressService>();
         progress
             .Setup(x => x.BuildProgress(It.IsAny<int>(), It.IsAny<IEnumerable<WatchableEpisode>>(), It.IsAny<IReadOnlySet<int>>()))
             .Returns((int id, IEnumerable<WatchableEpisode> episodes, IReadOnlySet<int> watched) =>
@@ -689,5 +691,146 @@ public class LibraryModelTests
         _sut.Watching.Single().WatchedEpisodes.Should().Be(1, "another series' watches are not counted here");
         _tvDb.Verify(x => x.GetSeriesAggregateByIdAsync(9, It.IsAny<CancellationToken>()), Times.Never);
         _sut.ErrorToast().Should().BeNull();
+    }
+
+    // ---- the check on a Watching card ------------------------------------------
+
+    private static readonly Guid BatchId = Guid.Parse("0b0b0b0b-0000-0000-0000-000000000001");
+
+    [Test]
+    public async Task AWatchingCard_Should_CarryItsNextReleasedEpisode_ForTheCheck()
+    {
+        SetUpSeries(
+            Series(1, "Behind", "Continuing", Ep(10, 1, Today.AddDays(-20)), Ep(11, 2, Today.AddDays(-10)), Ep(12, 3, Today.AddDays(5))),
+            Series(2, "Never Started", "Continuing", Ep(20, 1, Today.AddDays(-20))),
+            Series(3, "Caught Up", "Continuing", Ep(30, 1, Today.AddDays(-20)), Ep(31, 2, Today.AddDays(5))),
+            Series(4, "Nothing Aired", "Continuing", Ep(40, 1, Today.AddDays(5))));
+        SetUpWatched(10, 30);
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        var behind = _sut.Watching.Single(i => i.TvdbId == 1);
+        behind.NextEpisodeId.Should().Be(11, "the first released episode not watched");
+        behind.NextEpisodeCode.Should().Be("S01E02");
+        _sut.Watching.Single(i => i.TvdbId == 2).NextEpisodeId.Should().Be(20);
+        _sut.Watching.Single(i => i.TvdbId == 4).NextEpisodeId.Should().BeNull("nothing released: no check");
+        _sut.UpToDate.Single().NextEpisodeId.Should().BeNull();
+    }
+
+    [Test]
+    public async Task TheDormantGroup_Should_HaveNoCheck()
+    {
+        SetUpSeries(
+            Series(1, "Watched Yesterday", "Continuing", Ep(10, 1, Today.AddDays(-400)), Ep(11, 2, Today.AddDays(-390))),
+            Series(2, "Watched A Year Ago", "Continuing", Ep(20, 1, Today.AddDays(-400)), Ep(21, 2, Today.AddDays(-390))));
+        SetUpWatched(10, 20);
+        SetUpLastWatched((1, 1), (2, 365));
+
+        await _sut.OnGetAsync(CancellationToken.None);
+
+        _sut.Watching.Single().NextEpisodeId.Should().Be(11);
+        _sut.Dormant.Single().NextEpisodeId.Should().BeNull("like the Dashboard, which leaves those series out of Continue watching");
+        _sut.Dormant.Single().NextEpisodeCode.Should().BeNull();
+    }
+
+    [Test]
+    public async Task MarkWatched_Should_MarkThatEpisode_ThroughTheService_WithTheUndoToast()
+    {
+        SetUpSeries(Series(1, "Severance", "Continuing", Ep(10, 1, Today.AddDays(-20)), Ep(11, 2, Today.AddDays(-10))));
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId)));
+        _sut.Anchor = "series-card-1";
+
+        var result = await _sut.OnPostMarkWatchedAsync(seriesId: 1, episodeId: 11, CancellationToken.None);
+
+        _progress.Verify(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()), Times.Once);
+        _watches.Verify(x => x.MarkWatchedAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _sut.SuccessToast().Should().Be("Marked Severance S01E02 as watched.");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedSeriesKey].Should().Be("1", "one tap with no confirmation: the toast has the Undo");
+        _sut.TempData[PageModelToastExtensions.UndoWatchedBatchKey].Should().Be(BatchId.ToString("D"));
+
+        var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
+        redirect.PageName.Should().BeNull("back to the Library");
+        redirect.RouteValues.Should().BeNull();
+        redirect.Fragment.Should().Be("series-card-1", "the page comes back at the card");
+    }
+
+    [Test]
+    public async Task MarkWatched_Should_SayTheSeriesIsCaughtUp_WhenItIs()
+    {
+        SetUpSeries(Series(1, "Severance", "Continuing", Ep(10, 1, Today.AddDays(-20))));
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(
+                EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId),
+                new SeriesCaughtUp(1, "Severance", Finished: false, UserHasRated: false)));
+
+        await _sut.OnPostMarkWatchedAsync(1, 10, CancellationToken.None);
+
+        _sut.SuccessToast().Should().StartWith("Marked Severance S01E01 as watched. You're up to date with Severance.");
+        _sut.TempData[PageModelToastExtensions.CaughtUpKindKey].Should().Be(PageModelToastExtensions.CaughtUpUpToDate);
+    }
+
+    [Test]
+    public async Task MarkWatched_FromTheOneSectionView_Should_ComeBackToIt_AtTheCard()
+    {
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(1, BatchId)));
+        _sut.Section = "watching";
+        _sut.Anchor = "series-card-1";
+
+        var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+
+        var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
+        redirect.RouteValues.Should().Contain("section", "watching");
+        redirect.Fragment.Should().Be("series-card-1");
+    }
+
+    [TestCase(null)]
+    [TestCase("watching")]
+    [TestCase("series-card-")]
+    [TestCase("javascript:alert(1)")]
+    public async Task MarkWatched_Should_DropAnAnchorThatIsNotACard(string? anchor)
+    {
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, WatchedBatch.Empty));
+        _sut.Anchor = anchor;
+
+        var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+
+        result.Should().BeOfType<RedirectToPageResult>().Which.Fragment.Should().BeNull();
+        _sut.SuccessToast().Should().BeNull("nothing was written, so there is nothing to undo");
+    }
+
+    [TestCase(EpisodeWatchOutcome.NotAired, "You can't mark an episode as watched before it has aired.")]
+    [TestCase(EpisodeWatchOutcome.EpisodeNotInSeries, "That episode doesn't belong to this series.")]
+    public async Task MarkWatched_Should_SayWhyNothingWasMarked(EpisodeWatchOutcome outcome, string message)
+    {
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(outcome, WatchedBatch.Empty));
+
+        await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+
+        _sut.ErrorToast().Should().Be(message);
+    }
+
+    [Test]
+    public async Task MarkWatched_Should_ShowAnErrorToast_WhenTheServiceFails_OrThereIsNoUser()
+    {
+        _progress
+            .Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, 1, 11, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("db down"));
+
+        await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+        _sut.ErrorToast().Should().Be("Could not update watched status right now.");
+
+        _currentUser.SetupGet(x => x.UserId).Returns((Guid?)null);
+        var result = await _sut.OnPostMarkWatchedAsync(1, 11, CancellationToken.None);
+        result.Should().BeOfType<RedirectToPageResult>();
+        _progress.Verify(x => x.MarkEpisodeWatchedUndoablyAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }
