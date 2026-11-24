@@ -13,9 +13,10 @@ using Microsoft.Playwright;
 // instances. Optional: --only <text> captures just the shots whose name
 // contains the text; --install downloads the Chromium build Playwright needs.
 //
-// Every shot also checks its collapsed cast and crew lists
-// (CheckCollapsedListsAsync): nobody may be drawn half outside a list, and
-// nothing may cover the last person shown. A problem fails the run.
+// Every shot also checks its lists collapsed by count, the cast and crew lists
+// and the Dashboard's Continue watching (CheckCollapsedListsAsync): nothing may
+// be drawn half outside a list, and nothing may cover the last item shown. A
+// problem fails the run.
 //
 // After the shots it times the toasts in a real browser (RunToastChecksAsync,
 // results in toast-checks.json): how long each kind stays, pausing, Escape.
@@ -67,6 +68,78 @@ List<Shot> shots =
 [
     // ---- Signed in, with a full library --------------------------------------
     new("dashboard", "populated", Site.SignedIn, "/Dashboard"),
+    // More than nine series in Continue watching (continue-watching-many.sql, put in place for the
+    // shot and undone after it): collapsed, the first nine and "Show all N"; then expanded in place.
+    new("dashboard", "continue-watching-collapsed", Site.SignedIn, "/Dashboard",
+        Prepare: async page =>
+        {
+            await RunReviewScriptAsync(options, "continue-watching-many", "on");
+            await page.ReloadAsync();
+            await page.Locator("#continueWatchingToggle[aria-expanded=false]").WaitForAsync();
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "continue-watching-many", "off")),
+    new("dashboard", "continue-watching-expanded", Site.SignedIn, "/Dashboard",
+        Prepare: async page =>
+        {
+            await RunReviewScriptAsync(options, "continue-watching-many", "on");
+            await page.ReloadAsync();
+            var toggle = page.Locator("#continueWatchingToggle");
+            await toggle.ScrollIntoViewIfNeededAsync();
+            await toggle.ClickAsync();
+            await page.Locator("#continueWatchingList.is-expanded").WaitForAsync();
+            if (await toggle.GetAttributeAsync("aria-expanded") != "true" || !page.Url.Contains("all=true"))
+                throw new InvalidOperationException("\"Show all\" did not expand the list in place.");
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "continue-watching-many", "off")),
+    // A mark from the expanded list (the last series, beyond the first nine): the page comes back
+    // expanded, at that card or row, with the Undo toast. Undone afterwards.
+    new("dashboard", "expanded-mark", Site.SignedIn, "/Dashboard", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await RunReviewScriptAsync(options, "continue-watching-many", "on");
+            await page.ReloadAsync();
+            await page.Locator("#continueWatchingToggle").ClickAsync();
+            await page.Locator("#continueWatchingList.is-expanded").WaitForAsync();
+            var check = page.Locator(".tvdb-catchup-check button:visible, .tvdb-catchup-row__check button:visible").Last;
+            await check.ScrollIntoViewIfNeededAsync();
+            await check.ClickAsync();
+            await page.Locator(".tvdb-toast-action").WaitForAsync();
+            if (!page.Url.Contains("all=true", StringComparison.Ordinal) || !page.Url.Contains("#catchup-", StringComparison.Ordinal)
+                || await page.Locator("#continueWatchingList.is-expanded").CountAsync() != 1)
+                throw new InvalidOperationException($"A mark from the expanded list came back to {page.Url}, not expanded at its row.");
+            // The series has just been watched, so it has moved up the queue (on a phone, maybe from a
+            // row to the card): its card or its row, whichever is drawn, must be on screen.
+            var onScreen = await page.EvaluateAsync<bool>(
+                """
+                () => {
+                    const id = location.hash.replace(/^#catchup-(card|row)-/, '');
+                    return ['card', 'row'].map(kind => document.getElementById('catchup-' + kind + '-' + id))
+                        .some(el => {
+                            if (!el || el.getClientRects().length === 0) return false;
+                            const r = el.getBoundingClientRect();
+                            return r.bottom > 0 && r.top < innerHeight;
+                        });
+                }
+                """);
+            if (!onScreen)
+                throw new InvalidOperationException($"After a mark from the expanded list ({page.Url}) the marked series is not on screen.");
+        },
+        Cleanup: async page =>
+        {
+            try
+            {
+                var undo = page.Locator(".tvdb-toast-action");
+                if (await undo.CountAsync() > 0)
+                {
+                    await undo.First.ClickAsync();
+                    await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
+                }
+            }
+            finally
+            {
+                await RunReviewScriptAsync(options, "continue-watching-many", "off");
+            }
+        }),
     new("search", "empty", Site.SignedIn, "/Search"),
     new("search", "results", Site.SignedIn, "/Search?Query=dark"),
     new("search", "show-more", Site.SignedIn, "/Search?Query=dark",
@@ -80,6 +153,8 @@ List<Shot> shots =
     // The Gentlemen is a series the seed stops: its badge says "Stopped", not "In library".
     new("search", "stopped", Site.SignedIn, "/Search?Query=the+gentlemen", ViewportOnly: true),
     new("library", "populated", Site.SignedIn, "/Library"),
+    // Watching on its own: every card with a released next episode has the round check.
+    new("library", "section-watching", Site.SignedIn, "/Library?section=watching"),
     new("library", "section-watched", Site.SignedIn, "/Library?section=watched"),
     new("library", "section-dormant", Site.SignedIn, "/Library?section=dormant"),
     new("library", "dormant-expanded", Site.SignedIn, "/Library",
@@ -901,6 +976,20 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
     catch (Exception ex)
     {
         result.Error = ex.Message.Split('\n')[0];
+
+        // A shot that changed the data (a mark, a script turned on) puts it back
+        // even when it failed, so the shots after it see the seed as it was.
+        if (shot.Cleanup is not null)
+        {
+            try
+            {
+                await shot.Cleanup(page);
+            }
+            catch (Exception cleanupEx)
+            {
+                result.Error += $" (cleanup failed too: {cleanupEx.Message.Split('\n')[0]})";
+            }
+        }
     }
 
     return result;
@@ -999,7 +1088,9 @@ static async Task LoadLazyImagesAsync(IPage page)
     }
 }
 
-// A list collapsed behind "Show all" (the cast and crew lists, [data-cast])
+// A list collapsed behind "Show all" ([data-collapsible] without .is-expanded,
+// around one or more [data-collapsible-list]: the cast and crew lists, and the
+// Dashboard's Continue watching cards and phone rows)
 // must show whole people only: every item that is drawn lies fully inside the
 // list's box (one cut off by the box, or drawn outside it, is a problem; one
 // that is not rendered at all is fine), and nothing covers the last item shown
@@ -1020,9 +1111,9 @@ static async Task CheckCollapsedListsAsync(IPage page, ShotResult result)
                     if (getComputedStyle(node).position === 'fixed') return true;
                 return false;
             };
-            const lists = Array.from(document.querySelectorAll('[data-cast]:not(.is-expanded) .tvdb-cast__list'));
+            const lists = Array.from(document.querySelectorAll('[data-collapsible]:not(.is-expanded) [data-collapsible-list]'));
             for (const list of lists) {
-                const name = '#' + (list.id || 'list');
+                const name = list.id ? '#' + list.id : '.' + list.className.trim().split(/\s+/)[0];
                 const box = list.getBoundingClientRect();
                 let last = null;
                 Array.from(list.children).forEach((item, index) => {
