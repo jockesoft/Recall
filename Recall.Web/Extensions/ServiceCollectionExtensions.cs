@@ -133,6 +133,7 @@ public static class ServiceCollectionExtensions
         // Discover: the lists the daily job fetches, and the settings of its rows.
         services.AddOptions<DiscoverOptions>().BindConfiguration(DiscoverOptions.SectionName);
         services.AddScoped<IDiscoverListRefresher, DiscoverListRefresher>();
+        services.AddScoped<IDiscoverService, DiscoverService>();
         services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
         services.AddScoped<ISitemapService, SitemapService>();
