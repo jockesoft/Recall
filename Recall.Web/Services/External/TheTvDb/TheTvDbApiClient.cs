@@ -6,7 +6,9 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure;
 using Recall.Web.Infrastructure.External;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
+using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Filter;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Movies;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Search;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
@@ -47,6 +49,29 @@ public sealed class TheTvDbApiClient(
 
         var envelope = await SendAsync<TheTvDbEnvelopeDto<List<SearchByRemoteIdResultDto>>>(
             () => new HttpRequestMessage(HttpMethod.Get, $"search/remoteid/{Uri.EscapeDataString(remoteId)}"),
+            cancellationToken);
+
+        return envelope.Data ?? [];
+    }
+
+    public async Task<IReadOnlyList<FilterRecordDto>> FilterSeriesAsync(TitleFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<List<FilterRecordDto>>>(
+            () => new HttpRequestMessage(HttpMethod.Get, filter.SeriesPath()),
+            cancellationToken);
+
+        return envelope.Data ?? [];
+    }
+
+    public async Task<IReadOnlyList<FilterRecordDto>> FilterMoviesAsync(TitleFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var path = filter.MoviesPath();
+        var envelope = await SendAsync<TheTvDbEnvelopeDto<List<FilterRecordDto>>>(
+            () => new HttpRequestMessage(HttpMethod.Get, path),
             cancellationToken);
 
         return envelope.Data ?? [];
