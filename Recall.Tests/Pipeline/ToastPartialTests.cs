@@ -134,7 +134,7 @@ public sealed class ToastPartialTests
         html.Should().Contain("action=\"/Discover?handler=Undo\"").And.Contain(">Undo</button>");
         html.Should().Contain("name=\"action\" value=\"Hide\"")
             .And.Contain("name=\"kind\" value=\"Series\"")
-            .And.Contain("name=\"id\" value=\"445000\"")
+            .And.Contain("name=\"tvdbId\" value=\"445000\"")
             .And.Contain("name=\"Anchor\" value=\"discover-new-5\"");
         Bars(html).Should().Be(1);
     }

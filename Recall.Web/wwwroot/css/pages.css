@@ -1921,7 +1921,8 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     margin: 0;
 }
 
-/* Phosphor 2.1 has no bookmark with a plus: the bookmark with a small plus in it. */
+/* Phosphor 2.1 has no bookmark with a plus: the bookmark with a plus at its
+   top-right corner, a little smaller (scaled, so it follows the bookmark's size). */
 .tvdb-icon-badge {
     position: relative;
     display: inline-flex;
@@ -1930,11 +1931,9 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
 
 .tvdb-icon-badge__mark {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    /* Scaled, not sized: the theme has no font size this small, and the
-       plus must shrink with whatever size the bookmark is drawn at. */
-    transform: translate(-50%, -62%) scale(0.55);
+    top: -0.3em;
+    right: -0.45em;
+    transform: scale(0.7);
 }
 
 /* What the three buttons on a poster do, once, under the rows. */

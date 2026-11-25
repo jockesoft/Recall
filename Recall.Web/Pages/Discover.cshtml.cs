@@ -88,7 +88,7 @@ public sealed class DiscoverModel(
     /// movie onto the watchlist (with its name from the list, so no lookup).
     /// Only a title the user's page offers today is added.
     /// </summary>
-    public async Task<IActionResult> OnPostAddAsync(string? kind, int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostAddAsync(string? kind, int tvdbId, CancellationToken cancellationToken)
     {
         if (currentUserService.UserId is not { } userId)
             return Challenge();
@@ -97,7 +97,7 @@ public sealed class DiscoverModel(
 
         try
         {
-            var title = await OfferedAsync(userId, kind, id, cancellationToken);
+            var title = await OfferedAsync(userId, kind, tvdbId, cancellationToken);
             if (title is null)
             {
                 this.SetErrorToast(NotOffered);
@@ -110,7 +110,7 @@ public sealed class DiscoverModel(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Failed adding {Kind} {TvdbId} from Discover.", kind, id);
+            logger.LogError(ex, "Failed adding {Kind} {TvdbId} from Discover.", kind, tvdbId);
             this.SetErrorToast("Could not add that right now.");
         }
 
@@ -118,7 +118,7 @@ public sealed class DiscoverModel(
     }
 
     /// <summary>"×": hides the title from every row of the user's Discover. The toast offers Undo.</summary>
-    public async Task<IActionResult> OnPostHideAsync(string? kind, int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostHideAsync(string? kind, int tvdbId, CancellationToken cancellationToken)
     {
         if (currentUserService.UserId is not { } userId)
             return Challenge();
@@ -127,7 +127,7 @@ public sealed class DiscoverModel(
 
         try
         {
-            var title = await OfferedAsync(userId, kind, id, cancellationToken);
+            var title = await OfferedAsync(userId, kind, tvdbId, cancellationToken);
             if (title is null)
             {
                 this.SetErrorToast(NotOffered);
@@ -141,7 +141,7 @@ public sealed class DiscoverModel(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Failed hiding {Kind} {TvdbId} from Discover.", kind, id);
+            logger.LogError(ex, "Failed hiding {Kind} {TvdbId} from Discover.", kind, tvdbId);
             this.SetErrorToast("Could not hide that right now.");
         }
 
@@ -153,12 +153,12 @@ public sealed class DiscoverModel(
     /// watchlist) or of "Not interested" (the title shown again). The card is
     /// back at its place, so the page returns there.
     /// </summary>
-    public async Task<IActionResult> OnPostUndoAsync(string? action, string? kind, int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostUndoAsync(string? action, string? kind, int tvdbId, CancellationToken cancellationToken)
     {
         if (currentUserService.UserId is not { } userId)
             return Challenge();
 
-        if (!TryParse<DiscoverUndoAction>(action, out var undo) || !TryParse<DiscoverKind>(kind, out var titleKind) || id <= 0)
+        if (!TryParse<DiscoverUndoAction>(action, out var undo) || !TryParse<DiscoverKind>(kind, out var titleKind) || tvdbId <= 0)
         {
             this.SetInfoToast(NothingToUndo);
             return BackToCard(leftTheList: false);
@@ -166,13 +166,13 @@ public sealed class DiscoverModel(
 
         try
         {
-            var name = (await discoverService.FindAsync(userId, titleKind, id, cancellationToken))?.Name ?? "It";
+            var name = (await discoverService.FindAsync(userId, titleKind, tvdbId, cancellationToken))?.Name ?? "It";
 
             var undone = undo switch
             {
-                DiscoverUndoAction.Hide => await discoverUserRepository.UnhideAsync(userId, titleKind, id, cancellationToken),
-                _ when titleKind == DiscoverKind.Movie => await movieTrackingService.RemoveFromWatchlistAsync(userId, id, cancellationToken),
-                _ => await seriesLibraryService.RemoveAsync(userId, id, cancellationToken)
+                DiscoverUndoAction.Hide => await discoverUserRepository.UnhideAsync(userId, titleKind, tvdbId, cancellationToken),
+                _ when titleKind == DiscoverKind.Movie => await movieTrackingService.RemoveFromWatchlistAsync(userId, tvdbId, cancellationToken),
+                _ => await seriesLibraryService.RemoveAsync(userId, tvdbId, cancellationToken)
             };
 
             if (!undone)
@@ -186,7 +186,7 @@ public sealed class DiscoverModel(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Failed undoing {Action} of {Kind} {TvdbId} on Discover.", action, kind, id);
+            logger.LogError(ex, "Failed undoing {Action} of {Kind} {TvdbId} on Discover.", action, kind, tvdbId);
             this.SetErrorToast("Could not undo that right now.");
         }
 
@@ -238,9 +238,10 @@ public sealed class DiscoverModel(
     }
 
     /// <summary>The title, when the user's page offers it today; null for anything else.</summary>
-    private async Task<DiscoverTitle?> OfferedAsync(Guid userId, string? kind, int id, CancellationToken cancellationToken) =>
-        TryParse<DiscoverKind>(kind, out var titleKind) && id > 0
-            ? await discoverService.FindAsync(userId, titleKind, id, cancellationToken)
+    /// <remarks>The field is "tvdbId", not "id": an input named "id" would shadow the form's own id in the DOM.</remarks>
+    private async Task<DiscoverTitle?> OfferedAsync(Guid userId, string? kind, int tvdbId, CancellationToken cancellationToken) =>
+        TryParse<DiscoverKind>(kind, out var titleKind) && tvdbId > 0
+            ? await discoverService.FindAsync(userId, titleKind, tvdbId, cancellationToken)
             : null;
 
     private static bool TryParse<T>(string? value, out T parsed) where T : struct, Enum =>

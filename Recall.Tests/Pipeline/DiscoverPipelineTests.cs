@@ -198,7 +198,7 @@ public sealed class DiscoverPipelineTests
         series.Should().Contain("<form method=\"post\" action=\"/Discover?handler=Add\">");
         series.Should().Contain("title=\"Add to library\" aria-label=\"Add New series 1 to your library\"");
         series.Should().Contain("<input type=\"hidden\" name=\"kind\" value=\"Series\" />")
-            .And.Contain("<input type=\"hidden\" name=\"id\" value=\"1001\" />")
+            .And.Contain("<input type=\"hidden\" name=\"tvdbId\" value=\"1001\" />")
             .And.Contain("<input type=\"hidden\" name=\"Anchor\" value=\"discover-new-1\" />")
             .And.NotContain("name=\"last\"");
 
