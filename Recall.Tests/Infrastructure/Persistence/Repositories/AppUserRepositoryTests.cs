@@ -34,6 +34,29 @@ public sealed class AppUserRepositoryTests
     }
 
     [Test]
+    public async Task GetIdsWithWatches_Should_BeEveryUserWhoWatchedAnEpisodeOrAMovie_Once()
+    {
+        var (episodes, movies, both, nothing) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            foreach (var (id, name) in new[] { (episodes, "episodes"), (movies, "movies"), (both, "both"), (nothing, "nothing") })
+                seed.AppUsers.Add(new AppUserEntity { Id = id, Username = name, Email = $"{name}@test.local" });
+
+            seed.EpisodeWatches.Add(new EpisodeWatchEntity { Id = Guid.NewGuid(), UserId = episodes, SeriesTvdbId = 1, EpisodeTvdbId = 11, WatchedUtc = DateTime.UtcNow });
+            seed.EpisodeWatches.Add(new EpisodeWatchEntity { Id = Guid.NewGuid(), UserId = episodes, SeriesTvdbId = 1, EpisodeTvdbId = 12, WatchedUtc = DateTime.UtcNow });
+            seed.EpisodeWatches.Add(new EpisodeWatchEntity { Id = Guid.NewGuid(), UserId = both, SeriesTvdbId = 1, EpisodeTvdbId = 11, WatchedUtc = DateTime.UtcNow });
+            seed.UserMovieWatches.Add(new UserMovieWatchEntity { Id = Guid.NewGuid(), UserId = movies, MovieTvdbId = 5, WatchedUtc = DateTime.UtcNow });
+            seed.UserMovieWatches.Add(new UserMovieWatchEntity { Id = Guid.NewGuid(), UserId = both, MovieTvdbId = 5, WatchedUtc = DateTime.UtcNow });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = new AppDbContext(_dbOptions);
+        var ids = await new AppUserRepository(db).GetIdsWithWatchesAsync();
+
+        ids.Should().BeEquivalentTo([episodes, movies, both]);
+    }
+
+    [Test]
     public async Task GetCountsAsync_Should_CountEveryAccount_AndTheAdminsAmongThem()
     {
         await using (var seed = new AppDbContext(_dbOptions))

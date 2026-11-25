@@ -20,6 +20,7 @@ using Recall.Web.Services.Import;
 using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Push;
 using Recall.Web.Services.Sitemap;
+using Recall.Web.Services.Discover;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
@@ -129,6 +130,9 @@ public static class ServiceCollectionExtensions
         // When a series in the queue counts as "haven't watched in a while" (ContinueWatchingOrder.Arrange).
         services.AddOptions<LibraryOptions>().BindConfiguration(LibraryOptions.SectionName);
         services.AddScoped<IStatsService, StatsService>();
+        // Discover: the lists the daily job fetches, and the settings of its rows.
+        services.AddOptions<DiscoverOptions>().BindConfiguration(DiscoverOptions.SectionName);
+        services.AddScoped<IDiscoverListRefresher, DiscoverListRefresher>();
         services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
         services.AddScoped<ISitemapService, SitemapService>();

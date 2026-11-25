@@ -367,7 +367,7 @@ public static class InfrastructureServiceCollectionExtensions
     [
         nameof(UpdateTvDbInfoTimer), nameof(UpdateMovieInfoTimer), nameof(MailTimer), nameof(UpdateOmdbInfoTimer),
         nameof(UpdateMovieOmdbInfoTimer), nameof(NewEpisodeNotificationTimer), nameof(WatchlistImportTimer),
-        nameof(PruneOldDataTimer), nameof(WeeklyDigestTimer)
+        nameof(PruneOldDataTimer), nameof(WeeklyDigestTimer), nameof(DiscoverListsTimer)
     ];
 
     /// <summary>
@@ -471,6 +471,14 @@ public static class InfrastructureServiceCollectionExtensions
                 .StartAt(DateTimeOffset.UtcNow.AddSeconds(120))
                 .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(1)).RepeatForever())
                 .WithDescription("Queue the weekly email digest when it is due (hourly check; does nothing unless Digest:Enabled)."));
+
+            Schedule<DiscoverListsTimer>(trigger => trigger
+                .WithIdentity("DiscoverListsTimer-trigger")
+                .StartAt(DateTimeOffset.UtcNow.AddSeconds(180))
+                // Hourly: each run fetches only the lists that are due (daily),
+                // so an empty table is filled within minutes of a start.
+                .WithSimpleSchedule(s => s.WithInterval(TimeSpan.FromHours(1)).RepeatForever())
+                .WithDescription("Fetch Discover's lists from TheTVDB once a day (hourly check; about 10 to 30 requests a day)."));
 
             Schedule<PruneOldDataTimer>(trigger => trigger
                 .WithIdentity("PruneOldDataTimer-trigger")

@@ -17,6 +17,13 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
     public Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<Guid>> GetIdsWithWatchesAsync(CancellationToken cancellationToken = default)
+    {
+        return await dbContext.EpisodeWatches.Select(x => x.UserId)
+            .Union(dbContext.UserMovieWatches.Select(x => x.UserId))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<bool> SetDigestOptInAsync(Guid userId, bool optedIn, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;

@@ -9,6 +9,12 @@ public interface IAppUserRepository
 
     Task<AppUserEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Every user who has watched at least one episode or movie: the users who
+    /// can have genres in Stats, so the ones Discover's job fetches genre lists for.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetIdsWithWatchesAsync(CancellationToken cancellationToken = default);
+
     Task<AppUserEntity?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
 
     /// <summary>
