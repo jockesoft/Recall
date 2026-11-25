@@ -320,6 +320,48 @@ public sealed class UniqueViolationTests : PostgresFixture
         await ContextShouldStillSaveAsync(db);
     }
 
+    [Test]
+    public async Task DiscoverList_Save_Should_WriteOverTheListAnotherWriterStoredFirst()
+    {
+        var key = $"series-genre-{NextId()}";
+        var race = Competing(db => db.DiscoverLists.Add(new DiscoverListEntity
+        {
+            Key = key, Payload = "[]", ItemCount = 0, FetchedUtc = DateTime.UtcNow.AddDays(-1)
+        }));
+        await using var db = NewContext(race);
+        var repository = new DiscoverListRepository(db, NullLogger<DiscoverListRepository>.Instance);
+        var fetched = new DateTime(2026, 11, 25, 5, 0, 0, DateTimeKind.Utc);
+
+        await repository.SaveAsync(key, [new DiscoverTitle { Kind = DiscoverKind.Series, TvdbId = 1, Name = "Ours", Score = 500 }], fetched);
+
+        race.Fired.Should().BeTrue();
+        await using var check = NewContext();
+        var row = await check.DiscoverLists.SingleAsync(x => x.Key == key);
+        row.ItemCount.Should().Be(1, "the list the job fetched is the one kept");
+        row.FetchedUtc.Should().Be(fetched);
+        await ContextShouldStillSaveAsync(db);
+    }
+
+    [Test]
+    public async Task DiscoverDismissal_Hide_Should_ReportAlreadyHidden_WhenASecondPressGotThereFirst()
+    {
+        var user = await SeedUserAsync();
+        var movieId = NextId();
+        var race = Competing(db => db.DiscoverDismissals.Add(new DiscoverDismissalEntity
+        {
+            Id = Guid.NewGuid(), UserId = user, Kind = DiscoverKind.Movie, TvdbId = movieId, CreatedUtc = DateTime.UtcNow
+        }));
+        await using var db = NewContext(race);
+        var repository = new DiscoverUserRepository(db, TimeProvider.System, NullLogger<DiscoverUserRepository>.Instance);
+
+        var hidden = await repository.HideAsync(user, DiscoverKind.Movie, movieId);
+
+        race.Fired.Should().BeTrue();
+        hidden.Should().BeFalse("the other press hid it");
+        (await CountAsync(x => x.DiscoverDismissals.CountAsync(d => d.UserId == user && d.TvdbId == movieId))).Should().Be(1);
+        await ContextShouldStillSaveAsync(db);
+    }
+
     private CompetingWriteInterceptor Competing(Action<AppDbContext> add) =>
         new(async () =>
         {

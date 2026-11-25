@@ -1,6 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace Recall.Web.Domain.TheTvDb;
 
 /// <summary>A series or a movie, as Discover tells them apart (and stores them, by name).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<DiscoverKind>))]
 public enum DiscoverKind
 {
     Series = 1,

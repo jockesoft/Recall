@@ -121,6 +121,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILikeRepository, LikeRepository>();
         services.AddScoped<IMovieWatchRepository, MovieWatchRepository>();
         services.AddScoped<ITrackedMovieRepository, TrackedMovieRepository>();
+        services.AddScoped<IDiscoverListRepository, DiscoverListRepository>();
+        services.AddScoped<IDiscoverUserRepository, DiscoverUserRepository>();
         services.AddScoped<IMovieTrackingService, MovieTrackingService>();
         services.AddScoped<IRatingRepository, RatingRepository>();
         services.AddScoped<IWatchProgressService, WatchProgressService>();

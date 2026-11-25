@@ -21,6 +21,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PushSubscriptionEntity> PushSubscriptions => Set<PushSubscriptionEntity>();
     public DbSet<WatchlistImportJobEntity> WatchlistImportJobs => Set<WatchlistImportJobEntity>();
     public DbSet<WatchlistImportItemEntity> WatchlistImportItems => Set<WatchlistImportItemEntity>();
+    public DbSet<DiscoverDismissalEntity> DiscoverDismissals => Set<DiscoverDismissalEntity>();
+
+    // Discover's lists, fetched daily from TheTVDB's filter endpoints. Shared, like the caches below.
+    public DbSet<DiscoverListEntity> DiscoverLists => Set<DiscoverListEntity>();
 
     // Durable TheTVDB snapshots — fallback tier below Redis (read: cache -> DB -> API).
     public DbSet<CachedSeriesAggregateEntity> CachedSeriesAggregates => Set<CachedSeriesAggregateEntity>();

@@ -6,6 +6,7 @@ using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
+using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 
 namespace Recall.Tests.Postgres.Snapshots;
@@ -29,6 +30,7 @@ public sealed class JsonbSnapshotTests : PostgresFixture
     [TestCase("cached_series_omdb")]
     [TestCase("cached_episode_omdb")]
     [TestCase("cached_movie_omdb")]
+    [TestCase("discover_list")]
     public async Task PayloadColumn_Should_BeJsonb(string table)
     {
         var type = await ScalarAsync<string>(
@@ -334,4 +336,32 @@ public sealed class JsonbSnapshotTests : PostgresFixture
     }
 
     private TvdbSnapshotStore TvdbStore() => new(NewFactory(), NullLogger<TvdbSnapshotStore>.Instance);
+
+    [Test]
+    public async Task DiscoverList_Should_RoundTrip_AsAnArrayDocument_WithItsKindByName()
+    {
+        var key = $"series-popular-{NextId()}";
+        DiscoverTitle[] titles =
+        [
+            new() { Kind = DiscoverKind.Series, TvdbId = 1, Name = AwkwardText, Year = 2026, FirstAired = new DateOnly(2026, 10, 13),
+                    ImageUrl = "https://artworks.thetvdb.com/a.jpg", Status = "Continuing", Score = 11858 },
+            new() { Kind = DiscoverKind.Movie, TvdbId = 2, Name = "Dune: Part Three", Year = 2026, Score = 13474 }
+        ];
+
+        await using (var db = NewContext())
+            await new DiscoverListRepository(
+                db, NullLogger<DiscoverListRepository>.Instance)
+                .SaveAsync(key, titles, DateTime.UtcNow);
+
+        await using (var db = NewContext())
+        {
+            var loaded = await new DiscoverListRepository(
+                db, NullLogger<DiscoverListRepository>.Instance).GetAsync([key]);
+            loaded[key].Titles.Should().Equal(titles);
+        }
+
+        (await ScalarAsync<string>("SELECT jsonb_typeof(payload) FROM discover_list WHERE key = $1", key)).Should().Be("array");
+        (await ScalarAsync<string>("SELECT payload->1->>'kind' FROM discover_list WHERE key = $1", key))
+            .Should().Be("Movie", "the kind is stored by name, so the stored lists stay readable if the enum's numbers change");
+    }
 }

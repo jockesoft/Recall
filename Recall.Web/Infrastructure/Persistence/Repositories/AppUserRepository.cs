@@ -108,6 +108,7 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
         await dbContext.LoginTokens.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.DigestSends.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.PushSubscriptions.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.DiscoverDismissals.Where(x => x.UserId == userId).ExecuteDeleteAsync(cancellationToken);
 
         // The mail queue has no user id: its rows are found by the address
         // (stored lower-cased on the user).

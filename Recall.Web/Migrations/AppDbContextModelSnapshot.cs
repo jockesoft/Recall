@@ -17,7 +17,7 @@ namespace Recall.Web.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -373,6 +373,64 @@ namespace Recall.Web.Migrations
                         .IsUnique();
 
                     b.ToTable("digest_send", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.DiscoverDismissalEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_utc");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("TvdbId")
+                        .HasColumnType("integer")
+                        .HasColumnName("tvdb_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Kind", "TvdbId")
+                        .IsUnique();
+
+                    b.ToTable("discover_dismissal", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.DiscoverListEntity", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTime>("FetchedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fetched_utc");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("item_count");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("discover_list", (string)null);
                 });
 
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.EmailEntity", b =>
@@ -1101,6 +1159,15 @@ namespace Recall.Web.Migrations
                 });
 
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.DigestSendEntity", b =>
+                {
+                    b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.DiscoverDismissalEntity", b =>
                 {
                     b.HasOne("Recall.Web.Infrastructure.Persistence.Entities.AppUserEntity", null)
                         .WithMany()
