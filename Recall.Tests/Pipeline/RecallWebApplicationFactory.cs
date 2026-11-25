@@ -11,6 +11,7 @@ using Moq;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence;
 using Recall.Web.Services;
+using Recall.Web.Services.External.TheTvDb;
 
 namespace Recall.Tests.Pipeline;
 
@@ -33,10 +34,25 @@ public sealed class RecallWebApplicationFactory : WebApplicationFactory<Program>
 
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
 
-    public Mock<ITheTvDbService> TheTvDb { get; } = new();
+    public Mock<ITheTvDbService> TheTvDb { get; }
 
-    public RecallWebApplicationFactory()
+    /// <summary>
+    /// The transport client, replaced too, so nothing can reach TheTVDB however
+    /// it is resolved. Strict when the factory is: any call fails the request.
+    /// </summary>
+    public Mock<ITheTvDbApiClient> TheTvDbApi { get; }
+
+    /// <param name="strictTheTvDb">
+    /// Make both TheTVDB mocks strict: a call nobody set up throws, so a page
+    /// that is meant to make no TheTVDB request fails if it makes one. The one
+    /// series set up below stays answerable.
+    /// </param>
+    public RecallWebApplicationFactory(bool strictTheTvDb = false)
     {
+        var behavior = strictTheTvDb ? MockBehavior.Strict : MockBehavior.Default;
+        TheTvDb = new Mock<ITheTvDbService>(behavior);
+        TheTvDbApi = new Mock<ITheTvDbApiClient>(behavior);
+
         // Kept open for the factory's lifetime: an in-memory SQLite database
         // lives only as long as its connection.
         _connection.Open();
@@ -88,6 +104,8 @@ public sealed class RecallWebApplicationFactory : WebApplicationFactory<Program>
             // ---- external APIs ------------------------------------------------------
             RemoveAll(services, d => d.ServiceType == typeof(ITheTvDbService));
             services.AddScoped(_ => TheTvDb.Object);
+            RemoveAll(services, d => d.ServiceType == typeof(ITheTvDbApiClient));
+            services.AddScoped(_ => TheTvDbApi.Object);
 
             // ---- background jobs: registered, never started -------------------------
             RemoveAll(services, d =>

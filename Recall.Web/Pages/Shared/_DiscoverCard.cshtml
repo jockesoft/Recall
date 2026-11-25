@@ -1,0 +1,17 @@
+@model Recall.Web.Pages.Shared.DiscoverCardModel
+@* One Discover card: the poster card (the _SeriesCard classes), and on the
+   poster the "×" (top right, 36px) and the add button (bottom right, 44px),
+   both POST forms that work without script and come back to the card's place. *@
+
+<div class="tvdb-series-card-wrap tvdb-discover-card" id="@Model.ElementId" data-content-type="@(Model.IsMovie ? "movie" : "series")">
+    <a asp-page="@Model.DetailsPage" asp-route-id="@Model.Title.TvdbId" class="tvdb-series-card">
+        <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.Title.ImageUrl) ? "is-empty" : "")">
+            @if (!string.IsNullOrWhiteSpace(Model.Title.ImageUrl))
+            {
+                <img src="@Model.Title.ImageUrl" alt="" width="150" height="225" loading="@(Model.LoadEagerly ? "eager" : "lazy")" />
+            }
+        </span>
+        <span class="tvdb-series-title">@Model.Title.Name</span>
+        <span class="tvdb-series-year">@Model.MetaLine</span>
+    </a>
+</div>

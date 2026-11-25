@@ -26,6 +26,12 @@ public static class Icons
     public const string Add = "ph ph-plus";
     public const string Watchlist = "ph ph-bookmark-simple";
     public const string OnWatchlist = "ph-fill ph-bookmark-simple";
+    // Discover's "Add to your watchlist": Phosphor 2.1 has no bookmark with a
+    // plus, so the card draws Watchlist with a small Add on it (.tvdb-icon-badge).
+    /// <summary>Discover's "Not interested" on a poster.</summary>
+    public const string NotInterested = "ph ph-x";
+    /// <summary>Discover: the page's empty states.</summary>
+    public const string Discover = "ph ph-sparkle";
     /// <summary>"Mark as unwatched" in a movie's "⋯" menu.</summary>
     public const string MarkUnwatched = "ph ph-eye-slash";
     public const string More = "ph ph-dots-three";
