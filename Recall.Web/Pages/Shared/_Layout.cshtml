@@ -101,6 +101,9 @@
                     @if (CurrentUser.IsAuthenticated)
                     {
                         <li class="nav-item">
+                            <a class="nav-link" asp-area="" asp-page="/Discover" aria-current="@CurrentIf("/Discover")">Discover</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" asp-area="" asp-page="/Search" aria-current="@CurrentIf("/Search")">Search</a>
                         </li>
                         <li class="nav-item">

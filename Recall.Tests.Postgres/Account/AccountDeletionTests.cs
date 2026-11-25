@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Recall.Web.Infrastructure.Persistence;
+using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 
@@ -40,7 +41,7 @@ public sealed class AccountDeletionTests : PostgresFixture
         tables.Should().Contain(
         [
             "digest_send", "tracked_series", "tracked_movie", "episode_watch", "user_movie_watch", "user_like", "user_rating",
-            "notification", "notified_episode", "login_token", "watchlist_import_job", "push_subscription"
+            "notification", "notified_episode", "login_token", "watchlist_import_job", "push_subscription", "discover_dismissal"
         ], "these are the tables the test seeds; the list itself comes from the database");
 
         foreach (var table in tables)
@@ -264,6 +265,12 @@ public sealed class AccountDeletionTests : PostgresFixture
             Id = Guid.NewGuid(), UserId = userId, Endpoint = $"https://fcm.googleapis.com/fcm/send/{Guid.NewGuid():N}",
             P256dh = "key", Auth = "auth", DeviceLabel = "Chrome on Android", TimeZone = "Europe/Stockholm",
             HeldSinceUtc = now, HeldUntilUtc = now.AddHours(8)
+        });
+
+        // Hidden from Discover ("Not interested").
+        db.DiscoverDismissals.Add(new DiscoverDismissalEntity
+        {
+            Id = Guid.NewGuid(), UserId = userId, Kind = DiscoverKind.Series, TvdbId = seriesId, CreatedUtc = now
         });
 
         var jobId = Guid.NewGuid();

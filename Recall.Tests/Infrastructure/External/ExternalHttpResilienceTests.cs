@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.External;
+using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
@@ -90,7 +91,7 @@ public class ExternalHttpResilienceTests
     }
 
     private static ServiceProvider BuildServices(
-        ScriptedHandler handler, TimeSpan? retryDelay = null, IOmdbRequestBudget? omdbBudget = null)
+        HttpMessageHandler handler, TimeSpan? retryDelay = null, IOmdbRequestBudget? omdbBudget = null, TimeSpan? attemptTimeout = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -113,6 +114,8 @@ public class ExternalHttpResilienceTests
             o.RetryBaseDelay = retryDelay ?? TimeSpan.FromMilliseconds(1);
             // A test that passes its own delay needs it to be exactly that long.
             o.UseJitter = retryDelay is null;
+            if (attemptTimeout is { } timeout)
+                o.TheTvDbAttemptTimeout = timeout;
         });
 
         // Same named clients the lines above registered; only the transport changes.
@@ -270,8 +273,92 @@ public class ExternalHttpResilienceTests
         await using var services = BuildServices(new ScriptedHandler(() => Json(SearchJson)));
         var factory = services.GetRequiredService<IHttpClientFactory>();
 
-        factory.CreateClient(nameof(ITheTvDbApiClient)).Timeout.Should().Be(ExternalHttpResilience.TheTvDbAttemptTimeout);
+        // TheTVDB's client times each attempt itself, so the HttpClient sets no limit of its own.
+        factory.CreateClient(nameof(ITheTvDbApiClient)).Timeout.Should().Be(Timeout.InfiniteTimeSpan);
+        new ExternalHttpResilienceOptions().TheTvDbAttemptTimeout.Should().Be(ExternalHttpResilience.TheTvDbAttemptTimeout)
+            .And.Be(TimeSpan.FromSeconds(8));
         factory.CreateClient(nameof(IOmdbApiClient)).Timeout.Should().Be(ExternalHttpResilience.OmdbOverallTimeout);
+    }
+
+    // ---- the attempt timeout ---------------------------------------------------------
+
+    /// <summary>Answers at once, but every data response's body takes <paramref name="bodyDelay"/> to arrive.</summary>
+    private sealed class SlowBodyHandler(TimeSpan bodyDelay, string body) : HttpMessageHandler
+    {
+        public int DataAttempts { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Post)
+                return Task.FromResult(Json(LoginJson));
+
+            DataAttempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new SlowContent(bodyDelay, body) });
+        }
+
+        private sealed class SlowContent(TimeSpan delay, string body) : HttpContent
+        {
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+                SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+            protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
+            {
+                await Task.Delay(delay, cancellationToken);
+                await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes(body), cancellationToken);
+            }
+
+            protected override bool TryComputeLength(out long length)
+            {
+                length = -1;
+                return false;
+            }
+        }
+    }
+
+    private const string FilterJson =
+        """{"status":"success","data":[{"id":1,"name":"A long list","image":"/p.jpg","year":"2026","score":500}]}""";
+
+    [Test]
+    public async Task AFilterList_Should_GetItsOwnAttemptTimeout_WhileOtherCallsKeepTheDefault()
+    {
+        // The default attempt shrunk to 200 ms (8 s in production); every body takes 600 ms to arrive.
+        var defaultTimeout = TimeSpan.FromMilliseconds(200);
+        var slow = TimeSpan.FromMilliseconds(600);
+
+        var searchHandler = new SlowBodyHandler(slow, SearchJson);
+        await using (var services = BuildServices(searchHandler, attemptTimeout: defaultTimeout))
+        {
+            var search = () => services.GetRequiredService<ITheTvDbApiClient>().SearchAsync("anything");
+
+            var failure = (await search.Should().ThrowAsync<TaskCanceledException>()).Which;
+            failure.InnerException.Should().BeOfType<TimeoutException>("a slow attempt fails like HttpClient.Timeout, which the pipeline retries");
+            searchHandler.DataAttempts.Should().Be(ExternalHttpResilience.TheTvDbMaxRetries + 1,
+                "every attempt of an ordinary call is cut off at the default and tried again");
+        }
+
+        var filterHandler = new SlowBodyHandler(slow, FilterJson);
+        await using (var services = BuildServices(filterHandler, attemptTimeout: defaultTimeout))
+        {
+            var records = await services.GetRequiredService<ITheTvDbApiClient>()
+                .FilterSeriesAsync(new TitleFilter(TitleFilterSort.Score), attemptTimeout: TimeSpan.FromSeconds(5));
+
+            records.Should().ContainSingle().Which.Name.Should().Be("A long list");
+            filterHandler.DataAttempts.Should().Be(1, "the list's own timeout lets its slow body arrive, so it is fetched once");
+        }
+    }
+
+    [Test]
+    public async Task TheCallersOwnCancellation_Should_StayACancellation_AndNotBeRetried()
+    {
+        var handler = new SlowBodyHandler(TimeSpan.FromSeconds(10), FilterJson);
+        await using var services = BuildServices(handler);
+        using var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        var act = () => services.GetRequiredService<ITheTvDbApiClient>()
+            .FilterMoviesAsync(new TitleFilter(TitleFilterSort.Score), TimeSpan.FromSeconds(30), caller.Token);
+
+        (await act.Should().ThrowAsync<OperationCanceledException>()).Which.InnerException.Should().NotBeOfType<TimeoutException>();
+        handler.DataAttempts.Should().Be(1);
     }
 
     [Test]

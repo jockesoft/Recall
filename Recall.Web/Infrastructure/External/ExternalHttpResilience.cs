@@ -19,6 +19,13 @@ public sealed class ExternalHttpResilienceOptions
     public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
 
     public bool UseJitter { get; set; } = true;
+
+    /// <summary>
+    /// One TheTVDB attempt, response body included, unless the call asks for
+    /// its own (Discover's filter lists). The production value is
+    /// <see cref="ExternalHttpResilience.TheTvDbAttemptTimeout"/>; tests shrink it.
+    /// </summary>
+    public TimeSpan TheTvDbAttemptTimeout { get; set; } = ExternalHttpResilience.TheTvDbAttemptTimeout;
 }
 
 /// <summary>
@@ -29,7 +36,10 @@ public sealed class ExternalHttpResilienceOptions
 /// <list type="bullet">
 /// <item>TheTVDB's pipeline is run by <c>TheTvDbApiClient</c> itself, around
 /// each throttled attempt, so a request gives its concurrency slot back while
-/// it waits to retry. <c>HttpClient.Timeout</c> is the per-attempt limit.</item>
+/// it waits to retry. The client times each attempt itself (its
+/// <c>HttpClient.Timeout</c> is infinite), so a call can ask for a longer one:
+/// Discover's filter lists, 400–500 KB each, get
+/// <c>DiscoverOptions.FilterAttemptTimeoutSeconds</c>.</item>
 /// <item>OMDb has no throttle, so its pipeline is an ordinary handler inside
 /// the <c>HttpClient</c>, whose <c>Timeout</c> is the overall limit. Its retry
 /// draws on the shared daily request budget.</item>
@@ -63,7 +73,11 @@ public static class ExternalHttpResilience
     /// </summary>
     public static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(2);
 
-    /// <summary>One TheTVDB round trip, response body included (it is the typed client's <c>HttpClient.Timeout</c>).</summary>
+    /// <summary>
+    /// One TheTVDB round trip, response body included, for every call that
+    /// does not ask for its own (timed by <c>TheTvDbApiClient</c>, from the
+    /// moment the attempt holds a throttle slot).
+    /// </summary>
     public static readonly TimeSpan TheTvDbAttemptTimeout = TimeSpan.FromSeconds(8);
 
     public const int TheTvDbMaxRetries = 2;

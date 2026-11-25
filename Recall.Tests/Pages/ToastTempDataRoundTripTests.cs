@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Tests.TestSupport;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Pages.Shared;
+using Recall.Web.Services.Discover;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Tests.Pages;
@@ -54,6 +56,14 @@ public sealed class ToastTempDataRoundTripTests
                 "Marked 7 episodes as watched and resumed watching Mare of Easttown.", 370112, new WatchedBatch(7, BatchId),
                 caughtUp: new SeriesCaughtUp(370112, "Mare of Easttown", Finished: true, UserHasRated: false),
                 today: Today, resumedFromStoppedUtc: StoppedUtc));
+        yield return new("Discover add of a series, with Undo",
+            p => p.SetDiscoverToast("Added Severance to your library.", new DiscoverUndo(DiscoverUndoAction.Add, DiscoverKind.Series, 371980, "discover-new-5")));
+        yield return new("Discover add of a movie, with Undo",
+            p => p.SetDiscoverToast("Added Dune: Part Two to your watchlist.", new DiscoverUndo(DiscoverUndoAction.Add, DiscoverKind.Movie, 338552, "discover-movies-20")));
+        yield return new("Discover hide, with Undo",
+            p => p.SetDiscoverToast("Hidden from Discover.", new DiscoverUndo(DiscoverUndoAction.Hide, DiscoverKind.Series, 445000, "discover-genre-science-fiction-1")));
+        yield return new("Discover hide without a place",
+            p => p.SetDiscoverToast("Hidden from Discover.", new DiscoverUndo(DiscoverUndoAction.Hide, DiscoverKind.Movie, 1, null)));
         yield return new("success and error together",
             p => { p.SetSuccessToast("Saved."); p.SetErrorToast("But something else failed."); });
     }
@@ -82,6 +92,19 @@ public sealed class ToastTempDataRoundTripTests
 
         var toast = ToastMessagesModel.From(tempData).Toasts.Should().ContainSingle().Subject;
         toast.UndoWatched.Should().Be(new UndoWatchedForm("370112", BatchId.ToString("D"), StoppedUtc.Ticks.ToString()));
+        toast.HasAction.Should().BeTrue();
+        toast.DurationMilliseconds.Should().Be(10_000, "a toast with an Undo stays ten seconds");
+    }
+
+    [Test]
+    public void TheUndoOfADiscoverHide_Should_SurviveTheCookie()
+    {
+        var tempData = CookieTempData.RoundTrip(p =>
+            p.SetDiscoverToast("Hidden from Discover.", new DiscoverUndo(DiscoverUndoAction.Hide, DiscoverKind.Movie, 338552, "discover-movies-3")));
+
+        var toast = ToastMessagesModel.From(tempData).Toasts.Should().ContainSingle().Subject;
+        toast.Text.Should().Be("Hidden from Discover.");
+        toast.UndoDiscover.Should().Be(new UndoDiscoverForm("Hide", "Movie", "338552", "discover-movies-3"));
         toast.HasAction.Should().BeTrue();
         toast.DurationMilliseconds.Should().Be(10_000, "a toast with an Undo stays ten seconds");
     }

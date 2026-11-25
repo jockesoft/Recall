@@ -465,6 +465,17 @@ This is the checklist that was followed before enabling it. Go through it again 
 
 To switch it off again, set `Digest__Enabled=false`. Users keep their choice.
 
+Discover
+
+`/Discover` (signed in only) suggests series and movies the user does not have yet: new series, the year's most popular,
+the user's top two genres and the year's movies. The lists come from TheTVDB's filter endpoints, fetched by
+`DiscoverListsTimer` once a day (it checks hourly and fills an empty table within minutes of a start): about five
+requests plus two per genre in use, logged as "DiscoverListsTimer: N TheTVDB request(s) this run". A page view makes no
+TheTVDB request. Nothing needs setting: the `Discover` section of `appsettings.json` has the defaults (the lowest
+TheTVDB score a title needs, row sizes, how often lists are fetched), and any of them can be overridden in `.env.prod`
+as `Discover__…`. A list the job could not fetch keeps its previous version; until the first fetch the page says
+suggestions are on their way.
+
 Enabling push notifications
 
 Push notifications tell users on their phone or computer when a new episode is out. They are off unless `Push:Enabled` is true; while off, nothing about them shows anywhere.

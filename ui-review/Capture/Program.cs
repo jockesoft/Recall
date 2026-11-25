@@ -202,6 +202,18 @@ List<Shot> shots =
     new("library", "populated", Site.SignedIn, "/Library"),
     // Watching on its own: every card with a released next episode has the round check.
     new("library", "section-watching", Site.SignedIn, "/Library?section=watching"),
+
+    // Discover, from discover-seed.sql (its job is off: no TheTVDB request). The rows, then the
+    // two actions on a poster: each comes back to the same place in the row, now holding the
+    // next title, with a toast whose Undo (the cleanup) takes it back. A movie is added, not a
+    // series: a series nobody has opened would be fetched from TheTVDB to go in the library.
+    new("discover", "populated", Site.SignedIn, "/Discover"),
+    new("discover", "after-add", Site.SignedIn, "/Discover", ViewportOnly: true,
+        Prepare: page => DiscoverActionAsync(page, "#discover-movies-2", ".tvdb-discover-card-add button", "Added "),
+        Cleanup: UndoDiscoverAsync),
+    new("discover", "not-interested", Site.SignedIn, "/Discover", ViewportOnly: true,
+        Prepare: page => DiscoverActionAsync(page, "#discover-new-1", ".tvdb-discover-card-hide button", "Hidden from Discover."),
+        Cleanup: UndoDiscoverAsync),
     new("library", "section-watched", Site.SignedIn, "/Library?section=watched"),
     new("library", "section-dormant", Site.SignedIn, "/Library?section=dormant"),
     new("library", "dormant-expanded", Site.SignedIn, "/Library",
@@ -499,6 +511,8 @@ List<Shot> shots =
     // ---- Signed in, nothing tracked: the empty states ------------------------
     new("dashboard", "empty", Site.Empty, "/Dashboard"),
     new("library", "empty", Site.Empty, "/Library"),
+    // No list stored yet: the empty clone has none.
+    new("discover", "empty", Site.Empty, "/Discover"),
     // The empty clone has a second administrator, so the confirmation form is offered. Nothing is submitted.
     new("delete-account", "confirmation", Site.Empty, "/Account/Delete"),
     new("delete-account", "ready", Site.Empty, "/Account/Delete", ViewportOnly: true,
@@ -1334,6 +1348,29 @@ static async Task OpenMobileMenuAsync(IPage page)
         await toggler.ClickAsync();
         await page.Locator(".navbar-collapse.show").WaitForAsync();
     }
+}
+
+// A button on a Discover poster pressed: the page must come back to the same card place
+// (now another title's) with the toast, or the shot fails.
+static async Task DiscoverActionAsync(IPage page, string card, string button, string toast)
+{
+    var place = page.Locator(card);
+    await place.ScrollIntoViewIfNeededAsync();
+    var before = await place.Locator("a.tvdb-series-card").GetAttributeAsync("href");
+
+    await place.Locator(button).ClickAsync();
+    await page.Locator(".tvdb-toast-stack .alert-success .tvdb-toast-action").WaitForAsync();
+
+    var text = await page.Locator(".tvdb-toast-stack .alert-success .tvdb-toast-text").InnerTextAsync();
+    var after = await page.Locator(card + " a.tvdb-series-card").GetAttributeAsync("href");
+    if (new Uri(page.Url).Fragment != card || !text.StartsWith(toast, StringComparison.Ordinal) || after == before)
+        throw new InvalidOperationException($"{card}: came back to {page.Url} with \"{text}\", the card holding {after} (was {before}).");
+}
+
+static async Task UndoDiscoverAsync(IPage page)
+{
+    await page.Locator(".tvdb-toast-stack").GetByRole(AriaRole.Button, new() { Name = "Undo" }).ClickAsync();
+    await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
 }
 
 enum Site { SignedIn, Empty, Anonymous }

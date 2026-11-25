@@ -27,6 +27,7 @@ public sealed partial class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
     ITrackedSeriesRepository trackedSeriesRepository,
+    ISeriesLibraryService seriesLibraryService,
     IEpisodeWatchRepository episodeWatchRepository,
     IWatchProgressService watchProgressService,
     ILikeRepository likeRepository,
@@ -934,15 +935,15 @@ public sealed partial class DetailsModel(
 
             if (existing is null)
             {
-                var series = await theTvDbService.GetSeriesByIdAsync(seriesId, cancellationToken);
-                if (series is null) return;
-
-                var tracked = TrackedSeriesMappings.FromTvDbDetails(userId, series);
-
-                if (await trackedSeriesRepository.AddAsync(tracked, cancellationToken))
-                    this.SetSuccessToast("Series saved to your library.");
-                else
-                    this.SetInfoToast("Series is already in your library.");
+                switch ((await seriesLibraryService.AddAsync(userId, seriesId, cancellationToken)).Outcome)
+                {
+                    case AddSeriesOutcome.Added:
+                        this.SetSuccessToast("Series saved to your library.");
+                        break;
+                    case AddSeriesOutcome.AlreadyInLibrary:
+                        this.SetInfoToast("Series is already in your library.");
+                        break;
+                }
             }
             else
             {

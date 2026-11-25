@@ -28,7 +28,9 @@
 # switched on too (a key pair generated once per run into .run/vapid.env) so
 # Profile's Notifications section, Admin's test button and the Privacy text
 # show, with the new-episode job off: it is the one that sends pushes, and the
-# seed's devices have made-up endpoints at a real push service.
+# seed's devices have made-up endpoints at a real push service. Discover's job
+# is off as well: the seeded clone gets its lists from discover-seed.sql, and
+# the empty clone has none ("Suggestions are on their way").
 #
 # recall_db itself is only read (as the template for the clones). The apps use
 # Redis database 1, so the development cache in database 0 is left alone too.
@@ -79,6 +81,7 @@ start_app() { # name url database environment [directory]
     Jobs__Disabled__1=WeeklyDigestTimer \
     Jobs__Disabled__2=UpdateTvDbInfoTimer \
     Jobs__Disabled__3=NewEpisodeNotificationTimer \
+    Jobs__Disabled__4=DiscoverListsTimer \
     Digest__Enabled=true \
     Push__Enabled=true \
     Push__Subject=mailto:ui-review@example.com \
@@ -145,8 +148,12 @@ setup() {
   psql_db "$EMPTY_DB" -c "
     TRUNCATE tracked_series, tracked_movie, episode_watch, user_movie_watch, user_like, user_rating,
              notification, notified_episode, login_token, email, watchlist_import_item, watchlist_import_job;"
-  # push_subscription only exists once the clone is migrated (the first start).
-  psql_db "$EMPTY_DB" -c "DO \$\$ BEGIN IF to_regclass('push_subscription') IS NOT NULL THEN TRUNCATE push_subscription; END IF; END \$\$;"
+  # push_subscription and the Discover tables only exist once the clone is migrated (the first start).
+  # Without lists the empty clone shows Discover's "Suggestions are on their way".
+  psql_db "$EMPTY_DB" -c "DO \$\$ BEGIN
+    IF to_regclass('push_subscription') IS NOT NULL THEN TRUNCATE push_subscription; END IF;
+    IF to_regclass('discover_list') IS NOT NULL THEN TRUNCATE discover_list, discover_dismissal; END IF;
+  END \$\$;"
 
   # A second administrator in the empty clone, so the dev user is not the only
   # one there and "Delete my account" shows its confirmation form. In the seeded
@@ -172,6 +179,9 @@ setup() {
   fi
 
   psql_db "$SEEDED_DB" < "$ROOT/ui-review/seed.sql"
+  # Discover's lists, as the daily job would have stored them (its job is off in every instance,
+  # so no run makes a TheTVDB request for them); dated from today, see discover-seed.sql.
+  psql_db "$SEEDED_DB" < "$ROOT/ui-review/discover-seed.sql"
 
   # The seed edits cached payloads; drop the Redis copies so the apps read them.
   docker exec "$REDIS_CONTAINER" redis-cli -n "$REDIS_DB" FLUSHDB > /dev/null

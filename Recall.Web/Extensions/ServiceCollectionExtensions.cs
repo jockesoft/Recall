@@ -20,6 +20,7 @@ using Recall.Web.Services.Import;
 using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Push;
 using Recall.Web.Services.Sitemap;
+using Recall.Web.Services.Discover;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
@@ -40,9 +41,12 @@ public static class ServiceCollectionExtensions
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TheTvDbOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Accept.Add(new("application/json"));
-            // One attempt, body included. Retries are run by TheTvDbApiClient around
-            // each throttled attempt (see ExternalHttpResilience), not inside this client.
-            client.Timeout = ExternalHttpResilience.TheTvDbAttemptTimeout;
+            // No limit here: TheTvDbApiClient times each attempt itself (8 s, or
+            // what the call asks for, such as Discover's filter lists), since a
+            // request can only shorten HttpClient.Timeout, never lengthen it.
+            // Retries are run by the client around each throttled attempt (see
+            // ExternalHttpResilience), not inside this HttpClient.
+            client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
         });
 
         services.AddTheTvDbRetryPipeline();
@@ -121,12 +125,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILikeRepository, LikeRepository>();
         services.AddScoped<IMovieWatchRepository, MovieWatchRepository>();
         services.AddScoped<ITrackedMovieRepository, TrackedMovieRepository>();
+        services.AddScoped<IDiscoverListRepository, DiscoverListRepository>();
+        services.AddScoped<IDiscoverUserRepository, DiscoverUserRepository>();
         services.AddScoped<IMovieTrackingService, MovieTrackingService>();
         services.AddScoped<IRatingRepository, RatingRepository>();
         services.AddScoped<IWatchProgressService, WatchProgressService>();
+        services.AddScoped<ISeriesLibraryService, SeriesLibraryService>();
         // When a series in the queue counts as "haven't watched in a while" (ContinueWatchingOrder.Arrange).
         services.AddOptions<LibraryOptions>().BindConfiguration(LibraryOptions.SectionName);
         services.AddScoped<IStatsService, StatsService>();
+        // Discover: the lists the daily job fetches, and the settings of its rows.
+        services.AddOptions<DiscoverOptions>().BindConfiguration(DiscoverOptions.SectionName);
+        services.AddScoped<IDiscoverListRefresher, DiscoverListRefresher>();
+        services.AddScoped<IDiscoverService, DiscoverService>();
         services.AddScoped<IFavoritesService, FavoritesService>();
         services.AddScoped<ITvdbSnapshotStore, TvdbSnapshotStore>();
         services.AddScoped<ISitemapService, SitemapService>();

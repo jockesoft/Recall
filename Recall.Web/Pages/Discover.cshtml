@@ -1,0 +1,84 @@
+@page
+@using Recall.Web.Pages.Shared
+@model Recall.Web.Pages.DiscoverModel
+@{
+    ViewData["Title"] = "Discover";
+    ViewData["Description"] = "Series and movies you don't have yet, picked from TheTVDB and updated daily.";
+}
+
+<div class="tvdb-shell">
+    <h1 class="mb-2">Discover</h1>
+    <p class="tvdb-prose text-muted mb-4">
+        Picked from TheTVDB and updated daily. Anything already in your library, on your watchlist or watched is left out.
+    </p>
+
+    @if (Model.LoadFailed)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Problem,
+                     Heading = "Discover could not be loaded",
+                     Text = "Something went wrong on our side. Try again in a moment.",
+                     ActionText = "Search instead",
+                     ActionPage = "/Search"
+                 })" />
+    }
+    else if (!Model.Suggestions.HasLists)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Discover,
+                     Heading = "Suggestions are on their way",
+                     Text = "Discover's lists are fetched from TheTVDB once a day, and the first ones have not arrived yet. Look again in a few minutes.",
+                     ActionText = "Search instead",
+                     ActionPage = "/Search"
+                 })" />
+    }
+    else if (Model.Suggestions.Rows.Count == 0)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateModel
+                 {
+                     Icon = Icons.Discover,
+                     Heading = "Nothing new to suggest",
+                     Text = "You already have every title on today's lists. New ones arrive daily.",
+                     ActionText = "Search instead",
+                     ActionPage = "/Search"
+                 })" />
+    }
+    else
+    {
+        var firstRow = true;
+        foreach (var row in Model.Suggestions.Rows)
+        {
+            var prefix = DiscoverModel.RowPrefix(row);
+            <section class="tvdb-page-section tvdb-discover-section" id="@prefix" aria-labelledby="@(prefix)-heading">
+                <div class="tvdb-discover-head">
+                    <h2 id="@(prefix)-heading">@row.Heading</h2>
+                    <p class="tvdb-meta">@row.Description</p>
+                </div>
+                <div class="tvdb-discover-row">
+                    @for (var i = 0; i < row.Titles.Count; i++)
+                    {
+                        <partial name="_DiscoverCard" model="@(new DiscoverCardModel
+                                 {
+                                     Title = row.Titles[i],
+                                     ElementId = DiscoverModel.CardId(row, i + 1),
+                                     IsLastInRow = i == row.Titles.Count - 1,
+                                     LoadEagerly = firstRow && i < DiscoverModel.EagerPosters
+                                 })" />
+                    }
+                </div>
+            </section>
+            firstRow = false;
+        }
+
+        <p class="tvdb-meta tvdb-discover-legend">
+            <span><i class="@Icons.Add" aria-hidden="true"></i> Add a series to your library</span>
+            <span>
+                <span class="tvdb-icon-badge" aria-hidden="true"><i class="@Icons.Watchlist"></i><i class="@Icons.Add tvdb-icon-badge__mark"></i></span>
+                Add a movie to your watchlist
+            </span>
+            <span><i class="@Icons.NotInterested" aria-hidden="true"></i> Not interested: hide it from Discover</span>
+        </p>
+    }
+</div>

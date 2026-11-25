@@ -1878,3 +1878,74 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     font-size: var(--tvdb-text-sm);
     color: var(--tvdb-text-muted);
 }
+
+/* ---- Discover --------------------------------------------------------------------------------
+   Rows of 150px posters (the _SeriesCard classes) that scroll sideways at every
+   width, snapping to a poster, with the next one peeking in at the edge. The
+   row reaches the panel's edges, so a phone's screen edges. */
+.tvdb-discover-head h2 {
+    margin-bottom: var(--tvdb-space-1);
+}
+
+.tvdb-discover-head p {
+    margin-bottom: var(--tvdb-space-3);
+}
+
+.tvdb-discover-row {
+    display: flex;
+    gap: var(--tvdb-space-4);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    margin-inline: calc(-1 * var(--tvdb-shell-pad));
+    padding-inline: var(--tvdb-shell-pad);
+    scroll-padding-inline: var(--tvdb-shell-pad);
+    /* Room for the cards' hover lift and focus ring inside the scroller. */
+    padding-block: var(--tvdb-space-1);
+}
+
+.tvdb-discover-row > .tvdb-discover-card {
+    flex: 0 0 var(--tvdb-width-strip-poster);
+    scroll-snap-align: start;
+}
+
+/* The "×" on a Discover poster's top-right corner (a 36px --on-image button). */
+.tvdb-discover-card-hide {
+    position: absolute;
+    top: var(--tvdb-space-2);
+    right: var(--tvdb-space-2);
+    z-index: 2;
+}
+
+.tvdb-discover-card-hide form,
+.tvdb-discover-card-add form {
+    margin: 0;
+}
+
+/* Phosphor 2.1 has no bookmark with a plus: the bookmark with a plus at its
+   top-right corner, a little smaller (scaled, so it follows the bookmark's size). */
+.tvdb-icon-badge {
+    position: relative;
+    display: inline-flex;
+    line-height: 1;
+}
+
+.tvdb-icon-badge__mark {
+    position: absolute;
+    top: -0.3em;
+    right: -0.45em;
+    transform: scale(0.7);
+}
+
+/* What the three buttons on a poster do, once, under the rows. */
+.tvdb-discover-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2) var(--tvdb-space-5);
+    margin-top: var(--tvdb-space-6);
+}
+
+.tvdb-discover-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+}
