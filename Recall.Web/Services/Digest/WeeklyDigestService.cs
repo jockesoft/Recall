@@ -4,6 +4,7 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Digest;
 
@@ -93,7 +94,7 @@ public sealed class WeeklyDigestService(
                 if (await digestRepository.RecordAsync(recipient.UserId, period, DigestSendStatus.Queued, email, cancellationToken))
                     queued++;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 // One user's failure must not stop the others; no ledger row was
                 // written, so the next hourly run tries this user again.

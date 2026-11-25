@@ -1,7 +1,9 @@
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Quartz;
+using Recall.Tests.TestSupport;
 using Recall.Web.Infrastructure.Mail;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Retention;
@@ -101,5 +103,31 @@ public class PruneOldDataTimerTests
         _repository.Verify(x => x.DeleteFinishedEmailsAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteNotifiedEpisodesAsync(It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteCompletedImportJobsAsync(It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ---- a timeout is a failed category; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task Execute_Should_PruneTheNextCategory_WhenOneTimesOut()
+    {
+        _repository.Setup(x => x.DeleteLoginTokensAsync(It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        await CreateSut().Execute(Mock.Of<IJobExecutionContext>());
+
+        _repository.Verify(x => x.DeleteFinishedEmailsAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(x => x.DeleteCompletedImportJobsAsync(It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task Execute_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        using var job = new CancellationTokenSource();
+        _repository.Setup(x => x.DeleteLoginTokensAsync(It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = async () => await CreateSut().Execute(Mock.Of<IJobExecutionContext>(), job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _repository.Verify(x => x.DeleteFinishedEmailsAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

@@ -5,6 +5,7 @@ using Recall.Web.Mappings;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Discover;
 
@@ -91,7 +92,7 @@ public sealed class DiscoverListRefresher(
         {
             userIds = await userRepository.GetIdsWithWatchesAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             // Without users the fixed lists are still worth fetching.
             logger.LogWarning(ex, "DiscoverListsTimer: could not list the users; fetching the fixed lists only.");
@@ -106,7 +107,7 @@ public sealed class DiscoverListRefresher(
                 foreach (var genre in DiscoverGenres.ForUser(stats, Options.MinGenreTitles))
                     genreIds.Add(genre.Id);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "DiscoverListsTimer: could not read the genres of user {UserId}.", userId);
             }
@@ -146,7 +147,7 @@ public sealed class DiscoverListRefresher(
         }
         // A timeout is a cancellation too (TaskCanceledException), but not the
         // job's: only the job's own cancellation ends the run.
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "DiscoverListsTimer: could not refresh {Key}; the stored list is kept.", key.Key);
             return false;
@@ -159,7 +160,7 @@ public sealed class DiscoverListRefresher(
         {
             return await listRepository.DeleteUnusedAsync(keys.Select(k => k.Key).ToList(), now - UnusedListLifetime, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "DiscoverListsTimer: could not remove unused lists.");
             return 0;

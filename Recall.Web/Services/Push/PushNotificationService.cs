@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Push;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Push;
 
@@ -50,7 +51,7 @@ public sealed class PushNotificationService(
 
                 counts += await DeliverAsync(device, payload, now, cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "Push to device {DeviceId} of user {UserId} failed.", device.Id, userId);
                 counts += new PushRunCounts(Failed: 1);
@@ -94,7 +95,7 @@ public sealed class PushNotificationService(
 
                 counts += delivery;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "Releasing the held push of device {DeviceId} failed.", device.Id);
                 counts += new PushRunCounts(Failed: 1);
@@ -123,7 +124,7 @@ public sealed class PushNotificationService(
             {
                 counts += await DeliverAsync(device, payload, now, cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "Test push to device {DeviceId} failed.", device.Id);
                 counts += new PushRunCounts(Failed: 1);

@@ -4,6 +4,7 @@ using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Services;
 using Recall.Web.Services.External.Omdb;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -88,7 +89,7 @@ public sealed class UpdateMovieOmdbInfoTimer(
                 else
                     skipped++;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 // One bad movie shouldn't abort the batch — it stays stale and is retried next run.
                 logger.LogWarning(ex, "UpdateMovieOmdbInfoTimer: failed to refresh OMDb data for movie {MovieId}.", tvdbId);

@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -6,6 +7,7 @@ using Recall.Web.Domain.Omdb;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.External.Omdb;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
+using Recall.Tests.TestSupport;
 using Recall.Web.Infrastructure.Timers;
 using Recall.Web.Services;
 using Recall.Web.Services.External.Omdb;
@@ -203,5 +205,58 @@ public class OmdbEnrichmentTimerTests
         _movieStore.Verify(x => x.UpsertAsync(2, "tt2", It.IsAny<OmdbMovie?>(), It.IsAny<CancellationToken>()), Times.Once,
             "the failure on the first movie must not stop the second");
         _movieStore.Verify(x => x.UpsertAsync(It.IsIn(1, 3, 4), It.IsAny<string?>(), It.IsAny<OmdbMovie?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // ---- a timeout is a failed item; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task SeriesJob_Should_KeepTheStoredSnapshotAndMoveOn_WhenOmdbTimesOut()
+    {
+        SeriesDue(1, 2);
+        _omdb.Setup(x => x.GetSeriesAsync("tt1", It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        await SeriesJob().Execute(Mock.Of<IJobExecutionContext>());
+
+        _seriesStore.Verify(x => x.UpsertAsync(1, It.IsAny<string?>(), It.IsAny<OmdbSeries?>(), It.IsAny<CancellationToken>()), Times.Never,
+            "the snapshot stays as it was and the series is retried next run");
+        _seriesStore.Verify(x => x.UpsertAsync(2, "tt2", It.IsAny<OmdbSeries?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task SeriesJob_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        SeriesDue(1, 2);
+        using var job = new CancellationTokenSource();
+        _omdb.Setup(x => x.GetSeriesAsync("tt1", It.IsAny<CancellationToken>())).Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = async () => await SeriesJob().Execute(Mock.Of<IJobExecutionContext>(), job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _omdb.Verify(x => x.GetSeriesAsync("tt2", It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task MovieJob_Should_KeepTheStoredSnapshotAndMoveOn_WhenOmdbTimesOut()
+    {
+        MoviesDue(1, 2);
+        _omdb.Setup(x => x.GetMovieAsync("tt1", It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        await MovieJob().Execute(Mock.Of<IJobExecutionContext>());
+
+        _movieStore.Verify(x => x.UpsertAsync(1, It.IsAny<string?>(), It.IsAny<OmdbMovie?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _movieStore.Verify(x => x.UpsertAsync(2, "tt2", It.IsAny<OmdbMovie?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task MovieJob_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        MoviesDue(1, 2);
+        using var job = new CancellationTokenSource();
+        _omdb.Setup(x => x.GetMovieAsync("tt1", It.IsAny<CancellationToken>())).Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = async () => await MovieJob().Execute(Mock.Of<IJobExecutionContext>(), job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _omdb.Verify(x => x.GetMovieAsync("tt2", It.IsAny<CancellationToken>()), Times.Never);
     }
 }

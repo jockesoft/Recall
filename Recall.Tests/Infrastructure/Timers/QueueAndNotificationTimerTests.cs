@@ -42,6 +42,21 @@ public class QueueAndNotificationTimerTests
         await act.Should().NotThrowAsync();
     }
 
+    [Test]
+    public async Task MailTimer_Should_LogATimeout_ButLetTheJobsOwnCancellationThrough()
+    {
+        var mail = new Mock<IMailService>();
+        mail.Setup(x => x.SendPendingEmailsAsync(It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        var sut = new MailTimer(mail.Object, NullLogger<MailTimer>.Instance);
+
+        await sut.Invoking(async s => await s.Execute(Mock.Of<IJobExecutionContext>())).Should().NotThrowAsync(
+            "a timeout is a failure to log, not the job being stopped");
+
+        using var job = new CancellationTokenSource();
+        mail.Setup(x => x.SendPendingEmailsAsync(It.IsAny<CancellationToken>())).Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+        await sut.Invoking(async s => await s.Execute(Mock.Of<IJobExecutionContext>(), job.Token)).Should().ThrowAsync<OperationCanceledException>();
+    }
+
     // ---- WatchlistImportTimer ----------------------------------------------------
 
     [Test]
@@ -65,6 +80,20 @@ public class QueueAndNotificationTimerTests
         var act = async () => await sut.Execute(Mock.Of<IJobExecutionContext>());
 
         await act.Should().NotThrowAsync();
+    }
+
+    [Test]
+    public async Task WatchlistImportTimer_Should_LogATimeout_ButLetTheJobsOwnCancellationThrough()
+    {
+        var import = new Mock<IWatchlistImportService>();
+        import.Setup(x => x.ProcessNextBatchAsync(It.IsAny<int>(), It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        var sut = new WatchlistImportTimer(import.Object, NullLogger<WatchlistImportTimer>.Instance);
+
+        await sut.Invoking(async s => await s.Execute(Mock.Of<IJobExecutionContext>())).Should().NotThrowAsync();
+
+        using var job = new CancellationTokenSource();
+        import.Setup(x => x.ProcessNextBatchAsync(It.IsAny<int>(), It.IsAny<CancellationToken>())).Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+        await sut.Invoking(async s => await s.Execute(Mock.Of<IJobExecutionContext>(), job.Token)).Should().ThrowAsync<OperationCanceledException>();
     }
 
     // ---- NewEpisodeNotificationTimer -----------------------------------------------
@@ -360,5 +389,43 @@ public class QueueAndNotificationTimerTests
         logger.Entries.Should().Contain((Microsoft.Extensions.Logging.LogLevel.Information,
             "NewEpisodeNotificationTimer: 3 push(es) sent, 0 held for quiet hours, 1 failed " +
             "(1 expired subscription(s) removed, 2 held push(es) dropped as already read)."));
+    }
+
+    // ---- a timeout is a failed item; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task NotificationJob_Should_CheckTheNextSeries_AndPushTheNextUser_WhenOneTimesOut()
+    {
+        TrackedSeriesIds(1, 2);
+        Tracked(1, Alice);
+        Tracked(2, Alice, Bob);
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(1, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        Series(2, Ep(21, 1, Today.AddDays(-1)));
+        _push.Setup(x => x.ReleaseHeldAsync(It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        _push.Setup(x => x.SendNewEpisodesAsync(Alice, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        _push.Setup(x => x.SendNewEpisodesAsync(Bob, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(new PushRunCounts(Sent: 1));
+
+        await NotificationJob().Execute(Mock.Of<IJobExecutionContext>());
+
+        _sent.Select(s => (s.UserId, s.Digest.SeriesTvdbId)).Should().BeEquivalentTo([(Alice, 2), (Bob, 2)],
+            "the series after the one that timed out is still checked");
+        _push.Verify(x => x.SendNewEpisodesAsync(Bob, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once,
+            "the user after the push that timed out is still pushed");
+    }
+
+    [Test]
+    public async Task NotificationJob_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        TrackedSeriesIds(1, 2);
+        Tracked(2, Alice);
+        Series(2, Ep(21, 1, Today.AddDays(-1)));
+        using var job = new CancellationTokenSource();
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(1, It.IsAny<CancellationToken>())).Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = async () => await NotificationJob().Execute(Mock.Of<IJobExecutionContext>(), job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _sent.Should().BeEmpty();
+        _push.Verify(x => x.SendNewEpisodesAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

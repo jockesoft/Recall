@@ -1,6 +1,7 @@
 using Quartz;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -49,7 +50,7 @@ public class UpdateMovieInfoTimer(
                 if (await theTvDbService.RefreshMovieAggregateByIdAsync(candidate.TvdbId, cancellationToken))
                     refreshed++;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "UpdateMovieInfoTimer: failed to refresh movie {MovieId}.", candidate.TvdbId);
             }

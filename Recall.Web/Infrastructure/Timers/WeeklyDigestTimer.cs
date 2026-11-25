@@ -1,5 +1,6 @@
 using Quartz;
 using Recall.Web.Services.Digest;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -20,7 +21,7 @@ public sealed class WeeklyDigestTimer(IWeeklyDigestService digestService, ILogge
         {
             await digestService.RunAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             // Never let an unhandled exception escape into the scheduler.
             logger.LogError(ex, "WeeklyDigestTimer: unexpected failure while preparing digests.");

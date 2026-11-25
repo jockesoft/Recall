@@ -1,6 +1,7 @@
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Stats;
 
@@ -79,7 +80,7 @@ public sealed class StatsService(
             {
                 return (Id: id, Value: await read(id, cancellationToken));
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 // One unreadable title must not take the page down; it is
                 // counted as not cached.

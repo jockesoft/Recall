@@ -182,4 +182,54 @@ public sealed class WeeklyDigestServiceTests
         await act.Should().NotThrowAsync("an exception must not escape into the scheduler");
         service.Verify(x => x.RunAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    // ---- a timeout is a failed user; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task Run_Should_CountAUserWhoseDigestTimesOutAsFailed_AndQueueTheNext()
+    {
+        var (saga, martin) = (Recipient("saga"), Recipient("martin"));
+        Due(saga, martin);
+        _composer
+            .Setup(x => x.ComposeAsync(saga.UserId, It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Timeouts.Request());
+        Composes(martin, somethingToSay: true);
+
+        var result = await CreateSut().RunAsync();
+
+        result.Failed.Should().Be(1);
+        result.Queued.Should().Be(1);
+        _recorded.Select(r => r.UserId).Should().Equal([martin.UserId], "no ledger row for the user who failed, so the next run tries again");
+    }
+
+    [Test]
+    public async Task Run_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        var (saga, martin) = (Recipient("saga"), Recipient("martin"));
+        Due(saga, martin);
+        Composes(martin, somethingToSay: true);
+        using var job = new CancellationTokenSource();
+        _composer
+            .Setup(x => x.ComposeAsync(saga.UserId, It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<string>(), It.IsAny<IDictionary<int, SeriesAggregate?>>(), It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = () => CreateSut().RunAsync(job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _recorded.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task TheJob_Should_LogATimeout_ButLetItsOwnCancellationThrough()
+    {
+        var service = new Mock<IWeeklyDigestService>();
+        service.Setup(x => x.RunAsync(It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        var job = new WeeklyDigestTimer(service.Object, NullLogger<WeeklyDigestTimer>.Instance);
+
+        await job.Invoking(async j => await j.Execute(Mock.Of<IJobExecutionContext>())).Should().NotThrowAsync();
+
+        using var own = new CancellationTokenSource();
+        service.Setup(x => x.RunAsync(It.IsAny<CancellationToken>())).Callback(() => own.Cancel()).ThrowsAsync(new OperationCanceledException(own.Token));
+        await job.Invoking(async j => await j.Execute(Mock.Of<IJobExecutionContext>(), own.Token)).Should().ThrowAsync<OperationCanceledException>();
+    }
 }

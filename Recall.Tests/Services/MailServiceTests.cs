@@ -1,3 +1,4 @@
+using Recall.Tests.TestSupport;
 using AwesomeAssertions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -276,4 +277,39 @@ public sealed class MailServiceTests
         public string ContentRootPath { get; set; } = Path.GetTempPath();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
+
+    // ---- a timeout is a failed email; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task SendPending_Should_RecordAFailedAttempt_AndSendTheNextEmail_WhenOneTimesOut()
+    {
+        var (first, second) = (PendingEmail("first@test.local"), PendingEmail("second@test.local"));
+        _repository.Setup(x => x.GetPendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
+        _repository.Setup(x => x.MarkSentAsync(first.Id, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        await _sut.SendPendingEmailsAsync();
+
+        _repository.Verify(x => x.RecordFailedAttemptAsync(first.Id, _options.MaxSendAttempts, It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(x => x.MarkSentAsync(second.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task SendPending_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        var (first, second) = (PendingEmail("first@test.local"), PendingEmail("second@test.local"));
+        _repository.Setup(x => x.GetPendingAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
+        using var job = new CancellationTokenSource();
+        _repository.Setup(x => x.MarkSentAsync(first.Id, It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = () => _sut.SendPendingEmailsAsync(job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _repository.Verify(x => x.MarkSentAsync(second.Id, It.IsAny<CancellationToken>()), Times.Never);
+        _repository.Verify(x => x.RecordFailedAttemptAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never,
+            "a stopped job is not a failed send");
+    }
+
+    private static OutboundEmail PendingEmail(string to) =>
+        new() { Id = Guid.NewGuid(), ToAddress = to, Subject = "Sign in", Body = "link" };
 }

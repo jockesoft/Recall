@@ -207,4 +207,62 @@ public class MetadataRefreshTimerTests
         _tvDb.Verify(x => x.RefreshMovieAggregateByIdAsync(2, It.IsAny<CancellationToken>()), Times.Once);
         _tvDb.Verify(x => x.RefreshMovieAggregateByIdAsync(3, It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    // ---- a timeout is a failed item; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task SeriesJob_Should_MoveOn_WhenASeriesOrAnEpisodeTimesOut()
+    {
+        SetUpSeriesCandidates(1, 2);
+        SetUpEpisodeCandidates(11, 12);
+        _tvDb.Setup(x => x.RefreshSeriesAggregateByIdAsync(1, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        _tvDb.Setup(x => x.RefreshEpisodeDetailsByIdAsync(11, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        await SeriesJob().Execute(Mock.Of<IJobExecutionContext>());
+
+        _tvDb.Verify(x => x.RefreshSeriesAggregateByIdAsync(2, It.IsAny<CancellationToken>()), Times.Once,
+            "a TheTVDB timeout is one failed series, not the end of the run");
+        _tvDb.Verify(x => x.RefreshEpisodeDetailsByIdAsync(12, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task SeriesJob_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        SetUpSeriesCandidates(1, 2);
+        SetUpEpisodeCandidates(11);
+        using var job = new CancellationTokenSource();
+        _tvDb.Setup(x => x.RefreshSeriesAggregateByIdAsync(1, It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = async () => await SeriesJob().Execute(Mock.Of<IJobExecutionContext>(), job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _tvDb.Verify(x => x.RefreshSeriesAggregateByIdAsync(2, It.IsAny<CancellationToken>()), Times.Never);
+        _tvDb.Verify(x => x.RefreshEpisodeDetailsByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task MovieJob_Should_MoveOn_WhenAMovieTimesOut()
+    {
+        SetUpMovieCandidates(1, 2);
+        _tvDb.Setup(x => x.RefreshMovieAggregateByIdAsync(1, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        await MovieJob().Execute(Mock.Of<IJobExecutionContext>());
+
+        _tvDb.Verify(x => x.RefreshMovieAggregateByIdAsync(2, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task MovieJob_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        SetUpMovieCandidates(1, 2);
+        using var job = new CancellationTokenSource();
+        _tvDb.Setup(x => x.RefreshMovieAggregateByIdAsync(1, It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = async () => await MovieJob().Execute(Mock.Of<IJobExecutionContext>(), job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _tvDb.Verify(x => x.RefreshMovieAggregateByIdAsync(2, It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

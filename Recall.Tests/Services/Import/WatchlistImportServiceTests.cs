@@ -1,3 +1,4 @@
+using Recall.Tests.TestSupport;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -298,5 +299,41 @@ public sealed class WatchlistImportServiceTests
             failing.Id, WatchlistImportItemStatus.Failed, null, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         _importRepository.Verify(x => x.MarkItemResultAsync(
             succeeding.Id, WatchlistImportItemStatus.Imported, 1, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ---- a timeout is a failed row; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task ProcessNextBatch_Should_MarkARowThatTimesOutFailed_AndProcessTheNext()
+    {
+        var (slow, next) = (Item(yourRating: null, imdbId: "tt0000001"), Item(yourRating: null, imdbId: "tt0000002"));
+        SetUpBatch(slow, next);
+        _theTvDbService.Setup(x => x.ResolveByRemoteIdAsync(slow.ImdbId, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        SetUpMovieMatch(next, tvdbId: 77);
+
+        await _sut.ProcessNextBatchAsync(15);
+
+        _importRepository.Verify(x => x.MarkItemResultAsync(
+            slow.Id, WatchlistImportItemStatus.Failed, null, It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _theTvDbService.Verify(x => x.ResolveByRemoteIdAsync(next.ImdbId, It.IsAny<CancellationToken>()), Times.Once,
+            "the row after the one that timed out is still looked up");
+    }
+
+    [Test]
+    public async Task ProcessNextBatch_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        var (first, second) = (Item(yourRating: null, imdbId: "tt0000001"), Item(yourRating: null, imdbId: "tt0000002"));
+        SetUpBatch(first, second);
+        using var job = new CancellationTokenSource();
+        _theTvDbService.Setup(x => x.ResolveByRemoteIdAsync(first.ImdbId, It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = () => _sut.ProcessNextBatchAsync(15, job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _theTvDbService.Verify(x => x.ResolveByRemoteIdAsync(second.ImdbId, It.IsAny<CancellationToken>()), Times.Never);
+        _importRepository.Verify(x => x.MarkItemResultAsync(
+            It.IsAny<Guid>(), WatchlistImportItemStatus.Failed, It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
+            "a stopped job does not mark the row it was on as failed");
     }
 }

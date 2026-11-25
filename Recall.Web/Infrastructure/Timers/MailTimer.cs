@@ -7,6 +7,7 @@
 
 using Quartz;
 using Recall.Web.Services;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -27,7 +28,7 @@ public sealed class MailTimer(IMailService mailService, ILogger<MailTimer> logge
         {
             await mailService.SendPendingEmailsAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             // Never let an unhandled exception escape into the scheduler.
             logger.LogError(ex, "MailTimer: unexpected failure while sending pending emails.");

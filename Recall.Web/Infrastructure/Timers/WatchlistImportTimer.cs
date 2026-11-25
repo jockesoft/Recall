@@ -1,5 +1,6 @@
 using Quartz;
 using Recall.Web.Services.Import;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -23,7 +24,7 @@ public sealed class WatchlistImportTimer(
         {
             await importService.ProcessNextBatchAsync(MaxItemsPerRun, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "WatchlistImportTimer: unexpected failure while processing the import queue.");
         }

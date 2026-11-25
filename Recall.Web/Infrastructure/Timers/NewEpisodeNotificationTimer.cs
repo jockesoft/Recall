@@ -12,6 +12,7 @@ using Recall.Web.Services.WatchTracking;
 using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Notifications.Models;
 using Recall.Web.Services.Push;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -135,7 +136,7 @@ public sealed class NewEpisodeNotificationTimer(
                     }
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 // One bad series shouldn't abort the sweep — it's retried next run.
                 logger.LogWarning(ex, "NewEpisodeNotificationTimer: failed while checking series {SeriesId}.", seriesId);
@@ -154,7 +155,7 @@ public sealed class NewEpisodeNotificationTimer(
             {
                 pushes += await pushNotificationService.SendNewEpisodesAsync(userId, runStartedUtc, cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "NewEpisodeNotificationTimer: pushing to user {UserId} failed.", userId);
                 pushes += new PushRunCounts(Failed: 1);
@@ -170,7 +171,7 @@ public sealed class NewEpisodeNotificationTimer(
         {
             return await pushNotificationService.ReleaseHeldAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "NewEpisodeNotificationTimer: releasing held pushes failed; they are retried next run.");
             return PushRunCounts.None;
