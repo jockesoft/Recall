@@ -1907,3 +1907,46 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     flex: 0 0 var(--tvdb-width-strip-poster);
     scroll-snap-align: start;
 }
+
+/* The "×" on a Discover poster's top-right corner (a 36px --on-image button). */
+.tvdb-discover-card-hide {
+    position: absolute;
+    top: var(--tvdb-space-2);
+    right: var(--tvdb-space-2);
+    z-index: 2;
+}
+
+.tvdb-discover-card-hide form,
+.tvdb-discover-card-add form {
+    margin: 0;
+}
+
+/* Phosphor 2.1 has no bookmark with a plus: the bookmark with a small plus in it. */
+.tvdb-icon-badge {
+    position: relative;
+    display: inline-flex;
+    line-height: 1;
+}
+
+.tvdb-icon-badge__mark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* Scaled, not sized: the theme has no font size this small, and the
+       plus must shrink with whatever size the bookmark is drawn at. */
+    transform: translate(-50%, -62%) scale(0.55);
+}
+
+/* What the three buttons on a poster do, once, under the rows. */
+.tvdb-discover-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tvdb-space-2) var(--tvdb-space-5);
+    margin-top: var(--tvdb-space-6);
+}
+
+.tvdb-discover-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-2);
+}

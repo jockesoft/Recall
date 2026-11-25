@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Services.Discover;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Extensions;
@@ -28,6 +29,15 @@ public static class PageModelToastExtensions
     // Read back by _ToastMessages.cshtml, which renders an "Undo" POST form
     // (resume the series) inside the "Stopped watching …" toast.
     public const string UndoStoppedSeriesKey = "Toast.UndoStopped.SeriesId";
+
+    // Read back by _ToastMessages.cshtml, which renders an "Undo" POST form to
+    // Discover inside the toast of an add or a "Not interested" there: what to
+    // take back ("Add" or "Hide"), the kind ("Series" or "Movie"), the TheTVDB
+    // id, and the card's place to return to ("discover-new-5").
+    public const string UndoDiscoverActionKey = "Toast.UndoDiscover.Action";
+    public const string UndoDiscoverKindKey = "Toast.UndoDiscover.Kind";
+    public const string UndoDiscoverIdKey = "Toast.UndoDiscover.Id";
+    public const string UndoDiscoverAnchorKey = "Toast.UndoDiscover.Anchor";
 
     // Set when the success toast is the "you're up to date" / "you've finished"
     // one: which of the two (its icon), and the series to offer "Rate it" for.
@@ -77,6 +87,23 @@ public static class PageModelToastExtensions
                     pageModel.TempData[ErrorKey] = "That series isn't in your library.";
                     break;
             }
+        }
+
+        /// <summary>
+        /// Success toast for an action on Discover ("Added Severance to your
+        /// library.", "Hidden from Discover.") with an Undo that takes it back
+        /// and returns to the card's place.
+        /// </summary>
+        public void SetDiscoverToast(string message, DiscoverUndo undo)
+        {
+            pageModel.TempData[SuccessKey] = message;
+            // Strings, written invariantly: the cookie TempData serializer only round-trips a few primitive types.
+            pageModel.TempData[UndoDiscoverActionKey] = undo.Action.ToString();
+            pageModel.TempData[UndoDiscoverKindKey] = undo.Kind.ToString();
+            pageModel.TempData[UndoDiscoverIdKey] = undo.TvdbId.ToString(CultureInfo.InvariantCulture);
+
+            if (!string.IsNullOrWhiteSpace(undo.Anchor))
+                pageModel.TempData[UndoDiscoverAnchorKey] = undo.Anchor;
         }
 
         /// <summary>

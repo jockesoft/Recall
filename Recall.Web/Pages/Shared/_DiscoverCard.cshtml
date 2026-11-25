@@ -3,6 +3,19 @@
    poster the "×" (top right, 36px) and the add button (bottom right, 44px),
    both POST forms that work without script and come back to the card's place. *@
 
+@{
+    void Hidden()
+    {
+        <input type="hidden" name="kind" value="@Model.Kind" />
+        <input type="hidden" name="id" value="@Model.Title.TvdbId" />
+        <input type="hidden" name="Anchor" value="@Model.ElementId" />
+        @if (Model.IsLastInRow)
+        {
+            <input type="hidden" name="last" value="true" />
+        }
+    }
+}
+
 <div class="tvdb-series-card-wrap tvdb-discover-card" id="@Model.ElementId" data-content-type="@(Model.IsMovie ? "movie" : "series")">
     <a asp-page="@Model.DetailsPage" asp-route-id="@Model.Title.TvdbId" class="tvdb-series-card">
         <span class="tvdb-series-poster @(string.IsNullOrWhiteSpace(Model.Title.ImageUrl) ? "is-empty" : "")">
@@ -14,4 +27,34 @@
         <span class="tvdb-series-title">@Model.Title.Name</span>
         <span class="tvdb-series-year">@Model.MetaLine</span>
     </a>
+
+    <div class="tvdb-discover-card-hide">
+        <form method="post" asp-page="/Discover" asp-page-handler="Hide">
+            @{ Hidden(); }
+            <button type="submit" class="tvdb-round-button tvdb-round-button--md tvdb-round-button--on-image"
+                    title="Not interested" aria-label="@Model.HideLabel">
+                <i class="@Icons.NotInterested" aria-hidden="true"></i>
+            </button>
+        </form>
+    </div>
+
+    @* The overlay is the poster's size and lets clicks through to the card everywhere but the button. *@
+    <div class="tvdb-series-card-mark tvdb-discover-card-add">
+        <form method="post" asp-page="/Discover" asp-page-handler="Add">
+            @{ Hidden(); }
+            <button type="submit" class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-image"
+                    title="@Model.AddHint" aria-label="@Model.AddLabel">
+                @if (Model.IsMovie)
+                {
+                    <span class="tvdb-icon-badge" aria-hidden="true">
+                        <i class="@Icons.Watchlist"></i><i class="@Icons.Add tvdb-icon-badge__mark"></i>
+                    </span>
+                }
+                else
+                {
+                    <i class="@Icons.Add" aria-hidden="true"></i>
+                }
+            </button>
+        </form>
+    </div>
 </div>

@@ -256,4 +256,40 @@ public sealed class ToastMessagesModelTests
         toast.HasAction.Should().BeFalse();
         toast.DurationMilliseconds.Should().Be(5000);
     }
+
+    [TestCase("Add", "Series", "12", "Add", "Series")]
+    [TestCase("Hide", "Movie", "34", "Hide", "Movie")]
+    public void ADiscoverUndo_Should_BeReadBack(string action, string kind, string id, string expectedAction, string expectedKind)
+    {
+        var tempData = Page().TempData;
+        tempData[PageModelToastExtensions.SuccessKey] = "Done.";
+        tempData[PageModelToastExtensions.UndoDiscoverActionKey] = action;
+        tempData[PageModelToastExtensions.UndoDiscoverKindKey] = kind;
+        tempData[PageModelToastExtensions.UndoDiscoverIdKey] = id;
+
+        var toast = ToastMessagesModel.From(tempData).Toasts.Single();
+
+        toast.UndoDiscover.Should().Be(new UndoDiscoverForm(expectedAction, expectedKind, id, null));
+        toast.HasAction.Should().BeTrue();
+    }
+
+    [TestCase("Delete", "Series", "12")]
+    [TestCase("1", "Series", "12")]
+    [TestCase("Add", "Episode", "12")]
+    [TestCase("Add", "2", "12")]
+    [TestCase("Add", "Series", "0")]
+    [TestCase("Add", "Series", "not a number")]
+    public void ADiscoverUndoThatMakesNoSense_Should_GiveNoUndoButton(string action, string kind, string id)
+    {
+        var tempData = Page().TempData;
+        tempData[PageModelToastExtensions.SuccessKey] = "Done.";
+        tempData[PageModelToastExtensions.UndoDiscoverActionKey] = action;
+        tempData[PageModelToastExtensions.UndoDiscoverKindKey] = kind;
+        tempData[PageModelToastExtensions.UndoDiscoverIdKey] = id;
+
+        var toast = ToastMessagesModel.From(tempData).Toasts.Single();
+
+        toast.UndoDiscover.Should().BeNull();
+        toast.HasAction.Should().BeFalse();
+    }
 }

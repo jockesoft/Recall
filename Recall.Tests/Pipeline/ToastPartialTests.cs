@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Services.Discover;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -118,6 +120,22 @@ public sealed class ToastPartialTests
         html.Should().Contain("handler=UndoWatched").And.Contain(">Undo</button>");
         html.Should().Contain($"name=\"batch\" value=\"{BatchId:D}\"").And.NotContain("name=\"stamp\"");
         html.Should().Contain("name=\"returnUrl\" value=\"/Dashboard\"");
+        Bars(html).Should().Be(1);
+    }
+
+    [Test]
+    public async Task ADiscoverToast_Should_PostItsUndoToDiscover_AndCarryTenSeconds()
+    {
+        var html = await RenderAsync(page => page.SetDiscoverToast(
+            "Hidden from Discover.", new DiscoverUndo(DiscoverUndoAction.Hide, DiscoverKind.Series, 445000, "discover-new-5")));
+
+        var toast = ToastTags(html).Should().ContainSingle().Subject;
+        toast.Should().Contain("data-toast-duration=\"10000\"").And.Contain("data-toast-actions=\"true\"");
+        html.Should().Contain("action=\"/Discover?handler=Undo\"").And.Contain(">Undo</button>");
+        html.Should().Contain("name=\"action\" value=\"Hide\"")
+            .And.Contain("name=\"kind\" value=\"Series\"")
+            .And.Contain("name=\"id\" value=\"445000\"")
+            .And.Contain("name=\"Anchor\" value=\"discover-new-5\"");
         Bars(html).Should().Be(1);
     }
 

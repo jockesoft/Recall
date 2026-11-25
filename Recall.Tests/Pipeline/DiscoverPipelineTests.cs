@@ -184,6 +184,87 @@ public sealed class DiscoverPipelineTests
         html.Should().NotContain("tvdb-discover-row");
     }
 
+    // ---- the buttons, and what they do ----------------------------------------------
+
+    [Test]
+    public async Task ACard_Should_CarryItsAddAndNotInterestedButtons()
+    {
+        var html = await PageAsync("/Discover");
+        var series = Card(html, "discover-new-1");
+        var movie = Card(html, "discover-movies-1");
+
+        series.Should().Contain("<form method=\"post\" action=\"/Discover?handler=Hide\">");
+        series.Should().Contain("title=\"Not interested\" aria-label=\"Not interested in New series 1\"");
+        series.Should().Contain("<form method=\"post\" action=\"/Discover?handler=Add\">");
+        series.Should().Contain("title=\"Add to library\" aria-label=\"Add New series 1 to your library\"");
+        series.Should().Contain("<input type=\"hidden\" name=\"kind\" value=\"Series\" />")
+            .And.Contain("<input type=\"hidden\" name=\"id\" value=\"1001\" />")
+            .And.Contain("<input type=\"hidden\" name=\"Anchor\" value=\"discover-new-1\" />")
+            .And.NotContain("name=\"last\"");
+
+        movie.Should().Contain("title=\"Add to watchlist\" aria-label=\"Add Movie 1 to your watchlist\"");
+        movie.Should().Contain("tvdb-icon-badge", "the bookmark with a plus");
+        Card(html, "discover-new-20").Should().Contain("<input type=\"hidden\" name=\"last\" value=\"true\" />");
+
+        html.Should().Contain("Add a series to your library").And.Contain("Add a movie to your watchlist")
+            .And.Contain("Not interested: hide it from Discover");
+    }
+
+    [Test]
+    public async Task NotInterested_Should_HideTheTitleFromEveryRow_UntilUndone()
+    {
+        var (factory, client) = await NewUserAsync();
+        using var _ = factory;
+        using var __ = client;
+
+        var page = await PageAsync(client, "/Discover");
+        Card(page, "discover-new-1").Should().Contain("value=\"1001\"");
+
+        var hide = await PostFormAsync(client, Card(page, "discover-new-1"), "Hide");
+        hide.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        hide.Headers.Location!.ToString().Should().Be("/Discover#discover-new-1", "back to the same place");
+
+        var after = await PageAsync(client, "/Discover");
+        after.Should().Contain("Hidden from Discover.");
+        after.Should().NotContain("href=\"/Series/Details/1001\"", "a hidden title is in no row");
+        Card(after, "discover-new-1").Should().Contain("value=\"1002\"", "the next title has the place");
+
+        using (var scope = factory.Services.CreateScope())
+            scope.ServiceProvider.GetRequiredService<AppDbContext>().DiscoverDismissals
+                .Count(d => d.TvdbId == 1001 && d.Kind == DiscoverKind.Series).Should().Be(1);
+
+        var undoForm = Regex.Match(after, "<form[^>]*handler=Undo[^>]*>.*?</form>", RegexOptions.Singleline).Value;
+        undoForm.Should().Contain("name=\"action\" value=\"Hide\"");
+        var undo = await PostFormAsync(client, undoForm, "Undo");
+        undo.Headers.Location!.ToString().Should().Be("/Discover#discover-new-1");
+
+        var undone = await PageAsync(client, "/Discover");
+        undone.Should().Contain("New series 1 is back in Discover.");
+        Card(undone, "discover-new-1").Should().Contain("value=\"1001\"", "the title is back at its place");
+    }
+
+    [Test]
+    public async Task AddingAMovie_Should_PutItOnTheWatchlist_WithoutAskingTheTvdb()
+    {
+        var (factory, client) = await NewUserAsync();
+        using var _ = factory;
+        using var __ = client;
+        _baseFactory.TheTvDbApi.Invocations.Clear();
+
+        var page = await PageAsync(client, "/Discover");
+        var add = await PostFormAsync(client, Card(page, "discover-movies-1"), "Add");
+
+        add.Headers.Location!.ToString().Should().Be("/Discover#discover-movies-1");
+        using (var scope = factory.Services.CreateScope())
+            scope.ServiceProvider.GetRequiredService<AppDbContext>().TrackedMovies
+                .Single().Should().Match<TrackedMovieEntity>(m => m.TvdbId == 5001 && m.Name == "Movie 1");
+
+        var after = await PageAsync(client, "/Discover");
+        after.Should().Contain("Added Movie 1 to your watchlist.");
+        after.Should().NotContain("href=\"/Movies/Details/5001\"", "a title on the watchlist is no longer suggested");
+        _baseFactory.TheTvDbApi.Invocations.Should().BeEmpty();
+    }
+
     // ---- helpers --------------------------------------------------------------------
 
     private static IReadOnlyList<DiscoverTitle> Many(int _, Func<int, DiscoverTitle> make) =>
@@ -201,12 +282,47 @@ public sealed class DiscoverPipelineTests
         ImageUrl = $"https://artworks.thetvdb.com/banners/{id}.jpg", Status = "Released", Score = 10_000 - id % 1000
     };
 
-    private async Task<string> PageAsync(string path)
+    /// <summary>A new user with nothing watched, signed in on a client of their own (their own cookies).</summary>
+    private async Task<(WebApplicationFactory<Program> Factory, HttpClient Client)> NewUserAsync()
     {
-        var response = await _client.GetAsync(path);
+        var userId = Guid.NewGuid();
+        var factory = SignedIn(_baseFactory);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.AppUsers.Add(new AppUserEntity { Id = userId, Username = $"u{userId:N}", Email = $"{userId:N}@test.local" });
+            await db.SaveChangesAsync();
+        }
+
+        return (factory, Client(factory, userId));
+    }
+
+    /// <summary>One card's markup, from its opening tag to the next card (or the end of its row).</summary>
+    private static string Card(string html, string id) =>
+        Regex.Match(html, $"<div class=\"tvdb-series-card-wrap tvdb-discover-card\" id=\"{id}\".*?(?=<div class=\"tvdb-series-card-wrap|</section>)",
+            RegexOptions.Singleline).Value;
+
+    /// <summary>Submits the form of <paramref name="handler"/> found in <paramref name="html"/>, with its hidden fields and token.</summary>
+    private static async Task<HttpResponseMessage> PostFormAsync(HttpClient client, string html, string handler)
+    {
+        var form = Regex.Match(html, $"<form method=\"post\"[^>]*? action=\"([^\"]*handler={handler})\"[^>]*>(.*?)</form>", RegexOptions.Singleline);
+        form.Success.Should().BeTrue($"the {handler} form is there");
+
+        var fields = Regex.Matches(form.Groups[2].Value, "<input (?:type=\"hidden\" )?name=\"([^\"]+)\" (?:type=\"hidden\" )?value=\"([^\"]*)\"")
+            .ToDictionary(m => m.Groups[1].Value, m => WebUtility.HtmlDecode(m.Groups[2].Value));
+        fields.Should().ContainKey("__RequestVerificationToken");
+
+        return await client.PostAsync(WebUtility.HtmlDecode(form.Groups[1].Value), new FormUrlEncodedContent(fields));
+    }
+
+    private static async Task<string> PageAsync(HttpClient client, string path)
+    {
+        var response = await client.GetAsync(path);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         return WebUtility.HtmlDecode(Regex.Replace(await response.Content.ReadAsStringAsync(), @"\s+", " "));
     }
+
+    private Task<string> PageAsync(string path) => PageAsync(_client, path);
 
     private static WebApplicationFactory<Program> SignedIn(RecallWebApplicationFactory factory) =>
         factory.WithWebHostBuilder(builder =>

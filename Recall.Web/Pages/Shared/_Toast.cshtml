@@ -57,6 +57,19 @@
             <button type="submit" class="tvdb-toast-action">Undo</button>
         </form>
     }
+    @if (toast.UndoDiscover is { } undoDiscover)
+    {
+        <form method="post" asp-page="/Discover" asp-page-handler="Undo" class="d-inline-flex">
+            <input type="hidden" name="action" value="@undoDiscover.Action" />
+            <input type="hidden" name="kind" value="@undoDiscover.Kind" />
+            <input type="hidden" name="id" value="@undoDiscover.Id" />
+            @if (undoDiscover.Anchor is not null)
+            {
+                <input type="hidden" name="Anchor" value="@undoDiscover.Anchor" />
+            }
+            <button type="submit" class="tvdb-toast-action">Undo</button>
+        </form>
+    }
     <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
     @if (toast.DurationMilliseconds is not null)
     {
