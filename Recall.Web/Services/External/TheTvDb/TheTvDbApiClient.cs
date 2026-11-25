@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Polly;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure;
@@ -24,10 +25,15 @@ public sealed class TheTvDbApiClient(
     HttpClient httpClient,
     TheTvDbClientState state,
     [FromKeyedServices(ExternalHttpResilience.TheTvDbPipeline)] ResiliencePipeline<HttpResponseMessage> retryPipeline,
-    ILogger<TheTvDbApiClient> logger)
+    ILogger<TheTvDbApiClient> logger,
+    IOptions<ExternalHttpResilienceOptions>? resilienceOptions = null)
     : ITheTvDbApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = RecallJsonOptions.Web;
+
+    /// <summary>One attempt's limit for a call that does not ask for its own.</summary>
+    private TimeSpan DefaultAttemptTimeout =>
+        resilienceOptions?.Value.TheTvDbAttemptTimeout ?? ExternalHttpResilience.TheTvDbAttemptTimeout;
 
     public async Task<IReadOnlyList<SearchResultDto>> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
@@ -54,25 +60,29 @@ public sealed class TheTvDbApiClient(
         return envelope.Data ?? [];
     }
 
-    public async Task<IReadOnlyList<FilterRecordDto>> FilterSeriesAsync(TitleFilter filter, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<FilterRecordDto>> FilterSeriesAsync(
+        TitleFilter filter, TimeSpan? attemptTimeout = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
         var envelope = await SendAsync<TheTvDbEnvelopeDto<List<FilterRecordDto>>>(
             () => new HttpRequestMessage(HttpMethod.Get, filter.SeriesPath()),
-            cancellationToken);
+            cancellationToken,
+            attemptTimeout);
 
         return envelope.Data ?? [];
     }
 
-    public async Task<IReadOnlyList<FilterRecordDto>> FilterMoviesAsync(TitleFilter filter, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<FilterRecordDto>> FilterMoviesAsync(
+        TitleFilter filter, TimeSpan? attemptTimeout = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
         var path = filter.MoviesPath();
         var envelope = await SendAsync<TheTvDbEnvelopeDto<List<FilterRecordDto>>>(
             () => new HttpRequestMessage(HttpMethod.Get, path),
-            cancellationToken);
+            cancellationToken,
+            attemptTimeout);
 
         return envelope.Data ?? [];
     }
@@ -449,12 +459,16 @@ public sealed class TheTvDbApiClient(
     /// the retry pipeline is outermost and each attempt takes its own throttle
     /// slot, so a request that is backing off between attempts is not sitting
     /// on one of the few concurrent-request slots while it sleeps — and time
-    /// spent queueing for a slot counts against no timeout at all.
+    /// spent queueing for a slot counts against no timeout at all. Each attempt
+    /// has <paramref name="attemptTimeout"/>, or the default 8 seconds.
     /// </summary>
-    private async Task<T> SendAsync<T>(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
+    private async Task<T> SendAsync<T>(
+        Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken, TimeSpan? attemptTimeout = null)
     {
+        var timeout = attemptTimeout is { } requested && requested > TimeSpan.Zero ? requested : DefaultAttemptTimeout;
+
         using var response = await retryPipeline.ExecuteAsync(
-            async token => await SendThrottledAsync(requestFactory, token), cancellationToken);
+            async token => await SendThrottledAsync(requestFactory, timeout, token), cancellationToken);
 
         // Already buffered: HttpClient.SendAsync reads the whole body by default,
         // inside the attempt's timeout.
@@ -478,14 +492,35 @@ public sealed class TheTvDbApiClient(
         }
     }
 
-    /// <summary>One attempt: holds a throttle slot for exactly as long as it is talking to TheTVDB.</summary>
+    /// <summary>
+    /// One attempt: holds a throttle slot for exactly as long as it is talking
+    /// to TheTVDB, and has <paramref name="attemptTimeout"/> from the moment it
+    /// holds it (login, a re-login after a 401, the request and its whole body).
+    /// An attempt that runs out fails the way <c>HttpClient.Timeout</c> does (a
+    /// <see cref="TaskCanceledException"/> around a <see cref="TimeoutException"/>),
+    /// which the retry pipeline treats as transient; the caller's own
+    /// cancellation stays a plain cancellation.
+    /// </summary>
     private async Task<HttpResponseMessage> SendThrottledAsync(
-        Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
+        Func<HttpRequestMessage> requestFactory, TimeSpan attemptTimeout, CancellationToken cancellationToken)
     {
         await state.RequestThrottle.WaitAsync(cancellationToken);
         try
         {
-            return await SendAuthenticatedAsync(requestFactory, allowReauth: true, cancellationToken);
+            using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            attempt.CancelAfter(attemptTimeout);
+
+            try
+            {
+                return await SendAuthenticatedAsync(requestFactory, allowReauth: true, attempt.Token);
+            }
+            catch (OperationCanceledException ex) when (attempt.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                var seconds = attemptTimeout.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                throw new TaskCanceledException(
+                    $"The request was canceled due to the TheTVDB attempt timeout of {seconds} seconds elapsing.",
+                    new TimeoutException(ex.Message, ex));
+            }
         }
         finally
         {

@@ -41,9 +41,12 @@ public static class ServiceCollectionExtensions
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TheTvDbOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Accept.Add(new("application/json"));
-            // One attempt, body included. Retries are run by TheTvDbApiClient around
-            // each throttled attempt (see ExternalHttpResilience), not inside this client.
-            client.Timeout = ExternalHttpResilience.TheTvDbAttemptTimeout;
+            // No limit here: TheTvDbApiClient times each attempt itself (8 s, or
+            // what the call asks for, such as Discover's filter lists), since a
+            // request can only shorten HttpClient.Timeout, never lengthen it.
+            // Retries are run by the client around each throttled attempt (see
+            // ExternalHttpResilience), not inside this HttpClient.
+            client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
         });
 
         services.AddTheTvDbRetryPipeline();

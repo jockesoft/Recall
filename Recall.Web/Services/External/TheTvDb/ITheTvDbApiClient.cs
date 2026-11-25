@@ -57,10 +57,14 @@ public interface ITheTvDbApiClient
 
     /// <summary>
     /// The first page (500 base records) of TheTVDB's series filter: one
-    /// request. For the Discover lists, fetched by the daily job only.
+    /// request. For the Discover lists, fetched by the daily job only. The
+    /// answer is 400–500 KB, so the job gives each attempt longer than the
+    /// usual 8 seconds (<paramref name="attemptTimeout"/>; null is the usual).
     /// </summary>
-    Task<IReadOnlyList<FilterRecordDto>> FilterSeriesAsync(TitleFilter filter, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<FilterRecordDto>> FilterSeriesAsync(
+        TitleFilter filter, TimeSpan? attemptTimeout = null, CancellationToken cancellationToken = default);
 
-    /// <summary>The first page (500 base records) of TheTVDB's movie filter: one request.</summary>
-    Task<IReadOnlyList<FilterRecordDto>> FilterMoviesAsync(TitleFilter filter, CancellationToken cancellationToken = default);
+    /// <summary>The first page (500 base records) of TheTVDB's movie filter: one request, timed like <see cref="FilterSeriesAsync"/>.</summary>
+    Task<IReadOnlyList<FilterRecordDto>> FilterMoviesAsync(
+        TitleFilter filter, TimeSpan? attemptTimeout = null, CancellationToken cancellationToken = default);
 }

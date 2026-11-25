@@ -120,9 +120,10 @@ public sealed class DiscoverListRefresher(
     {
         try
         {
+            var attemptTimeout = TimeSpan.FromSeconds(Math.Max(1, Options.FilterAttemptTimeoutSeconds));
             var records = key.Kind == DiscoverKind.Movie
-                ? await apiClient.FilterMoviesAsync(key.Filter, cancellationToken)
-                : await apiClient.FilterSeriesAsync(key.Filter, cancellationToken);
+                ? await apiClient.FilterMoviesAsync(key.Filter, attemptTimeout, cancellationToken)
+                : await apiClient.FilterSeriesAsync(key.Filter, attemptTimeout, cancellationToken);
 
             var titles = records
                 .Select(record => record.ToDiscoverTitle(key.Kind))
@@ -143,7 +144,9 @@ public sealed class DiscoverListRefresher(
             await listRepository.SaveAsync(key.Key, titles, now, cancellationToken);
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // A timeout is a cancellation too (TaskCanceledException), but not the
+        // job's: only the job's own cancellation ends the run.
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(ex, "DiscoverListsTimer: could not refresh {Key}; the stored list is kept.", key.Key);
             return false;

@@ -30,6 +30,15 @@ public sealed class DiscoverOptions
     /// </summary>
     public int MinGenreTitles { get; set; } = 5;
 
+    /// <summary>
+    /// One attempt at a filter list, its 400–500 KB body included, in seconds.
+    /// Longer than other TheTVDB calls' 8 seconds, which a list sometimes needs
+    /// (in the first real run one was cut off and fetched again). With the two
+    /// retries a list can take up to three times this, plus the waits: fine for
+    /// a background job, which never holds up a page.
+    /// </summary>
+    public int FilterAttemptTimeoutSeconds { get; set; } = 30;
+
     /// <summary>A list is fetched again once it is this old. The job checks hourly, so lists are fetched daily.</summary>
     public int RefreshAfterHours { get; set; } = 23;
 }

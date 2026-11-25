@@ -56,8 +56,8 @@ public sealed class DiscoverListRefresherTests
         _users.Setup(x => x.GetIdsWithWatchesAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
 
         // Every filter request answers with one good title, unless a test says otherwise.
-        _api.Setup(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), It.IsAny<CancellationToken>())).ReturnsAsync([Record(1)]);
-        _api.Setup(x => x.FilterMoviesAsync(It.IsAny<TitleFilter>(), It.IsAny<CancellationToken>())).ReturnsAsync([Record(2)]);
+        _api.Setup(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ReturnsAsync([Record(1)]);
+        _api.Setup(x => x.FilterMoviesAsync(It.IsAny<TitleFilter>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ReturnsAsync([Record(2)]);
     }
 
     [Test]
@@ -68,8 +68,8 @@ public sealed class DiscoverListRefresherTests
         result.Due.Should().BeTrue();
         result.Refreshed.Should().Be(5);
         _saved.Keys.Should().BeEquivalentTo(FixedKeys);
-        _api.Verify(x => x.FilterSeriesAsync(new TitleFilter(TitleFilterSort.FirstAired, 2026, null), It.IsAny<CancellationToken>()), Times.Once);
-        _api.Verify(x => x.FilterMoviesAsync(new TitleFilter(TitleFilterSort.Score, 2026, null), It.IsAny<CancellationToken>()), Times.Once);
+        _api.Verify(x => x.FilterSeriesAsync(new TitleFilter(TitleFilterSort.FirstAired, 2026, null), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _api.Verify(x => x.FilterMoviesAsync(new TitleFilter(TitleFilterSort.Score, 2026, null), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -119,7 +119,7 @@ public sealed class DiscoverListRefresherTests
     [Test]
     public async Task OnlyTitlesThatPassTheQualityFilter_Should_BeStored_OncePerTitle()
     {
-        _api.Setup(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), It.IsAny<CancellationToken>())).ReturnsAsync(
+        _api.Setup(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ReturnsAsync(
         [
             Record(1),
             Record(1),                              // the same title twice
@@ -138,7 +138,7 @@ public sealed class DiscoverListRefresherTests
     [Test]
     public async Task AnOrderedList_Should_KeepItsFirst150()
     {
-        _api.Setup(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), It.IsAny<CancellationToken>()))
+        _api.Setup(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Enumerable.Range(1, 500).Select(i => Record(i)).ToList());
 
         await Sut().RunAsync();
@@ -150,7 +150,7 @@ public sealed class DiscoverListRefresherTests
     [Test]
     public async Task AFailedFetch_Should_KeepTheStoredList_AndNotStopTheOthers()
     {
-        _api.Setup(x => x.FilterSeriesAsync(It.Is<TitleFilter>(f => f.Year == null), It.IsAny<CancellationToken>()))
+        _api.Setup(x => x.FilterSeriesAsync(It.Is<TitleFilter>(f => f.Year == null), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new TheTvDbApiException("down", 503));
 
         var result = await Sut().RunAsync();
@@ -162,9 +162,49 @@ public sealed class DiscoverListRefresherTests
     }
 
     [Test]
+    public async Task EveryFilterRequest_Should_GetTheListAttemptTimeout_FromTheOptions()
+    {
+        await Sut().RunAsync();
+
+        _api.Verify(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), TimeSpan.FromSeconds(30), It.IsAny<CancellationToken>()), Times.Exactly(3));
+        _api.Verify(x => x.FilterMoviesAsync(It.IsAny<TitleFilter>(), TimeSpan.FromSeconds(30), It.IsAny<CancellationToken>()), Times.Exactly(2));
+
+        await Sut(new DiscoverOptions { FilterAttemptTimeoutSeconds = 45 }).RunAsync();
+
+        _api.Verify(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), TimeSpan.FromSeconds(45), It.IsAny<CancellationToken>()), Times.Exactly(3));
+    }
+
+    [Test]
+    public async Task AListThatTimesOut_Should_KeepTheStoredList_AndNotEndTheRun()
+    {
+        // What the client throws when every attempt ran out: a cancellation, but not the job's.
+        _api.Setup(x => x.FilterSeriesAsync(It.Is<TitleFilter>(f => f.Year == null), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TaskCanceledException("attempt timeout", new TimeoutException()));
+
+        var result = await Sut().RunAsync();
+
+        result.Failed.Should().Be(1);
+        result.Refreshed.Should().Be(4, "the other lists are still fetched");
+        _saved.Should().NotContainKey("series-alltime");
+    }
+
+    [Test]
+    public async Task TheJobsOwnCancellation_Should_EndTheRun()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        _api.Setup(x => x.FilterSeriesAsync(It.IsAny<TitleFilter>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException(cancelled.Token));
+
+        var act = () => Sut().RunAsync(cancelled.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Test]
     public async Task AnEmptyAnswer_Should_KeepTheStoredList()
     {
-        _api.Setup(x => x.FilterMoviesAsync(It.IsAny<TitleFilter>(), It.IsAny<CancellationToken>())).ReturnsAsync([Record(9, score: 1)]);
+        _api.Setup(x => x.FilterMoviesAsync(It.IsAny<TitleFilter>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ReturnsAsync([Record(9, score: 1)]);
 
         var result = await Sut().RunAsync();
 
@@ -204,9 +244,9 @@ public sealed class DiscoverListRefresherTests
         refresher.Verify(x => x.RunAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    private DiscoverListRefresher Sut() => new(
+    private DiscoverListRefresher Sut(DiscoverOptions? options = null) => new(
         _api.Object, _lists.Object, _users.Object, _stats.Object,
-        Options.Create(new DiscoverOptions()), new FixedTimeProvider(Now), _logger);
+        Options.Create(options ?? new DiscoverOptions()), new FixedTimeProvider(Now), _logger);
 
     private static FilterRecordDto Record(int id, string? image = "/banners/x.jpg", double score = 5000, string year = "2026") => new()
     {
