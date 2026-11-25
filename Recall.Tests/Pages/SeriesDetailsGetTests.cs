@@ -70,6 +70,7 @@ public sealed class SeriesDetailsGetTests
             _tvDb.Object,
             _currentUser.Object,
             _tracked.Object,
+            new SeriesLibraryService(_tracked.Object, _tvDb.Object),
             _watches.Object,
             new WatchProgressService(_tvDb.Object, _watches.Object, _tracked.Object, _ratings.Object, clock, NullLogger<WatchProgressService>.Instance),
             Mock.Of<ILikeRepository>(),

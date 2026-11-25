@@ -48,6 +48,7 @@ public class SeriesDetailsPostTests
             _tvDb.Object,
             _currentUser.Object,
             _tracked.Object,
+            new SeriesLibraryService(_tracked.Object, _tvDb.Object),
             Mock.Of<IEpisodeWatchRepository>(),
             _progress.Object,
             _likes.Object,
