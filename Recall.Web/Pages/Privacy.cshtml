@@ -137,6 +137,11 @@
         Your stats page is worked out from your own watch history and ratings each time you open it.
         Only you can see it: there are no public profiles, and nothing on it is shared or sent anywhere.
     </p>
+    <p class="tvdb-prose">
+        When you mark a title "Not interested" on Discover we keep which one and when, so it stays out of your
+        suggestions until you undo it or delete your account; the suggestions themselves are worked out on our
+        server from your library and the genres of what you watched, and nothing about you is sent to TheTVDB.
+    </p>
 
     <h2>How long things are kept</h2>
     <p class="tvdb-prose">
@@ -179,7 +184,7 @@
         <li>
             <strong>Removed immediately:</strong> the account itself (email address and username), your
             library, watch history, likes, ratings, notifications, IMDb imports, sign-in links,
-            the emails we sent you, your weekly-email setting with its history@(Model.PushAvailable ? ", and the devices you turned notifications on for" : string.Empty). Ratings you gave no longer count towards Recall ratings.
+            the emails we sent you, the titles you hid from Discover, your weekly-email setting with its history@(Model.PushAvailable ? ", and the devices you turned notifications on for" : string.Empty). Ratings you gave no longer count towards Recall ratings.
         </li>
         <li>
             <strong>Not removed immediately:</strong> database backups are kept for about 9 days@(Model.LogRetentionDays is { } days ? $", and server logs for {days} days" : ", and server logs for a limited time").
