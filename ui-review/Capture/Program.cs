@@ -31,7 +31,7 @@ using Recall.UiReview;
 var options = Options.Parse(args);
 
 if (options.Install)
-    return Microsoft.Playwright.Program.Main(["install", "chromium"]);
+    return Microsoft.Playwright.Program.Main(["install", "chromium", "webkit"]);
 
 if (options.CheckLaunchGuard)
 {
@@ -219,6 +219,11 @@ List<Shot> shots =
     // next title, with a toast whose Undo (the cleanup) takes it back. A movie is added, not a
     // series: a series nobody has opened would be fetched from TheTVDB to go in the library.
     new("discover", "populated", Site.SignedIn, "/Discover"),
+    // The same pages in WebKit with an iPhone's screen (Safari's engine), phone width only:
+    // the corner buttons on posters and stills once sat out of their corner there.
+    new("discover", "populated-webkit", Site.SignedIn, "/Discover", Engine: Engine.WebKit),
+    new("library", "section-watching-webkit", Site.SignedIn, "/Library?section=watching", Engine: Engine.WebKit),
+    new("dashboard", "populated-webkit", Site.SignedIn, "/Dashboard", Engine: Engine.WebKit),
     new("discover", "after-add", Site.SignedIn, "/Discover", ViewportOnly: true,
         Prepare: page => DiscoverActionAsync(page, "#discover-movies-2", ".tvdb-discover-card-add button", "Added "),
         Cleanup: UndoDiscoverAsync),
@@ -621,8 +626,13 @@ if (options.Only is { } only)
 
 using var playwright = await Playwright.CreateAsync();
 // Through BrowserLaunch only (the launch methods are banned anywhere else): Playwright's
-// bundled Chromium, a throwaway profile per context, never the keychain.
+// bundled Chromium (and WebKit, for the shots that ask for it), a throwaway profile
+// per context, never the keychain.
 await using var browser = await BrowserLaunch.LaunchAsync(playwright.Chromium);
+await using var webkit = shots.Any(s => s.Engine == Engine.WebKit) ? await BrowserLaunch.LaunchAsync(playwright.Webkit) : null;
+
+// What WebKit pretends to be: an iPhone's Safari (its user agent and pixel density), at the phone viewport.
+var iPhone = playwright.Devices["iPhone 13"];
 
 var results = new List<ShotResult>();
 
@@ -630,13 +640,19 @@ foreach (var viewport in viewports)
 {
     foreach (var shot in shots)
     {
+        // A WebKit shot is a phone's: it is taken once, at the phone width.
+        if (shot.Engine == Engine.WebKit && !viewport.IsMobile)
+            continue;
+
         var result = await CaptureAsync(shot, viewport);
         results.Add(result);
         Console.WriteLine(
             $"{result.File,-58} {(result.Error is null ? "ok" : "FAILED: " + result.Error)}" +
             (result.OverflowPx > 0 ? $"  overflow {result.OverflowPx}px" : "") +
             (result.Violations.Count > 0 ? $"  axe {result.Violations.Count}" : "") +
-            (result.CollapsedListProblems.Count > 0 ? $"  LIST: {string.Join("; ", result.CollapsedListProblems)}" : ""));
+            (result.CollapsedListProblems.Count > 0 ? $"  LIST: {string.Join("; ", result.CollapsedListProblems)}" : "") +
+            (result.CornerButtonProblems.Count > 0 ? $"  CORNER: {string.Join("; ", result.CornerButtonProblems.Take(3))}" +
+                (result.CornerButtonProblems.Count > 3 ? $" (+{result.CornerButtonProblems.Count - 3} more)" : "") : ""));
     }
 }
 
@@ -688,7 +704,13 @@ Console.WriteLine(listProblems == 0
     ? "collapsed lists: ok on every shot"
     : $"collapsed lists: FAILED, {listProblems} problem(s) on {results.Count(r => r.CollapsedListProblems.Count > 0)} shot(s) (CollapsedListProblems in report.json)");
 
-return results.Any(r => r.Error is not null) || listProblems > 0 || toastChecks.Any(c => !c.Passed) || pushChecks.Any(c => !c.Passed) ? 1 : 0;
+var cornerProblems = results.Sum(r => r.CornerButtonProblems.Count);
+Console.WriteLine(cornerProblems == 0
+    ? $"corner buttons: ok on every shot ({results.Count(r => r.Engine == Engine.WebKit)} in WebKit)"
+    : $"corner buttons: FAILED, {cornerProblems} button(s) out of their corner on {results.Count(r => r.CornerButtonProblems.Count > 0)} shot(s) (CornerButtonProblems in report.json)");
+
+return results.Any(r => r.Error is not null) || listProblems > 0 || cornerProblems > 0
+       || toastChecks.Any(c => !c.Passed) || pushChecks.Any(c => !c.Passed) ? 1 : 0;
 
 // Profile's push section on the signed-in instance. The browser's permission
 // prompt is played by an init script that counts the calls, so the check sees
@@ -988,16 +1010,18 @@ async Task<List<ToastCheck>> RunToastChecksAsync()
 async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
 {
     var file = $"{shot.Name}_{viewport.Width}.png";
-    var result = new ShotResult { File = file, Page = shot.Page, State = shot.State, Width = viewport.Width };
+    var result = new ShotResult { File = file, Page = shot.Page, State = shot.State, Width = viewport.Width, Engine = shot.Engine };
+    var isWebKit = shot.Engine == Engine.WebKit;
 
-    await using var context = await browser.NewContextAsync(new()
+    // A new context every shot: a throwaway profile, nothing kept between shots.
+    await using var context = await (isWebKit ? webkit! : browser).NewContextAsync(new()
     {
         ViewportSize = new() { Width = viewport.Width, Height = viewport.Height },
-        DeviceScaleFactor = viewport.DeviceScaleFactor,
+        DeviceScaleFactor = isWebKit ? iPhone.DeviceScaleFactor : viewport.DeviceScaleFactor,
         IsMobile = viewport.IsMobile,
         HasTouch = viewport.IsMobile,
         Locale = "en-US",
-        UserAgent = shot.UserAgent,
+        UserAgent = shot.UserAgent ?? (isWebKit ? iPhone.UserAgent : null),
     });
     if (shot.InitScript is not null)
         await context.AddInitScriptAsync(shot.InitScript);
@@ -1049,6 +1073,7 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
 
         await MeasureAsync(page, result);
         await CheckCollapsedListsAsync(page, result);
+        await CheckCornerButtonsAsync(page, result);
 
         if (shot.Cleanup is not null)
             await shot.Cleanup(page);
@@ -1257,6 +1282,43 @@ static async Task CheckCollapsedListsAsync(IPage page, ShotResult result)
     result.CollapsedListProblems = problems.ToList();
 }
 
+// The round buttons on a picture's corner (a poster's heart, "×" and add or
+// check, a Continue watching card's check and "⋯") must sit in that corner:
+// 8px (±2) from its right edge and from its top or bottom edge, measured
+// against the picture's frame, in every engine. In WebKit the bottom-right
+// one once sat 23px in and 35px up, over the title, while Chromium had it
+// right. Hidden buttons (cards past the first nine) are skipped.
+static async Task CheckCornerButtonsAsync(IPage page, ShotResult result)
+{
+    var problems = await page.EvaluateAsync<string[]>(
+        """
+        () => {
+            const problems = [];
+            const drawn = el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+            const holders = '.tvdb-series-card-mark, .tvdb-series-card-like, .tvdb-discover-card-hide, .tvdb-catchup-check, .tvdb-catchup-menu';
+            for (const button of document.querySelectorAll('.tvdb-round-button--on-image')) {
+                if (!button.closest(holders) || !drawn(button)) continue;
+                const card = button.closest('.tvdb-series-card-wrap, .tvdb-catchup-card');
+                const frame = card && card.querySelector('.tvdb-series-poster, .tvdb-catchup-media');
+                if (!frame || !drawn(frame)) continue;
+                const b = button.getBoundingClientRect(), f = frame.getBoundingClientRect();
+                if (b.width === 0 || f.width === 0) continue;
+                const right = f.right - b.right;
+                const atTop = (b.top + b.bottom) / 2 < (f.top + f.bottom) / 2;
+                const vertical = atTop ? b.top - f.top : f.bottom - b.bottom;
+                if (Math.abs(right - 8) > 2 || Math.abs(vertical - 8) > 2) {
+                    const name = button.getAttribute('aria-label') || button.title || button.className;
+                    problems.push(`${card.id ? '#' + card.id + ' ' : ''}"${name}": ${Math.round(right)}px from the right, ` +
+                        `${Math.round(vertical)}px from the ${atTop ? 'top' : 'bottom'} (want 8±2)`);
+                }
+            }
+            return problems;
+        }
+        """);
+
+    result.CornerButtonProblems = problems.ToList();
+}
+
 static async Task MeasureAsync(IPage page, ShotResult result)
 {
     var metrics = await page.EvaluateAsync<JsonElement>(
@@ -1388,6 +1450,10 @@ static async Task UndoDiscoverAsync(IPage page)
 
 enum Site { SignedIn, Empty, Anonymous }
 
+/// <summary>Which of Playwright's bundled engines takes a shot: Chromium at both widths, WebKit (Safari's) as an iPhone.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Engine>))]
+enum Engine { Chromium, WebKit }
+
 record Shot(
     string Page,
     string State,
@@ -1397,7 +1463,8 @@ record Shot(
     Func<IPage, Task>? Cleanup = null,
     bool ViewportOnly = false,
     string? UserAgent = null,
-    string? InitScript = null)
+    string? InitScript = null,
+    Engine Engine = Engine.Chromium)
 {
     public string Name => $"{Page}_{State}";
 }
@@ -1427,6 +1494,12 @@ class ShotResult
     public List<string> FailedRequests { get; set; } = [];
     public List<Violation> Violations { get; set; } = [];
     public List<string> CollapsedListProblems { get; set; } = [];
+
+    /// <summary>The engine the shot was taken in.</summary>
+    public Engine Engine { get; set; }
+
+    /// <summary>Round buttons on a picture that are not 8±2px from their corner (CheckCornerButtonsAsync).</summary>
+    public List<string> CornerButtonProblems { get; set; } = [];
     public string? Error { get; set; }
 }
 

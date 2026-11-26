@@ -15,6 +15,10 @@ namespace Recall.UiReview;
 /// a crash or Ctrl-C).</item>
 /// <item>Chromium always gets <c>--use-mock-keychain</c> (no "Chromium Safe
 /// Storage" keychain item, so no prompt) and <c>--password-store=basic</c>.</item>
+/// <item>WebKit (the review's iPhone shots) the same way: Playwright's own
+/// build, a normal launch, a new context per shot, which Playwright keeps in
+/// memory (WebKit has no keychain flags to add; its contexts never write a
+/// profile).</item>
 /// </list>
 /// A launch that breaks a rule fails at once with a message that says which.
 /// Calling Playwright's launch methods anywhere else does not build: they are
@@ -94,18 +98,28 @@ public static class BrowserLaunch
         MustRefuse("an executable path", BrowserType.Chromium,
             new() { ExecutablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", Args = [MockKeychain, BasicPasswordStore] });
         MustRefuse("a channel for WebKit", BrowserType.Webkit, new() { Channel = "webkit" });
+        MustRefuse("an executable path for WebKit", BrowserType.Webkit,
+            new() { ExecutablePath = "/Applications/Safari.app/Contents/MacOS/Safari" });
 #pragma warning restore RS0030
         MustRefuse("a profile folder", BrowserType.Chromium, new() { Args = ["--user-data-dir=/tmp/profile", MockKeychain, BasicPasswordStore] });
+        MustRefuse("a profile folder for WebKit", BrowserType.Webkit, new() { Args = ["--user-data-dir=/tmp/profile"] });
         MustRefuse("Chromium without --use-mock-keychain", BrowserType.Chromium, new() { Args = [BasicPasswordStore] });
         MustRefuse("Chromium without --password-store=basic", BrowserType.Chromium, new() { Args = [MockKeychain] });
 
-        try
+        foreach (var (browserName, options) in new[]
+                 {
+                     (BrowserType.Chromium, new BrowserTypeLaunchOptions { Args = [MockKeychain, BasicPasswordStore] }),
+                     (BrowserType.Webkit, new BrowserTypeLaunchOptions())
+                 })
         {
-            EnsureSafe(BrowserType.Chromium, new() { Args = [MockKeychain, BasicPasswordStore] });
-        }
-        catch (InvalidOperationException ex)
-        {
-            failures.Add($"a safe launch was refused: {ex.Message}");
+            try
+            {
+                EnsureSafe(browserName, options);
+            }
+            catch (InvalidOperationException ex)
+            {
+                failures.Add($"a safe {browserName} launch was refused: {ex.Message}");
+            }
         }
 
         return failures;
