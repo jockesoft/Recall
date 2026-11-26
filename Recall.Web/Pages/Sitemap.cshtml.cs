@@ -3,6 +3,7 @@ using System.Xml.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Services.Sitemap;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Pages;
 
@@ -41,7 +42,7 @@ public sealed class SitemapModel(ISitemapService sitemapService, ILogger<Sitemap
             urls.AddRange(content.Episodes.Select(e =>
                 BuildUrl($"/Episodes/Details/{e.TvdbId}", e.LastModifiedUtc, "monthly", "0.5")));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             // A broken sitemap is worse than an incomplete one — serve the static
             // pages rather than a 500, and let the next crawl pick up the rest.

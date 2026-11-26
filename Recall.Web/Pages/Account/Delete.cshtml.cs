@@ -70,7 +70,7 @@ public sealed class DeleteModel(
         {
             result = await userRepository.DeleteAccountAsync(userId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed deleting account {UserId}.", userId);
             this.SetErrorToast("Could not delete your account right now. Nothing was removed; please try again.");

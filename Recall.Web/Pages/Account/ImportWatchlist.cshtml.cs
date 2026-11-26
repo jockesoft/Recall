@@ -71,7 +71,7 @@ public sealed class ImportWatchlistModel(
         {
             LatestJob = await importRepository.GetLatestJobForUserAsync(userId, includeItems: true, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load the latest watchlist import job.");
         }
@@ -110,7 +110,7 @@ public sealed class ImportWatchlistModel(
         {
             this.SetErrorToast(ex.Message);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Failed to start a watchlist import for user {UserId}.", userId);
             this.SetErrorToast("Could not read that file. Make sure it's an unmodified IMDb export.");

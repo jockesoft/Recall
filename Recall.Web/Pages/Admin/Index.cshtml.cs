@@ -58,7 +58,7 @@ public sealed class IndexModel(
             else
                 this.SetInfoToast("You have no devices with notifications on. Turn them on in your profile first.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Test push for admin {UserId} failed.", userId);
             this.SetErrorToast("Could not send the test notification right now.");

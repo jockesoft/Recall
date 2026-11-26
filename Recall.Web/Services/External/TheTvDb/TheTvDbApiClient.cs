@@ -130,18 +130,19 @@ public sealed class TheTvDbApiClient(
         // The extended record has every episode, but named and described in the
         // series' original language. The translated list has the same episodes
         // in the wanted language. Best-effort, like the series translation:
-        // without it the episodes keep their original names.
+        // without it (TheTVDB failing, or a page timing out) the episodes keep
+        // their original names. One Warning per fallback.
         var translatedEpisodesTask = GetSeriesEpisodesTranslatedAsync(seriesId, language, cancellationToken)
             .AsOptionalAsync(
-                logger, LogLevel.Warning,
-                "Translated episode list failed for series {SeriesId}, language {Language}. Episodes keep their original names.",
+                cancellationToken, logger, LogLevel.Warning,
+                "Translated episode list failed or timed out for series {SeriesId}, language {Language}. Episodes keep their original names.",
                 seriesId, language);
 
-        // Translation is best-effort — its failure shouldn't cost us the series data.
+        // Translation is best-effort — its failure or timeout shouldn't cost us the series data.
         var translationDto = await GetSeriesTranslationByLanguageAsync(seriesId, language, cancellationToken)
             .AsOptionalAsync(
-                logger, LogLevel.Information,
-                "Translation fetch failed for series {SeriesId}, language {Language}. Falling back to untranslated data.",
+                cancellationToken, logger, LogLevel.Warning,
+                "Translation fetch failed or timed out for series {SeriesId}, language {Language}. Falling back to untranslated data.",
                 seriesId, language);
 
         var translatedEpisodes = await translatedEpisodesTask ?? [];
@@ -365,11 +366,11 @@ public sealed class TheTvDbApiClient(
     {
         var movieDtoTask = GetMovieByIdExtendedAsync(movieId, cancellationToken);
 
-        // Translation is best-effort — its failure shouldn't cost us the movie data.
+        // Translation is best-effort — its failure or timeout shouldn't cost us the movie data.
         var translationDto = await GetMovieTranslationByLanguageAsync(movieId, language, cancellationToken)
             .AsOptionalAsync(
-                logger, LogLevel.Information,
-                "Translation fetch failed for movie {MovieId}, language {Language}. Falling back to untranslated data.",
+                cancellationToken, logger, LogLevel.Warning,
+                "Translation fetch failed or timed out for movie {MovieId}, language {Language}. Falling back to untranslated data.",
                 movieId, language);
 
         var movieDto = await movieDtoTask; // let a genuine movie-fetch failure propagate
@@ -440,7 +441,7 @@ public sealed class TheTvDbApiClient(
 
         var translation = await GetEpisodeTranslationByLanguageAsync(episodeId, language, cancellationToken)
             .AsOptionalAsync(
-                logger, LogLevel.Debug,
+                cancellationToken, logger, LogLevel.Debug,
                 "Could not load translation for episode {EpisodeId}, language {Language}.",
                 episodeId, language);
 

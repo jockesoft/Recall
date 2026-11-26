@@ -1,3 +1,4 @@
+using Recall.Tests.TestSupport;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -174,5 +175,35 @@ public sealed class DigestComposerTests
 
         digest.Content.IsEmpty.Should().BeTrue();
         digest.Email.Should().BeNull("no email is sent about a series the user stopped watching");
+    }
+
+    // ---- a timeout is a series left out; only the caller's own cancellation ends the run ----
+
+    [Test]
+    public async Task Compose_Should_LeaveOutASeriesWhoseReadTimesOut_AndKeepTheRest()
+    {
+        Tracks(1, 2);
+        Cached(1, Ep(10, 1, 1, -30), Ep(11, 1, 2, -1));
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(2, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        _watches.Setup(x => x.GetLastWatchedUtcBySeriesAsync(UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<int, DateTime> { [1] = Now.AddDays(-2), [2] = Now.AddDays(-1) });
+
+        var digest = await _sut.ComposeAsync(UserId, "saga", Now, BaseUrl);
+
+        digest.Content.ReadyToWatch.Items.Select(l => l.SeriesId).Should().Equal(1);
+    }
+
+    [Test]
+    public async Task Compose_Should_Stop_WhenTheCallerIsCancelled()
+    {
+        Tracks(1, 2);
+        Cached(2, Ep(20, 1, 1, -1));
+        using var job = new CancellationTokenSource();
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(1, It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = () => _sut.ComposeAsync(UserId, "saga", Now, BaseUrl, cancellationToken: job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 }

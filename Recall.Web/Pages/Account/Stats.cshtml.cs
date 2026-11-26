@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Infrastructure.Display;
 using Recall.Web.Services;
 using Recall.Web.Services.Stats;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Pages.Account;
 
@@ -32,7 +33,7 @@ public sealed class StatsModel(
         {
             Stats = await statsService.GetAsync(userId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed to compute stats for user {UserId}.", userId);
             LoadFailed = true;

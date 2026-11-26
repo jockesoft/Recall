@@ -276,12 +276,14 @@ public sealed class DetailsModel(
 
             return Page();
         }
-        catch (TheTvDbApiException ex)
+        // TheTVDB failing and TheTVDB not answering in time are the same to the
+        // visitor: the page's 503 state. A visitor who went away is neither.
+        catch (Exception ex) when (ex is TheTvDbApiException || ex.IsTimeoutFor(cancellationToken))
         {
-            logger.LogWarning(ex, "TheTVDB API error while loading movie details for id {MovieId}.", id);
+            logger.LogWarning(ex, "TheTVDB API error or timeout while loading movie details for id {MovieId}.", id);
             return LoadFailed(StatusCodes.Status503ServiceUnavailable);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Unexpected error while loading movie details for id {MovieId}.", id);
             return LoadFailed(StatusCodes.Status500InternalServerError);
@@ -305,7 +307,7 @@ public sealed class DetailsModel(
         {
             await likeRepository.ToggleAsync(userId, LikeTargetType.Movie, id, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your like right now.");
@@ -330,7 +332,7 @@ public sealed class DetailsModel(
             else
                 this.SetInfoToast("Movie marked as not watched.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling watched state for movie {MovieId}.", id);
             this.SetErrorToast("Could not update watched status right now.");
@@ -369,7 +371,7 @@ public sealed class DetailsModel(
                     break;
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling the watchlist for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your watchlist right now.");
@@ -394,7 +396,7 @@ public sealed class DetailsModel(
             await ratingRepository.RateAsync(userId, RatingTargetType.Movie, id, id, value, cancellationToken);
             this.SetSuccessToast("Rating saved.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed rating movie {MovieId}.", id);
             this.SetErrorToast("Could not save your rating right now.");
@@ -413,7 +415,7 @@ public sealed class DetailsModel(
             await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Movie, id, cancellationToken);
             this.SetInfoToast("Rating removed.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed clearing rating for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your rating right now.");

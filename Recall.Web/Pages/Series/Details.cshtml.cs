@@ -371,7 +371,7 @@ public sealed partial class DetailsModel(
         {
             await ToggleLibraryAsync(userId, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling library state for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your library right now.");
@@ -389,7 +389,7 @@ public sealed partial class DetailsModel(
         {
             await likeRepository.ToggleAsync(userId, LikeTargetType.Series, id, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your like right now.");
@@ -414,7 +414,7 @@ public sealed partial class DetailsModel(
             await ratingRepository.RateAsync(userId, RatingTargetType.Series, id, id, value, cancellationToken);
             this.SetSuccessToast("Rating saved.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed rating series {SeriesId}.", id);
             this.SetErrorToast("Could not save your rating right now.");
@@ -433,7 +433,7 @@ public sealed partial class DetailsModel(
             await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Series, id, cancellationToken);
             this.SetInfoToast("Rating removed.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed clearing rating for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your rating right now.");
@@ -463,7 +463,7 @@ public sealed partial class DetailsModel(
 
             return new JsonResult(new { priorUnwatchedCount });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed checking prior episodes for series {SeriesId}, episode {EpisodeId}.", id, episodeId);
             return StatusCode(500);
@@ -506,7 +506,7 @@ public sealed partial class DetailsModel(
                     break;
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling watched state for series {SeriesId}, episode {EpisodeId}.", id, episodeId);
             this.SetErrorToast("Could not update watched status right now.");
@@ -556,7 +556,7 @@ public sealed partial class DetailsModel(
                     resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed marking episode {EpisodeId} and earlier episodes as watched for series {SeriesId}.", episodeId, id);
             this.SetErrorToast("Could not update watched status right now.");
@@ -597,7 +597,7 @@ public sealed partial class DetailsModel(
                     resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed marking season {Season} of series {SeriesId} as watched.", season, id);
             this.SetErrorToast("Could not update watched status right now.");
@@ -623,7 +623,7 @@ public sealed partial class DetailsModel(
                 ? "Marked 1 episode as not watched."
                 : $"Marked {removed} episodes as not watched.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed marking season {Season} of series {SeriesId} as not watched.", season, id);
             this.SetErrorToast("Could not update watched status right now.");
@@ -692,7 +692,7 @@ public sealed partial class DetailsModel(
 
             this.SetInfoToast(stoppedAgain ? $"{undone} You've stopped watching the series again." : undone);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed undoing a bulk watch for series {SeriesId}.", id);
             this.SetErrorToast("Could not undo that right now.");
@@ -716,7 +716,7 @@ public sealed partial class DetailsModel(
         {
             this.SetStopWatchingToast(await watchProgressService.StopWatchingAsync(userId, id, cancellationToken), id);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed stopping series {SeriesId}.", id);
             this.SetErrorToast("Could not update your library right now.");
@@ -759,7 +759,7 @@ public sealed partial class DetailsModel(
             else
                 this.SetSuccessToast($"Resumed watching {resumed}.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed resuming series {SeriesId}.", id);
             this.SetErrorToast(undo ? "Could not undo that right now." : "Could not update your library right now.");
@@ -850,12 +850,14 @@ public sealed partial class DetailsModel(
             BuildEpisodes(WatchProgress);
             return Page();
         }
-        catch (TheTvDbApiException ex)
+        // TheTVDB failing and TheTVDB not answering in time are the same to the
+        // visitor: the page's 503 state. A visitor who went away is neither.
+        catch (Exception ex) when (ex is TheTvDbApiException || ex.IsTimeoutFor(cancellationToken))
         {
-            logger.LogWarning(ex, "TheTVDB API error while loading details for id {SeriesId}.", id);
+            logger.LogWarning(ex, "TheTVDB API error or timeout while loading details for id {SeriesId}.", id);
             return LoadFailed(StatusCodes.Status503ServiceUnavailable);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Unexpected error while loading details for id {SeriesId}.", id);
             return LoadFailed(StatusCodes.Status500InternalServerError);
@@ -951,7 +953,7 @@ public sealed partial class DetailsModel(
                 this.SetInfoToast("Series removed from your library.");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling library state for series {SeriesId}.", seriesId);
             this.SetErrorToast("Could not update your library right now.");

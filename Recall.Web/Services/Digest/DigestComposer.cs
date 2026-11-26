@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Digest;
 
@@ -94,7 +95,7 @@ public sealed class DigestComposer(
         {
             return await theTvDbService.GetCachedSeriesAggregateAsync(seriesId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Digest: could not read cached series {SeriesId}; leaving it out.", seriesId);
             return null;

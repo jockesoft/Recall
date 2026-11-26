@@ -261,4 +261,54 @@ public class PushNotificationServiceTests
         _pushed.Should().OnlyContain(p => p.Payload.Title == "Recall test notification");
         _notifications.VerifyNoOtherCalls();
     }
+
+    // ---- a timeout is a failed device; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task SendNewEpisodes_Should_CountADeviceThatTimesOutAsFailed_AndPushTheNext()
+    {
+        _user.PushQuietHours = false;
+        var (phone, laptop) = (Device("Europe/Stockholm", "phone"), Device("America/New_York", "laptop"));
+        Devices(phone, laptop);
+        _sender
+            .Setup(x => x.SendAsync(It.Is<PushTarget>(t => t.Endpoint == phone.Endpoint), It.IsAny<PushPayload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Timeouts.Request());
+
+        var counts = await CreateSut().SendNewEpisodesAsync(User, Since);
+
+        counts.Should().Be(new PushRunCounts(Sent: 1, Failed: 1));
+        _pushed.Select(p => p.Target.Endpoint).Should().Equal(laptop.Endpoint);
+    }
+
+    [Test]
+    public async Task SendNewEpisodes_Should_Stop_WhenTheJobItselfIsCancelled()
+    {
+        _user.PushQuietHours = false;
+        var (phone, laptop) = (Device("Europe/Stockholm", "phone"), Device("America/New_York", "laptop"));
+        Devices(phone, laptop);
+        using var job = new CancellationTokenSource();
+        _sender
+            .Setup(x => x.SendAsync(It.Is<PushTarget>(t => t.Endpoint == phone.Endpoint), It.IsAny<PushPayload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = () => CreateSut().SendNewEpisodesAsync(User, Since, job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _pushed.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task ReleaseHeld_Should_MoveOn_WhenADeviceTimesOut()
+    {
+        var (first, second) = (Device("Europe/Stockholm", "first", heldSince: Since), Device("Europe/Stockholm", "second", heldSince: Since));
+        _subscriptions.Setup(x => x.GetDueHeldAsync(It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
+        _sender
+            .Setup(x => x.SendAsync(It.Is<PushTarget>(t => t.Endpoint == first.Endpoint), It.IsAny<PushPayload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Timeouts.Request());
+
+        var counts = await CreateSut(new DateTime(2026, 9, 16, 7, 0, 0, DateTimeKind.Utc)).ReleaseHeldAsync();
+
+        counts.Failed.Should().Be(1);
+        _pushed.Select(p => p.Target.Endpoint).Should().Equal(second.Endpoint);
+    }
 }

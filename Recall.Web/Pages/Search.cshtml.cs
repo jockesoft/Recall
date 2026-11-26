@@ -7,6 +7,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Pages;
 
@@ -69,13 +70,13 @@ public sealed class SearchModel(
         {
             Results = await theTvDbService.SearchAsync(Query!, cancellationToken);
         }
-        catch (TheTvDbApiException ex)
+        catch (Exception ex) when (ex is TheTvDbApiException || ex.IsTimeoutFor(cancellationToken))
         {
-            logger.LogWarning(ex, "TheTVDB API error while searching for query '{Query}'.", Query);
+            logger.LogWarning(ex, "TheTVDB API error or timeout while searching for query '{Query}'.", Query);
             ErrorMessage = "Could not fetch data from TheTVDB right now. Please try again shortly.";
             return;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Unexpected error while searching for query '{Query}'.", Query);
             ErrorMessage = "An unexpected error occurred. Please try again.";
@@ -106,7 +107,7 @@ public sealed class SearchModel(
             _watchedMovieIds = (await movieWatchRepository.GetWatchedMoviesAsync(userId, cancellationToken))
                 .Select(m => m.MovieTvdbId).ToHashSet();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load library state for the search results.");
         }

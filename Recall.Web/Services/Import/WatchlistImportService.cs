@@ -5,6 +5,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
 
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Import;
 
@@ -66,7 +67,7 @@ public sealed class WatchlistImportService(
             {
                 await ProcessItemAsync(item, cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(
                     ex, "WatchlistImport: failed processing item {ItemId} ({ImdbId}).", item.Id, item.ImdbId);

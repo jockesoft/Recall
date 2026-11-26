@@ -13,6 +13,7 @@ using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Internal;
 using Recall.Web.Infrastructure.Mail;
 using Recall.Web.Infrastructure.Persistence.Repositories;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services;
 
@@ -107,7 +108,7 @@ public sealed class MailService(
                 await emailRepository.MarkSentAsync(email.Id, cancellationToken);
                 sent++;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 // One bad message shouldn't abort the batch — bump its attempt
                 // count and move on; it'll be retried next run.

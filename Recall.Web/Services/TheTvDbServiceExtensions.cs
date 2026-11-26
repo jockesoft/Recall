@@ -1,4 +1,5 @@
 using Recall.Web.Domain.TheTvDb;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services;
 
@@ -21,7 +22,7 @@ public static class TheTvDbServiceExtensions
         {
             return await theTvDbService.GetSeriesAggregateByIdAsync(seriesTvdbId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "{Context}: could not load series aggregate {SeriesId}.", context, seriesTvdbId);
             return null;
@@ -45,7 +46,7 @@ public static class TheTvDbServiceExtensions
         {
             return await theTvDbService.GetMovieAggregateByIdAsync(movieTvdbId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "{Context}: could not load movie aggregate {MovieId}.", context, movieTvdbId);
             return null;
@@ -74,7 +75,7 @@ public static class TheTvDbServiceExtensions
             {
                 record = await theTvDbService.GetEpisodeDetailsAsync(episodeId, cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "Could not load episode {EpisodeId} to look for its still.", episodeId);
             }

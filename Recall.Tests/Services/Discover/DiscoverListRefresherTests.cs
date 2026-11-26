@@ -260,4 +260,60 @@ public sealed class DiscoverListRefresherTests
             TopGenres = genres.Select((name, i) => new StatsGenreRow(name, 1000 - i, 3)).ToList(),
             GenreCoverage = new StatsGenreCoverage(10, 10)
         };
+
+    // ---- a timeout is a failed user; only the job's own cancellation ends the run ----
+
+    [Test]
+    public async Task AUserWhoseGenresTimeOut_Should_BeSkipped_AndTheNextUsersGenresFetched()
+    {
+        var (alice, bob) = (Guid.NewGuid(), Guid.NewGuid());
+        _users.Setup(x => x.GetIdsWithWatchesAsync(It.IsAny<CancellationToken>())).ReturnsAsync([alice, bob]);
+        _stats.Setup(x => x.GetAsync(alice, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        _stats.Setup(x => x.GetAsync(bob, It.IsAny<CancellationToken>())).ReturnsAsync(Stats("Crime"));
+
+        var result = await Sut().RunAsync();
+
+        result.Genres.Should().Be(1);
+        _saved.Keys.Should().Contain(["series-genre-14", "movie-genre-14"]);
+    }
+
+    [Test]
+    public async Task UsersThatCannotBeListedInTime_Should_StillLeaveTheFixedListsFetched()
+    {
+        _users.Setup(x => x.GetIdsWithWatchesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        var result = await Sut().RunAsync();
+
+        result.Refreshed.Should().Be(5);
+    }
+
+    [Test]
+    public async Task TheJobsOwnCancellationWhileReadingGenres_Should_EndTheRun()
+    {
+        var (alice, bob) = (Guid.NewGuid(), Guid.NewGuid());
+        _users.Setup(x => x.GetIdsWithWatchesAsync(It.IsAny<CancellationToken>())).ReturnsAsync([alice, bob]);
+        using var job = new CancellationTokenSource();
+        _stats.Setup(x => x.GetAsync(alice, It.IsAny<CancellationToken>()))
+            .Callback(() => job.Cancel()).ThrowsAsync(new OperationCanceledException(job.Token));
+
+        var act = () => Sut().RunAsync(job.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        _stats.Verify(x => x.GetAsync(bob, It.IsAny<CancellationToken>()), Times.Never);
+        _saved.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task TheTimer_Should_LogATimeout_ButLetItsOwnCancellationThrough()
+    {
+        var refresher = new Mock<IDiscoverListRefresher>();
+        refresher.Setup(x => x.RunAsync(It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        var job = new DiscoverListsTimer(refresher.Object, NullLogger<DiscoverListsTimer>.Instance);
+
+        await job.Invoking(async j => await j.Execute(Mock.Of<IJobExecutionContext>())).Should().NotThrowAsync();
+
+        using var own = new CancellationTokenSource();
+        refresher.Setup(x => x.RunAsync(It.IsAny<CancellationToken>())).Callback(() => own.Cancel()).ThrowsAsync(new OperationCanceledException(own.Token));
+        await job.Invoking(async j => await j.Execute(Mock.Of<IJobExecutionContext>(), own.Token)).Should().ThrowAsync<OperationCanceledException>();
+    }
 }

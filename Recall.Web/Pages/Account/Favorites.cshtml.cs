@@ -37,7 +37,7 @@ public sealed class FavoritesModel(
             Titles = view.Titles;
             Episodes = view.Episodes;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load favorites for the account page.");
         }
@@ -55,7 +55,7 @@ public sealed class FavoritesModel(
         {
             await likeRepository.ToggleAsync(userId, LikeTargetType.Series, id, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your like right now.");
@@ -76,7 +76,7 @@ public sealed class FavoritesModel(
         {
             await likeRepository.ToggleAsync(userId, LikeTargetType.Movie, id, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your like right now.");

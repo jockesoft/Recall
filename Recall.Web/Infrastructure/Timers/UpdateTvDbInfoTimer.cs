@@ -11,6 +11,7 @@ using Recall.Web.Infrastructure.External.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.TvdbCache;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -123,7 +124,7 @@ public class UpdateTvDbInfoTimer(
                 if (await theTvDbService.RefreshSeriesAggregateByIdAsync(candidate.TvdbId, cancellationToken))
                     refreshed++;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 // One bad series shouldn't abort the batch — it'll be retried next run.
                 logger.LogWarning(ex, "UpdateTvDbInfoTimer: failed to refresh series {SeriesId}.", candidate.TvdbId);
@@ -172,7 +173,7 @@ public class UpdateTvDbInfoTimer(
                 if (await theTvDbService.RefreshEpisodeDetailsByIdAsync(episodeId, cancellationToken))
                     refreshed++;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 // One bad episode shouldn't abort the batch — it'll be retried next run.
                 logger.LogWarning(ex, "UpdateTvDbInfoTimer: failed to refresh episode {EpisodeId}.", episodeId);

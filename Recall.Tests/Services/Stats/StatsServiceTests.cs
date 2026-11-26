@@ -179,4 +179,32 @@ public sealed class StatsServiceTests
         stats.Totals.Episodes.Should().Be(1);
         stats.Totals.Minutes.Should().Be(40);
     }
+
+    // ---- a timeout is a title not counted; only the caller's own cancellation ends it ----
+
+    [Test]
+    public async Task GetAsync_Should_CountATitleWhoseReadTimesOutAsNotCached_AndReadTheRest()
+    {
+        Watched([Episode(1, 11), Episode(2, 21)], []);
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(1, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(2, It.IsAny<CancellationToken>())).ReturnsAsync(Series(2, 40));
+
+        var stats = await _sut.GetAsync(UserId);
+
+        stats.Totals.Minutes.Should().Be(40, "the series that was read still counts");
+        stats.Gaps.TitlesNotCached.Should().Be(1);
+    }
+
+    [Test]
+    public async Task GetAsync_Should_Stop_WhenTheCallerIsCancelled()
+    {
+        Watched([Episode(1, 11)], []);
+        using var caller = new CancellationTokenSource();
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(1, It.IsAny<CancellationToken>()))
+            .Callback(() => caller.Cancel()).ThrowsAsync(new OperationCanceledException(caller.Token));
+
+        var act = () => _sut.GetAsync(UserId, caller.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
 }

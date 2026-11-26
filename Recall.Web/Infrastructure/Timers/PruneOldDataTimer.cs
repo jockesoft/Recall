@@ -3,6 +3,7 @@ using Quartz;
 using Recall.Web.Infrastructure.Mail;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Infrastructure.Retention;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Infrastructure.Timers;
 
@@ -77,7 +78,7 @@ public sealed class PruneOldDataTimer(
                 logger.LogInformation(
                     "PruneOldDataTimer: deleted {Count} {What} older than {Days} day(s).", deleted, what, retentionDays);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             // One category failing shouldn't stop the others — it's retried on the next run.
             logger.LogWarning(ex, "PruneOldDataTimer: failed to prune {What}.", what);

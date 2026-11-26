@@ -198,4 +198,47 @@ public class SeriesDataDtoMappingsTests
         character.Image.Should().Be($"{ArtworksBaseUrl}/banners/actors/5.jpg");
         character.PersonImageUrl.Should().Be($"{ArtworksBaseUrl}/banners/actors/5-person.jpg");
     }
+
+    // ---- the overview when the English translation is missing ----------------------
+
+    [Test]
+    public void ToAggregate_Should_UseTheTranslatedOverview_WhenThereIsOne()
+    {
+        var dto = new SeriesDataDto { Id = 1, Name = "Bron", OriginalLanguage = "swe", Overview = "En kropp hittas på bron." };
+
+        var aggregate = dto.ToAggregate(new SeriesTranslationDataDto { Name = "The Bridge", Overview = " A body is found on the bridge. " });
+
+        aggregate.Overview.Should().Be("A body is found on the bridge.");
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    public void ToAggregate_Should_UseTheOriginalOverview_OfAnEnglishSeries_WhenTheTranslationHasNone(string? translatedOverview)
+    {
+        var dto = new SeriesDataDto { Id = 1, Name = "Severance", OriginalLanguage = "eng", Overview = " Mark leads a team of office workers. " };
+        var translation = translatedOverview is null ? null : new SeriesTranslationDataDto { Name = "Severance", Overview = translatedOverview };
+
+        var aggregate = dto.ToAggregate(translation);
+
+        aggregate.Overview.Should().Be("Mark leads a team of office workers.",
+            "the record's own overview is in English, so it serves when the translation failed or timed out");
+    }
+
+    [TestCase("swe")]
+    [TestCase("deu")]
+    [TestCase(null)]
+    public void ToAggregate_Should_LeaveTheOverviewEmpty_ForASeriesNotInEnglish_WhenTheTranslationIsMissing(string? originalLanguage)
+    {
+        var dto = new SeriesDataDto { Id = 1, Name = "Bron", OriginalLanguage = originalLanguage, Overview = "En kropp hittas på bron." };
+
+        var aggregate = dto.ToAggregate();
+
+        aggregate.Overview.Should().BeNull("an overview in another language is not shown in its place");
+    }
+
+    [Test]
+    public void ToAggregate_Should_LeaveTheOverviewEmpty_ForAnEnglishSeriesWithNoOverviewAtAll()
+    {
+        new SeriesDataDto { Id = 1, Name = "Show", OriginalLanguage = "eng", Overview = "  " }.ToAggregate().Overview.Should().BeNull();
+    }
 }

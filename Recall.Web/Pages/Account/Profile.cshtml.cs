@@ -132,7 +132,7 @@ public sealed class ProfileModel(
                 DigestOn = user?.DigestOptedInUtc is not null;
                 PushQuietHours = user?.PushQuietHours ?? true;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "Could not load the digest and quiet-hours settings for the profile page.");
             }
@@ -147,7 +147,7 @@ public sealed class ProfileModel(
                         d.Id, d.DeviceLabel, d.TimeZone, DisplayDate.Format(d.CreatedUtc, Today), EndpointHash(d.Endpoint)))
                     .ToList();
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
             {
                 logger.LogWarning(ex, "Could not load the push devices for the profile page.");
             }
@@ -157,7 +157,7 @@ public sealed class ProfileModel(
         {
             WatchTime = (await statsService.GetAsync(userId, cancellationToken)).Totals.WatchTime;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not compute total watch time for the profile page.");
         }
@@ -166,7 +166,7 @@ public sealed class ProfileModel(
         {
             FavoriteTitles = await favoritesService.GetLikedTitlesAsync(userId, FavoritesPreviewCount, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load favorite titles for the profile page.");
         }
@@ -175,7 +175,7 @@ public sealed class ProfileModel(
         {
             LatestImportJob = await importRepository.GetLatestJobForUserAsync(userId, includeItems: false, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load the latest watchlist import job for the profile page.");
         }
@@ -194,7 +194,7 @@ public sealed class ProfileModel(
                 ? $"Weekly email is on. It arrives on {DigestDay}s, when there is something new."
                 : "Weekly email is off.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed changing the digest setting for user {UserId}.", userId);
             this.SetErrorToast("Could not change that setting right now.");
@@ -236,7 +236,7 @@ public sealed class ProfileModel(
                 DeviceTimeZone.Normalize(timeZone)), cancellationToken);
             this.SetSuccessToast("Notifications are on for this device.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed saving a push subscription for user {UserId}.", userId);
             this.SetErrorToast("Could not turn on notifications on this device. Try again.");
@@ -257,7 +257,7 @@ public sealed class ProfileModel(
                 await pushSubscriptions.RemoveByEndpointAsync(userId, endpoint.Trim(), cancellationToken);
             this.SetSuccessToast("Notifications are off for this device.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed removing a push subscription for user {UserId}.", userId);
             this.SetErrorToast("Could not turn off notifications right now.");
@@ -279,7 +279,7 @@ public sealed class ProfileModel(
             else
                 this.SetInfoToast("That device was already removed.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed removing push device {DeviceId} for user {UserId}.", id, userId);
             this.SetErrorToast("Could not remove that device right now.");
@@ -301,7 +301,7 @@ public sealed class ProfileModel(
                 ? "Quiet hours are on. Notifications due between 22:00 and 08:00 on a device wait until 08:00 there."
                 : "Quiet hours are off. Notifications arrive whatever the time.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed changing quiet hours for user {UserId}.", userId);
             this.SetErrorToast("Could not change that setting right now.");
@@ -325,7 +325,7 @@ public sealed class ProfileModel(
         {
             await likeRepository.ToggleAsync(userId, LikeTargetType.Series, id, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your like right now.");
@@ -346,7 +346,7 @@ public sealed class ProfileModel(
         {
             await likeRepository.ToggleAsync(userId, LikeTargetType.Movie, id, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your like right now.");
