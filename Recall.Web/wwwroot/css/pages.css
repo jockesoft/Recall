@@ -1908,16 +1908,9 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     scroll-snap-align: start;
 }
 
-/* The "×" on a Discover poster's top-right corner (a 36px --on-image button). */
-.tvdb-discover-card-hide {
-    position: absolute;
-    top: var(--tvdb-space-2);
-    right: var(--tvdb-space-2);
-    z-index: 2;
-}
-
-.tvdb-discover-card-hide form,
-.tvdb-discover-card-add form {
+/* The "×" (top right) and the add button (bottom right) on a Discover poster are
+   placed by the shared rules in components.css ("Round buttons on a poster's corners"). */
+.tvdb-discover-card-hide form {
     margin: 0;
 }
 
