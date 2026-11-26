@@ -4,6 +4,7 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services.Favorites.Models;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Favorites;
 
@@ -198,7 +199,7 @@ public sealed class FavoritesService(
                 episodeName,
                 aired);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load liked episode {EpisodeId} for favorites.", like.TargetTvdbId);
             return null;

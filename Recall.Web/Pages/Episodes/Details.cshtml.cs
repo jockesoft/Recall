@@ -146,7 +146,7 @@ public sealed class DetailsModel(
 
             await likeRepository.ToggleAsync(userId, LikeTargetType.Episode, id, episode.SeriesId.Value, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for episode {EpisodeId}.", id);
             this.SetErrorToast("Could not update your like right now.");
@@ -183,7 +183,7 @@ public sealed class DetailsModel(
             await ratingRepository.RateAsync(userId, RatingTargetType.Episode, id, episode.SeriesId.Value, value, cancellationToken);
             this.SetSuccessToast("Rating saved.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed rating episode {EpisodeId}.", id);
             this.SetErrorToast("Could not save your rating right now.");
@@ -205,7 +205,7 @@ public sealed class DetailsModel(
             await ratingRepository.RemoveRatingAsync(userId, RatingTargetType.Episode, id, cancellationToken);
             this.SetInfoToast("Rating removed.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed clearing rating for episode {EpisodeId}.", id);
             this.SetErrorToast("Could not update your rating right now.");
@@ -262,7 +262,7 @@ public sealed class DetailsModel(
                     break;
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Unexpected error while toggling watched status for episode {EpisodeId}.", id);
             this.SetErrorToast("Could not update watched status right now.");
@@ -324,7 +324,7 @@ public sealed class DetailsModel(
                     resumedFromStoppedUtc: result.ResumedFromStoppedUtc);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Unexpected error while marking episode {EpisodeId} and earlier episodes as watched.", id);
             this.SetErrorToast("Could not update watched status right now.");
@@ -383,7 +383,7 @@ public sealed class DetailsModel(
             await episodeOmdbSnapshotStore.UpsertAsync(episodeTvdbId, imdbId, data, cancellationToken);
             return data;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Failed to fetch OMDb rating for episode {EpisodeId}; using cached snapshot if any.", episodeTvdbId);
             return await episodeOmdbSnapshotStore.GetAsync(episodeTvdbId, cancellationToken);
@@ -407,7 +407,7 @@ public sealed class DetailsModel(
             SeriesCountry = aggregate?.OriginalCountry;
             return aggregate;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load series {SeriesId} for the episode header.", seriesId);
             return null;
@@ -538,12 +538,14 @@ public sealed class DetailsModel(
 
             return Page();
         }
-        catch (TheTvDbApiException ex)
+        // TheTVDB failing and TheTVDB not answering in time are the same to the
+        // visitor: the page's 503 state. A visitor who went away is neither.
+        catch (Exception ex) when (ex is TheTvDbApiException || ex.IsTimeoutFor(cancellationToken))
         {
-            logger.LogWarning(ex, "TheTVDB API error while loading episode {EpisodeId}.", id);
+            logger.LogWarning(ex, "TheTVDB API error or timeout while loading episode {EpisodeId}.", id);
             return Failed(StatusCodes.Status503ServiceUnavailable);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Unexpected error while loading episode {EpisodeId}.", id);
             return Failed(StatusCodes.Status500InternalServerError);

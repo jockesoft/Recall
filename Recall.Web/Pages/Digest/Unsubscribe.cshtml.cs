@@ -58,7 +58,7 @@ public sealed class UnsubscribeModel(
             await userRepository.SetDigestOptInAsync(userId, optedIn: false, cancellationToken);
             logger.LogInformation("Weekly digest switched off through an unsubscribe link for user {UserId}.", userId);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed switching the weekly digest off for user {UserId}.", userId);
             this.SetErrorToast("Could not turn the weekly email off right now. Please try again.");

@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Recall.Tests.TestSupport;
@@ -39,6 +40,9 @@ public sealed class MovieDetailsGetTests
     private Mock<IMovieOmdbSnapshotStore> _omdb = null!;
     private DetailsModel _sut = null!;
 
+    /// <summary>What the page logged: a timeout is a warning, an aborted request nothing at Error.</summary>
+    private RecordingLogger<DetailsModel> _log = null!;
+
     [SetUp]
     public void SetUp()
     {
@@ -53,6 +57,7 @@ public sealed class MovieDetailsGetTests
             .ReturnsAsync(RatingSummary.Empty);
 
         var clock = new FixedTimeProvider(new DateTimeOffset(Today.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero));
+        _log = new RecordingLogger<DetailsModel>();
 
         _sut = new DetailsModel(
             _tvDb.Object,
@@ -63,7 +68,7 @@ public sealed class MovieDetailsGetTests
             _ratings.Object,
             _omdb.Object,
             clock,
-            NullLogger<DetailsModel>.Instance).WithTempData().WithHttpContext();
+            _log).WithTempData().WithHttpContext();
     }
 
     private void MovieExists(DateOnly? released = null, string status = "Released", string? detail = null, int? runtime = 180)
@@ -276,5 +281,35 @@ public sealed class MovieDetailsGetTests
         result.Should().BeOfType<PageResult>();
         _sut.Response.StatusCode.Should().Be(StatusCodes.Status503ServiceUnavailable);
         _sut.Movie.Should().BeNull();
+    }
+
+    // ---- a timeout is TheTVDB failing; a visitor who went away is not an error ----
+
+    [Test]
+    public async Task ATheTvDbTimeout_Should_Be503_LikeAnyTheTvDbFailure()
+    {
+        _tvDb.Setup(x => x.GetMovieAggregateByIdAsync(MovieId, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        var result = await _sut.OnGetAsync(MovieId, CancellationToken.None);
+
+        result.Should().BeOfType<PageResult>();
+        _sut.Response.StatusCode.Should().Be(StatusCodes.Status503ServiceUnavailable);
+        _sut.Movie.Should().BeNull();
+        _log.Entries.Should().Contain(e => e.Level == LogLevel.Warning && e.Message.Contains("timeout"));
+        _log.Entries.Should().NotContain(e => e.Level >= LogLevel.Error);
+    }
+
+    [Test]
+    public async Task AnAbortedRequest_Should_NotRenderAFailure_NorLogAnError()
+    {
+        using var request = new CancellationTokenSource();
+        _tvDb.Setup(x => x.GetMovieAggregateByIdAsync(MovieId, It.IsAny<CancellationToken>())).Callback(() => request.Cancel()).ThrowsAsync(new OperationCanceledException(request.Token));
+
+        var act = () => _sut.OnGetAsync(MovieId, request.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>(
+            "the request is gone: ASP.NET Core logs that at Debug, not as an error");
+        _sut.Response.StatusCode.Should().Be(StatusCodes.Status200OK, "no error state was set for a visitor who left");
+        _log.Entries.Should().NotContain(e => e.Level >= LogLevel.Error);
     }
 }

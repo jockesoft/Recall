@@ -2,6 +2,7 @@ using System.Globalization;
 using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Mappings;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.WatchTracking;
 
@@ -80,7 +81,7 @@ public sealed class WatchProgressService(
             // earlier episodes?" prompt never promises more than it does.
             return WatchProgressCalculator.CountPriorUnwatched(WithoutUnaired(ordered), watched, episodeTvdbId);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             // Nice-to-have prompt for a "catch up?" modal — never worth a broken page.
             logger.LogWarning(ex, "Could not compute prior-unwatched count for series {SeriesId}, episode {EpisodeId}.", seriesTvdbId, episodeTvdbId);
@@ -265,7 +266,7 @@ public sealed class WatchProgressService(
                 ? new MarkLibraryEffect(AddedToLibrary: details.Name)
                 : MarkLibraryEffect.None;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not add series {SeriesId} to the library, or resume it, after a mark.", seriesTvdbId);
             return MarkLibraryEffect.None;
@@ -328,7 +329,7 @@ public sealed class WatchProgressService(
 
             return !SeriesLibraryStateRule.CanStop(SeriesLibraryStateRule.Of(series, progress));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not read the state of series {SeriesId} before stopping it.", seriesTvdbId);
             return false;
@@ -359,7 +360,7 @@ public sealed class WatchProgressService(
 
             return progress.IsUpToDate ? null : new BeforeMark(userId, series, watched);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not read the state of series {SeriesId} before a mark; no caught-up message.", seriesTvdbId);
             return null;
@@ -409,7 +410,7 @@ public sealed class WatchProgressService(
 
             return new SeriesCaughtUp(series.TvdbId, series.Name, Finished: false, NextEpisode: next);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not tell whether series {SeriesId} is now caught up; no caught-up message.", before.Series.TvdbId);
             return null;

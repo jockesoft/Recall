@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Recall.Tests.TestSupport;
@@ -34,6 +35,9 @@ public class SeriesDetailsPostTests
     private Mock<IRatingRepository> _ratings = null!;
     private DetailsModel _sut = null!;
 
+    /// <summary>What the page logged: a timeout is a warning, an aborted request nothing at Error.</summary>
+    private RecordingLogger<DetailsModel> _log = null!;
+
     [SetUp]
     public void SetUp()
     {
@@ -55,7 +59,7 @@ public class SeriesDetailsPostTests
             _ratings.Object,
             Mock.Of<IOmdbSnapshotStore>(),
             TimeProvider.System,
-            NullLogger<DetailsModel>.Instance).WithTempData();
+            _log = new RecordingLogger<DetailsModel>()).WithTempData();
 
         _sut.Season = 2;
     }
@@ -925,5 +929,35 @@ public class SeriesDetailsPostTests
         VerifyRestored(Times.Never());
         _progress.Verify(x => x.StopWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
         _progress.Verify(x => x.ResumeWatchingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // ---- a timeout is a failed action; a visitor who went away is not an error ----
+
+    [Test]
+    public async Task ToggleLibrary_Should_ShowTheErrorToast_WhenTheTvDbTimesOut()
+    {
+        SignIn();
+        _tvDb.Setup(x => x.GetSeriesByIdAsync(SeriesId, It.IsAny<CancellationToken>())).ThrowsAsync(Timeouts.Request());
+
+        var result = await _sut.OnPostToggleLibraryAsync(SeriesId, CancellationToken.None);
+
+        AssertRedirectsBackToTheSeason(result);
+        _sut.ErrorToast().Should().Be("Could not update your library right now.");
+    }
+
+    [Test]
+    public async Task ToggleLibrary_Should_NeitherToastNorLogAnError_WhenTheRequestIsAborted()
+    {
+        SignIn();
+        using var request = new CancellationTokenSource();
+        _tvDb.Setup(x => x.GetSeriesByIdAsync(SeriesId, It.IsAny<CancellationToken>()))
+            .Callback(() => request.Cancel()).ThrowsAsync(new OperationCanceledException(request.Token));
+
+        var act = () => _sut.OnPostToggleLibraryAsync(SeriesId, request.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>(
+            "the request is gone: ASP.NET Core logs that at Debug, not as an error");
+        _sut.ErrorToast().Should().BeNull();
+        _log.Entries.Should().NotContain(e => e.Level >= LogLevel.Error);
     }
 }

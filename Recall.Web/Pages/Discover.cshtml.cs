@@ -72,7 +72,7 @@ public sealed class DiscoverModel(
         {
             Suggestions = await discoverService.GetPageAsync(userId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed to build the Discover page for user {UserId}.", userId);
             LoadFailed = true;
@@ -108,7 +108,7 @@ public sealed class DiscoverModel(
                 ? await AddMovieAsync(userId, title, cancellationToken)
                 : await AddSeriesAsync(userId, title, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed adding {Kind} {TvdbId} from Discover.", kind, tvdbId);
             this.SetErrorToast("Could not add that right now.");
@@ -139,7 +139,7 @@ public sealed class DiscoverModel(
             this.SetDiscoverToast(HiddenMessage, new DiscoverUndo(DiscoverUndoAction.Hide, title.Kind, title.TvdbId, Anchor));
             left = true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed hiding {Kind} {TvdbId} from Discover.", kind, tvdbId);
             this.SetErrorToast("Could not hide that right now.");
@@ -184,7 +184,7 @@ public sealed class DiscoverModel(
                     ? $"Took {name} off your watchlist again."
                     : $"Took {name} out of your library again.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed undoing {Action} of {Kind} {TvdbId} on Discover.", action, kind, tvdbId);
             this.SetErrorToast("Could not undo that right now.");

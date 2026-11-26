@@ -3,6 +3,7 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Discover;
 
@@ -65,7 +66,7 @@ public sealed class DiscoverService(
             var stats = await statsService.GetAsync(userId, cancellationToken);
             return DiscoverGenres.ForUser(stats, options.Value.MinGenreTitles);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Discover: could not read the genres of user {UserId}; showing all-time favourites.", userId);
             return [];

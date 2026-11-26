@@ -225,7 +225,7 @@ public sealed class LibraryModel(
 
             return Page();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed to load library for external user id {ExternalUserId}.", currentUserService.ExternalUserId);
             this.SetErrorToast("Could not load your library right now.");
@@ -387,7 +387,7 @@ public sealed class LibraryModel(
         {
             await likeRepository.ToggleAsync(userId, LikeTargetType.Series, id, id, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed toggling like for series {SeriesId}.", id);
             this.SetErrorToast("Could not update your like right now.");
@@ -439,7 +439,7 @@ public sealed class LibraryModel(
                     break;
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed marking episode {EpisodeId} of series {SeriesId} watched from the library.", episodeId, seriesId);
             this.SetErrorToast("Could not update watched status right now.");

@@ -307,7 +307,7 @@ public sealed class DashboardModel(
             return await userRepository.GetByIdAsync(userId, cancellationToken)
                 is { DigestOptedInUtc: null, DigestPromptDismissedUtc: null };
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not read the digest preference for the dashboard.");
             return false;
@@ -327,7 +327,7 @@ public sealed class DashboardModel(
             await userRepository.SetDigestOptInAsync(userId, optedIn: true, cancellationToken);
             this.SetSuccessToast($"Weekly email is on. It arrives on {DigestDay}s, when there is something new. You can turn it off in your profile.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed switching the weekly digest on for user {UserId}.", userId);
             this.SetErrorToast("Could not turn the weekly email on right now.");
@@ -345,7 +345,7 @@ public sealed class DashboardModel(
         {
             await userRepository.DismissDigestPromptAsync(userId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed recording the dismissed digest offer for user {UserId}.", userId);
         }
@@ -390,7 +390,7 @@ public sealed class DashboardModel(
                     break;
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed marking episode {EpisodeId} of series {SeriesId} watched from the dashboard.", episodeId, seriesId);
             this.SetErrorToast("Could not update watched status right now.");
@@ -439,7 +439,7 @@ public sealed class DashboardModel(
             leftTheList = result.Outcome is StopWatchingOutcome.Stopped or StopWatchingOutcome.AlreadyStopped;
             this.SetStopWatchingToast(result, seriesId);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "Failed stopping series {SeriesId} from the dashboard.", seriesId);
             this.SetErrorToast("Could not update your library right now.");

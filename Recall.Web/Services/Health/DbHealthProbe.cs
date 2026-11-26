@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Recall.Web.Infrastructure.Persistence;
+using Recall.Web.Extensions;
 
 namespace Recall.Web.Services.Health;
 
@@ -32,7 +33,7 @@ public sealed class DbHealthProbe(AppDbContext dbContext, ILogger<DbHealthProbe>
 
             return reachable;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogError(ex, "DB health probe: SELECT 1 failed.");
             return false;

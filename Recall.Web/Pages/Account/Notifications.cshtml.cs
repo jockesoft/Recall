@@ -35,7 +35,7 @@ public sealed class NotificationsModel(
             Notifications = await notificationService.GetRecentAsync(userId, cancellationToken);
             _posterBySeries = await LoadPostersAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not load notifications for the account page.");
             this.SetErrorToast("Could not load your notifications right now.");
@@ -73,7 +73,7 @@ public sealed class NotificationsModel(
         {
             await notificationService.MarkReadAsync(userId, id, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not mark notification {NotificationId} read.", id);
             this.SetErrorToast("Could not update your notifications right now.");
@@ -99,7 +99,7 @@ public sealed class NotificationsModel(
             if (!string.IsNullOrWhiteSpace(target))
                 return LocalRedirect(target);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not open notification {NotificationId}.", id);
         }
@@ -117,7 +117,7 @@ public sealed class NotificationsModel(
             await notificationService.MarkAllReadAsync(userId, cancellationToken);
             this.SetInfoToast("All notifications marked as read.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
         {
             logger.LogWarning(ex, "Could not mark all notifications read.");
             this.SetErrorToast("Could not update your notifications right now.");
