@@ -202,10 +202,31 @@ start() {
   start_app anonymous "$ANONYMOUS_URL" "$SEEDED_DB" Test "$RUN/publish"
 }
 
+# The browser never touches the macOS keychain or a real profile: the capture
+# launches Playwright's bundled Chromium only through BrowserLaunch (with
+# --use-mock-keychain and --password-store=basic, a throwaway profile per
+# context). Those profiles are written under TMPDIR, so each capture run gets
+# a temporary folder of its own as TMPDIR, deleted when the run ends: normally,
+# on an error, or on Ctrl-C (the trap below).
+CAPTURE_TMP=""
+
+remove_capture_tmp() {
+  if [ -n "$CAPTURE_TMP" ] && [ -d "$CAPTURE_TMP" ]; then
+    rm -rf "$CAPTURE_TMP"
+  fi
+  CAPTURE_TMP=""
+}
+
+trap remove_capture_tmp EXIT
+trap 'remove_capture_tmp; exit 130' INT
+trap 'remove_capture_tmp; exit 143' TERM HUP
+
 capture() {
-  dotnet run --project "$ROOT/ui-review/Capture" -- \
+  CAPTURE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/recall-capture.XXXXXX")"
+  TMPDIR="$CAPTURE_TMP" dotnet run --project "$ROOT/ui-review/Capture" -- \
     --signed-in "$SIGNED_IN_URL" --empty "$EMPTY_URL" --anonymous "$ANONYMOUS_URL" \
     --out "$ROOT/ui-review/screenshots" --review-script "$ROOT/ui-review/review.sh" "$@"
+  remove_capture_tmp
 }
 
 teardown() {

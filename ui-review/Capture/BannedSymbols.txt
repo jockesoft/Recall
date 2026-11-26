@@ -1,0 +1,6 @@
+M:Microsoft.Playwright.IBrowserType.LaunchAsync(Microsoft.Playwright.BrowserTypeLaunchOptions);Launch through BrowserLaunch.LaunchAsync: it adds the keychain flags and refuses a channel, an executable path or a profile
+M:Microsoft.Playwright.IBrowserType.LaunchPersistentContextAsync(System.String,Microsoft.Playwright.BrowserTypeLaunchPersistentContextOptions);Never: a persistent context is a browser profile on disk. Launch through BrowserLaunch.LaunchAsync and use browser.NewContextAsync()
+M:Microsoft.Playwright.IBrowserType.ConnectAsync(System.String,Microsoft.Playwright.BrowserTypeConnectOptions);Never connect to a browser that is already running (it may be a real profile); launch through BrowserLaunch.LaunchAsync
+M:Microsoft.Playwright.IBrowserType.ConnectOverCDPAsync(System.String,Microsoft.Playwright.BrowserTypeConnectOverCDPOptions);Never connect to a browser that is already running (it may be a real profile); launch through BrowserLaunch.LaunchAsync
+P:Microsoft.Playwright.BrowserTypeLaunchOptions.Channel;Playwright's bundled browser only: no installed Chrome, Edge or Brave
+P:Microsoft.Playwright.BrowserTypeLaunchOptions.ExecutablePath;Playwright's bundled browser only: no other executable
