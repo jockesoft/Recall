@@ -66,6 +66,31 @@ public sealed class TheTvDbTranslationFallbackTests
     }
 
     [Test]
+    public async Task AnEnglishSeriesWhoseTranslationTimesOut_Should_KeepItsOwnOverview()
+    {
+        var english = SeriesExtended.Replace("\"name\":\"Bron\",\"overview\":\"En kropp hittas på bron.\"",
+            "\"name\":\"Severance\",\"overview\":\"Mark leads a team of office workers.\",\"originalLanguage\":\"eng\"");
+        english.Should().Contain("originalLanguage", "the test's record must be an English one");
+
+        var series = await Client(new TheTvDbStub(translations: Answer.Hangs, english), new RecordingLogger<TheTvDbApiClient>())
+            .GetSeriesAggregateByIdAsync(1);
+
+        series!.Name.Should().Be("Severance");
+        series.Overview.Should().Be("Mark leads a team of office workers.", "the record's own overview is English");
+    }
+
+    [Test]
+    public async Task ASwedishSeriesWhoseTranslationTimesOut_Should_HaveNoOverview()
+    {
+        var swedish = SeriesExtended.Replace("\"averageRuntime\":58", "\"averageRuntime\":58,\"originalLanguage\":\"swe\"");
+
+        var series = await Client(new TheTvDbStub(translations: Answer.Hangs, swedish), new RecordingLogger<TheTvDbApiClient>())
+            .GetSeriesAggregateByIdAsync(1);
+
+        series!.Overview.Should().BeNull("a Swedish overview is not shown in place of the English one");
+    }
+
+    [Test]
     public async Task ASeriesWithItsTranslations_Should_UseThem()
     {
         var log = new RecordingLogger<TheTvDbApiClient>();
@@ -136,7 +161,7 @@ public sealed class TheTvDbTranslationFallbackTests
     }
 
     /// <summary>TheTVDB, with the records answering at once and the translations as the test asks.</summary>
-    private sealed class TheTvDbStub(Answer translations) : HttpMessageHandler
+    private sealed class TheTvDbStub(Answer translations, string seriesExtended = SeriesExtended) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -145,7 +170,7 @@ public sealed class TheTvDbTranslationFallbackTests
             if (path.EndsWith("/login", StringComparison.Ordinal))
                 return Json("""{"status":"success","data":{"token":"t"}}""");
             if (path.EndsWith("/series/1/extended", StringComparison.Ordinal))
-                return Json(SeriesExtended);
+                return Json(seriesExtended);
             if (path.EndsWith("/movies/2/extended", StringComparison.Ordinal))
                 return Json(MovieExtended);
 

@@ -39,6 +39,22 @@ public static class SeriesDataDtoMappings
             .Select(a => !string.IsNullOrWhiteSpace(a.Thumbnail) ? a.Thumbnail : a.Image)
             .FirstOrDefault(url => !string.IsNullOrWhiteSpace(url));
 
+    /// <summary>The language Recall shows, as TheTVDB names it: what the client asks translations for.</summary>
+    public const string EnglishLanguage = "eng";
+
+    /// <summary>
+    /// The overview to show when the English translation has none (it failed,
+    /// timed out, or is blank): the record's own, which is in the series'
+    /// original language, so only when that language is English. A series in
+    /// another language shows no overview rather than one the viewer may not
+    /// read.
+    /// </summary>
+    private static string? OriginalOverviewIfEnglish(SeriesDataDto dto) =>
+        string.Equals(dto.OriginalLanguage?.Trim(), EnglishLanguage, StringComparison.OrdinalIgnoreCase)
+        && !string.IsNullOrWhiteSpace(dto.Overview)
+            ? dto.Overview.Trim()
+            : null;
+
     public static SeriesAggregate ToAggregate(
         this SeriesDataDto dto,
         SeriesTranslationDataDto? translation = null,
@@ -63,7 +79,7 @@ public static class SeriesDataDtoMappings
         {
             TvdbId = dto.Id,
             Name = !string.IsNullOrWhiteSpace(translatedName) ? translatedName : (dto.Name ?? string.Empty),
-            Overview = !string.IsNullOrWhiteSpace(translatedOverview) ? translatedOverview : null,
+            Overview = !string.IsNullOrWhiteSpace(translatedOverview) ? translatedOverview : OriginalOverviewIfEnglish(dto),
             Slug = dto.Slug,
             ImageUrl = ArtworkUrl.Normalize(dto.Image),
             BackgroundUrl = ArtworkUrl.Normalize(PickBackground(dto.Artworks)),
