@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
+using Recall.UiReview;
 
 // Captures every page of Recall at a desktop and a phone width, and records
 // what axe-core and a few layout checks say about each one.
@@ -12,7 +13,8 @@ using Microsoft.Playwright;
 //
 // Normally started by ../review.sh capture, which also explains the three
 // instances. Optional: --only <text> captures just the shots whose name
-// contains the text; --install downloads the Chromium build Playwright needs.
+// contains the text; --install downloads the Chromium build Playwright needs;
+// --check-launch-guard checks that BrowserLaunch refuses every unsafe launch.
 //
 // Every shot also checks its lists collapsed by count, the cast and crew lists
 // and the Dashboard's Continue watching (CheckCollapsedListsAsync): nothing may
@@ -30,6 +32,15 @@ var options = Options.Parse(args);
 
 if (options.Install)
     return Microsoft.Playwright.Program.Main(["install", "chromium"]);
+
+if (options.CheckLaunchGuard)
+{
+    var failures = BrowserLaunch.SelfCheck();
+    foreach (var failure in failures)
+        Console.Error.WriteLine($"launch guard: {failure}");
+    Console.WriteLine(failures.Count == 0 ? "launch guard: every unsafe launch is refused" : "launch guard: FAILED");
+    return failures.Count == 0 ? 0 : 1;
+}
 
 Directory.CreateDirectory(options.OutputDirectory);
 
@@ -609,7 +620,9 @@ if (options.Only is { } only)
     shots = shots.Where(s => s.Name.Contains(only, StringComparison.OrdinalIgnoreCase)).ToList();
 
 using var playwright = await Playwright.CreateAsync();
-await using var browser = await playwright.Chromium.LaunchAsync();
+// Through BrowserLaunch only (the launch methods are banned anywhere else): Playwright's
+// bundled Chromium, a throwaway profile per context, never the keychain.
+await using var browser = await BrowserLaunch.LaunchAsync(playwright.Chromium);
 
 var results = new List<ShotResult>();
 
@@ -1425,6 +1438,9 @@ class Options
     public string OutputDirectory { get; private set; } = "screenshots";
     public string? Only { get; private set; }
     public bool Install { get; private set; }
+
+    /// <summary>--check-launch-guard: check that BrowserLaunch refuses every unsafe launch, without starting a browser.</summary>
+    public bool CheckLaunchGuard { get; private set; }
     public string? ReviewScript { get; private set; }
 
     public string BaseUrl(Site site) => site switch
@@ -1447,6 +1463,7 @@ class Options
                 case "--out": options.OutputDirectory = args[++i]; break;
                 case "--only": options.Only = args[++i]; break;
                 case "--install": options.Install = true; break;
+                case "--check-launch-guard": options.CheckLaunchGuard = true; break;
                 case "--review-script": options.ReviewScript = args[++i]; break;
                 default: throw new ArgumentException($"Unknown argument: {args[i]}");
             }
