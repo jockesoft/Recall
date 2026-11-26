@@ -1450,34 +1450,45 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 /* The heart overlaid on a poster's top-right corner. */
-.tvdb-series-card-like {
+/* ---- Round buttons on a poster's corners ----------------------------------------------
+   Every round --on-image button on a picture sits --tvdb-corner-inset (8px) from
+   the picture's outer edges, in every engine: the heart and Discover's "×" top
+   right, the add button and a Library Watching card's check bottom right (this
+   block), and a Continue watching card's "⋯" and check (the catch-up card, below).
+   Each is placed by insets only. Never through a box that gets its size from
+   aspect-ratio while it has padding and left/right insets: WebKit (Safari) sizes
+   such a box from the stretched width minus its padding, so it came out 16px
+   narrower and 24px shorter than the poster, and the bottom-right button sat 24px
+   in and 36px up, over the title, while Chromium had it right. The review's
+   corner check (CheckCornerButtonsAsync) measures every one, in both engines. */
+
+/* The heart (LikeToggleModel.Placement.Image) and Discover's "×": the poster's top-right corner. */
+.tvdb-series-card-like,
+.tvdb-discover-card-hide {
     position: absolute;
-    top: var(--tvdb-space-2);
-    right: var(--tvdb-space-2);
+    top: var(--tvdb-corner-inset);
+    right: var(--tvdb-corner-inset);
     z-index: 2;
 }
 
-/* The heart is a .tvdb-round-button--on-image (LikeToggleModel.Placement.Image). */
-
-/* The one-tap check of a Library Watching card: a 44px --on-image button in the
-   poster's bottom-right corner, above the progress bar (4px) and clear of the
-   title and the lines under it. The overlay is the poster's size and lets
-   clicks through to the card everywhere but the button. */
+/* The bottom-right one (a Library Watching card's check, Discover's add): an
+   overlay the poster's size, with no padding, that lets clicks through to the
+   card everywhere but the button, and the button's form pinned to its corner.
+   The progress bar (4px) along the poster's bottom stays clear of it. */
 .tvdb-series-card-mark {
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
     z-index: 2;
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
+    width: 100%;
     aspect-ratio: 2 / 3;
-    padding: var(--tvdb-space-2) var(--tvdb-space-2) calc(4px + var(--tvdb-space-2));
     pointer-events: none;
 }
 
 .tvdb-series-card-mark > form {
+    position: absolute;
+    right: var(--tvdb-corner-inset);
+    bottom: var(--tvdb-corner-inset);
     margin: 0;
     pointer-events: auto;
 }
@@ -1612,10 +1623,14 @@ dl.row dd a.tvdb-inline-edit {
     white-space: nowrap;
 }
 
+/* The check and the "⋯" sit inside the still's frame, which has a 1px border, so
+   they are placed 1px less than the corner inset: --tvdb-corner-inset from the
+   frame's outer edge, like the buttons on a poster (see "Round buttons on a
+   poster's corners"). */
 .tvdb-catchup-check {
     position: absolute;
-    right: var(--tvdb-space-3);
-    bottom: var(--tvdb-space-3);
+    right: calc(var(--tvdb-corner-inset) - 1px);
+    bottom: calc(var(--tvdb-corner-inset) - 1px);
     z-index: 3;
     margin: 0;
 }
@@ -1624,8 +1639,8 @@ dl.row dd a.tvdb-inline-edit {
    other controls so its open menu covers the next card's button too. */
 .tvdb-catchup-menu {
     position: absolute;
-    top: var(--tvdb-space-3);
-    right: var(--tvdb-space-3);
+    top: calc(var(--tvdb-corner-inset) - 1px);
+    right: calc(var(--tvdb-corner-inset) - 1px);
     z-index: 4;
 }
 
