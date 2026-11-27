@@ -41,7 +41,7 @@ public static class EpisodeMappings
 
     /// <summary>
     /// Maps the extended episode DTO (from /episodes/{id}/extended) including
-    /// score, content ratings, and awards.
+    /// score, content ratings, awards and the people credited on it.
     /// </summary>
     public static Episode ToDomain(this EpisodeExtendedDto dto)
     {
@@ -79,6 +79,11 @@ public static class EpisodeMappings
                     Type = r.Type,
                     SourceName = r.SourceName
                 })
+                .ToArray() ?? [],
+            // TheTVDB lists one row per role; a row without an id is not a credit.
+            Characters = dto.Characters?
+                .Where(c => c.Id != 0)
+                .Select(c => c.ToDomain())
                 .ToArray() ?? []
         };
     }

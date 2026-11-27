@@ -30,7 +30,11 @@ public static class DomainImageNormalization
         };
 
     public static Episode WithNormalizedImages(this Episode episode) =>
-        episode with { Image = ArtworkUrl.Normalize(episode.Image) };
+        episode with
+        {
+            Image = ArtworkUrl.Normalize(episode.Image),
+            Characters = episode.Characters.Select(NormalizeCharacter).ToArray()
+        };
 
     public static MovieAggregate WithNormalizedImages(this MovieAggregate aggregate) =>
         aggregate with

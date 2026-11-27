@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Recall.Web.Infrastructure.External.TheTvDb.Dto.Common;
 using Recall.Web.Infrastructure.External.TheTvDb.Dto.Series;
 
 namespace Recall.Web.Infrastructure.External.TheTvDb.Dto.Episodes;
@@ -77,5 +78,9 @@ public sealed record EpisodeExtendedDto : EpisodeDto
 
     [JsonPropertyName("remoteIds")]
     public List<RemoteIdDto>? RemoteIds { get; init; }
+
+    /// <summary>The people credited on the episode: guest stars, hosts, directors, writers.</summary>
+    [JsonPropertyName("characters")]
+    public List<CharacterDataDto>? Characters { get; init; }
 }
 

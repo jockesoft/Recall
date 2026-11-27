@@ -132,4 +132,43 @@ public sealed class CastBuilderTests
     {
         new CastPerson(name, null, null, null).Initials.Should().Be(expected);
     }
+
+    // ---- An episode's guests ----
+
+    [Test]
+    public void GuestStars_Should_KeepGuestsHostsAndMusicalGuests_AndLeaveOutTheCastAndCrew()
+    {
+        var guests = CastBuilder.GuestStars(
+        [
+            Role(1, "Bryan Cranston", "Actor", "Walter White", sort: 1),
+            Role(2, "Vince Gilligan", "Director", sort: 2),
+            Role(3, "Danny Trejo", "Guest Star", "Tortuga", sort: 4),
+            Role(4, "Ryan Gosling", "Host", sort: 3),
+            Role(5, "Sabrina Carpenter", "Musical Guest", sort: 5),
+        ]);
+
+        guests.Select(p => p.Name).Should().Equal(["Ryan Gosling", "Danny Trejo", "Sabrina Carpenter"], "in TheTVDB's order");
+        guests.Select(p => p.Detail).Should().Equal(["Host", "Tortuga", "Musical guest"],
+            "the character underneath, else what they are on the episode");
+        guests[1].Url.Should().Be("https://thetvdb.com/people/3", "the name links to TheTVDB");
+    }
+
+    [Test]
+    public void GuestStars_Should_ListAPersonOnce_WithEachOfTheirCharacters()
+    {
+        var guests = CastBuilder.GuestStars(
+        [
+            Role(7, "Kenan Thompson", "Guest Star", "Diondre Cole"),
+            Role(7, "Kenan Thompson", "Guest Star", "Steve Harvey"),
+        ]);
+
+        guests.Should().ContainSingle().Which.Detail.Should().Be("Diondre Cole / Steve Harvey");
+    }
+
+    [Test]
+    public void GuestStars_Should_BeEmpty_ForARecordWithoutGuests()
+    {
+        CastBuilder.GuestStars([]).Should().BeEmpty();
+        CastBuilder.GuestStars([Role(1, "Bryan Cranston", "Actor", "Walter White")]).Should().BeEmpty();
+    }
 }
