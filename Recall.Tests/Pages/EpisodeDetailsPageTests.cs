@@ -331,6 +331,7 @@ public sealed class EpisodeDetailsPageTests
         next.RouteId.Should().Be(E1, "the check posts to this page, which marks the other episode and comes back here");
         next.PriorUnwatchedCount.Should().Be(1, "this one is unwatched, so marking the next asks first");
         next.MarkLabel.Should().Be("S52E02 Sabrina Carpenter watched");
+        next.Heading.Should().Be("Up next");
     }
 
     [Test]
@@ -356,6 +357,7 @@ public sealed class EpisodeDetailsPageTests
         await _sut.OnGetAsync(E1, CancellationToken.None);
 
         _sut.UpNext!.Mark.Should().Be(UpNextMark.Watched);
+        _sut.UpNext.Heading.Should().Be("Next episode", "it is watched, so it is not what is up next");
         _progress.Verify(x => x.GetPriorUnwatchedCountAsync(UserId, SeriesId, E2, It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -365,6 +367,7 @@ public sealed class EpisodeDetailsPageTests
         await _sut.OnGetAsync(E1, CancellationToken.None);
 
         _sut.UpNext!.Mark.Should().Be(UpNextMark.None);
+        _sut.UpNext.Heading.Should().Be("Up next");
     }
 
     [Test]

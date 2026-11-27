@@ -1,7 +1,8 @@
 @model Recall.Web.Pages.Shared.UpNextModel
 @* The next episode, under the action row of Episode Details (UpNextModel): on
    paper, like the sign-in card. Its still (the shared EpisodeArt rule, lazy:
-   it is below the hero's own picture), "Up next", "S52E02 · title" as the link
+   it is below the hero's own picture), its label ("Up next", or "Next
+   episode" when that one is already watched), "S52E02 · title" as the link
    (one line, an ellipsis when it must), when it airs, and for a signed-in user
    the one-tap check of Series Details' rows: a ring, a green check when it is
    watched (pressing it unmarks), or the dashed clock while it may not be
@@ -17,7 +18,7 @@
     </div>
 
     <div class="tvdb-up-next__text">
-        <h2 class="tvdb-eyebrow tvdb-up-next__eyebrow" id="upNextHeading">Up next</h2>
+        <h2 class="tvdb-eyebrow tvdb-up-next__eyebrow" id="upNextHeading">@Model.Heading</h2>
         <a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeId" class="tvdb-up-next__title tvdb-link-plain"><span class="tvdb-mono">@Model.Code</span> · @Model.Title</a>
         @if (Model.DateText is not null || Model.Release is not null)
         {

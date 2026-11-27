@@ -240,7 +240,8 @@ public sealed class EpisodeDetailsPipelineTests
 
         var after = await PageAsync(_client, E1);
         Regex.Match(after, "<section class=\"tvdb-up-next tvdb-surface-paper\".*?</section>", RegexOptions.Singleline).Value
-            .Should().Contain("tvdb-ep-mark tvdb-ep-mark--on").And.Contain("aria-pressed=\"true\"");
+            .Should().Contain("tvdb-ep-mark tvdb-ep-mark--on").And.Contain("aria-pressed=\"true\"")
+            .And.Contain("id=\"upNextHeading\">Next episode</h2>", "the next episode is watched now");
         after.Should().Contain("2 of 2 watched");
 
         // And back, so the other tests see the second episode unwatched.

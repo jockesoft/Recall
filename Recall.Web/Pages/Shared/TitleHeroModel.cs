@@ -155,6 +155,13 @@ public sealed class UpNextModel
     /// <summary>Unwatched episodes before it; more than none and the check asks first (js/tvdb-series.js).</summary>
     public int PriorUnwatchedCount { get; init; }
 
+    /// <summary>
+    /// "Up next" while the episode is still to watch; "Next episode" once it
+    /// is watched (it is then not what comes next for the user, only what
+    /// follows this one). A visitor's says "Up next".
+    /// </summary>
+    public string Heading => Mark == UpNextMark.Watched ? "Next episode" : "Up next";
+
     /// <summary>The check's name, as on Series Details' rows: "S52E02 Title watched".</summary>
     public string MarkLabel => $"{Code} {Title} watched";
 }
