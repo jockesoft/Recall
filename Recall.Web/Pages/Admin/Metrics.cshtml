@@ -1,0 +1,122 @@
+@page
+@model Recall.Web.Pages.Admin.MetricsModel
+@using Recall.Web.Pages.Admin
+@{
+    ViewData["Title"] = "Site metrics";
+    var report = Model.Report;
+}
+
+<div class="tvdb-shell">
+    <a asp-page="/Admin/Index" class="tvdb-back-link"><i class="@Icons.Back" aria-hidden="true"></i> Admin</a>
+
+    <h1 class="mb-2">Site metrics</h1>
+    <p class="tvdb-prose text-muted mb-4">
+        Daily totals by UTC date, with nothing about who visited. Views by known crawlers are counted on their own
+        and left out of every other figure. Today is @DisplayDate.Format(report.Today, Model.Today) and still counting.
+    </p>
+
+    <section class="tvdb-page-section" aria-labelledby="funnelHeading">
+        <h2 id="funnelHeading">Sign-up funnel</h2>
+        <div class="table-responsive tvdb-metrics-scroll" tabindex="0" role="region" aria-labelledby="funnelHeading">
+            <table class="table table-sm tvdb-metrics-table" id="funnelTable">
+                <caption class="visually-hidden">Each step of signing up, with its share of the step before, over the last 7 and 30 days</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Step</th>
+                        <th scope="col" class="text-end">7 days</th>
+                        <th scope="col" class="text-end">Of the step before</th>
+                        <th scope="col" class="text-end">30 days</th>
+                        <th scope="col" class="text-end">Of the step before</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var step in report.Funnel)
+                    {
+                        <tr>
+                            <th scope="row">@step.Label</th>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(step.Last7)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Percent(step.RateOfPrevious7)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(step.Last30)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Percent(step.RateOfPrevious30)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="tvdb-page-section" aria-labelledby="daysHeading">
+        <h2 id="daysHeading">Last 30 days</h2>
+        <div class="table-responsive tvdb-metrics-scroll" tabindex="0" role="region" aria-labelledby="daysHeading">
+            <table class="table table-sm tvdb-metrics-table" id="daysTable">
+                <caption class="visually-hidden">Views and sign-up steps for each of the last 30 days, newest first</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col" class="text-end">Visitor views</th>
+                        <th scope="col" class="text-end">Signed-in views</th>
+                        <th scope="col" class="text-end">Crawler views</th>
+                        <th scope="col" class="text-end">Details views</th>
+                        <th scope="col" class="text-end">Actions pressed</th>
+                        <th scope="col" class="text-end">Sign-in page</th>
+                        <th scope="col" class="text-end">Emails sent</th>
+                        <th scope="col" class="text-end">Sign-ins</th>
+                        <th scope="col" class="text-end">New accounts</th>
+                        <th scope="col" class="text-end">Actions done</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var day in report.Days)
+                    {
+                        <tr>
+                            <th scope="row" class="text-nowrap">@DisplayDate.Format(day.Date, Model.Today)</th>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.Visitors)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.SignedInViews)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.Crawlers)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.DetailsViews)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.ActionClicks)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.SignInPage)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.LinksSent)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.SignIns)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.NewAccounts)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(day.ActionsDone)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="tvdb-meta mt-2 mb-0">Details views are visitors' views of Series, Movie and Episode pages. Sign-ins are by the link or the code.</p>
+    </section>
+
+    <section class="tvdb-page-section" aria-labelledby="totalsHeading">
+        <h2 id="totalsHeading">Totals</h2>
+        <div class="tvdb-metrics-totals">
+            @foreach (var group in report.Groups.Where(g => g.Rows.Count > 0))
+            {
+                var headingId = "totals-" + report.Groups.ToList().IndexOf(group);
+                <div>
+                    <h3 id="@headingId">@group.Heading</h3>
+                    <table class="table table-sm tvdb-metrics-table" aria-labelledby="@headingId">
+                        <thead>
+                            <tr>
+                                <th scope="col">What</th>
+                                <th scope="col" class="text-end">7 days</th>
+                                <th scope="col" class="text-end">30 days</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in group.Rows)
+                            {
+                                <tr>
+                                    <th scope="row">@row.Label</th>
+                                    <td class="text-end tvdb-mono">@MetricsModel.Count(row.Last7)</td>
+                                    <td class="text-end tvdb-mono">@MetricsModel.Count(row.Last30)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </section>
+</div>

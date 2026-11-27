@@ -15,6 +15,9 @@
         likes and ratings you add. We don't sell this or use it for advertising, and the site
         has no analytics or tracking scripts.
     </p>
+    <p class="tvdb-prose" id="metrics">
+        Recall counts daily page visits and sign-ins as anonymous totals, with no cookies and nothing about who visited.
+    </p>
 
     <h2 id="cookies">Cookies</h2>
     <p class="tvdb-prose">
@@ -165,6 +168,7 @@
         </li>
         <li>IMDb imports and their rows: @PrivacyModel.After(Model.Retention.ImportJobDays, "the import finished").</li>
         <li>The record of which weeks the weekly email was sent to you: @PrivacyModel.After(Model.Retention.DigestLedgerDays, "it was made").</li>
+        <li>The anonymous daily totals of visits and sign-ins: @PrivacyModel.After(Model.Retention.SiteMetricDays, "the day they count").</li>
         @if (Model.PushAvailable)
         {
             <li>

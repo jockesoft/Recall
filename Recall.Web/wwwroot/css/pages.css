@@ -1918,3 +1918,38 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     align-items: center;
     gap: var(--tvdb-space-2);
 }
+
+/* ---- Admin: site metrics ---------------------------------------------------- */
+
+/* A wide table scrolls inside its own box on a phone (a focusable region, so
+   it can be scrolled from the keyboard); the page itself never does. */
+.tvdb-metrics-scroll {
+    margin-bottom: 0;
+}
+
+.tvdb-metrics-scroll:focus-visible {
+    outline: 2px solid var(--tvdb-focus);
+    outline-offset: 2px;
+}
+
+.tvdb-metrics-table {
+    margin-bottom: 0;
+}
+
+.tvdb-metrics-table tbody th {
+    font-weight: 500;
+}
+
+/* The totals: one column, two from 992px. */
+.tvdb-metrics-totals {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--tvdb-space-6);
+}
+
+@media (min-width: 992px) {
+    .tvdb-metrics-totals {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: var(--tvdb-space-7);
+    }
+}
