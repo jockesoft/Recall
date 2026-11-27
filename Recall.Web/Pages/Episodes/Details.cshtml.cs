@@ -161,7 +161,7 @@ public sealed class DetailsModel(
     public string? ImdbRating => OmdbValue(Omdb?.ImdbRating);
 
     /// <summary>IMDb's vote count from the OMDb snapshot ("1,234").</summary>
-    public string? ImdbVotes => OmdbValue(Omdb?.ImdbVotes);
+    public string? ImdbVotes => VoteCount.Format(Omdb?.ImdbVotes);
 
     /// <summary>"Season finale", "Series finale" or "Midseason finale", as a chip in the hero.</summary>
     public string? FinaleText => Episode?.FinaleType?.ToLowerInvariant() switch

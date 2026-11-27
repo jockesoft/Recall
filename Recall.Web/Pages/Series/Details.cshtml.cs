@@ -143,7 +143,7 @@ public sealed partial class DetailsModel(
     public string? ImdbRating => OmdbValue(Omdb?.ImdbRating);
 
     /// <summary>IMDb's vote count from the OMDb snapshot ("1,234,567").</summary>
-    public string? ImdbVotes => OmdbValue(Omdb?.ImdbVotes);
+    public string? ImdbVotes => VoteCount.Format(Omdb?.ImdbVotes);
 
     /// <summary>OMDb's awards line, when it has one.</summary>
     public string? OmdbAwards => OmdbValue(Omdb?.Awards);
