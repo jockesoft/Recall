@@ -55,6 +55,13 @@ public interface IAppUserRepository
     Task DismissDigestPromptAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>Turns push quiet hours (22:00–08:00 on each device) on or off for the user.</summary>
+    /// <summary>
+    /// Records a successful sign-in: the first one sets
+    /// <c>first_sign_in_utc</c> (one atomic update, so two sign-ins at once
+    /// cannot both be first). True when this was the account's first.
+    /// </summary>
+    Task<bool> RecordSignInAsync(Guid userId, DateTime nowUtc, CancellationToken cancellationToken = default);
+
     Task SetPushQuietHoursAsync(Guid userId, bool on, CancellationToken cancellationToken = default);
 
     /// <summary>

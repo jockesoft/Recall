@@ -21,6 +21,12 @@ public sealed class LoginToken
 
     public DateTime ExpiresUtc { get; init; }
 
+    /// <summary>Where signing in with this token returns to (a local path), or null for the default.</summary>
+    public string? ReturnUrl { get; init; }
+
+    /// <summary>Asked for with a pending action in the browser (the funnel's action path).</summary>
+    public bool WithPendingAction { get; init; }
+
     public DateTime? ConsumedUtc { get; init; }
 
     public DateTime CreatedUtc { get; init; }

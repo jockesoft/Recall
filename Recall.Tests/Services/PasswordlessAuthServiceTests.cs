@@ -10,6 +10,8 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.Metrics;
+using Recall.Tests.TestSupport;
 
 namespace Recall.Tests.Services;
 
@@ -22,6 +24,7 @@ public sealed class PasswordlessAuthServiceTests
     private Mock<ILoginAbuseGuard> _abuseGuard = null!;
     private LoginTokenOptions _options = null!;
     private PasswordlessAuthService _sut = null!;
+    private RecordingSiteMetrics _metrics = null!;
 
     [SetUp]
     public void SetUp()
@@ -34,12 +37,14 @@ public sealed class PasswordlessAuthServiceTests
         _abuseGuard.Setup(x => x.TryStartResendCooldown(It.IsAny<Guid>(), It.IsAny<TimeSpan>())).Returns(true);
         _options = new LoginTokenOptions { TokenLifetimeMinutes = 15, InvalidatePreviousTokens = true };
 
+        _metrics = new RecordingSiteMetrics();
         _sut = new PasswordlessAuthService(
             _userRepository.Object,
             _tokenRepository.Object,
             _mailService.Object,
             _abuseGuard.Object,
             Options.Create(_options),
+            _metrics,
             NullLogger<PasswordlessAuthService>.Instance);
     }
 
@@ -264,6 +269,31 @@ public sealed class PasswordlessAuthServiceTests
         _mailService.Verify(
             x => x.QueueEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Test]
+    public async Task RequestLoginAsync_Should_CountASentEmail_OnlyWhenOneWasQueued()
+    {
+        _abuseGuard.Setup(x => x.TryAcquire("throttled@test.local")).Returns(false);
+        _userRepository
+            .Setup(x => x.GetOrCreateByEmailAsync("sent@test.local", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(User(Guid.NewGuid(), "sent@test.local", "sent"));
+        _abuseGuard.Setup(x => x.TryStartResendCooldown(It.IsAny<Guid>(), It.IsAny<TimeSpan>())).Returns(true);
+        _options.ResendCooldownSeconds = 60;
+
+        await _sut.RequestLoginAsync("throttled@test.local", _ => "https://recall.test/x");
+        _metrics.Keys.Should().BeEmpty("a throttled request sends nothing");
+
+        await _sut.RequestLoginAsync("sent@test.local", _ => "https://recall.test/x");
+        _metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent);
+
+        _abuseGuard.Setup(x => x.TryStartResendCooldown(It.IsAny<Guid>(), It.IsAny<TimeSpan>())).Returns(false);
+        await _sut.RequestLoginAsync("sent@test.local", _ => "https://recall.test/x");
+        _metrics.CountOf(SiteMetricKeys.LinkSent).Should().Be(1, "within the cooldown nothing is sent");
+
+        _options.AllowedEmails = ["allowed@test.local"];
+        await _sut.RequestLoginAsync("intruder@test.local", _ => "https://recall.test/x");
+        _metrics.CountOf(SiteMetricKeys.LinkSent).Should().Be(1, "an address off the allowlist gets nothing");
     }
 
     [Test]

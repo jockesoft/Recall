@@ -13,6 +13,7 @@ using Recall.Web.Infrastructure.Display;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.Stats;
+using Recall.Web.Services.PendingActions;
 using Recall.Web.Services.WatchTracking;
 using System.Globalization;
 
@@ -26,6 +27,7 @@ namespace Recall.Web.Pages.Series;
 public sealed partial class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
+    IPendingActions pendingActions,
     ITrackedSeriesRepository trackedSeriesRepository,
     ISeriesLibraryService seriesLibraryService,
     IEpisodeWatchRepository episodeWatchRepository,
@@ -165,7 +167,7 @@ public sealed partial class DetailsModel(
     /// is "Resume watching". Stop watching and Remove from library are in the
     /// "⋯" menu.
     /// </summary>
-    public TitleHeroModel BuildHero(string? returnUrl = null)
+    public TitleHeroModel BuildHero()
     {
         var series = Aggregate!;
         var genres = series.Genres.Count > 0 ? series.Genres : OmdbGenres();
@@ -189,23 +191,21 @@ public sealed partial class DetailsModel(
                 ? average.ToString("0.0", CultureInfo.InvariantCulture)
                 : null,
             RecallRatingCount = RecallRatingCount,
-            Rating = IsAuthenticated
-                ? new RatingWidgetModel
-                {
-                    RateHandler = "RateSeries",
-                    ClearHandler = "ClearSeriesRating",
-                    RouteId = series.TvdbId,
-                    HiddenFields = seasonField,
-                    CurrentValue = CurrentUserRating,
-                    TargetNoun = "series"
-                }
-                : null,
+            Rating = new RatingWidgetModel
+            {
+                RateHandler = "RateSeries",
+                ClearHandler = "ClearSeriesRating",
+                RouteId = series.TvdbId,
+                HiddenFields = seasonField,
+                CurrentValue = CurrentUserRating,
+                TargetNoun = "series"
+            },
             Progress = BuildProgress(),
-            Actions = BuildActions(returnUrl, seasonField)
+            Actions = BuildActions(seasonField)
         };
     }
 
-    private TitleActionsModel BuildActions(string? returnUrl, Dictionary<string, string> seasonField)
+    private TitleActionsModel BuildActions(Dictionary<string, string> seasonField)
     {
         var series = Aggregate!;
         TitleNotice? notice = null;
@@ -293,9 +293,6 @@ public sealed partial class DetailsModel(
 
         return new TitleActionsModel
         {
-            IsAuthenticated = IsAuthenticated,
-            Noun = "series",
-            ReturnUrl = returnUrl,
             Notice = notice,
             Primary = primary,
             Status = status,
@@ -365,7 +362,7 @@ public sealed partial class DetailsModel(
     public async Task<IActionResult> OnPostToggleLibraryAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "manage your library");
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.AddSeries, id));
 
         try
         {
@@ -383,7 +380,7 @@ public sealed partial class DetailsModel(
     public async Task<IActionResult> OnPostToggleSeriesLikeAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "like a series");
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.LikeSeries, id));
 
         try
         {
@@ -403,11 +400,11 @@ public sealed partial class DetailsModel(
         [FromForm] int value,
         CancellationToken cancellationToken)
     {
-        if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "rate a series");
-
         if (value is < 1 or > 10)
             return BackToPage(id, Season);
+
+        if (!currentUserService.TryGetUserId(out var userId))
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.RateSeries, id, value));
 
         try
         {
@@ -707,6 +704,39 @@ public sealed partial class DetailsModel(
     /// confirmation; the toast carries an Undo (a POST to
     /// <see cref="OnPostResumeWatchingAsync"/>).
     /// </summary>
+    /// <summary>
+    /// The Undo of "Added Silo to your library." after a sign-in that did what
+    /// the visitor had pressed (a pending action): takes the series out of the
+    /// library again (the row only, as Remove from library does).
+    /// </summary>
+    public async Task<IActionResult> OnPostUndoAddAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "manage your library");
+
+        try
+        {
+            if (await seriesLibraryService.RemoveAsync(userId, id, cancellationToken))
+            {
+                var name = (await theTvDbService.GetCachedSeriesAggregateAsync(id, cancellationToken))?.Name;
+                this.SetInfoToast(string.IsNullOrWhiteSpace(name)
+                    ? "Took the series out of your library again."
+                    : $"Took {name} out of your library again.");
+            }
+            else
+            {
+                this.SetInfoToast(NothingToUndo);
+            }
+        }
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
+        {
+            logger.LogError(ex, "Failed undoing the add of series {SeriesId}.", id);
+            this.SetErrorToast("Could not undo that right now.");
+        }
+
+        return BackToPage(id, Season);
+    }
+
     public async Task<IActionResult> OnPostStopWatchingAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (!currentUserService.TryGetUserId(out var userId))

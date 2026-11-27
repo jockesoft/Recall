@@ -47,6 +47,10 @@ namespace Recall.Web.Migrations
                         .HasColumnType("character varying(320)")
                         .HasColumnName("email");
 
+                    b.Property<DateTime?>("FirstSignInUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_sign_in_utc");
+
                     b.Property<bool>("PushQuietHours")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -581,6 +585,11 @@ namespace Recall.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_utc");
 
+                    b.Property<string>("ReturnUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("return_url");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(44)
@@ -594,6 +603,12 @@ namespace Recall.Web.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
+
+                    b.Property<bool>("WithPendingAction")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("with_pending_action");
 
                     b.HasKey("Id");
 
@@ -782,6 +797,26 @@ namespace Recall.Web.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("push_subscription", (string)null);
+                });
+
+            modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.SiteMetricDailyEntity", b =>
+                {
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<long>("Count")
+                        .HasColumnType("bigint")
+                        .HasColumnName("count");
+
+                    b.HasKey("Date", "Key");
+
+                    b.ToTable("site_metric_daily", (string)null);
                 });
 
             modelBuilder.Entity("Recall.Web.Infrastructure.Persistence.Entities.TrackedMovieEntity", b =>

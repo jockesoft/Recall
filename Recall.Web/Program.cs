@@ -72,6 +72,7 @@ builder.Services.AddNotifications();
 builder.Services.AddPush(builder.Configuration);
 builder.Services.AddMail(builder.Configuration);
 builder.Services.AddWatchlistImport();
+builder.Services.AddSiteMetrics();
 
 // Deep health probe for uptime monitoring — GET /health returns 200 "Healthy"
 // while Postgres answers a bare SELECT 1, 503 "Unhealthy" otherwise.
@@ -161,6 +162,10 @@ app.UseMiddleware<DevAuthMiddleware>();
 app.UseRateLimiter();
 
 app.UseAuthorization();
+
+// Counts page views (anonymous daily totals, SiteMetricKeys) once the page has
+// rendered; after authentication, so it knows whether the visitor is signed in.
+app.UseMiddleware<PageViewMetricsMiddleware>();
 
 // Anonymous, and the middleware sets its own no-store cache headers.
 // /health = readiness (runs the DB check); /health/live = liveness (no checks,

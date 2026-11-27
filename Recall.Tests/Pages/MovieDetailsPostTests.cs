@@ -9,6 +9,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Pages.Movies;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -41,6 +42,7 @@ public class MovieDetailsPostTests
         _sut = new DetailsModel(
             Mock.Of<ITheTvDbService>(),
             currentUser.Object,
+            Mock.Of<IPendingActions>(),
             _likes.Object,
             Mock.Of<IMovieWatchRepository>(),
             _tracking.Object,

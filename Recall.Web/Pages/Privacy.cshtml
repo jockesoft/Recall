@@ -15,6 +15,9 @@
         likes and ratings you add. We don't sell this or use it for advertising, and the site
         has no analytics or tracking scripts.
     </p>
+    <p class="tvdb-prose" id="metrics">
+        Recall counts daily page visits and sign-ins as anonymous totals, with no cookies and nothing about who visited.
+    </p>
 
     <h2 id="cookies">Cookies</h2>
     <p class="tvdb-prose">
@@ -32,6 +35,12 @@
             <strong>Form protection cookie</strong> (<code>.AspNetCore.Antiforgery</code>): proves that a form was
             sent from this site and not from somewhere else. Set on pages with a form, and removed
             when you close the browser.
+        </li>
+        <li>
+            <strong>Action cookie</strong> (<code>@Model.PendingCookieName</code>): when you press something like
+            "Add to library" before signing in, remembers which title and what to do, so it can be done once you
+            have signed in in this browser. It holds nothing else, can't be read in the browser, and is removed when
+            you sign in or after @Model.PendingCookieMinutes minutes.
         </li>
         <li>
             <strong>Message cookie</strong> (<code>.AspNetCore.Mvc.CookieTempDataProvider</code>): carries a
@@ -165,6 +174,7 @@
         </li>
         <li>IMDb imports and their rows: @PrivacyModel.After(Model.Retention.ImportJobDays, "the import finished").</li>
         <li>The record of which weeks the weekly email was sent to you: @PrivacyModel.After(Model.Retention.DigestLedgerDays, "it was made").</li>
+        <li>The anonymous daily totals of visits and sign-ins: @PrivacyModel.After(Model.Retention.SiteMetricDays, "the day they count").</li>
         @if (Model.PushAvailable)
         {
             <li>

@@ -14,6 +14,7 @@ using Recall.Web.Pages.Shared;
 using Recall.Web.Services;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -87,6 +88,7 @@ public sealed class EpisodeDetailsPageTests
             NullLogger<DetailsModel>.Instance,
             _tvDb.Object,
             _currentUser.Object,
+            Mock.Of<IPendingActions>(),
             _watches.Object,
             _progress.Object,
             Mock.Of<ILikeRepository>(),
@@ -119,7 +121,7 @@ public sealed class EpisodeDetailsPageTests
     {
         var result = await _sut.OnGetAsync(episodeId, CancellationToken.None);
         result.Should().BeOfType<Microsoft.AspNetCore.Mvc.RazorPages.PageResult>();
-        return _sut.BuildHero("/Episodes/Details/" + episodeId);
+        return _sut.BuildHero();
     }
 
     // ---- the hero ----
@@ -183,7 +185,6 @@ public sealed class EpisodeDetailsPageTests
 
         var actions = (await HeroOf(E1)).Actions;
 
-        actions.IsAuthenticated.Should().BeTrue();
         actions.Primary!.Label.Should().Be("Mark as watched");
         actions.Primary.Handler.Should().Be("ToggleWatched");
         actions.Primary.RouteId.Should().Be(E1);
@@ -250,13 +251,18 @@ public sealed class EpisodeDetailsPageTests
     }
 
     [Test]
-    public async Task AVisitor_Should_GetTheSignInCard()
+    public async Task AVisitor_Should_GetTheSameActionRow_TheHeartAndTheRating()
     {
-        var actions = (await HeroOf(E1)).Actions;
+        var hero = await HeroOf(E1);
 
-        actions.IsAuthenticated.Should().BeFalse();
-        actions.Noun.Should().Be("episode");
-        actions.ReturnUrl.Should().Be("/Episodes/Details/" + E1);
+        hero.Actions.Primary!.Label.Should().Be("Mark as watched");
+        hero.Actions.Primary.Handler.Should().Be("ToggleWatched");
+        hero.Actions.Primary.PriorCheckEpisodeId.Should().BeNull("a visitor's press marks this episode alone, after sign-in");
+        hero.Actions.Like!.Handler.Should().Be("ToggleLike");
+        hero.Actions.Like.IsLiked.Should().BeFalse();
+        hero.Rating!.RateHandler.Should().Be("RateEpisode");
+        hero.Rating.CurrentValue.Should().BeNull();
+        hero.Actions.Menu.Should().BeEmpty();
     }
 
     // ---- where you are ----
@@ -517,6 +523,7 @@ public sealed class EpisodeDetailsPageTests
             NullLogger<DetailsModel>.Instance,
             _tvDb.Object,
             _currentUser.Object,
+            Mock.Of<IPendingActions>(),
             _watches.Object,
             _progress.Object,
             Mock.Of<ILikeRepository>(),

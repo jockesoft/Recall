@@ -8,6 +8,8 @@
 #   ./review.sh import-progress on|off   add or remove an import that is still running (used by the capture)
 #   ./review.sh stats-sparse on|off      give the empty clone's user a bulk-marked and imported history only, or take it away (used by the capture)
 #   ./review.sh continue-watching-many on|off   put seven finished or up-to-date series back in Continue watching, or restore them (used by the capture)
+#   ./review.sh signin-code EMAIL        print the code from the newest sign-in email to EMAIL in the seeded clone (used by the capture)
+#   ./review.sh remove-account EMAIL     delete the seeded clone's account for EMAIL and the emails to it (used by the capture)
 #   ./review.sh stop       stop the app instances
 #   ./review.sh teardown   stop, drop the clones, clear the Redis database used
 #   ./review.sh all        setup, start, capture, teardown
@@ -305,8 +307,34 @@ continue_watching_many() { # on|off
   fi
 }
 
+# The sign-in shots (a visitor's action done after signing in) sign in with a
+# made-up address on the anonymous instance: the code is read from the queued
+# email in the clone, and the account is removed again after the shot, so the
+# other shots (Admin's user count) never see it. Only the review's own
+# addresses are accepted.
+review_address() { # email
+  [[ "${1:-}" =~ ^ui-review-[a-z-]+@example\.com$ ]] || { echo "not a review address: ${1:-}" >&2; exit 1; }
+}
+
+signin_code() { # email
+  review_address "$1"
+  local code
+  code="$(psql_db "$SEEDED_DB" -c "SELECT substring(body from '[0-9]{3} [0-9]{3}') FROM email WHERE to_address = '$1' AND body IS NOT NULL ORDER BY created_utc DESC LIMIT 1;")"
+  [ -n "$code" ] || { echo "no sign-in email to $1" >&2; exit 1; }
+  echo "$code"
+}
+
+remove_account() { # email
+  review_address "$1"
+  psql_db "$SEEDED_DB" -c "
+    DELETE FROM app_user WHERE email = '$1';
+    DELETE FROM email WHERE to_address = '$1';"
+}
+
 case "${1:-}" in
   setup) setup ;;
+  signin-code) signin_code "${2:-}" ;;
+  remove-account) remove_account "${2:-}" ;;
   import-progress) import_progress "${2:-off}" ;;
   stats-sparse) stats_sparse "${2:-off}" ;;
   continue-watching-many) continue_watching_many "${2:-off}" ;;
@@ -315,5 +343,5 @@ case "${1:-}" in
   stop) stop_apps ;;
   teardown) teardown ;;
   all) setup; start; capture; teardown ;;
-  *) sed -n '2,22p' "$0"; exit 1 ;;
+  *) sed -n '2,24p' "$0"; exit 1 ;;
 esac

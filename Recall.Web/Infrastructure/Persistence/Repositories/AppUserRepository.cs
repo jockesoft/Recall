@@ -55,6 +55,17 @@ public sealed class AppUserRepository(AppDbContext dbContext) : IAppUserReposito
                 cancellationToken);
     }
 
+    public async Task<bool> RecordSignInAsync(Guid userId, DateTime nowUtc, CancellationToken cancellationToken = default)
+    {
+        var first = await dbContext.AppUsers
+            .Where(x => x.Id == userId && x.FirstSignInUtc == null)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(x => x.FirstSignInUtc, nowUtc).SetProperty(x => x.UpdatedUtc, nowUtc),
+                cancellationToken);
+
+        return first > 0;
+    }
+
     public async Task SetPushQuietHoursAsync(Guid userId, bool on, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;

@@ -44,6 +44,15 @@ public sealed class LoginTokenEntityConfiguration : IEntityTypeConfiguration<Log
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(x => x.ReturnUrl)
+            .HasColumnName("return_url")
+            .HasMaxLength(512);
+
+        builder.Property(x => x.WithPendingAction)
+            .HasColumnName("with_pending_action")
+            .HasDefaultValue(false)
+            .IsRequired();
+
         builder.Property(x => x.ConsumedUtc)
             .HasColumnName("consumed_utc")
             .HasColumnType("timestamp with time zone");

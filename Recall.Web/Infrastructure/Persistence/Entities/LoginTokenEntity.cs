@@ -28,6 +28,21 @@ public sealed class LoginTokenEntity : IHasAuditTimestamps
 
     public DateTime ExpiresUtc { get; set; }
 
+    /// <summary>
+    /// Where the sign-in returns to, by the link or the code (a local path,
+    /// <c>LocalReturnUrl</c>): the page the visitor asked to sign in from.
+    /// Carried here rather than in the emailed link, and checked again when
+    /// the token is redeemed. Null means the Dashboard.
+    /// </summary>
+    public string? ReturnUrl { get; set; }
+
+    /// <summary>
+    /// The email was asked for with a pending action in the browser (a visitor
+    /// pressed an action on a Details page first): its sign-in is counted on the
+    /// action path of the sign-up funnel. Says nothing about which action.
+    /// </summary>
+    public bool WithPendingAction { get; set; }
+
     /// <summary>Set the moment the link is redeemed; <c>null</c> while still usable.</summary>
     public DateTime? ConsumedUtc { get; set; }
 

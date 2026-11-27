@@ -21,6 +21,8 @@ using Recall.Web.Services.Notifications;
 using Recall.Web.Services.Push;
 using Recall.Web.Services.Sitemap;
 using Recall.Web.Services.Discover;
+using Recall.Web.Services.Metrics;
+using Recall.Web.Services.PendingActions;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
@@ -230,6 +232,9 @@ public static class ServiceCollectionExtensions
         services.Configure<TurnstileOptions>(configuration.GetSection(TurnstileOptions.SectionName));
         services.AddScoped<ILoginTokenRepository, LoginTokenRepository>();
         services.AddScoped<IPasswordlessAuthService, PasswordlessAuthService>();
+        // What a signed-out visitor pressed on a Details page, done after they sign in.
+        services.AddSingleton<IPendingActions, PendingActions>();
+        services.AddScoped<IPendingActionService, PendingActionService>();
         services.AddSingleton<ILoginAbuseGuard, LoginAbuseGuard>();
         // No retry (it's a POST, and a human can just resubmit the form) — but
         // don't let a slow Cloudflare hold the sign-in request for the default 100 s.
@@ -238,6 +243,24 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(10);
         });
 
+        return services;
+    }
+
+    /// <summary>
+    /// The site metrics: anonymous daily counts kept in memory
+    /// (<see cref="SiteMetricsBuffer"/>, which is <see cref="ISiteMetrics"/>)
+    /// and written to <c>site_metric_daily</c> every minute and at shutdown by
+    /// <see cref="SiteMetricsFlusher"/>. Page views are counted by
+    /// <c>PageViewMetricsMiddleware</c>.
+    /// </summary>
+    public static IServiceCollection AddSiteMetrics(this IServiceCollection services)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<SiteMetricsBuffer>();
+        services.AddSingleton<ISiteMetrics>(sp => sp.GetRequiredService<SiteMetricsBuffer>());
+        services.AddScoped<ISiteMetricRepository, SiteMetricRepository>();
+        services.AddSingleton<SiteMetricsFlusher>();
+        services.AddHostedService(sp => sp.GetRequiredService<SiteMetricsFlusher>());
         return services;
     }
 }

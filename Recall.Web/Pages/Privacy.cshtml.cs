@@ -49,6 +49,11 @@ public sealed class PrivacyModel(
 
     public string SignInCookieName => InfrastructureServiceCollectionExtensions.SignInCookieName;
 
+    /// <summary>The cookie that holds what a visitor pressed before signing in (<c>PendingActions</c>), and for how long.</summary>
+    public string PendingCookieName => Recall.Web.Services.PendingActions.PendingActions.CookieName;
+
+    public int PendingCookieMinutes => (int)Recall.Web.Services.PendingActions.PendingActions.Lifetime.TotalMinutes;
+
     public int SignInCookieDays => InfrastructureServiceCollectionExtensions.SignInCookieDays;
 
     /// <summary>

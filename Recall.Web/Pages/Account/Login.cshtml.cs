@@ -10,6 +10,10 @@ using Microsoft.Extensions.Options;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.Metrics;
+using Recall.Web.Middleware;
+using Recall.Web.Services.PendingActions;
+using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages.Account;
 
@@ -20,6 +24,10 @@ public sealed class LoginModel(
     ITurnstileVerifier turnstileVerifier,
     IOptions<TurnstileOptions> turnstileOptions,
     IOptions<LoginTokenOptions> loginOptions,
+    IPendingActions pendingActions,
+    IPendingActionService pendingActionService,
+    ISiteMetrics metrics,
+    TimeProvider timeProvider,
     ILogger<LoginModel> logger) : PageModel
 {
     /// <summary>Real users take more than this to type an email and submit. Bots that
@@ -58,6 +66,15 @@ public sealed class LoginModel(
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    /// <summary>
+    /// What the visitor pressed before being sent here, when this browser has
+    /// it (<see cref="IPendingActions"/>): the sentence at the top of the form
+    /// ("Sign in to add Breaking Bad to your library."), and in the "check your
+    /// inbox" state one line of what happens after sign-in (its
+    /// <c>AfterSignIn</c>), the same whatever the address. Null otherwise.
+    /// </summary>
+    public PendingActionPrompt? Prompt { get; private set; }
+
     /// <summary>True once a link has been sent, so the view shows the "check your inbox" state.</summary>
     public bool LinkSent { get; private set; }
 
@@ -81,12 +98,25 @@ public sealed class LoginModel(
 
     public const string TooManyCodesMessage = "Too many wrong codes. Request a new email to get a new link and code.";
 
-    public void OnGet()
+    public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         // Unix milliseconds rather than an ISO-8601 string: a plain integer
         // has no characters (":", "+") that need HTML-entity round-tripping
         // through the hidden input's rendered attribute value.
         FormRenderedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
+        await LoadPromptAsync(cancellationToken);
+
+        // Which path of the funnel this view is on, counted by PageViewMetricsMiddleware
+        // with the view itself (so not for a crawler). The action path counts the
+        // first view after a press only; a reload is not another step.
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            var funnelKey = Prompt is null ? SiteMetricKeys.SignInPageDirect
+                : pendingActions.Advance(HttpContext, PendingStage.Shown) ? SiteMetricKeys.SignInPageWithAction
+                : null;
+            if (funnelKey is not null)
+                HttpContext.Items[PageViewMetricsMiddleware.FunnelViewItem] = funnelKey;
+        }
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
@@ -99,12 +129,11 @@ public sealed class LoginModel(
             logger.LogWarning(
                 "Login bot trap tripped from {RemoteIp} (honeypot: {Honeypot}).",
                 HttpContext.Connection.RemoteIpAddress, !string.IsNullOrEmpty(Website));
-            LinkSent = true;
-            return Page();
+            return await LinkSentAsync(cancellationToken);
         }
 
         if (!ModelState.IsValid)
-            return Page();
+            return await FormAgainAsync(cancellationToken);
 
         if (TurnstileEnabled)
         {
@@ -115,25 +144,36 @@ public sealed class LoginModel(
                 // A real person can just retry, so — unlike the honeypot/timing
                 // trap above — this fails visibly instead of pretending to succeed.
                 ModelState.AddModelError(string.Empty, "We couldn't verify that you're not a robot. Please try again.");
-                return Page();
+                return await FormAgainAsync(cancellationToken);
             }
         }
 
         var scheme = Request.Scheme;
-        var returnUrl = SafeReturnUrl();
 
-        await authService.RequestLoginAsync(
+        var withPendingAction = pendingActions.Peek(HttpContext) is not null;
+
+        // The return address goes on the token, not in the link: the link and
+        // the code then return to the same page, and the email holds nothing but the token.
+        var sent = await authService.RequestLoginAsync(
             Email,
             token => Url.Page(
                 "/Account/Verify",
                 pageHandler: null,
-                values: new { token, returnUrl },
+                values: new { token },
                 protocol: scheme)!,
+            LocalReturnUrlOrNull(),
+            withPendingAction,
             cancellationToken);
 
+        // The funnel's counts only; the page says the same either way. The action
+        // path counts a press's first email, the direct path every email.
+        if (sent && !withPendingAction)
+            metrics.Increment(SiteMetricKeys.LinkSentDirect);
+        else if (sent && pendingActions.Advance(HttpContext, PendingStage.Sent))
+            metrics.Increment(SiteMetricKeys.LinkSentWithAction);
+
         // Always report the same thing whether or not the account existed.
-        LinkSent = true;
-        return Page();
+        return await LinkSentAsync(cancellationToken);
     }
 
     /// <summary>
@@ -146,7 +186,6 @@ public sealed class LoginModel(
     public async Task<IActionResult> OnPostVerifyCodeAsync(string? code, CancellationToken cancellationToken)
     {
         // Back to "check your inbox", with the field, whatever happens below.
-        LinkSent = true;
         Code = code;
         ModelState.Clear();
 
@@ -155,21 +194,18 @@ public sealed class LoginModel(
         switch (result.Status)
         {
             case LoginRedemptionStatus.Success:
-                // As Pages/Account/Verify does for the link.
-                await HttpContext.SignInAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    RecallPrincipal.Create(result.UserId, result.DisplayName, result.Email, result.Role),
-                    new AuthenticationProperties { IsPersistent = true });
-                return LocalRedirect(SafeReturnUrl());
+                // As Pages/Account/Verify does for the link: back to the page on the token.
+                return await SignInCompletion.FinishAsync(
+                    this, result, pendingActions, pendingActionService, metrics, AirDate.Today(timeProvider), cancellationToken);
 
             case LoginRedemptionStatus.TooManyAttempts:
                 CodeLockedOut = true;
                 CodeError = TooManyCodesMessage;
-                return Page();
+                return await LinkSentAsync(cancellationToken);
 
             default:
                 CodeError = WrongCodeMessage;
-                return Page();
+                return await LinkSentAsync(cancellationToken);
         }
     }
 
@@ -184,6 +220,28 @@ public sealed class LoginModel(
         return DateTimeOffset.UtcNow - renderedAt >= MinimumHumanSubmitDelay;
     }
 
-    private string SafeReturnUrl() =>
-        !string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/Dashboard";
+    /// <summary>The form's return address when <c>Url.IsLocalUrl</c> accepts it; null (the Dashboard) otherwise.</summary>
+    private string? LocalReturnUrlOrNull() =>
+        !string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) ? ReturnUrl : null;
+
+    /// <summary>"Check your inbox", with what happens after sign-in when a press is waiting.</summary>
+    private async Task<IActionResult> LinkSentAsync(CancellationToken cancellationToken)
+    {
+        LinkSent = true;
+        await LoadPromptAsync(cancellationToken);
+        return Page();
+    }
+
+    /// <summary>The form again, after a mistake, with its context.</summary>
+    private async Task<IActionResult> FormAgainAsync(CancellationToken cancellationToken)
+    {
+        await LoadPromptAsync(cancellationToken);
+        return Page();
+    }
+
+    private async Task LoadPromptAsync(CancellationToken cancellationToken)
+    {
+        if (pendingActions.Peek(HttpContext) is { } action)
+            Prompt = await pendingActionService.DescribeAsync(action, cancellationToken);
+    }
 }

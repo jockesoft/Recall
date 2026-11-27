@@ -63,6 +63,10 @@ const int WatchlistMovie = 1305;    // Heat
 const int NotWatchedMovie = 219;    // Arrival: neither watched nor on the watchlist
 const int UnreleasedMovie = 356047; // Dune: Part Three: the seed moves its release to a year after the run
 
+// The made-up account the after-sign-in shot signs in with (removed again by its cleanup).
+const string PendingActionAddress = "ui-review-pending@example.com";
+const string PendingInboxAddress = "ui-review-inbox@example.com";
+
 // Profile's push section in the states a browser can be in. Headless Chromium
 // cannot really subscribe (it has no push service), so the browser's side is
 // played by an init script; the server's side is the seed's two devices.
@@ -496,6 +500,8 @@ List<Shot> shots =
         Cleanup: _ => RunReviewScriptAsync(options, "import-progress", "off")),
     new("admin", "default", Site.SignedIn, "/Admin"),
     new("admin", "digest-preview", Site.SignedIn, "/Admin/DigestPreview"),
+    // The site metrics: whatever the review itself has counted today on the seeded clone.
+    new("admin", "metrics", Site.SignedIn, "/Admin/Metrics"),
     new("digest-unsubscribe", "confirm", Site.SignedIn, "/Admin/DigestPreview", ViewportOnly: true,
         Prepare: async page =>
         {
@@ -645,6 +651,44 @@ List<Shot> shots =
             await page.Locator("#codeMessage:not(:empty)").WaitForAsync();
         }),
     new("verify", "invalid-link", Site.Anonymous, "/Account/Verify?token=not-a-real-token"),
+    // A visitor pressed "Add to library" on a series: the sign-in page says so at the top.
+    new("login", "pending-series", Site.Anonymous, $"/Series/Details/{NotInLibrary}", Prepare: PressAsVisitorAsync),
+    // ...or "Mark as watched" on an episode (one the anonymous instance can show: see episode-details_signed-out).
+    new("login", "pending-episode", Site.Anonymous, $"/Series/Details/{AllWatched}",
+        Prepare: async page =>
+        {
+            if (cachedEpisodePath is null)
+                await OpenFirstEpisodeAsync(page);
+            else
+                await page.GotoAsync(options.BaseUrl(Site.Anonymous) + cachedEpisodePath);
+            await SettleAsync(page);
+            await PressAsVisitorAsync(page);
+            await page.Locator("#signInContext").GetByText("as watched").WaitForAsync();
+        }),
+    // ...and after asking for the email: "Check your inbox" says what happens once signed in.
+    // Asking creates the account row, so the cleanup removes it again.
+    new("login", "pending-inbox", Site.Anonymous, $"/Series/Details/{NotInLibrary}",
+        Prepare: async page =>
+        {
+            await PressAsVisitorAsync(page);
+            await page.Locator("#Email").FillAsync(PendingInboxAddress);
+            await page.WaitForTimeoutAsync(2500); // the form refuses a submit faster than a person could type
+            await page.GetByRole(AriaRole.Button, new() { Name = "Send sign-in link" }).ClickAsync();
+            await page.Locator("#signInAfter").WaitForAsync();
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "remove-account", PendingInboxAddress)),
+    // ...and once signed in with the code from the email, the series page with the series
+    // added and the usual toast, with its Undo. The account exists only for this shot.
+    new("series-details", "after-sign-in", Site.Anonymous, $"/Series/Details/{NotInLibrary}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await PressAsVisitorAsync(page);
+            await SignInWithTheCodeAsync(page, options, PendingActionAddress);
+            await page.Locator(".tvdb-toast-stack .alert-success").GetByText("to your library").WaitForAsync();
+            await page.Locator(".tvdb-toast-stack .tvdb-toast-action").GetByText("Undo").WaitForAsync();
+            await page.Locator("#titleMenuButton").WaitForAsync(); // in the library: the "⋯" menu has Remove
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "remove-account", PendingActionAddress)),
     new("series-details", "signed-out", Site.Anonymous, $"/Series/Details/{Watching}"),
     new("series-details", "long-title", Site.Anonymous, $"/Series/Details/{NotInLibrary}"),
     new("episode-details", "signed-out", Site.Anonymous, $"/Series/Details/{AllWatched}",
@@ -770,7 +814,7 @@ Console.WriteLine(cornerProblems == 0
 var contrastProblems = results.Sum(r => r.HeroContrastProblems.Count);
 var heroShots = results.Where(r => r.HeroContrastChecked > 0).ToList();
 Console.WriteLine(contrastProblems == 0
-    ? $"hero contrast: ok on every shot with hero art ({heroShots.Count} shots, {heroShots.Sum(r => r.HeroContrastChecked)} texts on a white and a black picture; lowest {heroShots.Select(r => r.HeroContrastLowest).DefaultIfEmpty(0).Min():0.00}:1)"
+    ? $"hero contrast: ok on every shot with hero art ({heroShots.Count} shots, {heroShots.Sum(r => r.HeroContrastChecked)} texts on a white and a black picture; lowest {heroShots.Select(r => r.HeroContrastLowest).DefaultIfEmpty(0).Min():0.00}:1, {heroShots.OrderBy(r => r.HeroContrastLowest).FirstOrDefault()?.File}: {heroShots.OrderBy(r => r.HeroContrastLowest).FirstOrDefault()?.HeroContrastLowestText})"
     : $"hero contrast: FAILED, {contrastProblems} text(s) below the minimum on {results.Count(r => r.HeroContrastProblems.Count > 0)} shot(s) (HeroContrastProblems in report.json)");
 
 return results.Any(r => r.Error is not null) || listProblems > 0 || cornerProblems > 0 || contrastProblems > 0
@@ -1553,6 +1597,8 @@ static async Task CheckHeroContrastAsync(IPage page, ShotResult result)
                 }
                 """, new { png = Convert.ToBase64String(png), color = item.GetProperty("color").GetString() });
 
+            if (ratio < lowest)
+                result.HeroContrastLowestText = $"{picture}: {item.GetProperty("name").GetString()} \"{item.GetProperty("text").GetString()}\"";
             lowest = Math.Min(lowest, ratio);
             var minimum = item.GetProperty("large").GetBoolean() ? 3.0 : 4.5;
             if (ratio < minimum)
@@ -1652,22 +1698,51 @@ static async Task OpenFirstEpisodeAsync(IPage page)
 }
 
 // Changes the review clone through ../review.sh, which knows the database.
-static async Task RunReviewScriptAsync(Options options, params string[] arguments)
+// Returns what the script printed (signin-code prints the code).
+static async Task<string> RunReviewScriptAsync(Options options, params string[] arguments)
 {
     if (options.ReviewScript is null)
         throw new InvalidOperationException("This shot needs --review-script (review.sh capture passes it).");
 
-    var start = new System.Diagnostics.ProcessStartInfo("bash") { RedirectStandardError = true };
+    var start = new System.Diagnostics.ProcessStartInfo("bash") { RedirectStandardError = true, RedirectStandardOutput = true };
     start.ArgumentList.Add(options.ReviewScript);
     foreach (var argument in arguments)
         start.ArgumentList.Add(argument);
 
     using var process = System.Diagnostics.Process.Start(start)!;
+    var output = process.StandardOutput.ReadToEndAsync();
     var error = await process.StandardError.ReadToEndAsync();
     await process.WaitForExitAsync();
 
     if (process.ExitCode != 0)
         throw new InvalidOperationException($"review.sh {string.Join(' ', arguments)} failed: {error}");
+
+    return (await output).Trim();
+}
+
+// A signed-out visitor presses the page's primary action ("Add to library") and
+// lands on the sign-in page, which says what will happen once they sign in.
+static async Task PressAsVisitorAsync(IPage page)
+{
+    await page.Locator("#primaryAction").ClickAsync();
+    await page.WaitForURLAsync(url => url.Contains("/Account/Login", StringComparison.Ordinal));
+    await page.Locator("#signInContext").WaitForAsync();
+}
+
+// Then signs in with the code from the email (read from the clone's queue),
+// and comes back to the page with the action done and its toast.
+static async Task SignInWithTheCodeAsync(IPage page, Options options, string email)
+{
+    await page.Locator("#Email").FillAsync(email);
+    await page.WaitForTimeoutAsync(2500); // the form refuses a submit faster than a person could type
+    await page.GetByRole(AriaRole.Button, new() { Name = "Send sign-in link" }).ClickAsync();
+    await page.Locator("#code").WaitForAsync();
+
+    var code = await RunReviewScriptAsync(options, "signin-code", email);
+    await page.Locator("#code").FillAsync(code);
+    await page.Locator("#signInCodeSubmit").ClickAsync();
+    await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
+    await page.Locator(".tvdb-toast-stack .alert-success").WaitForAsync();
 }
 
 // On a phone the navigation is collapsed behind the toggler.
@@ -1765,6 +1840,9 @@ class ShotResult
 
     /// <summary>The lowest contrast measured in the hero, as a ratio to 1.</summary>
     public double HeroContrastLowest { get; set; }
+
+    /// <summary>Which text measured <see cref="HeroContrastLowest"/>, and over which picture.</summary>
+    public string? HeroContrastLowestText { get; set; }
     public string? Error { get; set; }
 }
 

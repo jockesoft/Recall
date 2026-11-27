@@ -21,6 +21,7 @@ public sealed class DataMigrationTests
     private const string SeriesMappingVersion = "20261002095341_SeriesMappingVersion";
     private const string BeforeSeriesStillCounts = "20261002122531_DropEpisodeRefreshAttempts";
     private const string BeforeSeriesStoppedUtc = "20261002125224_SeriesStillCounts";
+    private const string BeforeSiteMetricsAndFirstSignIn = "20261125154814_DiscoverListsAndDismissals";
 
     private static readonly DateTime ImportedUtc = new(2026, 9, 14, 8, 30, 0, DateTimeKind.Utc);
 
@@ -540,6 +541,27 @@ public sealed class DataMigrationTests
             "UPDATE tracked_series SET stopped_utc = now() WHERE user_id = $1 AND tvdb_id = 1", user);
         (await database.ScalarAsync<long>("SELECT count(*) FROM tracked_series WHERE stopped_utc IS NOT NULL"))
             .Should().Be(1);
+    }
+
+    // ---- SiteMetricsAndFirstSignIn: existing accounts are not new ----
+
+    [Test]
+    public async Task SiteMetricsAndFirstSignIn_Should_GiveEveryExistingAccountItsCreationDate_AsFirstSignIn()
+    {
+        await using var database = await MigrationDatabase.CreateAsync();
+        await database.MigrateToAsync(BeforeSiteMetricsAndFirstSignIn);
+
+        var user = await database.InsertUserAsync();
+        await database.ExecuteAsync(
+            "UPDATE app_user SET created_utc = '2026-03-04T05:06:07Z' WHERE id = $1", user);
+
+        await database.MigrateToLatestAsync();
+
+        (await database.ScalarAsync<DateTime>("SELECT first_sign_in_utc FROM app_user WHERE id = $1", user))
+            .Should().Be(new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc),
+                "an account from before the column is not a new account when it next signs in");
+        (await database.ScalarAsync<long>("SELECT count(*) FROM site_metric_daily"))
+            .Should().Be(0, "the metrics start empty");
     }
 
     private static async Task<(int Aired, int WithStill)> StillCountsAsync(MigrationDatabase database, int tvdbId) =>

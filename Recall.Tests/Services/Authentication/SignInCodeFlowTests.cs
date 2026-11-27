@@ -1,3 +1,4 @@
+using Recall.Tests.TestSupport;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
@@ -11,6 +12,7 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.Metrics;
 
 namespace Recall.Tests.Services.Authentication;
 
@@ -30,6 +32,9 @@ public sealed class SignInCodeFlowTests
     private LoginTokenOptions _options = null!;
     private List<(string Text, string Html)> _emails = null!;
 
+    /// <summary>What the service counted, across every service instance of a test.</summary>
+    private RecordingSiteMetrics Metrics { get; set; } = null!;
+
     [SetUp]
     public async Task SetUpAsync()
     {
@@ -43,6 +48,7 @@ public sealed class SignInCodeFlowTests
         _options = new LoginTokenOptions { TokenLifetimeMinutes = 20, ResendCooldownSeconds = 0, MaxRequestsPerEmailPerDay = 50 };
         _guard = new LoginAbuseGuard(Options.Create(_options));
         _emails = [];
+        Metrics = new RecordingSiteMetrics();
     }
 
     [TearDown]
@@ -61,11 +67,11 @@ public sealed class SignInCodeFlowTests
 
         return new PasswordlessAuthService(
             new AppUserRepository(db), new LoginTokenRepository(db), mail.Object, _guard,
-            Options.Create(_options), NullLogger<PasswordlessAuthService>.Instance);
+            Options.Create(_options), Metrics, NullLogger<PasswordlessAuthService>.Instance);
     }
 
     /// <summary>Requests a sign-in email and returns the link's token and the code, as they appear in it.</summary>
-    private async Task<(string Token, string Code)> RequestEmailAsync(string address = Address)
+    private async Task<(string Token, string Code)> RequestEmailAsync(string address = Address, string? returnUrl = null)
     {
         await using var db = new AppDbContext(_dbOptions);
         string? token = null;
@@ -73,7 +79,7 @@ public sealed class SignInCodeFlowTests
         {
             token = t;
             return $"https://recall.test/Account/Verify?token={t}";
-        });
+        }, returnUrl);
 
         var grouped = Regex.Match(_emails[^1].Text, @"\b(\d{3}) (\d{3})\b");
         grouped.Success.Should().BeTrue("the email shows the code in two groups of three");
@@ -122,6 +128,96 @@ public sealed class SignInCodeFlowTests
         row.CodeHash.Should().NotBeNullOrEmpty().And.NotContain(code);
         row.CodeHash.Should().Be(SignInCode.Hash(code, row.Id));
         row.CodeAttempts.Should().Be(0);
+    }
+
+    // ---- the site metrics -----------------------------------------------------------
+
+    [Test]
+    public async Task TheMetrics_Should_CountTheEmail_EachWayIn_AndTheFirstSignInAsANewAccount_Once()
+    {
+        var (token, _) = await RequestEmailAsync();
+        Metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent);
+
+        (await RedeemLinkAsync(token)).Succeeded.Should().BeTrue();
+        Metrics.Keys.Should().Equal(
+            SiteMetricKeys.LinkSent, SiteMetricKeys.LinkRedeemed, SiteMetricKeys.SignedInDirect,
+            SiteMetricKeys.NewAccount, SiteMetricKeys.NewAccountDirect);
+
+        var (_, code) = await RequestEmailAsync();
+        (await RedeemCodeAsync(code)).Succeeded.Should().BeTrue();
+        Metrics.Keys.Skip(5).Should().Equal(SiteMetricKeys.LinkSent, SiteMetricKeys.CodeRedeemed, SiteMetricKeys.SignedInDirect);
+
+        await using var db = new AppDbContext(_dbOptions);
+        (await db.AppUsers.SingleAsync()).FirstSignInUtc.Should().NotBeNull();
+    }
+
+    [Test]
+    public async Task AnEmailAskedForWithAPendingAction_Should_PutItsSignIn_OnTheActionPath()
+    {
+        string? token = null;
+        await using (var db = new AppDbContext(_dbOptions))
+            (await Service(db).RequestLoginAsync(Address, t => { token = t; return $"https://recall.test/Account/Verify?token={t}"; },
+                returnUrl: "/Series/Details/1", withPendingAction: true)).Should().BeTrue("an email was queued");
+
+        var signedIn = await RedeemLinkAsync(token!);
+
+        signedIn.WithPendingAction.Should().BeTrue();
+        Metrics.Keys.Should().Contain(SiteMetricKeys.SignedInWithAction).And.Contain(SiteMetricKeys.NewAccountWithAction)
+            .And.NotContain(SiteMetricKeys.SignedInDirect).And.NotContain(SiteMetricKeys.NewAccountDirect);
+    }
+
+    [Test]
+    public async Task TheMetrics_Should_CountNothing_ForAWrongCode_OrAnUnusedLink()
+    {
+        var (_, code) = await RequestEmailAsync();
+        await RedeemCodeAsync(WrongCode(code));
+        await RedeemLinkAsync("not-a-token");
+
+        Metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent);
+
+        await using var db = new AppDbContext(_dbOptions);
+        (await db.AppUsers.SingleAsync()).FirstSignInUtc.Should().BeNull("requesting an email creates the row, signing in makes it a new account");
+    }
+
+    // ---- where the sign-in returns to ------------------------------------------------
+
+    [Test]
+    public async Task TheReturnAddress_Should_RideOnTheToken_AndComeBackFromTheLinkAndFromTheCode()
+    {
+        var (token, _) = await RequestEmailAsync(returnUrl: "/Series/Details/81189");
+        _emails[^1].Text.Should().NotContain("Series", "the address is kept on the token, not put in the email");
+
+        (await RedeemLinkAsync(token)).ReturnUrl.Should().Be("/Series/Details/81189");
+
+        var (_, code) = await RequestEmailAsync(returnUrl: "/Movies/Details/1157");
+        (await RedeemCodeAsync(code)).ReturnUrl.Should().Be("/Movies/Details/1157");
+    }
+
+    [TestCase("https://evil.example/")]
+    [TestCase("//evil.example/Series/Details/1")]
+    [TestCase("/\\evil.example")]
+    public async Task AnAddressOffThisSite_Should_NeverBeStored(string returnUrl)
+    {
+        var (token, _) = await RequestEmailAsync(returnUrl: returnUrl);
+
+        await using (var db = new AppDbContext(_dbOptions))
+            (await db.LoginTokens.SingleAsync()).ReturnUrl.Should().BeNull();
+
+        (await RedeemLinkAsync(token)).ReturnUrl.Should().BeNull();
+    }
+
+    [Test]
+    public async Task AnAddressOffThisSite_Should_BeDroppedAgainOnRedemption_ShouldTheRowEverHoldOne()
+    {
+        var (token, code) = await RequestEmailAsync(returnUrl: "/Series/Details/1");
+        await using (var db = new AppDbContext(_dbOptions))
+            await db.LoginTokens.ExecuteUpdateAsync(s => s.SetProperty(x => x.ReturnUrl, "https://evil.example/"));
+
+        var signedIn = await RedeemCodeAsync(code);
+
+        signedIn.Succeeded.Should().BeTrue();
+        signedIn.ReturnUrl.Should().BeNull("the redemption checks the address again");
+        _ = token;
     }
 
     // ---- either way in, once ------------------------------------------------------

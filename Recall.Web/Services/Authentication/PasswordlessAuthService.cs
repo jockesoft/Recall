@@ -11,9 +11,11 @@ using System.Text;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Internal;
+using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.Metrics;
 
 namespace Recall.Web.Services.Authentication;
 
@@ -23,6 +25,7 @@ public sealed class PasswordlessAuthService(
     IMailService mailService,
     ILoginAbuseGuard abuseGuard,
     IOptions<LoginTokenOptions> options,
+    ISiteMetrics metrics,
     ILogger<PasswordlessAuthService> logger) : IPasswordlessAuthService
 {
     /// <summary>256 bits of entropy — the raw token that goes in the email link.</summary>
@@ -30,9 +33,11 @@ public sealed class PasswordlessAuthService(
 
     private readonly LoginTokenOptions _options = options.Value;
 
-    public async Task RequestLoginAsync(
+    public async Task<bool> RequestLoginAsync(
         string email,
         Func<string, string> loginLinkFactory,
+        string? returnUrl = null,
+        bool withPendingAction = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
@@ -47,7 +52,7 @@ public sealed class PasswordlessAuthService(
         {
             logger.LogWarning(
                 "Passwordless sign-in request rejected: {Email} is not on the allowlist.", normalizedEmail);
-            return;
+            return false;
         }
 
         // Per-address daily cap + site-wide hourly cap, both in-memory and
@@ -60,7 +65,7 @@ public sealed class PasswordlessAuthService(
             logger.LogWarning(
                 "Passwordless sign-in request throttled for {Email} (per-address or site-wide cap reached).",
                 normalizedEmail);
-            return;
+            return false;
         }
 
         var user = await userRepository.GetOrCreateByEmailAsync(normalizedEmail, cancellationToken);
@@ -79,7 +84,7 @@ public sealed class PasswordlessAuthService(
             logger.LogInformation(
                 "Passwordless sign-in request for user {UserId} ignored: within the {Cooldown}s resend cooldown.",
                 user.Id, _options.ResendCooldownSeconds);
-            return;
+            return false;
         }
 
         if (_options.InvalidatePreviousTokens)
@@ -100,7 +105,10 @@ public sealed class PasswordlessAuthService(
                 UserId = user.Id,
                 TokenHash = Hash(rawToken),
                 CodeHash = SignInCode.Hash(code, tokenId),
-                ExpiresUtc = nowUtc.AddMinutes(_options.TokenLifetimeMinutes)
+                ExpiresUtc = nowUtc.AddMinutes(_options.TokenLifetimeMinutes),
+                // Checked here too, whatever the page did: only a local path is ever stored.
+                ReturnUrl = LocalReturnUrl.Normalize(returnUrl),
+                WithPendingAction = withPendingAction
             },
             cancellationToken);
 
@@ -117,9 +125,13 @@ public sealed class PasswordlessAuthService(
             MailService.NormalPriority,
             cancellationToken);
 
+        // Only here: a bot trap, the allowlist, a cap or the cooldown sends nothing and counts nothing.
+        metrics.Increment(SiteMetricKeys.LinkSent);
+
         logger.LogInformation(
             "Passwordless sign-in requested for user {UserId}; link valid for {Minutes} minute(s).",
             user.Id, _options.TokenLifetimeMinutes);
+        return true;
     }
 
     public async Task<LoginRedemptionResult> RedeemAsync(string token, CancellationToken cancellationToken = default)
@@ -153,7 +165,9 @@ public sealed class PasswordlessAuthService(
         }
 
         logger.LogInformation("Passwordless sign-in succeeded for user {UserId} (role {Role}).", user.Id, user.Role);
-        return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
+        await CountSignInAsync(user.Id, SiteMetricKeys.LinkRedeemed, active.WithPendingAction, cancellationToken);
+        return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role, LocalReturnUrl.Normalize(active.ReturnUrl))
+            with { WithPendingAction = active.WithPendingAction };
     }
 
     public async Task<LoginRedemptionResult> RedeemCodeAsync(
@@ -185,7 +199,9 @@ public sealed class PasswordlessAuthService(
 
             abuseGuard.ResetWrongCodes(normalizedEmail);
             logger.LogInformation("Sign-in with a code succeeded for user {UserId} (role {Role}).", user!.Id, user.Role);
-            return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
+            await CountSignInAsync(user.Id, SiteMetricKeys.CodeRedeemed, token.WithPendingAction, cancellationToken);
+            return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role, LocalReturnUrl.Normalize(token.ReturnUrl))
+                with { WithPendingAction = token.WithPendingAction };
         }
 
         // Wrong, expired, no code, or no such account: all counted and answered alike.
@@ -198,6 +214,30 @@ public sealed class PasswordlessAuthService(
         return wrong >= SignInCode.MaxWrongAttempts
             ? LoginRedemptionResult.TooManyAttempts()
             : LoginRedemptionResult.Invalid();
+    }
+
+    /// <summary>
+    /// The site metrics of a sign-in: which way it was done, which path of the
+    /// funnel it is on, and whether it was the account's first (a new account).
+    /// Best-effort: a failure here never costs the sign-in.
+    /// </summary>
+    private async Task CountSignInAsync(Guid userId, string how, bool withPendingAction, CancellationToken cancellationToken)
+    {
+        metrics.Increment(how);
+        metrics.Increment(withPendingAction ? SiteMetricKeys.SignedInWithAction : SiteMetricKeys.SignedInDirect);
+
+        try
+        {
+            if (await userRepository.RecordSignInAsync(userId, DateTime.UtcNow, cancellationToken))
+            {
+                metrics.Increment(SiteMetricKeys.NewAccount);
+                metrics.Increment(withPendingAction ? SiteMetricKeys.NewAccountWithAction : SiteMetricKeys.NewAccountDirect);
+            }
+        }
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
+        {
+            logger.LogWarning(ex, "Could not record the sign-in of user {UserId}.", userId);
+        }
     }
 
     private bool IsEmailAllowed(string normalizedEmail)

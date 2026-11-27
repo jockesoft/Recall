@@ -39,7 +39,7 @@ else
 {
     var today = Model.Today;
 
-    <partial name="_TitleHero" model="@Model.BuildHero(ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
+    <partial name="_TitleHero" model="@Model.BuildHero()" />
 
     <div class="tvdb-shell tvdb-shell--below-hero">
         <div class="tvdb-detail-layout">

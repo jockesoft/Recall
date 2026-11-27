@@ -7,6 +7,7 @@ using Recall.Tests.TestSupport;
 using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Pages.Account;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -29,6 +30,10 @@ public class LoginCodeModelTests
         Mock.Of<ITurnstileVerifier>(),
         Options.Create(new TurnstileOptions()),
         Options.Create(new LoginTokenOptions()),
+        Mock.Of<IPendingActions>(),
+        Mock.Of<IPendingActionService>(),
+        Mock.Of<Recall.Web.Services.Metrics.ISiteMetrics>(),
+        TimeProvider.System,
         NullLogger<LoginModel>.Instance) { Email = "reader@test.local" }.WithHttpContext();
 
     [Test]

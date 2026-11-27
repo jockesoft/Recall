@@ -47,6 +47,10 @@ public sealed class AppUserEntityConfiguration : IEntityTypeConfiguration<AppUse
             .HasSentinel(true)
             .IsRequired();
 
+        builder.Property(x => x.FirstSignInUtc)
+            .HasColumnName("first_sign_in_utc")
+            .HasColumnType("timestamp with time zone");
+
         builder.Property(x => x.CreatedUtc)
             .HasColumnName("created_utc")
             .HasColumnType("timestamp with time zone")

@@ -206,19 +206,12 @@ public sealed record TitleProgressModel(
 /// Input for <c>_TitleActions.cshtml</c>: the action row of a detail page.
 /// One full-width primary button (or, when there is nothing to do, a quiet
 /// status box), then the square icon buttons: a "⋯" menu, a movie's
-/// watchlist toggle, the heart and Share. A visitor gets the sign-in card
-/// instead of the whole row.
+/// watchlist toggle, the heart and Share. A visitor gets the same row: its
+/// forms post to the same handlers, which keep what was pressed and send the
+/// visitor to sign in (<c>IPendingActions</c>).
 /// </summary>
 public sealed class TitleActionsModel
 {
-    public required bool IsAuthenticated { get; init; }
-
-    /// <summary>"series" or "movie": "Sign in to track this series".</summary>
-    public required string Noun { get; init; }
-
-    /// <summary>Where the sign-in card sends a visitor back to after signing in.</summary>
-    public string? ReturnUrl { get; init; }
-
     /// <summary>A sentence that explains the primary button and comes before it ("You stopped watching on Fri, Sep 4").</summary>
     public TitleNotice? Notice { get; init; }
 

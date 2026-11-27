@@ -23,6 +23,14 @@
                 The link and the code in it expire in @Model.LinkLifetimeMinutes minute@(Model.LinkLifetimeMinutes == 1 ? "" : "s") and work once.
                 Nothing after a few minutes? Check your spam folder.
             </p>
+            @if (Model.Prompt is { } waiting)
+            {
+                @* What the visitor pressed, done once they have signed in in this browser. The same
+                   line whatever the address, so it says nothing about whether it has an account. *@
+                <p class="tvdb-signin-after" id="signInAfter">
+                    <i class="@Icons.Check" aria-hidden="true"></i> @waiting.AfterSignIn
+                </p>
+            }
 
             @* For where the link doesn't open (a Home Screen app keeps its own sign-in):
                the address rides along in the form, so no cookie of ours is needed. *@
@@ -56,6 +64,20 @@
     }
     else
     {
+        @if (Model.Prompt is { } prompt)
+        {
+            @* What the visitor pressed on a Details page; it is done once they have signed in. *@
+            <div class="tvdb-signin-context" id="signInContext">
+                @if (prompt.PosterUrl is not null)
+                {
+                    <img src="@prompt.PosterUrl" alt="" class="tvdb-signin-context__poster" width="48" height="72" decoding="async" />
+                }
+                <div>
+                    <p class="tvdb-signin-context__lead">@prompt.Lead</p>
+                    <p class="tvdb-signin-context__detail">@prompt.Detail</p>
+                </div>
+            </div>
+        }
         <h1 class="mb-2">Sign in</h1>
         <p class="tvdb-prose text-muted mb-4">We'll email you a sign-in link. No password needed.</p>
 

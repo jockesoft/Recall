@@ -121,7 +121,7 @@ public sealed class MovieDetailsPipelineTests
         html.Should().Contain("<dt>Budget</dt> <dd class=\"tvdb-mono\">$60,000,000</dd>");
         html.Should().NotContain("<dt>Box office</dt>", "the movie has no box office figure");
         html.Should().NotContain("<dt>IMDb</dt>", "OMDb has nothing for it");
-        html.Should().Contain("Sign in to track this movie");
+        html.Should().Contain("handler=ToggleWatchlist", "a visitor gets the same action row");
 
         // Overview, then cast, then crew: the one-column order below 992px, which
         // the stylesheet's grid areas rearrange from 992px (crew under the overview).
