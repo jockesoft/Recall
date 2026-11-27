@@ -79,15 +79,21 @@
     --tvdb-scrim-caption: rgba(10, 13, 18, 0.78);   /* under caption text on a still */
     --tvdb-text-shadow-on-art: 0 1px 2px rgba(10, 13, 18, 0.7);
 
-    /* The title hero (Series Details): behind it the title's background art,
-       under a shade that never lets less than 80% ink through where text sits
-       and ends in the frame's colour, so its text passes contrast over any
-       picture (on-ink-muted is 4.9:1 over a white one). Without art the
-       hero is the plain gradient. */
+    /* The title hero (_TitleHero: Series, Movie and Episode Details): behind it
+       the background art (or an episode's still) under three layers. The top
+       shade is 84% ink behind the way back, then opens to 30% so the picture
+       shows; the text shade starts at the heading block (fading in over the
+       24px above it) at 86%, so everything from the title down sits on at
+       least that; the end shade finishes in the frame's colour. Over a white
+       picture, on-ink-muted is 5.5:1 on 84% and 5.9:1 on 86% (4.9:1 needs
+       80%); the UI review measures every hero text on a white and a black
+       picture. Without art the hero is the plain gradient. */
     --tvdb-hero-bg: linear-gradient(180deg, var(--tvdb-ink-2) 0%, var(--tvdb-ink) 100%);
     --tvdb-hero-shade:
         linear-gradient(90deg, var(--tvdb-ink) 0%, rgba(21, 27, 36, 0) 14%, rgba(21, 27, 36, 0) 86%, var(--tvdb-ink) 100%),
-        linear-gradient(180deg, rgba(21, 27, 36, 0.8) 0%, rgba(21, 27, 36, 0.88) 55%, var(--tvdb-ink) 100%);
+        linear-gradient(180deg, rgba(21, 27, 36, 0.84) 0, rgba(21, 27, 36, 0.84) 52px, rgba(21, 27, 36, 0.3) 92px, rgba(21, 27, 36, 0.3) 100%);
+    --tvdb-hero-text-shade: linear-gradient(180deg, rgba(21, 27, 36, 0) 0, rgba(21, 27, 36, 0.86) var(--tvdb-space-6), rgba(21, 27, 36, 0.9) 100%);
+    --tvdb-hero-end-shade: linear-gradient(180deg, rgba(21, 27, 36, 0) calc(100% - var(--tvdb-space-7)), var(--tvdb-ink) 100%);
     --tvdb-on-ink-line: rgba(241, 236, 226, 0.28);   /* chip and button edges on ink */
     --tvdb-on-ink-wash: rgba(241, 236, 226, 0.06);   /* a quiet fill on ink */
     --tvdb-ok-on-ink: #9cc79c;                       /* "Continuing", "Up to date" on ink */

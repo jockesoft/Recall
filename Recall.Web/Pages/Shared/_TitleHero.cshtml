@@ -17,11 +17,11 @@
         @if (Model.Back.UseHistory)
         {
             <a asp-page="@Model.Back.Page" asp-route-id="@Model.Back.RouteId" class="tvdb-back-link tvdb-hero__back"
-               onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> @Model.Back.Text</a>
+               onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> <span class="tvdb-hero__back-text">@Model.Back.Text</span></a>
         }
         else
         {
-            <a asp-page="@Model.Back.Page" asp-route-id="@Model.Back.RouteId" class="tvdb-back-link tvdb-hero__back"><i class="@Icons.Back" aria-hidden="true"></i> @Model.Back.Text</a>
+            <a asp-page="@Model.Back.Page" asp-route-id="@Model.Back.RouteId" class="tvdb-back-link tvdb-hero__back"><i class="@Icons.Back" aria-hidden="true"></i> <span class="tvdb-hero__back-text">@Model.Back.Text</span></a>
         }
 
         <div class="tvdb-hero__title-row">

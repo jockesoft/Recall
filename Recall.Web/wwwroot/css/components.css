@@ -1820,12 +1820,50 @@ dl.row dd a.tvdb-inline-edit {
     object-position: center 20%;
 }
 
-.tvdb-hero.has-art::before {
+/* Three shades over the art (see --tvdb-hero-shade in tokens.css), all at
+   z-index -1 in the hero's stacking context, painted in this order: the top
+   shade, the heading block's (.tvdb-hero__head::before, from the title down,
+   whatever the title's height in the hero), and the end shade. */
+.tvdb-hero.has-art::before,
+.tvdb-hero.has-art::after {
     content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
+    pointer-events: none;
+}
+
+.tvdb-hero.has-art::before {
     background: var(--tvdb-hero-shade);
+}
+
+.tvdb-hero.has-art::after {
+    background: var(--tvdb-hero-end-shade);
+}
+
+/* From the heading block down, across the whole hero (its overflow clips it). */
+.tvdb-hero.has-art .tvdb-hero__head::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: calc(var(--tvdb-space-6) * -1);
+    right: -100vw;
+    bottom: -100vh;
+    left: -100vw;
+    background: var(--tvdb-hero-text-shade);
+    pointer-events: none;
+}
+
+/* With art, a band between the way back and the title where the picture shows:
+   on a phone only when there is no poster (a poster's row is that band). */
+.tvdb-hero--no-poster.has-art .tvdb-hero__back {
+    margin-bottom: var(--tvdb-space-7);
+}
+
+@media (min-width: 576px) {
+    .tvdb-hero.has-art .tvdb-hero__back {
+        margin-bottom: calc(var(--tvdb-space-7) * 2);
+    }
 }
 
 .tvdb-hero__inner {
@@ -1839,8 +1877,17 @@ dl.row dd a.tvdb-inline-edit {
 
 .tvdb-hero__back {
     align-self: flex-start;
+    max-width: 100%;
     margin-bottom: 0;
     color: var(--tvdb-on-ink-muted);
+}
+
+/* One line, so it stays on the shade behind it (an episode's way back is its series' name). */
+.tvdb-hero__back-text {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .tvdb-hero__back:hover,
@@ -1866,6 +1913,7 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 .tvdb-hero__head {
+    position: relative;
     flex: 1 1 18rem;
     min-width: 0;
 }
