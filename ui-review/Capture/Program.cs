@@ -51,6 +51,8 @@ const int AllWatched = 334824;   // Dark
 const int NotStarted = 370112;   // Mare of Easttown
 const int Stopped = 417223;      // Baby Reindeer
 const int NotInLibrary = 367506; // The Lord of the Rings: The Rings of Power: a long title, not tracked
+const int GuestStarSeries = 76177; // Saturday Night Live: not tracked; its episodes list their hosts and guests
+const int NoStillSeries = 417648;  // The Penguin: the seed takes S01E01's still away (background-art fallback)
 const int WatchedMovie = 290272;     // Dune: Part Two
 const int NoArtMovie = 287533;      // Oppenheimer: watched, cached before background art was kept
 const int WatchlistMovie = 1305;    // Heat
@@ -348,6 +350,9 @@ List<Shot> shots =
             await page.Locator("#removeFromLibrary").ClickAsync();
             await page.Locator("#removeFromLibraryModal.show").WaitForAsync();
         }),
+    // Episode Details: the shared hero with the episode's still, the action row in each state,
+    // the Up next card under it, then the overview, the guest stars and previous/next.
+    // Watched, with the next episode watched too (Up next's green check).
     new("episode-details", "watched", Site.SignedIn, $"/Series/Details/{AllWatched}",
         Prepare: async page =>
         {
@@ -355,8 +360,55 @@ List<Shot> shots =
             // Remembered for the signed-out shot: that instance has no TheTVDB
             // key, so it can only show an episode this visit has cached.
             cachedEpisodePath = new Uri(page.Url).PathAndQuery;
+            await page.Locator(".tvdb-up-next #upNextMark[aria-pressed=true]").WaitForAsync();
         }),
-    new("episode-details", "unwatched", Site.SignedIn, $"/Series/Details/{NotStarted}", Prepare: OpenFirstEpisodeAsync),
+    // Not watched: "Mark as watched", and Up next's ring.
+    new("episode-details", "not-watched", Site.SignedIn, $"/Series/Details/{NotStarted}",
+        Prepare: async page =>
+        {
+            await OpenFirstEpisodeAsync(page);
+            await page.Locator(".tvdb-up-next #upNextMark[aria-pressed=false]").WaitForAsync();
+        }),
+    new("episode-details", "not-watched-webkit", Site.SignedIn, $"/Series/Details/{NotStarted}",
+        Prepare: OpenFirstEpisodeAsync, Engine: Engine.WebKit),
+    // Up next's check on an episode with an unwatched one before it asks first.
+    new("episode-details", "prior-episodes-modal", Site.SignedIn, $"/Series/Details/{NotStarted}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await OpenFirstEpisodeAsync(page);
+            await page.Locator("#upNextMark").ClickAsync();
+            await page.Locator("#seriesCatchUpModal.show").WaitForAsync();
+        }),
+    // Not released yet (the seed moves Silo's announced episodes to the coming weeks):
+    // "Airs …" in the viewer's time, and no way to mark it.
+    new("episode-details", "not-aired", Site.SignedIn, $"/Series/Details/{UpToDate}",
+        Prepare: async page =>
+        {
+            await OpenEpisodeLinkAsync(page, "li.tvdb-ep:has(.tvdb-ep-mark--upcoming) a[href^='/Episodes/Details/']");
+            await page.Locator(".tvdb-status-box time").WaitForAsync();
+        }),
+    // A special: "Special · E1" and "Special 1 of N", no bar.
+    new("episode-details", "special", Site.SignedIn, $"/Series/Details/{Watching}",
+        Prepare: page => OpenEpisodeLinkAsync(page, ".tvdb-season-card--specials a[href^='/Episodes/Details/']")),
+    // No still on TheTVDB: the series' background art stands in, behind the hero.
+    new("episode-details", "no-still", Site.SignedIn, $"/Series/Details/{NoStillSeries}",
+        Prepare: async page =>
+        {
+            await OpenFirstEpisodeAsync(page);
+            var art = await page.Locator(".tvdb-hero__art").GetAttributeAsync("src");
+            if (art is null || !art.Contains("/fanart/", StringComparison.Ordinal) && !art.Contains("backgrounds", StringComparison.Ordinal))
+                throw new InvalidOperationException($"The hero shows {art ?? "no art"}, not the series' background art.");
+        }),
+    // Guest stars, from the episode's own record (fetched on this visit, so it has them).
+    new("episode-details", "guest-stars", Site.SignedIn, $"/Series/Details/{GuestStarSeries}",
+        Prepare: async page =>
+        {
+            // Season 51's first episode (Bad Bunny, Oct 2025). TheTVDB lists no one yet on the
+            // newest episodes (S52E01 had nobody on 2026-11-27); this one has its host,
+            // musical guest and guest stars.
+            await OpenEpisodeLinkAsync(page, "#season-51 a[href^='/Episodes/Details/']");
+            await page.Locator("#guestStarsList").WaitForAsync();
+        }),
     new("movie-details", "not-watched", Site.SignedIn, $"/Movies/Details/{NotWatchedMovie}"),
     new("movie-details", "watched", Site.SignedIn, $"/Movies/Details/{WatchedMovie}"),
     new("movie-details", "watched-menu", Site.SignedIn, $"/Movies/Details/{WatchedMovie}", ViewportOnly: true,
@@ -1385,6 +1437,15 @@ static async Task RewatchLastEpisodeAsync(IPage page)
     await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
     await page.Locator("#primaryAction").ClickAsync();
     await page.Locator(".tvdb-toast-stack .alert-success[data-toast-kind]").WaitForAsync();
+}
+
+// Opens the episode a link on the page points at, also one inside a closed season card.
+static async Task OpenEpisodeLinkAsync(IPage page, string selector)
+{
+    var href = await page.Locator(selector).First.GetAttributeAsync("href")
+               ?? throw new InvalidOperationException($"No episode link matches {selector}.");
+    await page.GotoAsync(new Uri(new Uri(page.Url), href).ToString());
+    await SettleAsync(page);
 }
 
 static async Task OpenFirstEpisodeAsync(IPage page)

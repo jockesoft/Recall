@@ -107,6 +107,23 @@ SELECT ui_watch(426845);                     -- The Gentlemen (already tracked)
 SELECT ui_track(417223), ui_watch(417223, 3); -- Baby Reindeer, 3 of 7
 SELECT ui_track(370112);                      -- Mare of Easttown, nothing watched
 
+-- ---- An episode without a still -------------------------------------------
+-- Episode Details falls back to the series' background art when TheTVDB has no
+-- still, and none of the series with art lacks one. The Penguin S01E01 (whose
+-- record review.sh fetches in setup) loses its still, in the clone only: in the
+-- aggregate and in its own record, the two places the shared rule looks.
+UPDATE cached_series_aggregate a
+SET payload = jsonb_set(a.payload, '{episodes}', (
+        SELECT jsonb_agg(CASE WHEN (e ->> 'seasonNumber')::int = 1 AND (e ->> 'episodeNumber')::int = 1
+                              THEN e || '{"image": null}'::jsonb ELSE e END ORDER BY ord)
+        FROM jsonb_array_elements(a.payload -> 'episodes') WITH ORDINALITY t(e, ord))),
+    aired_still_count = GREATEST(aired_still_count - 1, 0)
+WHERE a.tvdb_id = 417648;
+
+UPDATE cached_episode_extended x
+SET payload = x.payload || '{"image": null}'::jsonb, has_image = false
+WHERE x.series_tvdb_id = 417648 AND (x.payload ->> 'seasonNumber')::int = 1 AND (x.payload ->> 'number')::int = 1;
+
 -- ---- Movies ----------------------------------------------------------------
 -- Watched already: Oppenheimer, The Ridiculous 6, Killer Elite.
 
