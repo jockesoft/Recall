@@ -56,6 +56,20 @@
     }
     else
     {
+        @if (Model.Prompt is { } prompt)
+        {
+            @* What the visitor pressed on a Details page; it is done once they have signed in. *@
+            <div class="tvdb-signin-context" id="signInContext">
+                @if (prompt.PosterUrl is not null)
+                {
+                    <img src="@prompt.PosterUrl" alt="" class="tvdb-signin-context__poster" width="48" height="72" decoding="async" />
+                }
+                <div>
+                    <p class="tvdb-signin-context__lead">@prompt.Lead</p>
+                    <p class="tvdb-signin-context__detail">@prompt.Detail</p>
+                </div>
+            </div>
+        }
         <h1 class="mb-2">Sign in</h1>
         <p class="tvdb-prose text-muted mb-4">We'll email you a sign-in link. No password needed.</p>
 

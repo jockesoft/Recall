@@ -28,6 +28,9 @@ public sealed record LoginRedemptionResult(
     string DisplayName,
     UserRole Role)
 {
+    /// <summary>Where the sign-in returns to, as stored on the token; null for the default. Check it with <c>Url.IsLocalUrl</c> before redirecting.</summary>
+    public string? ReturnUrl { get; init; }
+
     public bool Succeeded => Status == LoginRedemptionStatus.Success;
 
     public static LoginRedemptionResult Invalid() =>
@@ -36,6 +39,6 @@ public sealed record LoginRedemptionResult(
     public static LoginRedemptionResult TooManyAttempts() =>
         new(LoginRedemptionStatus.TooManyAttempts, Guid.Empty, string.Empty, string.Empty, UserRole.User);
 
-    public static LoginRedemptionResult ForUser(Guid userId, string email, string displayName, UserRole role) =>
-        new(LoginRedemptionStatus.Success, userId, email, displayName, role);
+    public static LoginRedemptionResult ForUser(Guid userId, string email, string displayName, UserRole role, string? returnUrl = null) =>
+        new(LoginRedemptionStatus.Success, userId, email, displayName, role) { ReturnUrl = returnUrl };
 }

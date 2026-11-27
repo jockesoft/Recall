@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services.Discover;
+using Recall.Web.Services.PendingActions;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Extensions;
@@ -38,6 +39,13 @@ public static class PageModelToastExtensions
     public const string UndoDiscoverKindKey = "Toast.UndoDiscover.Kind";
     public const string UndoDiscoverIdKey = "Toast.UndoDiscover.Id";
     public const string UndoDiscoverAnchorKey = "Toast.UndoDiscover.Anchor";
+
+    // Read back by _ToastMessages.cshtml, which renders an "Undo" POST form
+    // inside the toast of an action done after sign-in that added something:
+    // "Series" (out of the library again) or "Movie" (off the watchlist
+    // again), and the TheTVDB id.
+    public const string UndoAddTitleKey = "Toast.UndoAdd.Title";
+    public const string UndoAddIdKey = "Toast.UndoAdd.Id";
 
     // Set when the success toast is the "you're up to date" / "you've finished"
     // one: which of the two (its icon), and the series to offer "Rate it" for.
@@ -104,6 +112,40 @@ public static class PageModelToastExtensions
 
             if (!string.IsNullOrWhiteSpace(undo.Anchor))
                 pageModel.TempData[UndoDiscoverAnchorKey] = undo.Anchor;
+        }
+
+        /// <summary>
+        /// The toast for an action a visitor pressed before signing in, done
+        /// once they had (<see cref="IPendingActionService"/>): the usual
+        /// success, with the Undo of an add or of a mark, or why it was not done.
+        /// </summary>
+        public void SetPendingActionToast(PendingActionOutcome outcome, DateOnly today)
+        {
+            switch (outcome.Tone)
+            {
+                case PendingOutcomeTone.Error:
+                    pageModel.TempData[ErrorKey] = outcome.Message;
+                    return;
+                case PendingOutcomeTone.Info:
+                    pageModel.TempData[InfoKey] = outcome.Message;
+                    return;
+            }
+
+            if (outcome is { WatchedSeriesId: { } seriesId, Batch: { } batch })
+            {
+                // The page's own tick undoes a single mark, but the visitor never saw it change: offer the Undo.
+                pageModel.SetSuccessToastWithWatchedUndo(outcome.Message, seriesId, batch, undoSingle: true,
+                    caughtUp: outcome.CaughtUp, today: today, resumedFromStoppedUtc: outcome.ResumedFromStoppedUtc);
+                return;
+            }
+
+            pageModel.TempData[SuccessKey] = outcome.Message;
+
+            if (outcome.UndoAdd is { } undo)
+            {
+                pageModel.TempData[UndoAddTitleKey] = undo.Title.ToString();
+                pageModel.TempData[UndoAddIdKey] = undo.TvdbId.ToString(CultureInfo.InvariantCulture);
+            }
         }
 
         /// <summary>

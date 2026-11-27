@@ -4,6 +4,7 @@ using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Display;
 using Recall.Web.Services.Discover;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Web.Pages.Shared;
 
@@ -53,7 +54,8 @@ public sealed class ToastMessagesModel
                 RateSeriesId = Id(tempData, PageModelToastExtensions.RateSeriesKey),
                 UndoWatched = UndoWatchedFrom(tempData),
                 UndoStoppedSeriesId = Id(tempData, PageModelToastExtensions.UndoStoppedSeriesKey),
-                UndoDiscover = UndoDiscoverFrom(tempData)
+                UndoDiscover = UndoDiscoverFrom(tempData),
+                UndoAdd = UndoAddFrom(tempData)
             });
         }
 
@@ -95,6 +97,16 @@ public sealed class ToastMessagesModel
     private static bool IsName<T>(string? value, out T parsed) where T : struct, Enum =>
         Enum.TryParse(value, ignoreCase: false, out parsed) && Enum.IsDefined(parsed) && !int.TryParse(value, out _);
 
+    private static UndoAddForm? UndoAddFrom(ITempDataDictionary tempData)
+    {
+        var title = tempData.GetText(PageModelToastExtensions.UndoAddTitleKey);
+        var id = Id(tempData, PageModelToastExtensions.UndoAddIdKey);
+
+        return IsName<PendingTitle>(title, out var parsed) && parsed is PendingTitle.Series or PendingTitle.Movie && id is not null
+            ? new UndoAddForm(parsed == PendingTitle.Series, id)
+            : null;
+    }
+
     private static UndoWatchedForm? UndoWatchedFrom(ITempDataDictionary tempData)
     {
         var seriesId = Id(tempData, PageModelToastExtensions.UndoWatchedSeriesKey);
@@ -113,6 +125,9 @@ public sealed class ToastMessagesModel
 
 /// <summary>What the Undo of a Discover add or "Not interested" posts back: "Add" or "Hide", "Series" or "Movie", the id, and the card's place.</summary>
 public sealed record UndoDiscoverForm(string Action, string Kind, string Id, string? Anchor);
+
+/// <summary>The Undo of an add done after sign-in: the series out of the library again, or the movie off the watchlist again.</summary>
+public sealed record UndoAddForm(bool IsSeries, string Id);
 
 /// <summary>What the Undo of a "mark watched" posts back: the batch, and the stopped date to restore when the mark had resumed the series.</summary>
 public sealed record UndoWatchedForm(string SeriesId, string Batch, string? StoppedStamp);
@@ -138,9 +153,13 @@ public sealed record ToastView(ToastKind Kind, string Text)
     /// <summary>The Undo of an add or a "Not interested" on Discover.</summary>
     public UndoDiscoverForm? UndoDiscover { get; init; }
 
+    /// <summary>The Undo of an add done after sign-in (a pending action).</summary>
+    public UndoAddForm? UndoAdd { get; init; }
+
     /// <summary>Whether the toast has something to press besides its close button. A new action must be counted here.</summary>
     public bool HasAction =>
-        RateSeriesId is not null || UndoWatched is not null || UndoStoppedSeriesId is not null || UndoDiscover is not null;
+        RateSeriesId is not null || UndoWatched is not null || UndoStoppedSeriesId is not null || UndoDiscover is not null
+        || UndoAdd is not null;
 
     /// <summary>
     /// Milliseconds until the toast closes itself, for <c>data-toast-duration</c>;

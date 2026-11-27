@@ -7,6 +7,8 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Domain.TheTvDb;
 using Recall.Web.Pages.Shared;
 using Recall.Web.Services.Discover;
+using Recall.Web.Services.PendingActions;
+using Recall.Web.Infrastructure.Display;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Tests.Pages;
@@ -64,6 +66,24 @@ public sealed class ToastTempDataRoundTripTests
             p => p.SetDiscoverToast("Hidden from Discover.", new DiscoverUndo(DiscoverUndoAction.Hide, DiscoverKind.Series, 445000, "discover-genre-science-fiction-1")));
         yield return new("Discover hide without a place",
             p => p.SetDiscoverToast("Hidden from Discover.", new DiscoverUndo(DiscoverUndoAction.Hide, DiscoverKind.Movie, 1, null)));
+        yield return new("after sign-in: a series added, with Undo",
+            p => p.SetPendingActionToast(new PendingActionOutcome(PendingOutcomeTone.Success, "Added Breaking Bad to your library.")
+            {
+                UndoAdd = new PendingUndo(PendingTitle.Series, 81189)
+            }, Today));
+        yield return new("after sign-in: a movie on the watchlist, with Undo",
+            p => p.SetPendingActionToast(new PendingActionOutcome(PendingOutcomeTone.Success, "Added Heat to your watchlist.")
+            {
+                UndoAdd = new PendingUndo(PendingTitle.Movie, 1157)
+            }, Today));
+        yield return new("after sign-in: an episode marked, with Undo",
+            p => p.SetPendingActionToast(new PendingActionOutcome(PendingOutcomeTone.Success, "Marked S03E01 as watched and added Breaking Bad to your library.")
+            {
+                WatchedSeriesId = 81189,
+                Batch = new WatchedBatch(1, BatchId)
+            }, Today));
+        yield return new("after sign-in: nothing to do",
+            p => p.SetPendingActionToast(new PendingActionOutcome(PendingOutcomeTone.Info, "Breaking Bad is already in your library."), Today));
         yield return new("success and error together",
             p => { p.SetSuccessToast("Saved."); p.SetErrorToast("But something else failed."); });
     }
@@ -92,6 +112,22 @@ public sealed class ToastTempDataRoundTripTests
 
         var toast = ToastMessagesModel.From(tempData).Toasts.Should().ContainSingle().Subject;
         toast.UndoWatched.Should().Be(new UndoWatchedForm("370112", BatchId.ToString("D"), StoppedUtc.Ticks.ToString()));
+        toast.HasAction.Should().BeTrue();
+        toast.DurationMilliseconds.Should().Be(10_000, "a toast with an Undo stays ten seconds");
+    }
+
+    [Test]
+    public void TheUndoOfAnAddAfterSignIn_Should_SurviveTheCookie()
+    {
+        var tempData = CookieTempData.RoundTrip(p =>
+            p.SetPendingActionToast(new PendingActionOutcome(PendingOutcomeTone.Success, "Added Heat to your watchlist.")
+            {
+                UndoAdd = new PendingUndo(PendingTitle.Movie, 1157)
+            }, Today));
+
+        var toast = ToastMessagesModel.From(tempData).Toasts.Should().ContainSingle().Subject;
+        toast.Kind.Should().Be(ToastKind.Success);
+        toast.UndoAdd.Should().Be(new UndoAddForm(IsSeries: false, "1157"));
         toast.HasAction.Should().BeTrue();
         toast.DurationMilliseconds.Should().Be(10_000, "a toast with an Undo stays ten seconds");
     }

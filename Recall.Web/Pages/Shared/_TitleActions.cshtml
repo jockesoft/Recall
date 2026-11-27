@@ -1,19 +1,9 @@
 @model Recall.Web.Pages.Shared.TitleActionsModel
 @* The action row of a detail page (TitleActionsModel): one full-width primary
    button or a quiet status box, then the square icon buttons: "⋯" (a menu
-   of the secondary actions), a movie's watchlist toggle, the heart and Share. A visitor gets the sign-in
-   card instead of the whole row. Sits on the dark frame, in the hero. *@
-
-@if (!Model.IsAuthenticated)
-{
-    <div class="tvdb-signin-card tvdb-surface-paper">
-        <p class="mb-0">Sign in to track this @Model.Noun.</p>
-        <a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl" class="btn btn-primary">
-            <i class="@Icons.SignIn me-1" aria-hidden="true"></i> Sign in
-        </a>
-    </div>
-    return;
-}
+   of the secondary actions), a movie's watchlist toggle, the heart and Share. A visitor gets the same
+   row; what they press is kept while they sign in, then done (IPendingActions). Sits on the dark
+   frame, in the hero. *@
 
 <div class="tvdb-title-actions">
     @if (Model.Notice is { } notice)

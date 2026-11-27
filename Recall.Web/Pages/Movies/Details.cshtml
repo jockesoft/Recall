@@ -41,7 +41,7 @@ else
         .FirstOrDefault(r => string.Equals(r.SourceName, "imdb", StringComparison.OrdinalIgnoreCase))?.Id;
     var hasPeople = Model.Cast.Count > 0 || Model.Crew.Count > 0;
 
-    <partial name="_TitleHero" model="@Model.BuildHero(ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
+    <partial name="_TitleHero" model="@Model.BuildHero()" />
 
     <div class="tvdb-shell">
         @* Anchors, not tabs: everything stays on the page. *@

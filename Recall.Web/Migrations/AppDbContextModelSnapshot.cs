@@ -585,6 +585,11 @@ namespace Recall.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_utc");
 
+                    b.Property<string>("ReturnUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("return_url");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(44)

@@ -1,3 +1,5 @@
+using Recall.Web.Services.PendingActions;
+
 namespace Recall.Web.Services.Metrics;
 
 /// <summary>
@@ -24,6 +26,12 @@ public static class SiteMetricKeys
     /// <summary>An account's first sign-in (<c>app_user.first_sign_in_utc</c> was empty): a new account that is really used.</summary>
     public const string NewAccount = "signin.new-account";
 
+    /// <summary>"action.clicked.add-series": a signed-out visitor pressed an action on a Details page.</summary>
+    public static string ActionClicked(PendingActionKind kind) => "action.clicked." + PendingAction.Slug(kind);
+
+    /// <summary>"action.completed.add-series": the pending action was done after the visitor signed in.</summary>
+    public static string ActionCompleted(PendingActionKind kind) => "action.completed." + PendingAction.Slug(kind);
+
     /// <summary>"view.series.anon", "view.login.user".</summary>
     public static string PageView(SitePage page, bool signedIn) =>
         $"view.{Slug(page)}.{(signedIn ? "user" : "anon")}";
@@ -42,6 +50,12 @@ public static class SiteMetricKeys
         {
             CrawlerView, LinkSent, LinkRedeemed, CodeRedeemed, NewAccount
         };
+
+        foreach (var kind in Enum.GetValues<PendingActionKind>())
+        {
+            keys.Add(ActionClicked(kind));
+            keys.Add(ActionCompleted(kind));
+        }
 
         foreach (var page in Pages)
         {

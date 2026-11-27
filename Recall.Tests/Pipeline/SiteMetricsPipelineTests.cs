@@ -167,6 +167,7 @@ public sealed class SiteMetricsPipelineTests
 
         html.Should().Contain("Recall counts daily page visits and sign-ins as anonymous totals, with no cookies and nothing about who visited.");
         html.Should().Contain("The anonymous daily totals of visits and sign-ins: deleted 400 days after the day they count.");
+        html.Should().Contain("<code>Recall.Pending</code>").And.Contain("after 15 minutes", "the action cookie is listed with the others");
     }
 
     // ---- /Admin/Metrics ----------------------------------------------------------------

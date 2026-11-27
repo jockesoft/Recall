@@ -252,11 +252,15 @@ public sealed class EpisodeDetailsPipelineTests
     }
 
     [Test]
-    public async Task AVisitor_Should_GetTheSignInCard_AndUpNextWithoutAControl()
+    public async Task AVisitor_Should_GetTheActionRow_AndUpNextWithoutAControl()
     {
         var html = await PageAsync(_visitor, E1);
 
-        html.Should().Contain("Sign in to track this episode.");
+        html.Should().NotContain("Sign in to track this episode.", "the sign-in card is gone");
+        html.Should().Contain($"action=\"/Episodes/Details/{E1}?handler=ToggleWatched\"").And.Contain("id=\"primaryAction\"");
+        html.Should().Contain($"action=\"/Episodes/Details/{E1}?handler=ToggleLike\"");
+        html.Should().Contain($"action=\"/Episodes/Details/{E1}?handler=RateEpisode\"").And.Contain("tvdb-rating-disclosure");
+        html.Should().Contain("data-prior-check=\"false\"", "a visitor is not asked about earlier episodes");
         Regex.Match(html, "<section class=\"tvdb-up-next tvdb-surface-paper\".*?</section>", RegexOptions.Singleline).Value
             .Should().Contain("S01E02").And.NotContain("tvdb-ep-mark");
         html.Should().NotContain("seriesCatchUpModal");

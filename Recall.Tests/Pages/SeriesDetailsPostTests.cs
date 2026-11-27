@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Pages.Series;
 using Recall.Web.Services;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -34,6 +36,7 @@ public class SeriesDetailsPostTests
     private Mock<ILikeRepository> _likes = null!;
     private Mock<IRatingRepository> _ratings = null!;
     private DetailsModel _sut = null!;
+    private readonly Mock<IPendingActions> _pending = new();
 
     /// <summary>What the page logged: a timeout is a warning, an aborted request nothing at Error.</summary>
     private RecordingLogger<DetailsModel> _log = null!;
@@ -51,6 +54,7 @@ public class SeriesDetailsPostTests
         _sut = new DetailsModel(
             _tvDb.Object,
             _currentUser.Object,
+            _pending.Object,
             _tracked.Object,
             new SeriesLibraryService(_tracked.Object, _tvDb.Object),
             Mock.Of<IEpisodeWatchRepository>(),
@@ -83,6 +87,34 @@ public class SeriesDetailsPostTests
         redirect.RouteValues["season"].Should().Be(2);
     }
 
+    // ---- the Undo of an add done after sign-in ---------------------------------
+
+    [Test]
+    public async Task UndoAdd_Should_TakeTheSeriesOutAgain_ByName()
+    {
+        SignIn();
+        AlreadyInLibrary();
+        _tvDb.Setup(x => x.GetCachedSeriesAggregateAsync(SeriesId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Recall.Web.Domain.TheTvDb.SeriesAggregate { TvdbId = SeriesId, Name = "Silo" });
+
+        var result = await _sut.OnPostUndoAddAsync(SeriesId, default);
+
+        AssertRedirectsBackToTheSeason(result);
+        _tracked.Verify(x => x.RemoveAsync(UserId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Once);
+        _sut.InfoToast().Should().Be("Took Silo out of your library again.");
+    }
+
+    [Test]
+    public async Task UndoAdd_Should_SayNothingIsLeft_WhenTheSeriesIsNotThere()
+    {
+        SignIn();
+
+        await _sut.OnPostUndoAddAsync(SeriesId, default);
+
+        _sut.InfoToast().Should().Be(DetailsModel.NothingToUndo);
+        _tracked.Verify(x => x.RemoveAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     // ---- back to the card or row the form came from ----------------------------
 
     [TestCase("episode-123", "episode-123")]
@@ -109,9 +141,7 @@ public class SeriesDetailsPostTests
 
     private static IEnumerable<TestCaseData> GuardedHandlers()
     {
-        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostToggleLibraryAsync(SeriesId, default)), "manage your library").SetName("Guard_ToggleLibrary");
-        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostToggleSeriesLikeAsync(SeriesId, default)), "like a series").SetName("Guard_ToggleSeriesLike");
-        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostRateSeriesAsync(SeriesId, 8, default)), "rate a series").SetName("Guard_RateSeries");
+        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostUndoAddAsync(SeriesId, default)), "manage your library").SetName("Guard_UndoAdd");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostClearSeriesRatingAsync(SeriesId, default)), "rate a series").SetName("Guard_ClearSeriesRating");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostToggleEpisodeWatchedAsync(SeriesId, EpisodeId, default)), "track watched episodes").SetName("Guard_ToggleEpisodeWatched");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostMarkWatchedThroughAsync(SeriesId, EpisodeId, default)), "track watched episodes").SetName("Guard_MarkWatchedThrough");
@@ -120,6 +150,33 @@ public class SeriesDetailsPostTests
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostUndoWatchedAsync(SeriesId, BatchId, null, default)), "track watched episodes").SetName("Guard_UndoWatched");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostStopWatchingAsync(SeriesId, default)), "manage your library").SetName("Guard_StopWatching");
         yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostResumeWatchingAsync(SeriesId, false, null, default)), "manage your library").SetName("Guard_ResumeWatching");
+    }
+
+    private static IEnumerable<TestCaseData> KeptHandlers()
+    {
+        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostToggleLibraryAsync(SeriesId, default)),
+            new PendingAction(PendingActionKind.AddSeries, SeriesId)).SetName("Kept_ToggleLibrary");
+        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostToggleSeriesLikeAsync(SeriesId, default)),
+            new PendingAction(PendingActionKind.LikeSeries, SeriesId)).SetName("Kept_ToggleSeriesLike");
+        yield return new TestCaseData((Func<DetailsModel, Task<IActionResult>>)(m => m.OnPostRateSeriesAsync(SeriesId, 8, default)),
+            new PendingAction(PendingActionKind.RateSeries, SeriesId, 8)).SetName("Kept_RateSeries");
+    }
+
+    [TestCaseSource(nameof(KeptHandlers))]
+    public async Task Anonymous_Should_KeepThePress_AndBeSentToSignIn_ReturningToTheSeries(
+        Func<DetailsModel, Task<IActionResult>> handler, PendingAction expected)
+    {
+        _pending.Invocations.Clear();
+        var result = await handler(_sut);
+
+        var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
+        redirect.PageName.Should().Be("/Account/Login");
+        redirect.RouteValues.Should().Equal(new Dictionary<string, object?> { ["returnUrl"] = $"/Series/Details/{SeriesId}" });
+        _pending.Verify(x => x.Start(It.IsAny<HttpContext>(), expected), Times.Once);
+        _sut.ErrorToast().Should().BeNull();
+        _tracked.VerifyNoOtherCalls();
+        _likes.VerifyNoOtherCalls();
+        _ratings.VerifyNoOtherCalls();
     }
 
     [TestCaseSource(nameof(GuardedHandlers))]

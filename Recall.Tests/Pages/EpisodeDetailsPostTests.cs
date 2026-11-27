@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,6 +15,7 @@ using Recall.Web.Pages.Episodes;
 using Recall.Web.Services;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -31,6 +33,7 @@ public class EpisodeDetailsPostTests
     private Mock<ILikeRepository> _likes = null!;
     private Mock<IRatingRepository> _ratings = null!;
     private DetailsModel _sut = null!;
+    private readonly Mock<IPendingActions> _pending = new();
 
     [SetUp]
     public void SetUp()
@@ -45,6 +48,7 @@ public class EpisodeDetailsPostTests
             NullLogger<DetailsModel>.Instance,
             _tvDb.Object,
             _currentUser.Object,
+            _pending.Object,
             Mock.Of<IEpisodeWatchRepository>(),
             _progress.Object,
             _likes.Object,
@@ -79,6 +83,45 @@ public class EpisodeDetailsPostTests
 
     // ---- sign-in guard and route validation ------------------------------------
 
+    private static IEnumerable<TestCaseData> KeptHandlers()
+    {
+        yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostToggleLikeAsync(id, default)),
+            new PendingAction(PendingActionKind.LikeEpisode, EpisodeId)).SetName("{m}_ToggleLike");
+        yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostRateEpisodeAsync(id, 8, default)),
+            new PendingAction(PendingActionKind.RateEpisode, EpisodeId, 8)).SetName("{m}_RateEpisode");
+        yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostToggleWatchedAsync(id, default)),
+            new PendingAction(PendingActionKind.MarkEpisodeWatched, EpisodeId)).SetName("{m}_ToggleWatched");
+        yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostMarkWatchedThroughAsync(id, default)),
+            new PendingAction(PendingActionKind.MarkEpisodeWatched, EpisodeId)).SetName("{m}_MarkWatchedThrough");
+    }
+
+    [TestCaseSource(nameof(KeptHandlers))]
+    public async Task Anonymous_Should_KeepThePress_AndBeSentToSignIn_ReturningToTheEpisode(
+        Func<DetailsModel, int, Task<IActionResult>> handler, PendingAction expected)
+    {
+        _pending.Invocations.Clear();
+        var result = await handler(_sut, EpisodeId);
+
+        var redirect = result.Should().BeOfType<RedirectToPageResult>().Subject;
+        redirect.PageName.Should().Be("/Account/Login");
+        redirect.RouteValues.Should().Equal(new Dictionary<string, object?> { ["returnUrl"] = $"/Episodes/Details/{EpisodeId}" });
+        _pending.Verify(x => x.Start(It.IsAny<HttpContext>(), expected), Times.Once);
+        _sut.ErrorToast().Should().BeNull();
+        VerifyNothingWritten();
+        _tvDb.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task Anonymous_ClearRating_Should_BeSentBack_WithASignInToast()
+    {
+        var result = await _sut.OnPostClearEpisodeRatingAsync(EpisodeId, default);
+
+        AssertRedirectsBackToTheEpisode(result);
+        _sut.ErrorToast().Should().Be("You need to be signed in to rate an episode.");
+        _pending.VerifyNoOtherCalls();
+        VerifyNothingWritten();
+    }
+
     private static IEnumerable<TestCaseData> Handlers()
     {
         yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostToggleLikeAsync(id, default)), "like an episode").SetName("{m}_ToggleLike");
@@ -86,18 +129,6 @@ public class EpisodeDetailsPostTests
         yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostClearEpisodeRatingAsync(id, default)), "rate an episode").SetName("{m}_ClearEpisodeRating");
         yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostToggleWatchedAsync(id, default)), "track watched episodes").SetName("{m}_ToggleWatched");
         yield return new TestCaseData((Func<DetailsModel, int, Task<IActionResult>>)((m, id) => m.OnPostMarkWatchedThroughAsync(id, default)), "track watched episodes").SetName("{m}_MarkWatchedThrough");
-    }
-
-    [TestCaseSource(nameof(Handlers))]
-    public async Task Anonymous_Should_BeSentBack_WithASignInToast(
-        Func<DetailsModel, int, Task<IActionResult>> handler, string toDoWhat)
-    {
-        var result = await handler(_sut, EpisodeId);
-
-        AssertRedirectsBackToTheEpisode(result);
-        _sut.ErrorToast().Should().Be($"You need to be signed in to {toDoWhat}.");
-        VerifyNothingWritten();
-        _tvDb.VerifyNoOtherCalls();
     }
 
     [TestCaseSource(nameof(Handlers))]

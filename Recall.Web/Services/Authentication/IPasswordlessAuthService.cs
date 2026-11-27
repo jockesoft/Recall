@@ -13,10 +13,14 @@ public interface IPasswordlessAuthService
     /// contains the URL returned by <paramref name="loginLinkFactory"/> for the
     /// generated raw token. Always completes the same way whether or not the
     /// account already existed, so it can't be used to probe for members.
+    /// <paramref name="returnUrl"/> is kept on the token (when it is a local
+    /// path, <see cref="Infrastructure.Authentication.LocalReturnUrl"/>), so the
+    /// link and the code both return there; it is not put in the link.
     /// </summary>
     Task RequestLoginAsync(
         string email,
         Func<string, string> loginLinkFactory,
+        string? returnUrl = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

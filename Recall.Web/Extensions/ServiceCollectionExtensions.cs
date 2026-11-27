@@ -22,6 +22,7 @@ using Recall.Web.Services.Push;
 using Recall.Web.Services.Sitemap;
 using Recall.Web.Services.Discover;
 using Recall.Web.Services.Metrics;
+using Recall.Web.Services.PendingActions;
 using Recall.Web.Services.Stats;
 using Recall.Web.Services.WatchTracking;
 
@@ -231,6 +232,9 @@ public static class ServiceCollectionExtensions
         services.Configure<TurnstileOptions>(configuration.GetSection(TurnstileOptions.SectionName));
         services.AddScoped<ILoginTokenRepository, LoginTokenRepository>();
         services.AddScoped<IPasswordlessAuthService, PasswordlessAuthService>();
+        // What a signed-out visitor pressed on a Details page, done after they sign in.
+        services.AddSingleton<IPendingActions, PendingActions>();
+        services.AddScoped<IPendingActionService, PendingActionService>();
         services.AddSingleton<ILoginAbuseGuard, LoginAbuseGuard>();
         // No retry (it's a POST, and a human can just resubmit the form) — but
         // don't let a slow Cloudflare hold the sign-in request for the default 100 s.

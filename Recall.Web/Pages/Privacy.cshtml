@@ -37,6 +37,12 @@
             when you close the browser.
         </li>
         <li>
+            <strong>Action cookie</strong> (<code>@Model.PendingCookieName</code>): when you press something like
+            "Add to library" before signing in, remembers which title and what to do, so it can be done once you
+            have signed in in this browser. It holds nothing else, can't be read in the browser, and is removed when
+            you sign in or after @Model.PendingCookieMinutes minutes.
+        </li>
+        <li>
             <strong>Message cookie</strong> (<code>.AspNetCore.Mvc.CookieTempDataProvider</code>): carries a
             confirmation such as "Marked as watched" from one page to the next. It exists for a
             moment and is removed as soon as the message has been shown.

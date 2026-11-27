@@ -36,6 +36,7 @@ public sealed class PasswordlessAuthService(
     public async Task RequestLoginAsync(
         string email,
         Func<string, string> loginLinkFactory,
+        string? returnUrl = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
@@ -103,7 +104,9 @@ public sealed class PasswordlessAuthService(
                 UserId = user.Id,
                 TokenHash = Hash(rawToken),
                 CodeHash = SignInCode.Hash(code, tokenId),
-                ExpiresUtc = nowUtc.AddMinutes(_options.TokenLifetimeMinutes)
+                ExpiresUtc = nowUtc.AddMinutes(_options.TokenLifetimeMinutes),
+                // Checked here too, whatever the page did: only a local path is ever stored.
+                ReturnUrl = LocalReturnUrl.Normalize(returnUrl)
             },
             cancellationToken);
 
@@ -160,7 +163,7 @@ public sealed class PasswordlessAuthService(
 
         logger.LogInformation("Passwordless sign-in succeeded for user {UserId} (role {Role}).", user.Id, user.Role);
         await CountSignInAsync(user.Id, SiteMetricKeys.LinkRedeemed, cancellationToken);
-        return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
+        return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role, LocalReturnUrl.Normalize(active.ReturnUrl));
     }
 
     public async Task<LoginRedemptionResult> RedeemCodeAsync(
@@ -193,7 +196,7 @@ public sealed class PasswordlessAuthService(
             abuseGuard.ResetWrongCodes(normalizedEmail);
             logger.LogInformation("Sign-in with a code succeeded for user {UserId} (role {Role}).", user!.Id, user.Role);
             await CountSignInAsync(user.Id, SiteMetricKeys.CodeRedeemed, cancellationToken);
-            return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
+            return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role, LocalReturnUrl.Normalize(token.ReturnUrl));
         }
 
         // Wrong, expired, no code, or no such account: all counted and answered alike.

@@ -10,6 +10,7 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.OmdbCache;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.PendingActions;
 using Recall.Web.Services.WatchTracking;
 using Recall.Web.Services.External.TheTvDb;
 using System.Globalization;
@@ -24,6 +25,7 @@ namespace Recall.Web.Pages.Movies;
 public sealed class DetailsModel(
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
+    IPendingActions pendingActions,
     ILikeRepository likeRepository,
     IMovieWatchRepository movieWatchRepository,
     IMovieTrackingService movieTrackingService,
@@ -98,7 +100,7 @@ public sealed class DetailsModel(
     /// "Mark as unwatched" is in the "⋯" menu), and one not released yet says
     /// when it is. The watchlist is a square toggle beside the heart.
     /// </summary>
-    public TitleHeroModel BuildHero(string? returnUrl = null)
+    public TitleHeroModel BuildHero()
     {
         var movie = Movie!;
 
@@ -118,17 +120,15 @@ public sealed class DetailsModel(
                 ? average.ToString("0.0", CultureInfo.InvariantCulture)
                 : null,
             RecallRatingCount = RecallRatingCount,
-            Rating = IsAuthenticated
-                ? new RatingWidgetModel
-                {
-                    RateHandler = "RateMovie",
-                    ClearHandler = "ClearMovieRating",
-                    RouteId = movie.TvdbId,
-                    CurrentValue = CurrentUserRating,
-                    TargetNoun = "movie"
-                }
-                : null,
-            Actions = BuildActions(returnUrl)
+            Rating = new RatingWidgetModel
+            {
+                RateHandler = "RateMovie",
+                ClearHandler = "ClearMovieRating",
+                RouteId = movie.TvdbId,
+                CurrentValue = CurrentUserRating,
+                TargetNoun = "movie"
+            },
+            Actions = BuildActions()
         };
     }
 
@@ -152,7 +152,7 @@ public sealed class DetailsModel(
         return new TitleStatusChip($"{(theatrical ? "In cinemas" : "Coming")} {DisplayDate.Format(date, Today)}", Active: true);
     }
 
-    private TitleActionsModel BuildActions(string? returnUrl)
+    private TitleActionsModel BuildActions()
     {
         var movie = Movie!;
         TitleAction? primary = null;
@@ -207,9 +207,6 @@ public sealed class DetailsModel(
 
         return new TitleActionsModel
         {
-            IsAuthenticated = IsAuthenticated,
-            Noun = "movie",
-            ReturnUrl = returnUrl,
             Primary = primary,
             Status = status,
             Menu = menu,
@@ -301,7 +298,7 @@ public sealed class DetailsModel(
     public async Task<IActionResult> OnPostToggleMovieLikeAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "like a movie");
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.LikeMovie, id));
 
         try
         {
@@ -319,7 +316,7 @@ public sealed class DetailsModel(
     public async Task<IActionResult> OnPostToggleMovieWatchedAsync([FromRoute] int id, CancellationToken cancellationToken)
     {
         if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "track watched movies");
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.MarkMovieWatched, id));
 
         try
         {
@@ -347,7 +344,7 @@ public sealed class DetailsModel(
             return NotFound();
 
         if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "use your watchlist");
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.AddMovieToWatchlist, id));
 
         try
         {
@@ -385,11 +382,11 @@ public sealed class DetailsModel(
         [FromForm] int value,
         CancellationToken cancellationToken)
     {
-        if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "rate a movie");
-
         if (value is < 1 or > 10)
             return RedirectToPage(new { id });
+
+        if (!currentUserService.TryGetUserId(out var userId))
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.RateMovie, id, value));
 
         try
         {
@@ -419,6 +416,38 @@ public sealed class DetailsModel(
         {
             logger.LogError(ex, "Failed clearing rating for movie {MovieId}.", id);
             this.SetErrorToast("Could not update your rating right now.");
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    /// <summary>
+    /// The Undo of "Added Heat to your watchlist." after a sign-in that did
+    /// what the visitor had pressed (a pending action).
+    /// </summary>
+    public async Task<IActionResult> OnPostUndoWatchlistAsync([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        if (!currentUserService.TryGetUserId(out var userId))
+            return SignInRequired(id, "use your watchlist");
+
+        try
+        {
+            if (await movieTrackingService.RemoveFromWatchlistAsync(userId, id, cancellationToken))
+            {
+                var name = (await theTvDbService.GetCachedMovieAggregateAsync(id, cancellationToken))?.Name;
+                this.SetInfoToast(string.IsNullOrWhiteSpace(name)
+                    ? "Took the movie off your watchlist again."
+                    : $"Took {name} off your watchlist again.");
+            }
+            else
+            {
+                this.SetInfoToast("Nothing left to undo.");
+            }
+        }
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
+        {
+            logger.LogError(ex, "Failed undoing the watchlist add of movie {MovieId}.", id);
+            this.SetErrorToast("Could not undo that right now.");
         }
 
         return RedirectToPage(new { id });

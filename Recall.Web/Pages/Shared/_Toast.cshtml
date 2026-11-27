@@ -70,6 +70,13 @@
             <button type="submit" class="tvdb-toast-action">Undo</button>
         </form>
     }
+    @if (toast.UndoAdd is { } undoAdd)
+    {
+        <form method="post" asp-page="@(undoAdd.IsSeries ? "/Series/Details" : "/Movies/Details")"
+              asp-page-handler="@(undoAdd.IsSeries ? "UndoAdd" : "UndoWatchlist")" asp-route-id="@undoAdd.Id" class="d-inline-flex">
+            <button type="submit" class="tvdb-toast-action">Undo</button>
+        </form>
+    }
     <button type="button" class="tvdb-close" data-bs-dismiss="alert" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
     @if (toast.DurationMilliseconds is not null)
     {

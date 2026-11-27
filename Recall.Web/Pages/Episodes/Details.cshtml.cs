@@ -15,6 +15,7 @@ using Recall.Web.Pages.Shared;
 using Recall.Web.Services;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.External.TheTvDb;
+using Recall.Web.Services.PendingActions;
 using Recall.Web.Services.WatchTracking;
 
 namespace Recall.Web.Pages.Episodes;
@@ -36,6 +37,7 @@ public sealed class DetailsModel(
     ILogger<DetailsModel> logger,
     ITheTvDbService theTvDbService,
     ICurrentUserService currentUserService,
+    IPendingActions pendingActions,
     IEpisodeWatchRepository episodeWatchRepository,
     IWatchProgressService watchProgressService,
     ILikeRepository likeRepository,
@@ -190,7 +192,7 @@ public sealed class DetailsModel(
     /// menu; one that may not be marked yet gets "Airs …". A visitor gets the
     /// sign-in card. The next episode follows as its own card.
     /// </summary>
-    public TitleHeroModel BuildHero(string? returnUrl = null)
+    public TitleHeroModel BuildHero()
     {
         var episode = Episode!;
         var name = EpisodeName(episode);
@@ -224,23 +226,21 @@ public sealed class DetailsModel(
                 ? average.ToString("0.0", CultureInfo.InvariantCulture)
                 : null,
             RecallRatingCount = RecallRatingCount,
-            Rating = IsAuthenticated
-                ? new RatingWidgetModel
-                {
-                    RateHandler = "RateEpisode",
-                    ClearHandler = "ClearEpisodeRating",
-                    RouteId = episode.Id!.Value,
-                    CurrentValue = CurrentUserRating,
-                    TargetNoun = "episode"
-                }
-                : null,
+            Rating = new RatingWidgetModel
+            {
+                RateHandler = "RateEpisode",
+                ClearHandler = "ClearEpisodeRating",
+                RouteId = episode.Id!.Value,
+                CurrentValue = CurrentUserRating,
+                TargetNoun = "episode"
+            },
             Position = Position,
-            Actions = BuildActions(returnUrl, name),
+            Actions = BuildActions(name),
             UpNext = UpNext
         };
     }
 
-    private TitleActionsModel BuildActions(string? returnUrl, string name)
+    private TitleActionsModel BuildActions(string name)
     {
         var id = Episode!.Id!.Value;
         TitleAction? primary = null;
@@ -287,9 +287,6 @@ public sealed class DetailsModel(
 
         return new TitleActionsModel
         {
-            IsAuthenticated = IsAuthenticated,
-            Noun = "episode",
-            ReturnUrl = returnUrl,
             Primary = primary,
             Status = status,
             Menu = menu,
@@ -324,7 +321,7 @@ public sealed class DetailsModel(
             return NotFound();
 
         if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "like an episode");
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.LikeEpisode, id));
 
         try
         {
@@ -356,11 +353,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "rate an episode");
-
         if (value is < 1 or > 10)
             return RedirectToPage(new { id });
+
+        if (!currentUserService.TryGetUserId(out var userId))
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.RateEpisode, id, value));
 
         try
         {
@@ -425,10 +422,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "track watched episodes");
-
         var targetId = episodeId is > 0 and var other ? other : id;
+
+        // A visitor's press is done after sign-in: one episode, without the "Catch up?" question.
+        if (!currentUserService.TryGetUserId(out var userId))
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.MarkEpisodeWatched, targetId));
 
         try
         {
@@ -491,10 +489,11 @@ public sealed class DetailsModel(
         if (id <= 0)
             return NotFound();
 
-        if (!currentUserService.TryGetUserId(out var userId))
-            return SignInRequired(id, "track watched episodes");
-
         var targetId = episodeId is > 0 and var other ? other : id;
+
+        // A visitor's press is done after sign-in: one episode, without the "Catch up?" question.
+        if (!currentUserService.TryGetUserId(out var userId))
+            return this.SignInToFinish(pendingActions, new PendingAction(PendingActionKind.MarkEpisodeWatched, targetId));
 
         try
         {

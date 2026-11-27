@@ -16,6 +16,7 @@ using Recall.Web.Pages.Shared;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -74,6 +75,7 @@ public sealed class SeriesDetailsGetTests
         _sut = new DetailsModel(
             _tvDb.Object,
             _currentUser.Object,
+            Mock.Of<IPendingActions>(),
             _tracked.Object,
             new SeriesLibraryService(_tracked.Object, _tvDb.Object),
             _watches.Object,
@@ -133,7 +135,7 @@ public sealed class SeriesDetailsGetTests
     private async Task<TitleHeroModel> LoadHeroAsync()
     {
         await _sut.OnGetAsync(SeriesId, CancellationToken.None);
-        return _sut.BuildHero("/Series/Details/42");
+        return _sut.BuildHero();
     }
 
     // ---- season cards ---------------------------------------------------------------
@@ -538,15 +540,18 @@ public sealed class SeriesDetailsGetTests
     }
 
     [Test]
-    public async Task AVisitor_Should_GetTheSignInCard_AndNoRatingOrProgress()
+    public async Task AVisitor_Should_GetAddToLibrary_TheHeartAndTheRating_AndNoProgress()
     {
         SeriesExists();
 
         var hero = await LoadHeroAsync();
 
-        hero.Actions.IsAuthenticated.Should().BeFalse("the partial draws the sign-in card instead of the row");
-        hero.Actions.ReturnUrl.Should().Be("/Series/Details/42");
-        hero.Rating.Should().BeNull();
+        hero.Actions.Primary!.Label.Should().Be("Add to library");
+        hero.Actions.Primary.Handler.Should().Be("ToggleLibrary");
+        hero.Actions.Like!.Handler.Should().Be("ToggleSeriesLike");
+        hero.Actions.Menu.Should().BeEmpty();
+        hero.Rating!.RateHandler.Should().Be("RateSeries");
+        hero.Rating.CurrentValue.Should().BeNull();
         hero.Progress.Should().BeNull();
     }
 

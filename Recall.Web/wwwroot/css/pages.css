@@ -594,20 +594,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 
 /* ---- Details pages (series, episode, movie) ------------------------------------------ */
 
-/* Shown to a visitor in place of the action row (_TitleActions). */
-.tvdb-signin-card {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--tvdb-space-3);
-    padding: var(--tvdb-space-3) var(--tvdb-space-4);
-    background: var(--tvdb-paper-dim);
-    border: 1px solid var(--tvdb-ink-line);
-    border-radius: var(--tvdb-radius-md);
-    font-size: var(--tvdb-text-sm);
-}
-
 /* OMDb awards line. */
 .tvdb-awards {
     display: flex;
@@ -1917,6 +1903,42 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     display: inline-flex;
     align-items: center;
     gap: var(--tvdb-space-2);
+}
+
+/* ---- Sign-in: what the visitor pressed before getting here ------------------------- */
+
+/* At the top of the sign-in form when a pending action waits (LoginModel.Prompt):
+   the title's poster when it is cached, the sentence and the one after it. */
+.tvdb-signin-context {
+    display: flex;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    margin-bottom: var(--tvdb-space-5);
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
+    background: var(--tvdb-signal-tint);
+    border: 1px solid var(--tvdb-signal-edge);
+    border-radius: var(--tvdb-radius-lg);
+}
+
+.tvdb-signin-context__poster {
+    flex: none;
+    width: 48px;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: var(--tvdb-radius-sm);
+}
+
+.tvdb-signin-context__lead {
+    margin: 0;
+    font-weight: 600;
+    line-height: var(--tvdb-leading-snug);
+    color: var(--tvdb-text);
+}
+
+.tvdb-signin-context__detail {
+    margin: var(--tvdb-space-1) 0 0;
+    font-size: var(--tvdb-text-sm);
+    color: var(--tvdb-signal-ink);
 }
 
 /* ---- Admin: site metrics ---------------------------------------------------- */

@@ -15,6 +15,7 @@ using Recall.Web.Pages.Episodes;
 using Recall.Web.Services;
 using Recall.Web.Services.External.Omdb;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -77,6 +78,7 @@ public class EpisodeDetailsOmdbTests
         NullLogger<DetailsModel>.Instance,
         _tvDbService.Object,
         _currentUser.Object,
+        Mock.Of<IPendingActions>(),
         Mock.Of<IEpisodeWatchRepository>(),
         Mock.Of<IWatchProgressService>(),
         Mock.Of<ILikeRepository>(),

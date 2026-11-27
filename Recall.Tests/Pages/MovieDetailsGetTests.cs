@@ -16,6 +16,7 @@ using Recall.Web.Pages.Shared;
 using Recall.Web.Services;
 using Recall.Web.Services.External.TheTvDb;
 using Recall.Web.Services.WatchTracking;
+using Recall.Web.Services.PendingActions;
 
 namespace Recall.Tests.Pages;
 
@@ -62,6 +63,7 @@ public sealed class MovieDetailsGetTests
         _sut = new DetailsModel(
             _tvDb.Object,
             _currentUser.Object,
+            Mock.Of<IPendingActions>(),
             Mock.Of<ILikeRepository>(),
             _watches.Object,
             _tracking.Object,
@@ -100,7 +102,7 @@ public sealed class MovieDetailsGetTests
     private async Task<TitleHeroModel> LoadHeroAsync()
     {
         await _sut.OnGetAsync(MovieId, CancellationToken.None);
-        return _sut.BuildHero("/Movies/Details/287533");
+        return _sut.BuildHero();
     }
 
     // ---- the action row, in every state --------------------------------------------------
@@ -226,15 +228,20 @@ public sealed class MovieDetailsGetTests
     }
 
     [Test]
-    public async Task AVisitor_Should_GetTheSignInCard_AndNoRating()
+    public async Task AVisitor_Should_GetTheSameActionRow_TheWatchlistTheHeartAndTheRating()
     {
         MovieExists();
 
         var hero = await LoadHeroAsync();
 
-        hero.Actions.IsAuthenticated.Should().BeFalse("the partial draws the sign-in card instead of the row");
-        hero.Actions.ReturnUrl.Should().Be("/Movies/Details/287533");
-        hero.Rating.Should().BeNull();
+        hero.Actions.Primary!.Label.Should().Be("Mark as watched");
+        hero.Actions.Primary.Handler.Should().Be("ToggleMovieWatched");
+        hero.Actions.Watchlist!.IsPressed.Should().BeFalse();
+        hero.Actions.Watchlist.Handler.Should().Be("ToggleWatchlist");
+        hero.Actions.Like!.Handler.Should().Be("ToggleMovieLike");
+        hero.Actions.Menu.Should().BeEmpty();
+        hero.Rating!.RateHandler.Should().Be("RateMovie");
+        hero.Rating.CurrentValue.Should().BeNull();
         hero.Progress.Should().BeNull();
         hero.Back.Should().Be(new TitleBackLink("Back", "/Search", UseHistory: true));
     }

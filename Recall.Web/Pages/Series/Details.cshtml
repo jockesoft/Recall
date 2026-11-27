@@ -38,7 +38,7 @@ else
     var signedIn = Model.IsAuthenticated;
     var earlierOpen = Model.Seasons.Any(s => s.IsEarlier && s.IsOpen);
 
-    <partial name="_TitleHero" model="@Model.BuildHero(ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
+    <partial name="_TitleHero" model="@Model.BuildHero()" />
 
     <div class="tvdb-shell tvdb-shell--below-hero">
         @* Anchors, not tabs: everything stays on the page. *@

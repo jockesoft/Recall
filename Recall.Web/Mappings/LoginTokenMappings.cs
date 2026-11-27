@@ -15,6 +15,7 @@ public static class LoginTokenMappings
             CodeHash = entity.CodeHash,
             CodeAttempts = entity.CodeAttempts,
             ExpiresUtc = entity.ExpiresUtc,
+            ReturnUrl = entity.ReturnUrl,
             ConsumedUtc = entity.ConsumedUtc,
             CreatedUtc = entity.CreatedUtc,
             UpdatedUtc = entity.UpdatedUtc
@@ -31,6 +32,7 @@ public static class LoginTokenMappings
             CodeHash = domain.CodeHash,
             CodeAttempts = domain.CodeAttempts,
             ExpiresUtc = domain.ExpiresUtc,
+            ReturnUrl = domain.ReturnUrl,
             ConsumedUtc = domain.ConsumedUtc,
             CreatedUtc = domain.CreatedUtc == default ? DateTime.UtcNow : domain.CreatedUtc,
             UpdatedUtc = domain.UpdatedUtc == default ? DateTime.UtcNow : domain.UpdatedUtc
