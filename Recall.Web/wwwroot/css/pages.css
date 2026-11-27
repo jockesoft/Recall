@@ -1941,13 +1941,11 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     color: var(--tvdb-signal-ink);
 }
 
-/* "Check your inbox" after a press: what happens once the visitor has signed in. */
+/* "Check your inbox" after a press: what happens once the visitor has signed in.
+   Centred text with the check inline, so a wrapped sentence keeps it beside its first word. */
 .tvdb-signin-after {
-    display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: var(--tvdb-space-2);
     margin: var(--tvdb-space-3) 0 0;
+    text-align: center;
     padding: var(--tvdb-space-2) var(--tvdb-space-3);
     background: var(--tvdb-signal-tint);
     border: 1px solid var(--tvdb-signal-edge);
@@ -1958,7 +1956,8 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
 }
 
 .tvdb-signin-after > i {
-    flex: none;
+    margin-right: var(--tvdb-space-1);
+    vertical-align: -0.125em;
 }
 
 /* ---- Admin: site metrics ---------------------------------------------------- */
