@@ -65,6 +65,7 @@ const int UnreleasedMovie = 356047; // Dune: Part Three: the seed moves its rele
 
 // The made-up account the after-sign-in shot signs in with (removed again by its cleanup).
 const string PendingActionAddress = "ui-review-pending@example.com";
+const string PendingInboxAddress = "ui-review-inbox@example.com";
 
 // Profile's push section in the states a browser can be in. Headless Chromium
 // cannot really subscribe (it has no push service), so the browser's side is
@@ -651,7 +652,31 @@ List<Shot> shots =
         }),
     new("verify", "invalid-link", Site.Anonymous, "/Account/Verify?token=not-a-real-token"),
     // A visitor pressed "Add to library" on a series: the sign-in page says so at the top.
-    new("login", "pending-action", Site.Anonymous, $"/Series/Details/{NotInLibrary}", Prepare: PressAsVisitorAsync),
+    new("login", "pending-series", Site.Anonymous, $"/Series/Details/{NotInLibrary}", Prepare: PressAsVisitorAsync),
+    // ...or "Mark as watched" on an episode (one the anonymous instance can show: see episode-details_signed-out).
+    new("login", "pending-episode", Site.Anonymous, $"/Series/Details/{AllWatched}",
+        Prepare: async page =>
+        {
+            if (cachedEpisodePath is null)
+                await OpenFirstEpisodeAsync(page);
+            else
+                await page.GotoAsync(options.BaseUrl(Site.Anonymous) + cachedEpisodePath);
+            await SettleAsync(page);
+            await PressAsVisitorAsync(page);
+            await page.Locator("#signInContext").GetByText("as watched").WaitForAsync();
+        }),
+    // ...and after asking for the email: "Check your inbox" says what happens once signed in.
+    // Asking creates the account row, so the cleanup removes it again.
+    new("login", "pending-inbox", Site.Anonymous, $"/Series/Details/{NotInLibrary}",
+        Prepare: async page =>
+        {
+            await PressAsVisitorAsync(page);
+            await page.Locator("#Email").FillAsync(PendingInboxAddress);
+            await page.WaitForTimeoutAsync(2500); // the form refuses a submit faster than a person could type
+            await page.GetByRole(AriaRole.Button, new() { Name = "Send sign-in link" }).ClickAsync();
+            await page.Locator("#signInAfter").WaitForAsync();
+        },
+        Cleanup: _ => RunReviewScriptAsync(options, "remove-account", PendingInboxAddress)),
     // ...and once signed in with the code from the email, the series page with the series
     // added and the usual toast, with its Undo. The account exists only for this shot.
     new("series-details", "after-sign-in", Site.Anonymous, $"/Series/Details/{NotInLibrary}", ViewportOnly: true,
