@@ -36,6 +36,13 @@ public sealed class LoginTokenEntity : IHasAuditTimestamps
     /// </summary>
     public string? ReturnUrl { get; set; }
 
+    /// <summary>
+    /// The email was asked for with a pending action in the browser (a visitor
+    /// pressed an action on a Details page first): its sign-in is counted on the
+    /// action path of the sign-up funnel. Says nothing about which action.
+    /// </summary>
+    public bool WithPendingAction { get; set; }
+
     /// <summary>Set the moment the link is redeemed; <c>null</c> while still usable.</summary>
     public DateTime? ConsumedUtc { get; set; }
 

@@ -139,16 +139,31 @@ public sealed class SignInCodeFlowTests
         Metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent);
 
         (await RedeemLinkAsync(token)).Succeeded.Should().BeTrue();
-        Metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent, SiteMetricKeys.LinkRedeemed, SiteMetricKeys.NewAccount);
+        Metrics.Keys.Should().Equal(
+            SiteMetricKeys.LinkSent, SiteMetricKeys.LinkRedeemed, SiteMetricKeys.SignedInDirect,
+            SiteMetricKeys.NewAccount, SiteMetricKeys.NewAccountDirect);
 
         var (_, code) = await RequestEmailAsync();
         (await RedeemCodeAsync(code)).Succeeded.Should().BeTrue();
-        Metrics.Keys.Should().Equal(
-            SiteMetricKeys.LinkSent, SiteMetricKeys.LinkRedeemed, SiteMetricKeys.NewAccount,
-            SiteMetricKeys.LinkSent, SiteMetricKeys.CodeRedeemed);
+        Metrics.Keys.Skip(5).Should().Equal(SiteMetricKeys.LinkSent, SiteMetricKeys.CodeRedeemed, SiteMetricKeys.SignedInDirect);
 
         await using var db = new AppDbContext(_dbOptions);
         (await db.AppUsers.SingleAsync()).FirstSignInUtc.Should().NotBeNull();
+    }
+
+    [Test]
+    public async Task AnEmailAskedForWithAPendingAction_Should_PutItsSignIn_OnTheActionPath()
+    {
+        string? token = null;
+        await using (var db = new AppDbContext(_dbOptions))
+            (await Service(db).RequestLoginAsync(Address, t => { token = t; return $"https://recall.test/Account/Verify?token={t}"; },
+                returnUrl: "/Series/Details/1", withPendingAction: true)).Should().BeTrue("an email was queued");
+
+        var signedIn = await RedeemLinkAsync(token!);
+
+        signedIn.WithPendingAction.Should().BeTrue();
+        Metrics.Keys.Should().Contain(SiteMetricKeys.SignedInWithAction).And.Contain(SiteMetricKeys.NewAccountWithAction)
+            .And.NotContain(SiteMetricKeys.SignedInDirect).And.NotContain(SiteMetricKeys.NewAccountDirect);
     }
 
     [Test]

@@ -31,6 +31,9 @@ public sealed record LoginRedemptionResult(
     /// <summary>Where the sign-in returns to, as stored on the token; null for the default. Check it with <c>Url.IsLocalUrl</c> before redirecting.</summary>
     public string? ReturnUrl { get; init; }
 
+    /// <summary>The email was asked for with a pending action in the browser: the sign-in is on the funnel's action path.</summary>
+    public bool WithPendingAction { get; init; }
+
     public bool Succeeded => Status == LoginRedemptionStatus.Success;
 
     public static LoginRedemptionResult Invalid() =>

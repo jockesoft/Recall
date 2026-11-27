@@ -1962,6 +1962,12 @@ a.tvdb-profile-stat:focus-visible .tvdb-profile-stat__more {
     font-weight: 500;
 }
 
+/* The two funnels, one under the other: each is five columns wide. */
+.tvdb-metrics-funnels {
+    display: grid;
+    gap: var(--tvdb-space-5);
+}
+
 /* The totals: one column, two from 992px. */
 .tvdb-metrics-totals {
     display: grid;

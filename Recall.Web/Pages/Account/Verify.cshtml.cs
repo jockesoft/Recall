@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.Metrics;
 using Recall.Web.Services.PendingActions;
 using Recall.Web.Services.WatchTracking;
 
@@ -18,6 +19,7 @@ public sealed class VerifyModel(
     IPasswordlessAuthService authService,
     IPendingActions pendingActions,
     IPendingActionService pendingActionService,
+    ISiteMetrics metrics,
     TimeProvider timeProvider) : PageModel
 {
     public async Task<IActionResult> OnGetAsync(string? token, CancellationToken cancellationToken)
@@ -30,6 +32,6 @@ public sealed class VerifyModel(
             return Page();
 
         return await SignInCompletion.FinishAsync(
-            this, result, pendingActions, pendingActionService, AirDate.Today(timeProvider), cancellationToken);
+            this, result, pendingActions, pendingActionService, metrics, AirDate.Today(timeProvider), cancellationToken);
     }
 }

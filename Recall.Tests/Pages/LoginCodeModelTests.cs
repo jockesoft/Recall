@@ -32,6 +32,7 @@ public class LoginCodeModelTests
         Options.Create(new LoginTokenOptions()),
         Mock.Of<IPendingActions>(),
         Mock.Of<IPendingActionService>(),
+        Mock.Of<Recall.Web.Services.Metrics.ISiteMetrics>(),
         TimeProvider.System,
         NullLogger<LoginModel>.Instance) { Email = "reader@test.local" }.WithHttpContext();
 

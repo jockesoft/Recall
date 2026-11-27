@@ -13,6 +13,14 @@ namespace Recall.Web.Middleware;
 /// </summary>
 public sealed class PageViewMetricsMiddleware(RequestDelegate next, ISiteMetrics metrics)
 {
+    /// <summary>
+    /// Set by the sign-in page to the funnel key its view also counts under
+    /// (<see cref="SiteMetricKeys.SignInPageWithAction"/> or
+    /// <see cref="SiteMetricKeys.SignInPageDirect"/>), so that, like every
+    /// view, it is counted only for a page that rendered and not for a crawler.
+    /// </summary>
+    public const string FunnelViewItem = "Recall.SiteMetrics.FunnelView";
+
     public async Task InvokeAsync(HttpContext context)
     {
         await next(context);
@@ -32,6 +40,9 @@ public sealed class PageViewMetricsMiddleware(RequestDelegate next, ISiteMetrics
         }
 
         metrics.Increment(SiteMetricKeys.PageView(PageOf(page.ViewEnginePath), context.User.Identity?.IsAuthenticated == true));
+
+        if (context.Items[FunnelViewItem] is string funnelKey)
+            metrics.Increment(funnelKey);
     }
 
     /// <summary>"/Series/Details" is a series page; anything not named is <see cref="SitePage.Other"/>.</summary>

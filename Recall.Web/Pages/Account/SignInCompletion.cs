@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.Metrics;
 using Recall.Web.Services.PendingActions;
 
 namespace Recall.Web.Pages.Account;
@@ -25,6 +26,7 @@ public static class SignInCompletion
         LoginRedemptionResult result,
         IPendingActions pendingActions,
         IPendingActionService pendingActionService,
+        ISiteMetrics metrics,
         DateOnly today,
         CancellationToken cancellationToken)
     {
@@ -38,6 +40,11 @@ public static class SignInCompletion
         {
             var outcome = await pendingActionService.CompleteAsync(result.UserId, action, cancellationToken);
             page.SetPendingActionToast(outcome, today);
+
+            // The last step of the funnel's action path: only after a sign-in on that path,
+            // so it never counts more than the sign-ins before it.
+            if (result.WithPendingAction && outcome.Tone != PendingOutcomeTone.Error)
+                metrics.Increment(SiteMetricKeys.ActionDone);
         }
 
         // The token's address was checked when it was stored; check it again here.

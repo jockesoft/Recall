@@ -604,6 +604,12 @@ namespace Recall.Web.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
+                    b.Property<bool>("WithPendingAction")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("with_pending_action");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TokenHash")

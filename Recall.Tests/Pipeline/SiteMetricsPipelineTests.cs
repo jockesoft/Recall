@@ -106,6 +106,7 @@ public sealed class SiteMetricsPipelineTests
             ["view.landing.anon"] = 1,
             ["view.series.anon"] = 1,
             ["view.login.anon"] = 1,
+            [SiteMetricKeys.SignInPageDirect] = 1,
             ["view.other.anon"] = 1,
             ["view.series.user"] = 1
         });
@@ -204,10 +205,12 @@ public sealed class SiteMetricsPipelineTests
             db.SiteMetrics.AddRange(
                 new SiteMetricDailyEntity { Date = today, Key = "view.series.anon", Count = 1200 },
                 new SiteMetricDailyEntity { Date = today.AddDays(-10), Key = "view.series.anon", Count = 800 },
-                new SiteMetricDailyEntity { Date = today, Key = "view.login.anon", Count = 30 },
-                new SiteMetricDailyEntity { Date = today, Key = "signin.link-sent", Count = 12 },
-                new SiteMetricDailyEntity { Date = today, Key = "signin.link-redeemed", Count = 6 },
-                new SiteMetricDailyEntity { Date = today, Key = "signin.new-account", Count = 3 });
+                new SiteMetricDailyEntity { Date = today, Key = "signin.page.direct", Count = 30 },
+                new SiteMetricDailyEntity { Date = today, Key = "signin.link-sent.direct", Count = 12 },
+                new SiteMetricDailyEntity { Date = today, Key = "signin.signed-in.direct", Count = 6 },
+                new SiteMetricDailyEntity { Date = today, Key = "signin.new-account.direct", Count = 3 },
+                new SiteMetricDailyEntity { Date = today, Key = "action.clicked.add-series", Count = 8 },
+                new SiteMetricDailyEntity { Date = today, Key = "action.completed.add-series", Count = 2 });
             await db.SaveChangesAsync();
         }
 
@@ -218,8 +221,14 @@ public sealed class SiteMetricsPipelineTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         html.Should().Contain("Sign-up funnel");
         html.Should().Contain("1,200").And.Contain("2,000", "the 30-day total of visitors' series views");
-        html.Should().Contain(">40%<", "12 emails of 30 sign-in page views");
+        html.Should().Contain("Action path").And.Contain("Direct path");
+        html.Should().Contain(">40%<", "12 emails of 30 direct sign-in page views");
         html.Should().Contain(">50%<", "6 sign-ins of 12 emails, and 3 new accounts of 6 sign-ins");
+        System.Text.RegularExpressions.Regex.Matches(html, @">(\d+)%<").Select(m => int.Parse(m.Groups[1].Value))
+            .Should().NotBeEmpty().And.OnlyContain(percent => percent <= 100, "no step shows more than all of the one before");
+        System.Text.RegularExpressions.Regex.Replace(html, @"\s+", " ")
+            .Should().Contain("<th scope=\"row\">Add a series to the library</th> <td class=\"text-end tvdb-mono\">8</td> <td class=\"text-end tvdb-mono\">2</td>",
+                "one row per action, pressed then done");
         html.Should().Contain("Last 30 days");
     }
 

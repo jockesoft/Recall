@@ -2,14 +2,17 @@ namespace Recall.Web.Services.Metrics;
 
 /// <summary>
 /// What /Admin/Metrics shows, built from the daily counts by the pure
-/// <see cref="Build"/>: the last 30 days one by one, the 7- and 30-day totals
-/// of every key, and the sign-up funnel with its conversion rates.
+/// <see cref="Build"/>: the two paths of the sign-up funnel with their
+/// conversion rates, the last 30 days one by one, the 7- and 30-day totals
+/// of every key, and each signed-out action's presses and completions.
 /// </summary>
 public sealed record SiteMetricsReport(
     DateOnly Today,
     IReadOnlyList<SiteMetricsDay> Days,
     IReadOnlyList<SiteMetricsTotalGroup> Groups,
-    IReadOnlyList<SiteFunnelStep> Funnel)
+    IReadOnlyList<SiteFunnelStep> ActionFunnel,
+    IReadOnlyList<SiteFunnelStep> DirectFunnel,
+    IReadOnlyList<SiteActionTotal> Actions)
 {
     /// <summary>How many days the table and the longer totals cover, today included.</summary>
     public const int LongWindow = 30;
@@ -70,29 +73,66 @@ public sealed record SiteMetricsReport(
             ])
         };
 
-        var actionRows = ActionKinds(byDay.Values)
-            .SelectMany(kind => new[]
-            {
-                KeyRow($"{ActionLabels.For(kind)}: pressed while signed out", ActionClickedPrefix + kind),
-                KeyRow($"{ActionLabels.For(kind)}: done after sign-in", ActionCompletedPrefix + kind)
-            })
-            .ToList();
-        groups.Add(new SiteMetricsTotalGroup("Actions by signed-out visitors", actionRows));
+        groups.Add(new SiteMetricsTotalGroup("Sign-up paths",
+        [
+            KeyRow("Sign-in page views with a pending action (once per press)", SiteMetricKeys.SignInPageWithAction),
+            KeyRow("Sign-in page views without one", SiteMetricKeys.SignInPageDirect),
+            KeyRow("Emails sent with a pending action (once per press)", SiteMetricKeys.LinkSentWithAction),
+            KeyRow("Emails sent without one", SiteMetricKeys.LinkSentDirect),
+            KeyRow("Sign-ins with a pending action", SiteMetricKeys.SignedInWithAction),
+            KeyRow("Sign-ins without one", SiteMetricKeys.SignedInDirect),
+            KeyRow("New accounts with a pending action", SiteMetricKeys.NewAccountWithAction),
+            KeyRow("New accounts without one", SiteMetricKeys.NewAccountDirect),
+            KeyRow("Pending actions done after an action-path sign-in", SiteMetricKeys.ActionDone)
+        ]));
 
-        var steps = new (string Label, Func<IReadOnlyDictionary<string, long>, long> Select)[]
-        {
+        long Key(IReadOnlyDictionary<string, long> keys, string key) => keys.GetValueOrDefault(key);
+
+        var actionFunnel = Funnel(Total,
+        [
             ("Visitors' views of Series, Movie and Episode pages", DetailsViews),
-            ("Actions pressed while signed out", ActionClicks),
-            ("Visitors' views of the sign-in page", keys => keys.GetValueOrDefault(SiteMetricKeys.PageView(SitePage.Login, signedIn: false))),
-            ("Sign-in emails sent", keys => keys.GetValueOrDefault(SiteMetricKeys.LinkSent)),
-            ("Sign-ins (link or code)", SignIns),
-            ("New accounts", keys => keys.GetValueOrDefault(SiteMetricKeys.NewAccount))
-        };
+            ("Actions pressed", ActionClicks),
+            ("Sign-in page saying what the press will do", keys => Key(keys, SiteMetricKeys.SignInPageWithAction)),
+            ("Sign-in emails sent", keys => Key(keys, SiteMetricKeys.LinkSentWithAction)),
+            ("Signed in", keys => Key(keys, SiteMetricKeys.SignedInWithAction)),
+            ("Action done", keys => Key(keys, SiteMetricKeys.ActionDone))
+        ]);
 
+        var directFunnel = Funnel(Total,
+        [
+            ("Sign-in page without a pending action", keys => Key(keys, SiteMetricKeys.SignInPageDirect)),
+            ("Sign-in emails sent", keys => Key(keys, SiteMetricKeys.LinkSentDirect)),
+            ("Signed in", keys => Key(keys, SiteMetricKeys.SignedInDirect)),
+            ("New accounts", keys => Key(keys, SiteMetricKeys.NewAccountDirect))
+        ]);
+
+        var actions = ActionKinds(byDay.Values)
+            .Select(kind => new SiteActionTotal(
+                ActionLabels.For(kind),
+                Total(ShortWindow, keys => Key(keys, ActionClickedPrefix + kind)),
+                Total(ShortWindow, keys => Key(keys, ActionCompletedPrefix + kind)),
+                Total(LongWindow, keys => Key(keys, ActionClickedPrefix + kind)),
+                Total(LongWindow, keys => Key(keys, ActionCompletedPrefix + kind))))
+            .ToList();
+
+        return new SiteMetricsReport(today, days, groups, actionFunnel, directFunnel, actions);
+    }
+
+    /// <summary>
+    /// The steps with each one's share of the step before it, never above 1:
+    /// the keys are counted so that a step follows from the one before, but a
+    /// day ends at midnight UTC between them (and a press, a view and an email
+    /// can come from different days), so a window can still catch a few more of
+    /// a later step than of the one before it.
+    /// </summary>
+    private static List<SiteFunnelStep> Funnel(
+        Func<int, Func<IReadOnlyDictionary<string, long>, long>, long> total,
+        (string Label, Func<IReadOnlyDictionary<string, long>, long> Select)[] steps)
+    {
         var funnel = new List<SiteFunnelStep>();
         foreach (var (label, select) in steps)
         {
-            var step = new SiteFunnelStep(label, Total(ShortWindow, select), Total(LongWindow, select));
+            var step = new SiteFunnelStep(label, total(ShortWindow, select), total(LongWindow, select));
             if (funnel.Count > 0)
             {
                 var previous = funnel[^1];
@@ -106,11 +146,12 @@ public sealed record SiteMetricsReport(
             funnel.Add(step);
         }
 
-        return new SiteMetricsReport(today, days, groups, funnel);
+        return funnel;
     }
 
-    /// <summary>A share as a fraction (0.25), or null when there was nothing to take a share of.</summary>
-    public static double? Rate(long part, long whole) => whole > 0 ? (double)part / whole : null;
+    /// <summary>A share as a fraction (0.25) and never more than 1, or null when there was nothing to take a share of.</summary>
+    public static double? Rate(long part, long whole) => whole > 0 ? Math.Min(1.0, (double)part / whole) : null;
+
 
     public static string PageLabel(SitePage page) => page switch
     {
@@ -182,6 +223,9 @@ public sealed record SiteMetricsDay(
     long SignIns,
     long NewAccounts,
     long ActionsDone);
+
+/// <summary>One signed-out action: how often it was pressed, and done after sign-in, over 7 and 30 days.</summary>
+public sealed record SiteActionTotal(string Label, long Pressed7, long Done7, long Pressed30, long Done30);
 
 /// <summary>A heading and its rows of totals.</summary>
 public sealed record SiteMetricsTotalGroup(string Heading, IReadOnlyList<SiteMetricsTotal> Rows);

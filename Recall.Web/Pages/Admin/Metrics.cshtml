@@ -17,31 +17,46 @@
 
     <section class="tvdb-page-section" aria-labelledby="funnelHeading">
         <h2 id="funnelHeading">Sign-up funnel</h2>
-        <div class="table-responsive tvdb-metrics-scroll" tabindex="0" role="region" aria-label="Sign-up funnel, table">
-            <table class="table table-sm tvdb-metrics-table" id="funnelTable">
-                <caption class="visually-hidden">Each step of signing up, with its share of the step before, over the last 7 and 30 days</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Step</th>
-                        <th scope="col" class="text-end">7 days</th>
-                        <th scope="col" class="text-end">Of the step before</th>
-                        <th scope="col" class="text-end">30 days</th>
-                        <th scope="col" class="text-end">Of the step before</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var step in report.Funnel)
-                    {
-                        <tr>
-                            <th scope="row">@step.Label</th>
-                            <td class="text-end tvdb-mono">@MetricsModel.Count(step.Last7)</td>
-                            <td class="text-end tvdb-mono">@MetricsModel.Percent(step.RateOfPrevious7)</td>
-                            <td class="text-end tvdb-mono">@MetricsModel.Count(step.Last30)</td>
-                            <td class="text-end tvdb-mono">@MetricsModel.Percent(step.RateOfPrevious30)</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+        <p class="tvdb-meta mb-3">
+            Two paths: visitors who pressed an action on a Details page first, and visitors who came to sign in on their own.
+            A press is followed one step at a time, so each of its steps is counted once. A share never shows above 100%:
+            a day ends at midnight UTC, and a step can fall on the day after the one before it.
+        </p>
+
+        @{ var funnels = new[] { ("actionFunnel", "Action path", report.ActionFunnel), ("directFunnel", "Direct path", report.DirectFunnel) }; }
+        <div class="tvdb-metrics-funnels">
+            @foreach (var (id, title, steps) in funnels)
+            {
+                <div>
+                    <h3 id="@(id)Heading">@title</h3>
+                    <div class="table-responsive tvdb-metrics-scroll" tabindex="0" role="region" aria-label="@title, table">
+                        <table class="table table-sm tvdb-metrics-table" id="@id">
+                            <caption class="visually-hidden">@title: each step, with its share of the step before, over the last 7 and 30 days</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Step</th>
+                                    <th scope="col" class="text-end">7 days</th>
+                                    <th scope="col" class="text-end">Of the step before</th>
+                                    <th scope="col" class="text-end">30 days</th>
+                                    <th scope="col" class="text-end">Of the step before</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var step in steps)
+                                {
+                                    <tr>
+                                        <th scope="row">@step.Label</th>
+                                        <td class="text-end tvdb-mono">@MetricsModel.Count(step.Last7)</td>
+                                        <td class="text-end tvdb-mono">@MetricsModel.Percent(step.RateOfPrevious7)</td>
+                                        <td class="text-end tvdb-mono">@MetricsModel.Count(step.Last30)</td>
+                                        <td class="text-end tvdb-mono">@MetricsModel.Percent(step.RateOfPrevious30)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
         </div>
     </section>
 
@@ -86,6 +101,41 @@
             </table>
         </div>
         <p class="tvdb-meta mt-2 mb-0">Details views are visitors' views of Series, Movie and Episode pages. Sign-ins are by the link or the code.</p>
+    </section>
+
+    <section class="tvdb-page-section" aria-labelledby="actionsHeading">
+        <h2 id="actionsHeading">Actions by signed-out visitors</h2>
+        <div class="table-responsive tvdb-metrics-scroll" tabindex="0" role="region" aria-label="Actions by signed-out visitors, table">
+            <table class="table table-sm tvdb-metrics-table" id="actionsTable">
+                <caption class="visually-hidden">Each action a signed-out visitor can press: how often it was pressed, and done after sign-in, over the last 7 and 30 days</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" rowspan="2">Action</th>
+                        <th scope="colgroup" colspan="2" class="text-center">7 days</th>
+                        <th scope="colgroup" colspan="2" class="text-center">30 days</th>
+                    </tr>
+                    <tr>
+                        <th scope="col" class="text-end">Pressed</th>
+                        <th scope="col" class="text-end">Done</th>
+                        <th scope="col" class="text-end">Pressed</th>
+                        <th scope="col" class="text-end">Done</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var action in report.Actions)
+                    {
+                        <tr>
+                            <th scope="row">@action.Label</th>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(action.Pressed7)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(action.Done7)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(action.Pressed30)</td>
+                            <td class="text-end tvdb-mono">@MetricsModel.Count(action.Done30)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="tvdb-meta mt-2 mb-0">Done counts an action done after sign-in, or found already done for the account; the press and the sign-in can fall on different days.</p>
     </section>
 
     <section class="tvdb-page-section" aria-labelledby="totalsHeading">

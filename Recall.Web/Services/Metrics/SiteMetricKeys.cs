@@ -26,6 +26,38 @@ public static class SiteMetricKeys
     /// <summary>An account's first sign-in (<c>app_user.first_sign_in_utc</c> was empty): a new account that is really used.</summary>
     public const string NewAccount = "signin.new-account";
 
+    // ---- the two paths of the sign-up funnel ----------------------------------------
+    // The action path follows one press (the pending-action cookie's stage counts each
+    // step once per press); the direct path is everything without a press. The keys
+    // above still count every view, email and sign-in, whichever path.
+
+    /// <summary>A visitor's view of the sign-in page that showed what their press will do: once per press.</summary>
+    public const string SignInPageWithAction = "signin.page.with-action";
+
+    /// <summary>A visitor's view of the sign-in page without a pending action.</summary>
+    public const string SignInPageDirect = "signin.page.direct";
+
+    /// <summary>The first sign-in email sent for a press.</summary>
+    public const string LinkSentWithAction = "signin.link-sent.with-action";
+
+    /// <summary>A sign-in email sent without a pending action.</summary>
+    public const string LinkSentDirect = "signin.link-sent.direct";
+
+    /// <summary>A sign-in by an email that was asked for with a pending action (<c>login_token.with_pending_action</c>).</summary>
+    public const string SignedInWithAction = "signin.signed-in.with-action";
+
+    /// <summary>A sign-in by an email that was asked for without one.</summary>
+    public const string SignedInDirect = "signin.signed-in.direct";
+
+    /// <summary>A new account's first sign-in, on the action path.</summary>
+    public const string NewAccountWithAction = "signin.new-account.with-action";
+
+    /// <summary>A new account's first sign-in, on the direct path.</summary>
+    public const string NewAccountDirect = "signin.new-account.direct";
+
+    /// <summary>The pending action done (or found already done) after an action-path sign-in.</summary>
+    public const string ActionDone = "signin.action-done";
+
     /// <summary>"action.clicked.add-series": a signed-out visitor pressed an action on a Details page.</summary>
     public static string ActionClicked(PendingActionKind kind) => "action.clicked." + PendingAction.Slug(kind);
 
@@ -48,7 +80,9 @@ public static class SiteMetricKeys
     {
         var keys = new HashSet<string>(StringComparer.Ordinal)
         {
-            CrawlerView, LinkSent, LinkRedeemed, CodeRedeemed, NewAccount
+            CrawlerView, LinkSent, LinkRedeemed, CodeRedeemed, NewAccount,
+            SignInPageWithAction, SignInPageDirect, LinkSentWithAction, LinkSentDirect,
+            SignedInWithAction, SignedInDirect, NewAccountWithAction, NewAccountDirect, ActionDone
         };
 
         foreach (var kind in Enum.GetValues<PendingActionKind>())

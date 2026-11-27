@@ -192,6 +192,63 @@ public sealed class PendingActionsTests
         context.Response.Headers.SetCookie.ToString().Should().Contain(Web.Services.PendingActions.PendingActions.CookieName);
     }
 
+    // ---- the stage: each funnel step once per press ------------------------------
+
+    /// <summary>Advances the press in a request carrying <paramref name="value"/>; returns whether it moved and the new value.</summary>
+    private (bool Moved, string Value, SetCookieHeaderValue? Cookie) Advance(string value, PendingStage to)
+    {
+        var context = WithCookie(value);
+        var moved = _sut.Advance(context, to);
+        var cookie = SetCookieHeaderValue.ParseList(context.Response.Headers.SetCookie.Select(v => v!).ToList())
+            .SingleOrDefault(c => c.Name == Web.Services.PendingActions.PendingActions.CookieName);
+        return (moved, cookie?.Value.ToString() ?? value, cookie);
+    }
+
+    [Test]
+    public void Advance_Should_MoveOneStageAtATime_EachOnce_KeepingTheActionAndItsExpiry()
+    {
+        var action = new PendingAction(PendingActionKind.RateSeries, 81189, 9);
+        var pressed = Started(action).Value.ToString();
+        _clock.Now = Now.AddMinutes(3);
+
+        Advance(pressed, PendingStage.Sent).Moved.Should().BeFalse("an email before the sign-in page has shown the press is not the next step");
+
+        var (shown, shownValue, cookie) = Advance(pressed, PendingStage.Shown);
+        shown.Should().BeTrue();
+        cookie!.Expires.Should().Be(Now.AddMinutes(15), "a later stage keeps the press's fifteen minutes");
+        _sut.Read(shownValue).Should().Be(action);
+
+        Advance(shownValue, PendingStage.Shown).Moved.Should().BeFalse("a second view of the sign-in page is not another step");
+
+        var (sent, sentValue, _) = Advance(shownValue, PendingStage.Sent);
+        sent.Should().BeTrue();
+        Advance(sentValue, PendingStage.Sent).Moved.Should().BeFalse("a second email is not another step");
+        _sut.Read(sentValue).Should().Be(action, "the action itself is unchanged");
+    }
+
+    [Test]
+    public void Advance_Should_DoNothing_WithoutAValidCookie()
+    {
+        var context = WithCookie("garbage");
+
+        _sut.Advance(context, PendingStage.Shown).Should().BeFalse();
+        context.Response.Headers.SetCookie.Should().BeEmpty();
+    }
+
+    [Test]
+    public void ACookieFromBeforeTheStage_Should_ReadAsPressed()
+    {
+        var old = Signed($"v1|AddSeries|81189||{Ticks(Now)}");
+
+        Advance(old, PendingStage.Shown).Moved.Should().BeTrue();
+    }
+
+    [TestCase("Viewed")]
+    [TestCase("1")]
+    [TestCase("shown")]
+    public void AStageThatIsNotOneOfTheNames_Should_RejectTheCookie(string stage) =>
+        _sut.Read(Signed($"v1|AddSeries|81189||{Ticks(Now)}|{stage}")).Should().BeNull();
+
     [TestCase(PendingActionKind.AddSeries, "/Series/Details/81189")]
     [TestCase(PendingActionKind.RateSeries, "/Series/Details/81189")]
     [TestCase(PendingActionKind.AddMovieToWatchlist, "/Movies/Details/81189")]

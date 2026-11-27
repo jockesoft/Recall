@@ -21,20 +21,18 @@ namespace Recall.Tests.Pipeline;
 /// signed cookie (nothing in the address), the sign-in page says what will
 /// happen, the email's link and its code both return to the page, the action
 /// is done once with its usual toast, and each step is counted. Its own
-/// application instance, so its sign-in requests have a rate-limit bucket of
-/// their own.
+/// application instance per fixture, so its sign-in requests have a rate-limit
+/// bucket of their own (8 requests for an email per 5 minutes per IP).
 /// </summary>
-[TestFixture]
-[NonParallelizable]
-public sealed class PendingActionPipelineTests
+public abstract class PendingActionPipelineFixture
 {
-    private const int SeriesId = RecallWebApplicationFactory.KnownSeriesId;
-    private const int MovieId = 79;
-    private const string MovieName = "Pending Test Movie";
+    protected const int SeriesId = RecallWebApplicationFactory.KnownSeriesId;
+    protected const int MovieId = 79;
+    protected const string MovieName = "Pending Test Movie";
 
     private RecallWebApplicationFactory _baseFactory = null!;
-    private WebApplicationFactory<Program> _factory = null!;
-    private readonly Mock<ISeriesLibraryService> _library = new();
+    protected WebApplicationFactory<Program> _factory = null!;
+    protected readonly Mock<ISeriesLibraryService> _library = new();
 
     [OneTimeSetUp]
     public void StartApplication()
@@ -80,20 +78,20 @@ public sealed class PendingActionPipelineTests
         _library.Invocations.Clear();
     }
 
-    private HttpClient Browser() => _factory.CreateClient(new WebApplicationFactoryClientOptions
+    protected HttpClient Browser() => _factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         BaseAddress = new Uri("https://localhost"),
         AllowAutoRedirect = false,
         HandleCookies = true
     });
 
-    private static string Antiforgery(string html) =>
+    protected static string Antiforgery(string html) =>
         Regex.Match(html, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"").Groups[1].Value;
 
-    private static string Decoded(string html) => WebUtility.HtmlDecode(Regex.Replace(html, @"\s+", " "));
+    protected static string Decoded(string html) => WebUtility.HtmlDecode(Regex.Replace(html, @"\s+", " "));
 
     /// <summary>Opens a Details page and presses one of its forms, as a visitor's browser does.</summary>
-    private static async Task<HttpResponseMessage> PressAsync(HttpClient browser, string page, string handler, Dictionary<string, string>? fields = null)
+    protected static async Task<HttpResponseMessage> PressAsync(HttpClient browser, string page, string handler, Dictionary<string, string>? fields = null)
     {
         var html = await browser.GetStringAsync(page);
         var form = new Dictionary<string, string>(fields ?? []) { ["__RequestVerificationToken"] = Antiforgery(html) };
@@ -101,7 +99,7 @@ public sealed class PendingActionPipelineTests
     }
 
     /// <summary>Asks for the sign-in email from the sign-in page the press led to; returns the page and the email's link and code.</summary>
-    private async Task<(string Page, string Link, string Code)> RequestEmailAsync(HttpClient browser, string loginLocation, string email)
+    protected async Task<(string Page, string Link, string Code)> RequestEmailAsync(HttpClient browser, string loginLocation, string email)
     {
         var page = await browser.GetStringAsync(loginLocation);
         var returnUrl = Regex.Match(page, "<input type=\"hidden\" id=\"ReturnUrl\" name=\"ReturnUrl\" value=\"([^\"]*)\"").Groups[1].Value;
@@ -125,19 +123,25 @@ public sealed class PendingActionPipelineTests
         return (page, link, code);
     }
 
-    private Dictionary<string, long> Counted() =>
+    protected Dictionary<string, long> Counted() =>
         _factory.Services.GetRequiredService<SiteMetricsBuffer>().Pending()
             .GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.Sum(c => c.Count));
 
-    private async Task<Guid> UserIdAsync(string email)
+    protected async Task<Guid> UserIdAsync(string email)
     {
         using var scope = _factory.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<AppDbContext>().AppUsers.Where(u => u.Email == email).Select(u => u.Id).SingleAsync();
     }
 
-    private static IEnumerable<string> SetCookies(HttpResponseMessage response) =>
+    protected static IEnumerable<string> SetCookies(HttpResponseMessage response) =>
         response.Headers.TryGetValues("Set-Cookie", out var values) ? values : [];
+}
 
+/// <summary>A press done after the link or the code, and what it may and may not do.</summary>
+[TestFixture]
+[NonParallelizable]
+public sealed class PendingActionPipelineTests : PendingActionPipelineFixture
+{
     [Test]
     public async Task AddToLibrary_Should_BeKept_Explained_AndDoneAfterTheLink_WithItsToast()
     {
@@ -305,5 +309,39 @@ public sealed class PendingActionPipelineTests
             ["action.clicked.watched-movie"] = 1,
             ["action.clicked.like-movie"] = 1
         });
+    }
+}
+
+/// <summary>The two paths of the sign-up funnel, and "Check your inbox" after a press.</summary>
+[TestFixture]
+[NonParallelizable]
+public sealed class SignUpPathPipelineTests : PendingActionPipelineFixture
+{
+    [Test]
+    public async Task TheActionPath_Should_CountEachStepOncePerPress_AndTheDirectPathApart()
+    {
+        using var visitor = Browser();
+        var press = await PressAsync(visitor, $"/Series/Details/{SeriesId}", "ToggleSeriesLike");
+        await visitor.GetStringAsync(press.Headers.Location!.OriginalString);       // a second look at the sign-in page
+        var (_, link, _) = await RequestEmailAsync(visitor, press.Headers.Location.OriginalString, "path-counter@test.local");
+        await visitor.GetAsync(link);
+
+        using var direct = Browser();
+        await RequestEmailAsync(direct, "/Account/Login", "direct-counter@test.local");
+
+        Counted().Should().Contain(new Dictionary<string, long>
+        {
+            ["action.clicked.like-series"] = 1,
+            ["view.login.anon"] = 3,
+            [SiteMetricKeys.SignInPageWithAction] = 1,          // two views after the press, one step
+            [SiteMetricKeys.SignInPageDirect] = 1,
+            [SiteMetricKeys.LinkSentWithAction] = 1,
+            [SiteMetricKeys.LinkSentDirect] = 1,
+            [SiteMetricKeys.LinkSent] = 2,
+            [SiteMetricKeys.SignedInWithAction] = 1,
+            [SiteMetricKeys.NewAccountWithAction] = 1,
+            [SiteMetricKeys.ActionDone] = 1
+        });
+        Counted().Should().NotContainKey(SiteMetricKeys.SignedInDirect);
     }
 }
