@@ -195,34 +195,13 @@ else
 
     @if (signedIn)
     {
-        <div class="modal fade" id="seriesCatchUpModal" tabindex="-1" aria-labelledby="seriesCatchUpModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2 class="modal-title" id="seriesCatchUpModalLabel">Catch up?</h2>
-                        <button type="button" class="tvdb-close" data-bs-dismiss="modal" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
-                    </div>
-                    <div class="modal-body">
-                        You have <strong id="priorEpisodeCount">0</strong> earlier unwatched episode<span id="priorEpisodeCountPlural">s</span>.
-                        Mark <span id="priorEpisodeCountText">those</span> as watched too?
-                    </div>
-                    <div class="modal-footer">
-                        <form method="post" asp-page-handler="ToggleEpisodeWatched" asp-route-id="@series.TvdbId" class="d-inline" data-catch-up-just-this>
-                            <input type="hidden" name="episodeId" />
-                            <input type="hidden" name="Season" />
-                            <input type="hidden" name="Anchor" />
-                            <button type="submit" class="btn btn-outline-dark">Just this episode</button>
-                        </form>
-                        <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@series.TvdbId" class="d-inline" data-catch-up-through>
-                            <input type="hidden" name="episodeId" />
-                            <input type="hidden" name="Season" />
-                            <input type="hidden" name="Anchor" />
-                            <button type="submit" class="btn btn-primary">Mark this &amp; earlier episodes</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <partial name="_CatchUpModal" model="@(new CatchUpModalModel
+                 {
+                     RouteId = series.TvdbId,
+                     JustThisHandler = "ToggleEpisodeWatched",
+                     ThroughHandler = "MarkWatchedThrough",
+                     Fields = ["episodeId", "Season", "Anchor"]
+                 })" />
     }
 
     @if (Model.IsTrackedByCurrentUser)

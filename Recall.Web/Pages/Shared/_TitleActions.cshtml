@@ -25,7 +25,12 @@
     <div class="tvdb-title-actions__row">
         @if (Model.Primary is { } primary)
         {
-            <form method="post" asp-page-handler="@primary.Handler" asp-route-id="@primary.RouteId" class="tvdb-title-actions__primary">
+            @* With PriorCheckEpisodeId, js/tvdb-series.js first asks whether to mark the
+               earlier unwatched episodes too; without script the form marks this one. *@
+            <form method="post" asp-page-handler="@primary.Handler" asp-route-id="@primary.RouteId" class="tvdb-title-actions__primary"
+                  data-prior-check="@(primary.PriorCheckEpisodeId is null ? "false" : "true")"
+                  data-episode-id="@primary.PriorCheckEpisodeId"
+                  data-prior-count="@primary.PriorUnwatchedCount">
                 @foreach (var field in primary.HiddenFields)
                 {
                     <input type="hidden" name="@field.Key" value="@field.Value" />
@@ -50,13 +55,24 @@
             <div class="tvdb-status-box tvdb-title-actions__primary">
                 <i class="@status.Icon tvdb-status-box__icon" aria-hidden="true"></i>
                 <div class="tvdb-status-box__text">
-                    <span class="tvdb-status-box__label">@status.Text</span>
-                    @if (status.Detail is not null || status.Release is not null)
+                    @if (status.ReleaseInLabel && status.Release is not null)
                     {
-                        <span class="tvdb-status-box__detail">@status.Detail @if (status.Release is not null)
-                            {
-                                <partial name="_ReleaseTime" model="status.Release" />
-                            }</span>
+                        <span class="tvdb-status-box__label">@status.Text <partial name="_ReleaseTime" model="status.Release" /></span>
+                        if (status.Detail is not null)
+                        {
+                            <span class="tvdb-status-box__detail">@status.Detail</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="tvdb-status-box__label">@status.Text</span>
+                        if (status.Detail is not null || status.Release is not null)
+                        {
+                            <span class="tvdb-status-box__detail">@status.Detail @if (status.Release is not null)
+                                {
+                                    <partial name="_ReleaseTime" model="status.Release" />
+                                }</span>
+                        }
                     }
                 </div>
             </div>

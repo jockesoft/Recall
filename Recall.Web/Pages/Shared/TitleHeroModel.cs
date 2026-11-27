@@ -9,13 +9,25 @@ namespace Recall.Web.Pages.Shared;
 /// frame above the panel. The title's background art behind a shade, the way
 /// back, the poster beside the chips, the title, a meta line and the ratings,
 /// the user's progress, and the action row (<see cref="TitleActionsModel"/>).
-/// Series Details and Movie Details.
+/// Series Details, Movie Details and Episode Details. An episode has no
+/// poster (<see cref="ShowPoster"/>); it has its series above the title
+/// (<see cref="Parent"/>), where it is in its season (<see cref="Position"/>)
+/// and the episode after it (<see cref="UpNext"/>).
 /// </summary>
 public sealed class TitleHeroModel
 {
     public required string Name { get; init; }
 
     public string? PosterUrl { get; init; }
+
+    /// <summary>
+    /// False for an episode, which has no poster of its own: the heading block
+    /// then keeps the poster's height, so the hero is as tall as a series'.
+    /// </summary>
+    public bool ShowPoster { get; init; } = true;
+
+    /// <summary>What the title belongs to, as a link above it: an episode's series.</summary>
+    public TitleParentLink? Parent { get; init; }
 
     /// <summary>16:9 art behind the hero, decorative. Null: a plain dark gradient.</summary>
     public string? BackgroundUrl { get; init; }
@@ -29,6 +41,12 @@ public sealed class TitleHeroModel
 
     /// <summary>"2010– · 17 seasons · Discovery".</summary>
     public string? Meta { get; init; }
+
+    /// <summary>Data at the start of the meta line, in mono: an episode's "S52 · E1".</summary>
+    public string? MetaCode { get; init; }
+
+    /// <summary>The end of the meta line for an episode not released yet: "Airs" and its release time.</summary>
+    public TitleMetaRelease? MetaRelease { get; init; }
 
     /// <summary>IMDb's rating as OMDb gives it ("7.3"), when known.</summary>
     public string? ImdbRating { get; init; }
@@ -44,7 +62,13 @@ public sealed class TitleHeroModel
     /// <summary>Only for a series in the user's library with something released; a movie has none.</summary>
     public TitleProgressModel? Progress { get; init; }
 
+    /// <summary>An episode's place in its season, in place of <see cref="Progress"/>.</summary>
+    public TitlePositionModel? Position { get; init; }
+
     public required TitleActionsModel Actions { get; init; }
+
+    /// <summary>An episode's next episode, as a card under the action row (<c>_UpNextCard</c>).</summary>
+    public UpNextModel? UpNext { get; init; }
 
     /// <summary>"Your rating 9", or "Rate" while unrated.</summary>
     public string RatingChipText => Rating?.CurrentValue is { } value
@@ -54,7 +78,85 @@ public sealed class TitleHeroModel
 
 /// <summary>The way back at the top of the hero.</summary>
 /// <param name="UseHistory">Go back in the browser's history when there is any, rather than to <paramref name="Page"/>.</param>
-public sealed record TitleBackLink(string Text, string Page, bool UseHistory);
+/// <param name="RouteId">The page's id, for a page that has one (an episode's series).</param>
+public sealed record TitleBackLink(string Text, string Page, bool UseHistory, int? RouteId = null);
+
+/// <summary>A link above the title to what it belongs to: an episode's series.</summary>
+public sealed record TitleParentLink(string Text, string Page, int RouteId);
+
+/// <summary>"Airs" and the release time, at the end of the meta line.</summary>
+public sealed record TitleMetaRelease(string Prefix, ReleaseTimeModel Release);
+
+/// <summary>
+/// Where an episode sits in its season: "Episode 1 of 21 · Season 52", with
+/// "N of M watched" and a bar for a signed-in user. The count is the season's
+/// episodes; the watched figures are its released regular episodes, so a
+/// season still airing reads "Episode 3 of 21" and "2 of 5 watched". A
+/// special is "Special 3 of 4" alone: specials never count toward progress.
+/// </summary>
+/// <param name="WatchedCount">Null for a visitor and for a special: no watched line, no bar.</param>
+public sealed record TitlePositionModel(string Label, int? WatchedCount = null, int ReleasedCount = 0, int? SeasonNumber = null)
+{
+    public bool HasBar => WatchedCount is not null && ReleasedCount > 0;
+
+    /// <summary>Whole percent, rounded down, like the series' progress.</summary>
+    public int Percent => ReleasedCount <= 0 || WatchedCount is not { } watched
+        ? 0
+        : (int)Math.Floor(100.0 * watched / ReleasedCount);
+
+    /// <summary>"3 of 21 watched".</summary>
+    public string? WatchedText => WatchedCount is { } watched
+        ? $"{StatsFormat.Number(watched)} of {StatsFormat.Number(ReleasedCount)} watched"
+        : null;
+}
+
+/// <summary>The watched state of an episode's control: a ring, a green check, or a dashed clock.</summary>
+public enum UpNextMark
+{
+    /// <summary>A visitor: no control.</summary>
+    None,
+    Unwatched,
+    Watched,
+    /// <summary>May not be marked yet (<c>AirDate.MayBeMarked</c>): the dashed clock, not a button.</summary>
+    NotAired
+}
+
+/// <summary>
+/// Input for <c>_UpNextCard.cshtml</c>: the episode after this one in watch
+/// order, under the action row. Its still by the shared rule
+/// (<c>EpisodeArt</c>), "S52E02 · title" linking to it, when it airs, and for
+/// a signed-in user the one-tap check (or the dashed clock).
+/// </summary>
+public sealed class UpNextModel
+{
+    public required int EpisodeId { get; init; }
+
+    /// <summary>"S52E02".</summary>
+    public required string Code { get; init; }
+
+    public required string Title { get; init; }
+
+    public string? ImageUrl { get; init; }
+
+    /// <summary>"Aired Sun, Oct 4", or "Airs" before <see cref="Release"/>.</summary>
+    public string? DateText { get; init; }
+
+    /// <summary>For an episode not released yet: its release time after <see cref="DateText"/>.</summary>
+    public ReleaseTimeModel? Release { get; init; }
+
+    public UpNextMark Mark { get; init; }
+
+    /// <summary>The page the check posts to (the episode being shown) and its handler.</summary>
+    public required int RouteId { get; init; }
+
+    public required string Handler { get; init; }
+
+    /// <summary>Unwatched episodes before it; more than none and the check asks first (js/tvdb-series.js).</summary>
+    public int PriorUnwatchedCount { get; init; }
+
+    /// <summary>The check's name, as on Series Details' rows: "S52E02 Title watched".</summary>
+    public string MarkLabel => $"{Code} {Title} watched";
+}
 
 /// <summary>
 /// The title's status beside the genres: a series' ("Continuing", "Ended"), a
@@ -149,6 +251,17 @@ public sealed class TitleAction
 
     /// <summary>Icon class, from <c>Icons</c>.</summary>
     public string? Icon { get; init; }
+
+    /// <summary>
+    /// The episode the button marks, when marking it may first ask whether to
+    /// mark the earlier unwatched episodes too: the form carries
+    /// <c>data-prior-check</c>, and js/tvdb-series.js opens the "Catch up?"
+    /// dialog. Without script the form marks just this one.
+    /// </summary>
+    public int? PriorCheckEpisodeId { get; init; }
+
+    /// <summary>How many earlier episodes are unwatched (known to the page; with it, no request is needed to ask).</summary>
+    public int? PriorUnwatchedCount { get; init; }
 }
 
 /// <summary>
@@ -189,7 +302,11 @@ public sealed record TitleNotice(string Text, string Icon);
 /// second line that may end in a release time ("S17E09 airs" then the
 /// <c>&lt;time&gt;</c> of <paramref name="Release"/>).
 /// </summary>
-public sealed record TitleStatusBox(string Text, string Icon, string? Detail = null, ReleaseTimeModel? Release = null);
+/// <remarks>
+/// With <paramref name="ReleaseInLabel"/> the release time ends the first line
+/// instead ("Airs Fri, Nov 27 · 8:00 PM ET": an episode not released yet).
+/// </remarks>
+public sealed record TitleStatusBox(string Text, string Icon, string? Detail = null, ReleaseTimeModel? Release = null, bool ReleaseInLabel = false);
 
 /// <summary>
 /// One entry in the "⋯" menu: a POST to a page handler, or (with

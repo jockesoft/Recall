@@ -315,6 +315,30 @@ public class TheTvDbServiceTests
     }
 
     [Test]
+    public async Task GetCachedEpisodeDetailsAsync_Should_NeverCallTheApi_AndReturnNothing_WhenNeitherCacheHasIt()
+    {
+        var result = await _sut.GetCachedEpisodeDetailsAsync(77);
+
+        result.Should().BeNull("Episode Details' Up next costs no TheTVDB request");
+        _apiClient.VerifyNoOtherCalls();
+        _store.Verify(x => x.SaveEpisodeExtendedAsync(It.IsAny<Episode>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task GetCachedEpisodeDetailsAsync_Should_ReadTheSnapshot_WhenRedisMisses_WithoutTheApi()
+    {
+        _store
+            .Setup(x => x.GetEpisodeExtendedAsync(77, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Episode { Id = 77, Name = "From The Snapshot", Image = "/banners/episodes/77.jpg" });
+
+        var result = await _sut.GetCachedEpisodeDetailsAsync(77);
+
+        result!.Name.Should().Be("From The Snapshot");
+        result.Image.Should().Be("https://artworks.thetvdb.com/banners/episodes/77.jpg", "images are normalized on every read");
+        _apiClient.VerifyNoOtherCalls();
+    }
+
+    [Test]
     public async Task GetSeriesAggregateByIdAsync_Should_FetchFromApi_AndPersist_WhenCacheAndStoreMiss()
     {
         var fresh = new SeriesAggregate { TvdbId = 9, Name = "Fresh Show" };

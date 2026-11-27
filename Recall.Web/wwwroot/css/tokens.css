@@ -159,6 +159,7 @@
     --tvdb-width-full: 1100px;      /* grids and detail pages */
     --tvdb-width-narrow: 680px;     /* forms and text pages (content width) */
     --tvdb-width-strip-poster: 150px; /* a poster in Discover's sideways rows (2:3) */
+    --tvdb-width-hero-poster: 132px;  /* the poster in a detail page's hero (2:3) */
     --tvdb-corner-inset: var(--tvdb-space-2); /* a round button on a picture's corner, from the picture's outer edge */
 
     /* ---- Bootstrap, themed through its own variables ----------------------

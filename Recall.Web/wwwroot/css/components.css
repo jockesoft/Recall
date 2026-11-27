@@ -1160,7 +1160,7 @@ dl.row dd a.tvdb-inline-edit {
 /* ---- Titles in lists and on cards ---------------------------------------------------
    Two styles and no others. A row in a list (episode, search result, import
    row, notification, push device) has a title at body size; a card (poster, upcoming,
-   liked episode, person) has one a step smaller. Both are the UI face,
+   liked episode, person, Episode Details' Up next and previous/next) has one a step smaller. Both are the UI face,
    semibold. */
 .tvdb-ep__title,
 .tvdb-result__title,
@@ -1178,7 +1178,9 @@ dl.row dd a.tvdb-inline-edit {
 .tvdb-upcoming-series,
 .tvdb-series-title,
 .tvdb-fav-episode-show,
-.tvdb-person__name {
+.tvdb-person__name,
+.tvdb-up-next__title,
+.tvdb-episode-nav__title {
     font-size: var(--tvdb-text-sm);
     font-weight: 600;
     line-height: var(--tvdb-leading-snug);
@@ -1968,8 +1970,8 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 .tvdb-hero__poster {
-    flex: 0 0 132px;
-    width: 132px;
+    flex: 0 0 var(--tvdb-width-hero-poster);
+    width: var(--tvdb-width-hero-poster);
     min-height: 0;
     margin-inline: 0;
     border-radius: var(--tvdb-radius-md);
@@ -1979,6 +1981,27 @@ dl.row dd a.tvdb-inline-edit {
 .tvdb-hero__head {
     flex: 1 1 18rem;
     min-width: 0;
+}
+
+/* No poster (an episode): the heading block keeps the poster's height, so the
+   hero is as tall as a series' and the title sits at the same place. */
+.tvdb-hero--no-poster .tvdb-hero__title-row {
+    min-height: calc(var(--tvdb-width-hero-poster) * 3 / 2);
+}
+
+/* What the title belongs to (an episode's series), above it. */
+.tvdb-hero__parent {
+    display: inline-block;
+    margin-bottom: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-md);
+    font-weight: 600;
+    color: var(--tvdb-on-ink);
+    text-shadow: var(--tvdb-text-shadow-on-art);
+}
+
+.tvdb-hero__parent:hover,
+.tvdb-hero__parent:focus-visible {
+    color: var(--tvdb-signal);
 }
 
 .tvdb-hero__chips {
@@ -2127,6 +2150,69 @@ dl.row dd a.tvdb-inline-edit {
     margin: 0;
     font-size: var(--tvdb-text-xs);
     color: var(--tvdb-on-ink-muted);
+}
+
+/* ---- Up next (the _UpNextCard partial) -------------------------------------------------
+   Episode Details' next episode, under the action row: on paper like the
+   sign-in card. The still, the text (one line for the title, with an
+   ellipsis), then the 44px control of Series Details' rows (.tvdb-ep-mark). */
+
+.tvdb-up-next {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    padding: var(--tvdb-space-2) var(--tvdb-space-3) var(--tvdb-space-2) var(--tvdb-space-2);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-paper);
+    color: var(--tvdb-text);
+}
+
+.tvdb-up-next__still {
+    position: relative;
+    width: 112px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--tvdb-radius-sm);
+    background: var(--tvdb-media-bg);
+}
+
+.tvdb-up-next__still img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tvdb-up-next__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.tvdb-up-next__eyebrow {
+    margin: 0;
+}
+
+.tvdb-up-next__title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.tvdb-up-next__date {
+    font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-up-next__control {
+    display: flex;
+}
+
+@media (max-width: 575.98px) {
+    .tvdb-up-next__still {
+        width: 88px;
+    }
 }
 
 /* ---- Title actions (the _TitleActions partial) -------------------------------------------

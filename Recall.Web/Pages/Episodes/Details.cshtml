@@ -1,7 +1,5 @@
 @page "{id:int}"
 @model Recall.Web.Pages.Episodes.DetailsModel
-@using Recall.Web.Domain.TheTvDb
-@using Recall.Web.Pages.Shared
 
 @{
     var ep = Model.Episode;
@@ -10,56 +8,19 @@
         ? (ep.Overview.Length <= 300 ? ep.Overview : ep.Overview[..300].TrimEnd() + "…")
         : $"Details and ratings for {(ep?.Name ?? "this episode")}{(Model.SeriesName is not null ? $" from {Model.SeriesName}" : "")} on Recall.nu.";
     ViewData["Robots"] = ep is not null ? "index, follow" : "noindex, nofollow";
-
-    string? FormatRuntime(int? minutes)
-    {
-        if (minutes is null or <= 0) return null;
-        var h = minutes.Value / 60;
-        var m = minutes.Value % 60;
-        return h > 0 ? $"{h}h {m:D2}m" : $"{minutes} min";
-    }
-
-    string SlateCode(Episode e)
-    {
-        if (e.IsMovie) return "MOVIE";
-        var s = e.SeasonNumber?.ToString("D2") ?? "--";
-        var n = e.Number?.ToString("D2") ?? "--";
-        return $"S{s} \u00B7 E{n}";
-    }
-
-    string? FinaleLabel(string? finaleType) => finaleType?.ToLowerInvariant() switch
-    {
-        "series" => "Series finale",
-        "season" => "Season finale",
-        "midseason" => "Midseason finale",
-        _ => null
-    };
-
-    // OMDb uses the literal string "N/A" for missing values.
-    string? OmdbValue(string? raw) =>
-        string.IsNullOrWhiteSpace(raw) || string.Equals(raw.Trim(), "N/A", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : raw.Trim();
-
-    var runtimeText = ep is null ? null : FormatRuntime(ep.Runtime);
-    var finaleText = ep is null ? null : FinaleLabel(ep.FinaleType);
-    var omdbRating = OmdbValue(Model.Omdb?.ImdbRating);
-    var omdbVotes = OmdbValue(Model.Omdb?.ImdbVotes);
 }
 
-<div class="tvdb-shell">
-    @if (ep?.SeriesId is not null)
-    {
-        <a class="tvdb-back-link" href="/Series/Details/@ep.SeriesId"><i class="@Icons.Back" aria-hidden="true"></i> Back to @(Model.SeriesName ?? "the series")</a>
-    }
-    else if (Model.CameFromSeriesId is { } backTo)
-    {
-        <a class="tvdb-back-link" asp-page="/Series/Details" asp-route-id="@backTo"><i class="@Icons.Back" aria-hidden="true"></i> Back to the series</a>
-    }
+@Html.AntiForgeryToken()
 
-    @if (ep is null)
-    {
-        var cameFrom = Model.CameFromSeriesId;
+@if (ep is null)
+{
+    var cameFrom = Model.CameFromSeriesId;
+    <div class="tvdb-shell">
+        @if (cameFrom is { } backTo)
+        {
+            <a class="tvdb-back-link" asp-page="/Series/Details" asp-route-id="@backTo"><i class="@Icons.Back" aria-hidden="true"></i> Back to the series</a>
+        }
+
         <partial name="_EmptyState" model="@(new EmptyStateModel
                  {
                      Icon = Model.LoadFailed ? Icons.Problem : Icons.NotFound,
@@ -72,289 +33,114 @@
                      ActionPage = cameFrom is null ? "/Index" : "/Series/Details",
                      ActionRouteId = cameFrom
                  })" />
-    }
-    else
-    {
-        // TheTVDB returns a content rating per country — show just one.
-        // Prefer the US rating; otherwise fall back to the first available.
-        static bool IsUs(string? c) =>
-            string.Equals(c, "usa", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(c, "us", StringComparison.OrdinalIgnoreCase);
+    </div>
+}
+else
+{
+    var today = Model.Today;
 
-        var rating = ep.ContentRatings.FirstOrDefault(r => IsUs(r.Country))
-                     ?? ep.ContentRatings.FirstOrDefault();
-        var ratingLabel = rating is null ? null : (rating.Name ?? rating.FullName);
+    <partial name="_TitleHero" model="@Model.BuildHero(ViewContext.HttpContext.Request.Path + ViewContext.HttpContext.Request.QueryString)" />
 
-        <div class="tvdb-episode-page">
-            <div class="tvdb-episode-page__still tvdb-media is-wide @(Model.Art.HasImage ? "" : "is-empty")">
-                @if (Model.Art.IsStill)
-                {
-                    <img src="@Model.Art.Url" alt="Still from @ep.Name" />
-                }
-                else if (Model.Art.HasImage)
-                {
-                    @* No still on TheTVDB: the series' background art stands in. It is not a picture of this episode, so it says nothing to a screen reader. *@
-                    <img src="@Model.Art.Url" alt="" />
-                }
-                else
-                {
-                    <span class="tvdb-media__placeholder"><i class="@Icons.NoImage" aria-hidden="true"></i> No image yet</span>
-                }
-                <div class="tvdb-slate">
-                    <span class="tvdb-dot" aria-hidden="true"></span>
-                    <span>@SlateCode(ep)</span>
-                </div>
-            </div>
-
-            <div class="tvdb-episode-page__main">
-                @if (!string.IsNullOrWhiteSpace(Model.SeriesName) && ep.SeriesId is not null)
-                {
-                    <a class="tvdb-episode-series-link" href="/Series/Details/@ep.SeriesId">@Model.SeriesName</a>
-                }
-
-                <h1 class="mb-3">@(ep.Name ?? "Untitled episode")</h1>
-
-                @* On a phone the facts list sits at the foot of the page, so say when it aired up here too. *@
-                @if (Model.AiredDate is { } airedForSummary)
-                {
-                    <p class="tvdb-title__summary d-md-none">
-                        @(Model.HasAired ? "Aired" : "Airs") <partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release!, Model.Today))" />@(runtimeText is null ? "" : $" \u00B7 {runtimeText}")
-                    </p>
-                }
-
-                <div class="tvdb-rating-panel mb-3">
-                    @if (omdbRating is not null)
+    <div class="tvdb-shell tvdb-shell--below-hero">
+        <div class="tvdb-detail-layout">
+            <div class="tvdb-detail-layout__main">
+                <section id="overview" class="tvdb-detail-section" aria-labelledby="overviewHeading">
+                    <h2 id="overviewHeading">Overview</h2>
+                    @if (!string.IsNullOrWhiteSpace(ep.Overview))
                     {
-                        <span class="tvdb-rating">
-                            <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
-                            <span class="tvdb-rating-score"><strong>@omdbRating</strong>&#8202;/&#8202;10</span>
-                            <span class="tvdb-rating-votes">
-                                IMDb@(omdbVotes is not null ? $" · {omdbVotes} votes" : "")
-                            </span>
-                        </span>
+                        <p class="tvdb-prose">@ep.Overview</p>
                     }
-                    @if (ep.Score is > 0)
+                    else
                     {
-                        <span class="tvdb-rating">
-                            <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
-                            <span class="tvdb-rating-score"><strong>@ep.Score!.Value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
-                            <span class="tvdb-rating-votes">TVDB score</span>
-                        </span>
-                    }
-                    @if (Model.RecallRatingCount > 0)
-                    {
-                        <span class="tvdb-rating">
-                            <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
-                            <span class="tvdb-rating-score"><strong>@Model.RecallRatingAverage!.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>&#8202;/&#8202;10</span>
-                            <span class="tvdb-rating-votes">@Model.RecallRatingCount Recall rating@(Model.RecallRatingCount == 1 ? "" : "s")</span>
-                        </span>
+                        <p class="tvdb-prose text-muted fst-italic">No overview available for this episode yet.</p>
                     }
 
-                    @if (Model.IsAuthenticated)
-                    {
-                        <partial name="_RatingWidget" model="@(new RatingWidgetModel
-                                 {
-                                     RateHandler = "RateEpisode",
-                                     ClearHandler = "ClearEpisodeRating",
-                                     RouteId = ep.Id!.Value,
-                                     CurrentValue = Model.CurrentUserRating,
-                                     TargetNoun = "episode"
-                                 })" />
-                    }
-                </div>
-
-
-                <div class="tvdb-action-row mb-3">
-                    @if (finaleText is not null)
-                    {
-                        <span class="tvdb-badge tvdb-badge--amber">@finaleText</span>
-                    }
-
-                    @if (!Model.MayBeMarked)
-                    {
-                        <button type="button" class="btn btn-outline-dark" disabled>
-                            <i class="@Icons.NotAiredYet me-1" aria-hidden="true"></i>
-                            <span>Airs&nbsp;<partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release!, Model.Today))" /></span>
-                        </button>
-                    }
-                    else if (Model.IsAuthenticated)
-                    {
-                        if (Model.IsWatchedByCurrentUser)
+                    <dl class="tvdb-fact-list">
+                        @if (Model.Release is { } release)
                         {
-                            <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
-                                     {
-                                         Handler = "ToggleWatched",
-                                         RouteId = ep.Id!.Value,
-                                         IsWatched = true,
-                                         WatchedLabel = Model.WatchedOnUtc is { } w
-                                             ? $"Watched {DisplayDate.Format(w, Model.Today)}"
-                                             : "Watched"
-                                     })" />
-                        }
-                        else if (Model.PriorUnwatchedCount == 0)
-                        {
-                            <partial name="_EpisodeWatchedToggle" model="@(new EpisodeWatchedToggleModel
-                                     {
-                                         Handler = "ToggleWatched",
-                                         RouteId = ep.Id!.Value,
-                                         IsWatched = false
-                                     })" />
-                        }
-                        else
-                        {
-                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#markWatchedModal">
-                                Mark as watched
-                            </button>
-
-                            <div class="modal fade" id="markWatchedModal" tabindex="-1" aria-labelledby="markWatchedModalLabel" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-centered">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h2 class="modal-title" id="markWatchedModalLabel">Catch up?</h2>
-                                            <button type="button" class="tvdb-close" data-bs-dismiss="modal" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            You have <strong>@Model.PriorUnwatchedCount</strong> earlier unwatched episode@(Model.PriorUnwatchedCount == 1 ? "" : "s") in this series.
-                                            Mark @(Model.PriorUnwatchedCount == 1 ? "it" : "those") as watched too?
-                                        </div>
-                                        <div class="modal-footer">
-                                            <form method="post" asp-page-handler="ToggleWatched" asp-route-id="@ep.Id">
-                                                <button type="submit" class="btn btn-outline-dark">Just this episode</button>
-                                            </form>
-                                            <form method="post" asp-page-handler="MarkWatchedThrough" asp-route-id="@ep.Id">
-                                                <button type="submit" class="btn btn-primary">Mark this &amp; earlier episodes</button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div>
+                                <dt>@(Model.HasAired ? "Aired" : "Airs")</dt>
+                                <dd><partial name="_ReleaseTime" model="@(new ReleaseTimeModel(release, today))" /></dd>
                             </div>
                         }
-                    }
+                        @if (Model.RuntimeMinutes is > 0 and var minutes)
+                        {
+                            <div>
+                                <dt>Runtime</dt>
+                                <dd>@TitleSummary.Runtime(minutes)</dd>
+                            </div>
+                        }
+                        @if (Model.ImdbRating is { } imdb)
+                        {
+                            <div>
+                                <dt>IMDb</dt>
+                                <dd>
+                                    <i class="@Icons.Star tvdb-rating-star" aria-hidden="true"></i>
+                                    <span class="tvdb-mono">@imdb</span>&#8202;/&#8202;10
+                                    @if (Model.ImdbVotes is { } votes)
+                                    {
+                                        <span class="tvdb-meta">· @votes votes</span>
+                                    }
+                                </dd>
+                            </div>
+                        }
+                    </dl>
 
-                    @if (Model.IsAuthenticated)
+                    @if (ep.Awards.Count > 0)
                     {
-                        <partial name="_LikeToggle" model="@(new LikeToggleModel
-                                 {
-                                     Handler = "ToggleLike",
-                                     RouteId = ep.Id!.Value,
-                                     IsLiked = Model.IsLikedByCurrentUser,
-                                     TargetNoun = "episode"
-                                 })" />
-                    }
-                </div>
-
-                @if (!string.IsNullOrWhiteSpace(ep.Overview))
-                {
-                    <p class="tvdb-prose">@ep.Overview</p>
-                }
-                else
-                {
-                    <p class="tvdb-prose text-muted fst-italic">No overview available for this episode yet.</p>
-                }
-
-                @if (ep.Awards.Count > 0)
-                {
-                    <div class="mt-4">
-                        <h2 class="tvdb-section-title">Awards</h2>
-                        <ul class="list-unstyled mb-0">
+                        <h3 class="tvdb-episode-awards__heading">Awards</h3>
+                        <ul class="tvdb-episode-awards list-unstyled">
                             @foreach (var award in ep.Awards)
                             {
-                                <li class="d-flex align-items-start gap-2 mb-1">
-                                    @if (award.IsWinner)
-                                    {
-                                        <span class="tvdb-badge tvdb-badge--amber flex-shrink-0">Won</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="tvdb-badge tvdb-badge--neutral flex-shrink-0">Nominated</span>
-                                    }
+                                <li>
+                                    <span class="tvdb-badge @(award.IsWinner ? "tvdb-badge--amber" : "tvdb-badge--neutral")">@(award.IsWinner ? "Won" : "Nominated")</span>
                                     <span class="tvdb-meta">
-                                        @award.Name@(award.Year is not null ? $" ({award.Year})" : "")
-                                        @if (!string.IsNullOrWhiteSpace(award.Category))
+                                        @award.Name@(award.Year is not null ? $" ({award.Year})" : "")@if (!string.IsNullOrWhiteSpace(award.Category))
                                         {
-                                            <span class="text-muted"> &mdash; @award.Category</span>
+                                            <text> · @award.Category</text>
                                         }
                                     </span>
                                 </li>
                             }
                         </ul>
-                    </div>
-                }
-
-                <div class="tvdb-epnav-bar mt-4 pt-3">
-                    @if (Model.PreviousEpisode is { } prev)
-                    {
-                        <a class="tvdb-epnav tvdb-epnav--prev" href="/Episodes/Details/@prev.Id">
-                            <i class="@Icons.Back tvdb-epnav-arrow" aria-hidden="true"></i>
-                            <span class="tvdb-epnav-text">
-                                <strong class="tvdb-epnav-label">Prev episode</strong>
-                                @if (prev.SlateCode is { } prevCode)
-                                {
-                                    <span class="tvdb-epnav-slate tvdb-mono">@prevCode</span>
-                                }
-                            </span>
-                        </a>
                     }
-                    else
-                    {
-                        <span class="tvdb-epnav tvdb-epnav--prev is-disabled" aria-disabled="true">
-                            <i class="@Icons.Back tvdb-epnav-arrow" aria-hidden="true"></i>
-                            <span class="tvdb-epnav-text">
-                                <strong class="tvdb-epnav-label">Prev episode</strong>
-                            </span>
-                        </span>
-                    }
-
-                    @if (Model.NextEpisode is { } next)
-                    {
-                        <a class="tvdb-epnav tvdb-epnav--next" href="/Episodes/Details/@next.Id">
-                            <span class="tvdb-epnav-text">
-                                <strong class="tvdb-epnav-label">Next episode</strong>
-                                @if (next.SlateCode is { } nextCode)
-                                {
-                                    <span class="tvdb-epnav-slate tvdb-mono">@nextCode</span>
-                                }
-                            </span>
-                            <i class="@Icons.Next tvdb-epnav-arrow" aria-hidden="true"></i>
-                        </a>
-                    }
-                    else
-                    {
-                        <span class="tvdb-epnav tvdb-epnav--next is-disabled" aria-disabled="true">
-                            <span class="tvdb-epnav-text">
-                                <strong class="tvdb-epnav-label">Next episode</strong>
-                            </span>
-                            <i class="@Icons.Next tvdb-epnav-arrow" aria-hidden="true"></i>
-                        </span>
-                    }
-                </div>
+                </section>
             </div>
 
-            <dl class="tvdb-episode-page__facts tvdb-facts-quiet">
-                @if (Model.AiredDate is { } airDate)
-                {
-                    <div><dt>@(Model.HasAired ? "Aired" : "Airs")</dt><dd><partial name="_ReleaseTime" model="@(new ReleaseTimeModel(Model.Release!, Model.Today))" /></dd></div>
-                }
-                @if (runtimeText is not null)
-                {
-                    <div><dt>Runtime</dt><dd>@runtimeText</dd></div>
-                }
-                @if (ep.SeasonNumber is { } seasonNumber && !ep.IsMovie)
-                {
-                    <div><dt>Season</dt><dd>@(seasonNumber == 0 ? "Specials" : seasonNumber.ToString())</dd></div>
-                }
-                @if (ep.Number is { } episodeNumber && !ep.IsMovie)
-                {
-                    <div><dt>Episode</dt><dd>@episodeNumber</dd></div>
-                }
-                @if (!string.IsNullOrWhiteSpace(ratingLabel))
-                {
-                    var ratingTitle = string.Join(" — ", new[] { rating!.Country, rating.Description }
-                        .Where(x => !string.IsNullOrWhiteSpace(x)));
-                    <div><dt>Rated</dt><dd title="@(string.IsNullOrWhiteSpace(ratingTitle) ? "Content rating" : ratingTitle)">@ratingLabel</dd></div>
-                }
-            </dl>
+            @if (Model.GuestStars.Count > 0)
+            {
+                <div class="tvdb-detail-layout__side">
+                    <div id="guest-stars" class="tvdb-detail-people">
+                        <partial name="_CastList" model="@(new CastListModel { Heading = "Guest stars", Id = "guestStarsList", People = Model.GuestStars, Column = true })" />
+                    </div>
+                </div>
+            }
         </div>
+
+        @if (Model.PreviousEpisode is not null || Model.NextEpisode is not null)
+        {
+            @* Two cards across the panel; a missing side keeps its space. *@
+            <nav class="tvdb-episode-nav" aria-label="Previous and next episode">
+                @foreach (var (link, label, icon, side) in new[]
+                         {
+                             (Model.PreviousEpisode, "Previous", Icons.Back, "prev"),
+                             (Model.NextEpisode, "Next", Icons.Next, "next")
+                         })
+                {
+                    if (link is null)
+                    {
+                        <span class="tvdb-episode-nav__gap" aria-hidden="true"></span>
+                        continue;
+                    }
+
+                    <a class="tvdb-episode-nav__card tvdb-episode-nav__card--@side" asp-page="/Episodes/Details" asp-route-id="@link.Id" rel="@side">
+                        <span class="tvdb-episode-nav__label"><i class="@icon" aria-hidden="true"></i> @label</span>
+                        <span class="tvdb-episode-nav__title">@if (link.Code is not null)
+                            {<span class="tvdb-mono">@link.Code</span>@(link.Title is null ? "" : " · ")}@link.Title</span>
+                    </a>
+                }
+            </nav>
+        }
 
         <p class="tvdb-source-line">
             @if (!string.IsNullOrWhiteSpace(Model.SeriesSlug))
@@ -370,8 +156,27 @@
                 <a class="tvdb-metalink" href="https://www.imdb.com/title/@Model.ImdbId" target="_blank" rel="noopener">IMDb <span class="tvdb-mono">@Model.ImdbId</span></a>
             }
         </p>
+    </div>
+
+    @if (Model.IsAuthenticated)
+    {
+        <partial name="_CatchUpModal" model="@(new CatchUpModalModel
+                 {
+                     RouteId = ep.Id!.Value,
+                     JustThisHandler = "ToggleWatched",
+                     ThroughHandler = "MarkWatchedThrough"
+                 })" />
     }
-</div>
+}
+
+@section Scripts {
+    @if (ep is not null)
+    {
+        <script src="~/js/tvdb-cast.js" asp-append-version="true"></script>
+        <script src="~/js/tvdb-share.js" asp-append-version="true"></script>
+        <script src="~/js/tvdb-series.js" asp-append-version="true"></script>
+    }
+}
 
 @section Head {
     @if (ep is not null)
