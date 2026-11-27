@@ -67,4 +67,12 @@ public sealed class DataRetentionRepository(AppDbContext dbContext) : IDataReten
 
         return await expiredJobs.ExecuteDeleteAsync(cancellationToken);
     }
+
+    public Task<int> DeleteSiteMetricsAsync(DateTime beforeUtc, CancellationToken cancellationToken = default)
+    {
+        var before = DateOnly.FromDateTime(beforeUtc);
+        return dbContext.SiteMetrics
+            .Where(x => x.Date < before)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
 }

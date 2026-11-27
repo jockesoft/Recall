@@ -1,3 +1,4 @@
+using Recall.Tests.TestSupport;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
@@ -11,6 +12,7 @@ using Recall.Web.Infrastructure.Persistence.Entities;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
 using Recall.Web.Services.Authentication;
+using Recall.Web.Services.Metrics;
 
 namespace Recall.Tests.Services.Authentication;
 
@@ -30,6 +32,9 @@ public sealed class SignInCodeFlowTests
     private LoginTokenOptions _options = null!;
     private List<(string Text, string Html)> _emails = null!;
 
+    /// <summary>What the service counted, across every service instance of a test.</summary>
+    private RecordingSiteMetrics Metrics { get; set; } = null!;
+
     [SetUp]
     public async Task SetUpAsync()
     {
@@ -43,6 +48,7 @@ public sealed class SignInCodeFlowTests
         _options = new LoginTokenOptions { TokenLifetimeMinutes = 20, ResendCooldownSeconds = 0, MaxRequestsPerEmailPerDay = 50 };
         _guard = new LoginAbuseGuard(Options.Create(_options));
         _emails = [];
+        Metrics = new RecordingSiteMetrics();
     }
 
     [TearDown]
@@ -61,7 +67,7 @@ public sealed class SignInCodeFlowTests
 
         return new PasswordlessAuthService(
             new AppUserRepository(db), new LoginTokenRepository(db), mail.Object, _guard,
-            Options.Create(_options), NullLogger<PasswordlessAuthService>.Instance);
+            Options.Create(_options), Metrics, NullLogger<PasswordlessAuthService>.Instance);
     }
 
     /// <summary>Requests a sign-in email and returns the link's token and the code, as they appear in it.</summary>
@@ -122,6 +128,40 @@ public sealed class SignInCodeFlowTests
         row.CodeHash.Should().NotBeNullOrEmpty().And.NotContain(code);
         row.CodeHash.Should().Be(SignInCode.Hash(code, row.Id));
         row.CodeAttempts.Should().Be(0);
+    }
+
+    // ---- the site metrics -----------------------------------------------------------
+
+    [Test]
+    public async Task TheMetrics_Should_CountTheEmail_EachWayIn_AndTheFirstSignInAsANewAccount_Once()
+    {
+        var (token, _) = await RequestEmailAsync();
+        Metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent);
+
+        (await RedeemLinkAsync(token)).Succeeded.Should().BeTrue();
+        Metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent, SiteMetricKeys.LinkRedeemed, SiteMetricKeys.NewAccount);
+
+        var (_, code) = await RequestEmailAsync();
+        (await RedeemCodeAsync(code)).Succeeded.Should().BeTrue();
+        Metrics.Keys.Should().Equal(
+            SiteMetricKeys.LinkSent, SiteMetricKeys.LinkRedeemed, SiteMetricKeys.NewAccount,
+            SiteMetricKeys.LinkSent, SiteMetricKeys.CodeRedeemed);
+
+        await using var db = new AppDbContext(_dbOptions);
+        (await db.AppUsers.SingleAsync()).FirstSignInUtc.Should().NotBeNull();
+    }
+
+    [Test]
+    public async Task TheMetrics_Should_CountNothing_ForAWrongCode_OrAnUnusedLink()
+    {
+        var (_, code) = await RequestEmailAsync();
+        await RedeemCodeAsync(WrongCode(code));
+        await RedeemLinkAsync("not-a-token");
+
+        Metrics.Keys.Should().Equal(SiteMetricKeys.LinkSent);
+
+        await using var db = new AppDbContext(_dbOptions);
+        (await db.AppUsers.SingleAsync()).FirstSignInUtc.Should().BeNull("requesting an email creates the row, signing in makes it a new account");
     }
 
     // ---- either way in, once ------------------------------------------------------

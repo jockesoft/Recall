@@ -47,6 +47,7 @@ public class PruneOldDataTimerTests
         _repository.Verify(x => x.DeleteCompletedImportJobsAsync(DaysAgo(90), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteDigestLedgerAsync(DaysAgo(60), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteStalePushSubscriptionsAsync(DaysAgo(180), It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(x => x.DeleteSiteMetricsAsync(DaysAgo(400), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -59,7 +60,8 @@ public class PruneOldDataTimerTests
             ReadNotificationDays = 3,
             NotifiedEpisodeDays = 4,
             ImportJobDays = 5,
-            PushSubscriptionDays = 6
+            PushSubscriptionDays = 6,
+            SiteMetricDays = 7
         };
 
         await CreateSut(retention).Execute(Mock.Of<IJobExecutionContext>());
@@ -70,6 +72,7 @@ public class PruneOldDataTimerTests
         _repository.Verify(x => x.DeleteNotifiedEpisodesAsync(DaysAgo(4), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteCompletedImportJobsAsync(DaysAgo(5), It.IsAny<CancellationToken>()), Times.Once);
         _repository.Verify(x => x.DeleteStalePushSubscriptionsAsync(DaysAgo(6), It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(x => x.DeleteSiteMetricsAsync(DaysAgo(7), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

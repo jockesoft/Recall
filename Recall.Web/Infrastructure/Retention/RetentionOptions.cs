@@ -41,4 +41,11 @@ public sealed class RetentionOptions
 
     /// <summary>Completed IMDb import jobs and their rows, counted from completion. A job still processing is never deleted.</summary>
     public int ImportJobDays { get; set; } = 90;
+
+    /// <summary>
+    /// The site metrics' daily totals (<c>site_metric_daily</c>), counted from
+    /// the day they are about. Anonymous counts, not user data; long enough to
+    /// compare a month with the same month a year before.
+    /// </summary>
+    public int SiteMetricDays { get; set; } = 400;
 }

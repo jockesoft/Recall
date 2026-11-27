@@ -23,6 +23,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<WatchlistImportItemEntity> WatchlistImportItems => Set<WatchlistImportItemEntity>();
     public DbSet<DiscoverDismissalEntity> DiscoverDismissals => Set<DiscoverDismissalEntity>();
 
+    // Anonymous daily totals (SiteMetrics): not user data.
+    public DbSet<SiteMetricDailyEntity> SiteMetrics => Set<SiteMetricDailyEntity>();
+
     // Discover's lists, fetched daily from TheTVDB's filter endpoints. Shared, like the caches below.
     public DbSet<DiscoverListEntity> DiscoverLists => Set<DiscoverListEntity>();
 

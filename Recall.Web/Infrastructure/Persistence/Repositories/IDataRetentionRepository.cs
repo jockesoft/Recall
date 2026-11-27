@@ -39,4 +39,7 @@ public interface IDataRetentionRepository
     /// is never touched.
     /// </summary>
     Task<int> DeleteCompletedImportJobsAsync(DateTime completedBeforeUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>Site metric rows for days before <paramref name="beforeUtc"/>'s date.</summary>
+    Task<int> DeleteSiteMetricsAsync(DateTime beforeUtc, CancellationToken cancellationToken = default);
 }

@@ -28,6 +28,15 @@ public sealed class AppUserEntity : IHasAuditTimestamps
     /// </summary>
     public bool PushQuietHours { get; set; } = true;
 
+    /// <summary>
+    /// When the account was first signed in to, by the emailed link or code;
+    /// null until then. The row is created when the first link is requested,
+    /// so this, not <see cref="CreatedUtc"/>, says the account is really in
+    /// use (the "new account" step of the site metrics). Accounts from before
+    /// the column have their creation date here.
+    /// </summary>
+    public DateTime? FirstSignInUtc { get; set; }
+
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
 

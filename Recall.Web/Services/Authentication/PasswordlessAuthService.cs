@@ -11,9 +11,11 @@ using System.Text;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Recall.Web.Domain.Internal;
+using Recall.Web.Extensions;
 using Recall.Web.Infrastructure.Authentication;
 using Recall.Web.Infrastructure.Persistence.Repositories;
 using Recall.Web.Services;
+using Recall.Web.Services.Metrics;
 
 namespace Recall.Web.Services.Authentication;
 
@@ -23,6 +25,7 @@ public sealed class PasswordlessAuthService(
     IMailService mailService,
     ILoginAbuseGuard abuseGuard,
     IOptions<LoginTokenOptions> options,
+    ISiteMetrics metrics,
     ILogger<PasswordlessAuthService> logger) : IPasswordlessAuthService
 {
     /// <summary>256 bits of entropy — the raw token that goes in the email link.</summary>
@@ -117,6 +120,9 @@ public sealed class PasswordlessAuthService(
             MailService.NormalPriority,
             cancellationToken);
 
+        // Only here: a bot trap, the allowlist, a cap or the cooldown sends nothing and counts nothing.
+        metrics.Increment(SiteMetricKeys.LinkSent);
+
         logger.LogInformation(
             "Passwordless sign-in requested for user {UserId}; link valid for {Minutes} minute(s).",
             user.Id, _options.TokenLifetimeMinutes);
@@ -153,6 +159,7 @@ public sealed class PasswordlessAuthService(
         }
 
         logger.LogInformation("Passwordless sign-in succeeded for user {UserId} (role {Role}).", user.Id, user.Role);
+        await CountSignInAsync(user.Id, SiteMetricKeys.LinkRedeemed, cancellationToken);
         return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
     }
 
@@ -185,6 +192,7 @@ public sealed class PasswordlessAuthService(
 
             abuseGuard.ResetWrongCodes(normalizedEmail);
             logger.LogInformation("Sign-in with a code succeeded for user {UserId} (role {Role}).", user!.Id, user.Role);
+            await CountSignInAsync(user.Id, SiteMetricKeys.CodeRedeemed, cancellationToken);
             return LoginRedemptionResult.ForUser(user.Id, user.Email, user.Username, user.Role);
         }
 
@@ -198,6 +206,26 @@ public sealed class PasswordlessAuthService(
         return wrong >= SignInCode.MaxWrongAttempts
             ? LoginRedemptionResult.TooManyAttempts()
             : LoginRedemptionResult.Invalid();
+    }
+
+    /// <summary>
+    /// The site metrics of a sign-in: which way it was done, and whether it was
+    /// the account's first (a new account). Best-effort: a failure here never
+    /// costs the sign-in.
+    /// </summary>
+    private async Task CountSignInAsync(Guid userId, string how, CancellationToken cancellationToken)
+    {
+        metrics.Increment(how);
+
+        try
+        {
+            if (await userRepository.RecordSignInAsync(userId, DateTime.UtcNow, cancellationToken))
+                metrics.Increment(SiteMetricKeys.NewAccount);
+        }
+        catch (Exception ex) when (ex.IsNotCancellationBy(cancellationToken))
+        {
+            logger.LogWarning(ex, "Could not record the sign-in of user {UserId}.", userId);
+        }
     }
 
     private bool IsEmailAllowed(string normalizedEmail)

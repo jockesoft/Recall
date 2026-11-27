@@ -288,4 +288,25 @@ public sealed class DataRetentionRepositoryTests
             new WatchlistImportItemEntity { Id = Guid.NewGuid(), RowNumber = 2, ImdbId = "tt2", Title = "Two", TitleType = "Movie", CreatedUtc = Old }
         ]
     };
+
+    [Test]
+    public async Task DeleteSiteMetricsAsync_Should_RemoveDaysBeforeTheCutoffsDate_AndKeepTheRest()
+    {
+        var cutoffDay = DateOnly.FromDateTime(Cutoff);
+        await using (var seed = new AppDbContext(_dbOptions))
+        {
+            seed.SiteMetrics.AddRange(
+                new SiteMetricDailyEntity { Date = cutoffDay.AddDays(-1), Key = "view.series.anon", Count = 3 },
+                new SiteMetricDailyEntity { Date = cutoffDay, Key = "view.series.anon", Count = 4 },
+                new SiteMetricDailyEntity { Date = cutoffDay.AddDays(1), Key = "view.series.anon", Count = 5 });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var dbContext = new AppDbContext(_dbOptions);
+        var deleted = await new DataRetentionRepository(dbContext).DeleteSiteMetricsAsync(Cutoff);
+
+        deleted.Should().Be(1);
+        (await dbContext.SiteMetrics.Select(x => x.Date).OrderBy(x => x).ToListAsync())
+            .Should().Equal(cutoffDay, cutoffDay.AddDays(1));
+    }
 }
