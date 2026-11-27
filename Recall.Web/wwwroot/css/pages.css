@@ -1108,7 +1108,7 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     flex: none;
 }
 
-/* Two equal cards at every width; a missing side keeps its space. */
+/* Two equal cards from 576px; a missing side keeps its space. */
 .tvdb-episode-nav {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1157,6 +1157,32 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+}
+
+/* On a phone the cards are stacked, Previous first, each across the panel, so
+   a title is not cut short: it may take two lines, then ends in an ellipsis.
+   The empty side takes no room. */
+@media (max-width: 575.98px) {
+    .tvdb-episode-nav {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .tvdb-episode-nav__gap {
+        display: none;
+    }
+
+    .tvdb-episode-nav__card--next {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .tvdb-episode-nav__title {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        white-space: normal;
+    }
 }
 
 /* ---- Notifications --------------------------------------------------------------------- */
