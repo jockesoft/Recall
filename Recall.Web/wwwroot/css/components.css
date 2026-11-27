@@ -122,20 +122,6 @@
     --bs-btn-active-border-color: var(--tvdb-danger-ink);
 }
 
-/* A watched toggle that is on ("Watched Fri, Sep 11"): solid green, and brick
-   on hover to say "press to undo". The action itself is a .btn-primary. */
-.btn-watch--on {
-    --bs-btn-color: var(--tvdb-on-ok);
-    --bs-btn-bg: var(--tvdb-ok);
-    --bs-btn-border-color: var(--tvdb-ok);
-    --bs-btn-hover-color: var(--tvdb-on-danger);
-    --bs-btn-hover-bg: var(--tvdb-danger);
-    --bs-btn-hover-border-color: var(--tvdb-danger);
-    --bs-btn-active-color: var(--tvdb-on-danger);
-    --bs-btn-active-bg: var(--tvdb-danger);
-    --bs-btn-active-border-color: var(--tvdb-danger);
-}
-
 /* ---- Alerts ---------------------------------------------------------------- */
 
 .alert {
@@ -562,10 +548,6 @@ h1.tvdb-empty-state__title {
     border-radius: var(--tvdb-radius-lg);
 }
 
-.tvdb-media.is-wide {
-    aspect-ratio: 16 / 9;
-}
-
 .tvdb-media img {
     display: block;
     width: 100%;
@@ -596,53 +578,18 @@ h1.tvdb-empty-state__title {
     .tvdb-media { min-height: 0; }
 }
 
-/* A still that does not exist yet gets a low strip, not an empty 16:9 box. */
-.tvdb-media.is-wide.is-empty {
-    aspect-ratio: auto;
-    min-height: 0;
-    height: 6rem;
-}
-
-.tvdb-media.is-wide.is-empty::after {
-    content: none;
-}
-
-.tvdb-media__placeholder {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--tvdb-space-2);
-    padding-bottom: var(--tvdb-space-5);
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-on-ink-faint);
-}
-
-.tvdb-slate,
 .tvdb-slate--inline {
     display: inline-flex;
     align-items: center;
     gap: var(--tvdb-space-2);
+    padding: 0.1rem var(--tvdb-space-2);
     border: 1px solid var(--tvdb-signal-halo);
     border-radius: var(--tvdb-radius-sm);
+    background: var(--tvdb-ink-2);
     font-family: var(--tvdb-font-mono);
     font-size: var(--tvdb-text-xs);
     letter-spacing: 0.04em;
     color: var(--tvdb-on-ink);
-}
-
-.tvdb-slate {
-    position: absolute;
-    left: var(--tvdb-space-3);
-    bottom: var(--tvdb-space-3);
-    padding: var(--tvdb-space-1) var(--tvdb-space-2);
-    background: var(--tvdb-scrim-strong);
-}
-
-.tvdb-slate--inline {
-    padding: 0.1rem var(--tvdb-space-2);
-    background: var(--tvdb-ink-2);
 }
 
 .tvdb-dot {
@@ -737,31 +684,6 @@ h1.tvdb-empty-state__title {
     flex-wrap: wrap;
     align-items: center;
     gap: var(--tvdb-space-2) var(--tvdb-space-5);
-}
-
-/* Secondary facts as a quiet label–value list. */
-.tvdb-facts-quiet {
-    display: flex;
-    flex-direction: column;
-    gap: var(--tvdb-space-1);
-    margin: 0;
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
-}
-
-.tvdb-facts-quiet > div {
-    display: flex;
-    gap: var(--tvdb-space-3);
-}
-
-.tvdb-facts-quiet dt {
-    flex: 0 0 6.5rem;
-    font-weight: 500;
-}
-
-.tvdb-facts-quiet dd {
-    margin: 0;
-    color: var(--tvdb-text);
 }
 
 /* The last line of a detail page: where the data comes from. */
@@ -939,44 +861,9 @@ dl.row dd a.tvdb-inline-edit {
 
 /* ---- Ratings ------------------------------------------------------------------ */
 
-.tvdb-rating {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0 var(--tvdb-space-2);
-}
-
 .tvdb-rating-star {
     align-self: center;
     color: var(--tvdb-signal);
-}
-
-.tvdb-rating-score {
-    font-family: var(--tvdb-font-mono);
-    white-space: nowrap;
-}
-
-.tvdb-rating-score strong {
-    font-size: 1.1em;
-    font-weight: 500;
-    color: var(--tvdb-text);
-}
-
-.tvdb-rating-votes {
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
-}
-
-/* Everything rating-related on an episode, in one tile. */
-.tvdb-rating-panel {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--tvdb-space-2) var(--tvdb-space-5);
-    padding: var(--tvdb-space-3) var(--tvdb-space-4);
-    background: var(--tvdb-paper-dim);
-    border: 1px solid var(--tvdb-ink-line);
-    border-radius: var(--tvdb-radius-md);
 }
 
 /* "Your rating": ten pills, each a submit button (the _RatingWidget partial).

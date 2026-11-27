@@ -594,23 +594,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 
 /* ---- Details pages (series, episode, movie) ------------------------------------------ */
 
-/* Episode Details: the summary line under its title (on phones), and its
-   row of buttons. (Series and Movie Details use _TitleHero and _TitleActions;
-   their styles are in components.css.) */
-.tvdb-title__summary {
-    margin-bottom: var(--tvdb-space-3);
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
-}
-
-/* Buttons that act on the title, in one wrapping row. */
-.tvdb-action-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--tvdb-space-2);
-}
-
 /* Shown to a visitor in place of the action row (_TitleActions). */
 .tvdb-signin-card {
     display: flex;
@@ -623,22 +606,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     border: 1px solid var(--tvdb-ink-line);
     border-radius: var(--tvdb-radius-md);
     font-size: var(--tvdb-text-sm);
-}
-
-/* Series name above an episode title. */
-.tvdb-episode-series-link {
-    display: inline-block;
-    margin-bottom: var(--tvdb-space-1);
-    font-size: var(--tvdb-text-md);
-    font-weight: 600;
-    color: var(--tvdb-text);
-    text-decoration: none;
-}
-
-.tvdb-episode-series-link:hover,
-.tvdb-episode-series-link:focus-visible {
-    color: var(--tvdb-signal-text);
-    text-decoration: underline;
 }
 
 /* OMDb awards line. */
