@@ -54,8 +54,14 @@ ANONYMOUS_URL=http://localhost:7463   # environment "Test": DevAuthMiddleware st
 # app so TheTVDB data for them lands in the clone. Short series on purpose:
 # every uncached episode costs one translation call.
 # Adolescence, Baby Reindeer, Mare of Easttown, Band of Brothers, The Penguin,
-# The Lord of the Rings: The Rings of Power (a long title, left out of the library)
-EXTRA_SERIES=(452467 417223 370112 74205 417648 367506)
+# The Lord of the Rings: The Rings of Power (a long title, left out of the library),
+# Saturday Night Live (left out of the library: Episode Details' guest stars, from
+# its latest season's first episode, which the capture opens and so fetches)
+EXTRA_SERIES=(452467 417223 370112 74205 417648 367506 76177)
+# Episodes whose own record is fetched in setup, for the seed to change in the
+# clone: The Penguin S01E01 (series season episode), whose still seed.sql takes
+# away, for Episode Details' background-art fallback.
+EXTRA_EPISODES=("417648 1 1")
 # Heat, Interstellar, Dune: Part Two, Arrival (neither watched nor listed),
 # Dune: Part Three (not released yet: the seed moves its release a year ahead)
 EXTRA_MOVIES=(1305 131079 290272 219 356047)
@@ -174,6 +180,14 @@ setup() {
     done
     for id in "${EXTRA_MOVIES[@]}"; do
       echo "fetching movie $id: HTTP $(curl -s -o /dev/null -w '%{http_code}' -m 120 "$SIGNED_IN_URL/Movies/Details/$id")"
+    done
+    for spec in "${EXTRA_EPISODES[@]}"; do
+      set -- $spec
+      local episode
+      episode="$(psql_db "$SEEDED_DB" -c "
+        SELECT e ->> 'id' FROM cached_series_aggregate a, jsonb_array_elements(a.payload -> 'episodes') e
+        WHERE a.tvdb_id = $1 AND (e ->> 'seasonNumber')::int = $2 AND (e ->> 'episodeNumber')::int = $3 LIMIT 1;")"
+      echo "fetching episode S$2E$3 of series $1 ($episode): HTTP $(curl -s -o /dev/null -w '%{http_code}' -m 120 "$SIGNED_IN_URL/Episodes/Details/$episode")"
     done
     stop_apps
   fi

@@ -42,6 +42,14 @@ public interface ITheTvDbService
     Task<Episode?> GetEpisodeDetailsAsync(int episodeId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The episode's own record from the caches only (Redis, then the Postgres
+    /// snapshot); never from TheTVDB. Null when it is in neither. For a page
+    /// that shows an episode it was not asked about (Episode Details' "Up
+    /// next" still), so the view costs no request.
+    /// </summary>
+    Task<Episode?> GetCachedEpisodeDetailsAsync(int episodeId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Bypasses the read tiers: fetches the extended episode straight from
     /// TheTVDB and overwrites both the local snapshot and the Redis entry.
     /// Returns <c>false</c> when the API has nothing for the id.

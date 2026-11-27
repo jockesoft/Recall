@@ -1,0 +1,35 @@
+@model Recall.Web.Pages.Shared.CatchUpModalModel
+@* "Catch up?" (CatchUpModalModel): js/tvdb-series.js fills in the count and
+   the fields of the form that opened it. Without script nobody sees it: each
+   form marks just its own episode. *@
+
+<div class="modal fade" id="seriesCatchUpModal" tabindex="-1" aria-labelledby="seriesCatchUpModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="seriesCatchUpModalLabel">Catch up?</h2>
+                <button type="button" class="tvdb-close" data-bs-dismiss="modal" aria-label="Close"><i class="@Icons.Close" aria-hidden="true"></i></button>
+            </div>
+            <div class="modal-body">
+                You have <strong id="priorEpisodeCount">0</strong> earlier unwatched episode<span id="priorEpisodeCountPlural">s</span>.
+                Mark <span id="priorEpisodeCountText">those</span> as watched too?
+            </div>
+            <div class="modal-footer">
+                <form method="post" asp-page-handler="@Model.JustThisHandler" asp-route-id="@Model.RouteId" class="d-inline" data-catch-up-just-this>
+                    @foreach (var field in Model.Fields)
+                    {
+                        <input type="hidden" name="@field" />
+                    }
+                    <button type="submit" class="btn btn-outline-dark">Just this episode</button>
+                </form>
+                <form method="post" asp-page-handler="@Model.ThroughHandler" asp-route-id="@Model.RouteId" class="d-inline" data-catch-up-through>
+                    @foreach (var field in Model.Fields)
+                    {
+                        <input type="hidden" name="@field" />
+                    }
+                    <button type="submit" class="btn btn-primary">Mark this &amp; earlier episodes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

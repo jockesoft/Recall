@@ -1,0 +1,57 @@
+@model Recall.Web.Pages.Shared.UpNextModel
+@* The next episode, under the action row of Episode Details (UpNextModel): on
+   paper, like the sign-in card. Its still (the shared EpisodeArt rule, lazy:
+   it is below the hero's own picture), its label ("Up next", or "Next
+   episode" when that one is already watched), "S52E02 · title" as the link
+   (one line, an ellipsis when it must), when it airs, and for a signed-in user
+   the one-tap check of Series Details' rows: a ring, a green check when it is
+   watched (pressing it unmarks), or the dashed clock while it may not be
+   marked. An unwatched one asks first about earlier unwatched episodes
+   (js/tvdb-series.js), and without script the form marks just this one. *@
+
+<section class="tvdb-up-next tvdb-surface-paper" aria-labelledby="upNextHeading">
+    <div class="tvdb-up-next__still @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "is-empty" : "")">
+        @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="" loading="lazy" decoding="async" />
+        }
+    </div>
+
+    <div class="tvdb-up-next__text">
+        <h2 class="tvdb-eyebrow tvdb-up-next__eyebrow" id="upNextHeading">@Model.Heading</h2>
+        <a asp-page="/Episodes/Details" asp-route-id="@Model.EpisodeId" class="tvdb-up-next__title tvdb-link-plain"><span class="tvdb-mono">@Model.Code</span> · @Model.Title</a>
+        @if (Model.DateText is not null || Model.Release is not null)
+        {
+            <span class="tvdb-meta tvdb-up-next__date">@Model.DateText @if (Model.Release is not null)
+                {
+                    <partial name="_ReleaseTime" model="Model.Release" />
+                }</span>
+        }
+    </div>
+
+    @switch (Model.Mark)
+    {
+        case UpNextMark.NotAired:
+            <span class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-paper tvdb-ep-mark tvdb-ep-mark--upcoming tvdb-up-next__control"
+                  role="img" aria-label="Not aired yet" title="Not aired yet">
+                <i class="@Icons.NotAiredYet" aria-hidden="true"></i>
+            </span>
+            break;
+        case UpNextMark.Unwatched:
+        case UpNextMark.Watched:
+            var watched = Model.Mark == UpNextMark.Watched;
+            <form method="post" asp-page-handler="@Model.Handler" asp-route-id="@Model.RouteId" class="tvdb-up-next__control"
+                  data-prior-check="@(watched ? "false" : "true")" data-episode-id="@Model.EpisodeId"
+                  data-prior-count="@Model.PriorUnwatchedCount">
+                <input type="hidden" name="episodeId" value="@Model.EpisodeId" />
+                <button type="submit" id="upNextMark"
+                        class="tvdb-round-button tvdb-round-button--lg tvdb-round-button--on-paper tvdb-ep-mark @(watched ? "tvdb-ep-mark--on" : "")"
+                        aria-pressed="@(watched ? "true" : "false")"
+                        aria-label="@Model.MarkLabel"
+                        title="@(watched ? "Mark as unwatched" : "Mark as watched")">
+                    <i class="@Icons.Check" aria-hidden="true"></i>
+                </button>
+            </form>
+            break;
+    }
+</section>

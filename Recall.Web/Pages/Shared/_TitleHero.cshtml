@@ -3,9 +3,11 @@
    panel, as wide as the page. The background art is decoration (empty alt)
    under a shade that ends in the frame's colour, so the text over it reads
    the same whatever the picture; without art the shade is all there is.
-   Loaded eagerly: it is the first thing on the page. *@
+   Loaded eagerly: it is the first thing on the page. An episode has no
+   poster, a link to its series above the title, its place in the season in
+   place of the progress, and the next episode under the action row. *@
 
-<div class="tvdb-hero @(string.IsNullOrWhiteSpace(Model.BackgroundUrl) ? "" : "has-art")">
+<div class="tvdb-hero @(string.IsNullOrWhiteSpace(Model.BackgroundUrl) ? "" : "has-art") @(Model.ShowPoster ? "" : "tvdb-hero--no-poster")">
     @if (!string.IsNullOrWhiteSpace(Model.BackgroundUrl))
     {
         <img class="tvdb-hero__art" src="@Model.BackgroundUrl" alt="" fetchpriority="high" loading="eager" decoding="async" />
@@ -14,21 +16,24 @@
     <div class="tvdb-hero__inner">
         @if (Model.Back.UseHistory)
         {
-            <a asp-page="@Model.Back.Page" class="tvdb-back-link tvdb-hero__back"
-               onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> @Model.Back.Text</a>
+            <a asp-page="@Model.Back.Page" asp-route-id="@Model.Back.RouteId" class="tvdb-back-link tvdb-hero__back"
+               onclick="if (history.length > 1) { event.preventDefault(); history.back(); }"><i class="@Icons.Back" aria-hidden="true"></i> <span class="tvdb-hero__back-text">@Model.Back.Text</span></a>
         }
         else
         {
-            <a asp-page="@Model.Back.Page" class="tvdb-back-link tvdb-hero__back"><i class="@Icons.Back" aria-hidden="true"></i> @Model.Back.Text</a>
+            <a asp-page="@Model.Back.Page" asp-route-id="@Model.Back.RouteId" class="tvdb-back-link tvdb-hero__back"><i class="@Icons.Back" aria-hidden="true"></i> <span class="tvdb-hero__back-text">@Model.Back.Text</span></a>
         }
 
         <div class="tvdb-hero__title-row">
-            <div class="tvdb-hero__poster tvdb-media @(string.IsNullOrWhiteSpace(Model.PosterUrl) ? "is-empty" : "")">
-                @if (!string.IsNullOrWhiteSpace(Model.PosterUrl))
-                {
-                    <img src="@Model.PosterUrl" alt="Poster for @Model.Name" fetchpriority="high" loading="eager" />
-                }
-            </div>
+            @if (Model.ShowPoster)
+            {
+                <div class="tvdb-hero__poster tvdb-media @(string.IsNullOrWhiteSpace(Model.PosterUrl) ? "is-empty" : "")">
+                    @if (!string.IsNullOrWhiteSpace(Model.PosterUrl))
+                    {
+                        <img src="@Model.PosterUrl" alt="Poster for @Model.Name" fetchpriority="high" loading="eager" />
+                    }
+                </div>
+            }
 
             <div class="tvdb-hero__head">
                 @if (Model.Genres.Count > 0 || Model.Status is not null)
@@ -45,11 +50,39 @@
                     </ul>
                 }
 
+                @if (Model.Parent is { } parent)
+                {
+                    <a asp-page="@parent.Page" asp-route-id="@parent.RouteId" class="tvdb-hero__parent tvdb-link-plain">@parent.Text</a>
+                }
+
                 <h1 class="tvdb-hero__title">@Model.Name</h1>
 
-                @if (!string.IsNullOrWhiteSpace(Model.Meta))
+                @{
+                    var hasCode = Model.MetaCode is not null;
+                    var hasText = !string.IsNullOrWhiteSpace(Model.Meta);
+                    var metaRelease = Model.MetaRelease;
+                }
+                @if (hasCode || hasText || metaRelease is not null)
                 {
-                    <p class="tvdb-hero__meta">@Model.Meta</p>
+                    @* "S52 · E1 · 1 h 8 min · Airs <time>": the code is data (mono), the release time the viewer's own. *@
+                    <p class="tvdb-hero__meta">@if (hasCode)
+                        {
+                            @* The codes in mono, the dots between them and a word ("Special") not: "S52 · E1". *@
+                            var codeParts = Model.MetaCode!.Split(" · ");
+                            for (var i = 0; i < codeParts.Length; i++)
+                            {
+                                var part = codeParts[i];
+                                if (i > 0)
+                                {<text> · </text>}
+                                if (part.Length > 1 && char.IsDigit(part[1]))
+                                {<span class="tvdb-mono">@part</span>}
+                                else
+                                {<text>@part</text>}
+                            }
+                        }@if (hasCode && (hasText || metaRelease is not null))
+                        {<text> · </text>}@Model.Meta@if (hasText && metaRelease is not null)
+                        {<text> · </text>}@if (metaRelease is not null)
+                        {<text>@metaRelease.Prefix </text><partial name="_ReleaseTime" model="metaRelease.Release" />}</p>
                 }
 
                 <div class="tvdb-hero__ratings">
@@ -107,6 +140,33 @@
             </div>
         }
 
+        @if (Model.Position is { } position)
+        {
+            <div class="tvdb-hero__progress tvdb-hero__position">
+                <div class="tvdb-hero__progress-head">
+                    <span class="tvdb-hero__progress-count">@position.Label</span>
+                    @if (position.WatchedText is not null)
+                    {
+                        <span>@position.WatchedText</span>
+                    }
+                </div>
+                @if (position.HasBar)
+                {
+                    @* --tvdb-bar is the data (a percentage), the one inline style the theme allows. *@
+                    <div class="progress tvdb-hero__bar" role="progressbar" aria-label="Episodes of season @position.SeasonNumber watched"
+                         aria-valuemin="0" aria-valuemax="@position.ReleasedCount" aria-valuenow="@position.WatchedCount"
+                         aria-valuetext="@position.WatchedText, @position.Percent%">
+                        <div class="progress-bar" style="--tvdb-bar: @(position.Percent)%"></div>
+                    </div>
+                }
+            </div>
+        }
+
         <partial name="_TitleActions" model="Model.Actions" />
+
+        @if (Model.UpNext is { } upNext)
+        {
+            <partial name="_UpNextCard" model="upNext" />
+        }
     </div>
 </div>

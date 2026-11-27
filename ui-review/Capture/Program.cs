@@ -21,6 +21,10 @@ using Recall.UiReview;
 // be drawn half outside a list, and nothing may cover the last item shown. A
 // problem fails the run.
 //
+// Every shot with a title hero over art also checks the hero's text against a
+// white and a black picture in place of the art (CheckHeroContrastAsync): axe
+// cannot judge text over an image, so this measures it. A problem fails the run.
+//
 // After the shots it times the toasts in a real browser (RunToastChecksAsync,
 // results in toast-checks.json): how long each kind stays, pausing, Escape.
 // A failed check fails the run. --only toast-checks runs just those. Then it
@@ -51,6 +55,8 @@ const int AllWatched = 334824;   // Dark
 const int NotStarted = 370112;   // Mare of Easttown
 const int Stopped = 417223;      // Baby Reindeer
 const int NotInLibrary = 367506; // The Lord of the Rings: The Rings of Power: a long title, not tracked
+const int GuestStarSeries = 76177; // Saturday Night Live: not tracked; its episodes list their hosts and guests
+const int NoStillSeries = 417648;  // The Penguin: the seed takes S01E01's still away (background-art fallback)
 const int WatchedMovie = 290272;     // Dune: Part Two
 const int NoArtMovie = 287533;      // Oppenheimer: watched, cached before background art was kept
 const int WatchlistMovie = 1305;    // Heat
@@ -348,6 +354,9 @@ List<Shot> shots =
             await page.Locator("#removeFromLibrary").ClickAsync();
             await page.Locator("#removeFromLibraryModal.show").WaitForAsync();
         }),
+    // Episode Details: the shared hero with the episode's still, the action row in each state,
+    // the Up next card under it, then the overview, the guest stars and previous/next.
+    // Watched, with the next episode watched too (Up next's green check).
     new("episode-details", "watched", Site.SignedIn, $"/Series/Details/{AllWatched}",
         Prepare: async page =>
         {
@@ -355,8 +364,55 @@ List<Shot> shots =
             // Remembered for the signed-out shot: that instance has no TheTVDB
             // key, so it can only show an episode this visit has cached.
             cachedEpisodePath = new Uri(page.Url).PathAndQuery;
+            await page.Locator(".tvdb-up-next #upNextMark[aria-pressed=true]").WaitForAsync();
         }),
-    new("episode-details", "unwatched", Site.SignedIn, $"/Series/Details/{NotStarted}", Prepare: OpenFirstEpisodeAsync),
+    // Not watched: "Mark as watched", and Up next's ring.
+    new("episode-details", "not-watched", Site.SignedIn, $"/Series/Details/{NotStarted}",
+        Prepare: async page =>
+        {
+            await OpenFirstEpisodeAsync(page);
+            await page.Locator(".tvdb-up-next #upNextMark[aria-pressed=false]").WaitForAsync();
+        }),
+    new("episode-details", "not-watched-webkit", Site.SignedIn, $"/Series/Details/{NotStarted}",
+        Prepare: OpenFirstEpisodeAsync, Engine: Engine.WebKit),
+    // Up next's check on an episode with an unwatched one before it asks first.
+    new("episode-details", "prior-episodes-modal", Site.SignedIn, $"/Series/Details/{NotStarted}", ViewportOnly: true,
+        Prepare: async page =>
+        {
+            await OpenFirstEpisodeAsync(page);
+            await page.Locator("#upNextMark").ClickAsync();
+            await page.Locator("#seriesCatchUpModal.show").WaitForAsync();
+        }),
+    // Not released yet (the seed moves Silo's announced episodes to the coming weeks):
+    // "Airs …" in the viewer's time, and no way to mark it.
+    new("episode-details", "not-aired", Site.SignedIn, $"/Series/Details/{UpToDate}",
+        Prepare: async page =>
+        {
+            await OpenEpisodeLinkAsync(page, "li.tvdb-ep:has(.tvdb-ep-mark--upcoming) a[href^='/Episodes/Details/']");
+            await page.Locator(".tvdb-status-box time").WaitForAsync();
+        }),
+    // A special: "Special · E1" and "Special 1 of N", no bar.
+    new("episode-details", "special", Site.SignedIn, $"/Series/Details/{Watching}",
+        Prepare: page => OpenEpisodeLinkAsync(page, ".tvdb-season-card--specials a[href^='/Episodes/Details/']")),
+    // No still on TheTVDB: the series' background art stands in, behind the hero.
+    new("episode-details", "no-still", Site.SignedIn, $"/Series/Details/{NoStillSeries}",
+        Prepare: async page =>
+        {
+            await OpenFirstEpisodeAsync(page);
+            var art = await page.Locator(".tvdb-hero__art").GetAttributeAsync("src");
+            if (art is null || !art.Contains("/fanart/", StringComparison.Ordinal) && !art.Contains("backgrounds", StringComparison.Ordinal))
+                throw new InvalidOperationException($"The hero shows {art ?? "no art"}, not the series' background art.");
+        }),
+    // Guest stars, from the episode's own record (fetched on this visit, so it has them).
+    new("episode-details", "guest-stars", Site.SignedIn, $"/Series/Details/{GuestStarSeries}",
+        Prepare: async page =>
+        {
+            // Season 51's first episode (Bad Bunny, Oct 2025). TheTVDB lists no one yet on the
+            // newest episodes (S52E01 had nobody on 2026-11-27); this one has its host,
+            // musical guest and guest stars.
+            await OpenEpisodeLinkAsync(page, "#season-51 a[href^='/Episodes/Details/']");
+            await page.Locator("#guestStarsList").WaitForAsync();
+        }),
     new("movie-details", "not-watched", Site.SignedIn, $"/Movies/Details/{NotWatchedMovie}"),
     new("movie-details", "watched", Site.SignedIn, $"/Movies/Details/{WatchedMovie}"),
     new("movie-details", "watched-menu", Site.SignedIn, $"/Movies/Details/{WatchedMovie}", ViewportOnly: true,
@@ -652,7 +708,9 @@ foreach (var viewport in viewports)
             (result.Violations.Count > 0 ? $"  axe {result.Violations.Count}" : "") +
             (result.CollapsedListProblems.Count > 0 ? $"  LIST: {string.Join("; ", result.CollapsedListProblems)}" : "") +
             (result.CornerButtonProblems.Count > 0 ? $"  CORNER: {string.Join("; ", result.CornerButtonProblems.Take(3))}" +
-                (result.CornerButtonProblems.Count > 3 ? $" (+{result.CornerButtonProblems.Count - 3} more)" : "") : ""));
+                (result.CornerButtonProblems.Count > 3 ? $" (+{result.CornerButtonProblems.Count - 3} more)" : "") : "") +
+            (result.HeroContrastProblems.Count > 0 ? $"  CONTRAST: {string.Join("; ", result.HeroContrastProblems.Take(3))}" +
+                (result.HeroContrastProblems.Count > 3 ? $" (+{result.HeroContrastProblems.Count - 3} more)" : "") : ""));
     }
 }
 
@@ -709,7 +767,13 @@ Console.WriteLine(cornerProblems == 0
     ? $"corner buttons: ok on every shot ({results.Count(r => r.Engine == Engine.WebKit)} in WebKit)"
     : $"corner buttons: FAILED, {cornerProblems} button(s) out of their corner on {results.Count(r => r.CornerButtonProblems.Count > 0)} shot(s) (CornerButtonProblems in report.json)");
 
-return results.Any(r => r.Error is not null) || listProblems > 0 || cornerProblems > 0
+var contrastProblems = results.Sum(r => r.HeroContrastProblems.Count);
+var heroShots = results.Where(r => r.HeroContrastChecked > 0).ToList();
+Console.WriteLine(contrastProblems == 0
+    ? $"hero contrast: ok on every shot with hero art ({heroShots.Count} shots, {heroShots.Sum(r => r.HeroContrastChecked)} texts on a white and a black picture; lowest {heroShots.Select(r => r.HeroContrastLowest).DefaultIfEmpty(0).Min():0.00}:1)"
+    : $"hero contrast: FAILED, {contrastProblems} text(s) below the minimum on {results.Count(r => r.HeroContrastProblems.Count > 0)} shot(s) (HeroContrastProblems in report.json)");
+
+return results.Any(r => r.Error is not null) || listProblems > 0 || cornerProblems > 0 || contrastProblems > 0
        || toastChecks.Any(c => !c.Passed) || pushChecks.Any(c => !c.Passed) ? 1 : 0;
 
 // Profile's push section on the signed-in instance. The browser's permission
@@ -1074,6 +1138,7 @@ async Task<ShotResult> CaptureAsync(Shot shot, Viewport viewport)
         await MeasureAsync(page, result);
         await CheckCollapsedListsAsync(page, result);
         await CheckCornerButtonsAsync(page, result);
+        await CheckHeroContrastAsync(page, result);
 
         if (shot.Cleanup is not null)
             await shot.Cleanup(page);
@@ -1319,6 +1384,188 @@ static async Task CheckCornerButtonsAsync(IPage page, ShotResult result)
     result.CornerButtonProblems = problems.ToList();
 }
 
+// The title hero's text over its art (Series, Movie and Episode Details). axe
+// cannot see behind text that sits over an <img> (it reports it for review), so
+// the art is replaced by a plain white picture, then a plain black one, and
+// each text is measured against what is really drawn behind it: the text is
+// made transparent (its own children hidden), the box of its own line boxes
+// screenshotted (not the element's padding or border: a chip's rounded edge
+// would count as background), and its colour compared with the lightest and
+// the darkest pixel there, 1px in from the edges. WCAG AA: 4.5:1, 3:1 for large text (24px, or
+// 18.66px bold). Text on something opaque (a paper card, the amber button) is
+// left to axe. Toasts, modals, menus and the navbar are hidden meanwhile.
+// Runs last, after the screenshot: it changes the page.
+static async Task CheckHeroContrastAsync(IPage page, ShotResult result)
+{
+    if (await page.Locator(".tvdb-hero.has-art .tvdb-hero__art").CountAsync() == 0)
+        return;
+
+    var items = await page.EvaluateAsync<JsonElement>(
+        """
+        () => {
+            const style = document.createElement('style');
+            style.id = 'contrast-probe-style';
+            style.textContent = `
+                [data-contrast-probe-active] { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; }
+                [data-contrast-probe-active] * { visibility: hidden !important; }
+                .tvdb-toast-stack, .modal, .modal-backdrop, .dropdown-menu, .navbar { visibility: hidden !important; }`;
+            document.head.appendChild(style);
+
+            const hero = document.querySelector('.tvdb-hero.has-art');
+            const opaque = el => {
+                const s = getComputedStyle(el);
+                if (s.backgroundImage !== 'none') return true;
+                const m = s.backgroundColor.match(/rgba?\(([^)]+)\)/);
+                const parts = m ? m[1].split(',').map(Number) : [];
+                return parts.length === 3 || parts[3] >= 1;
+            };
+            const items = [];
+            for (const el of hero.querySelectorAll('*')) {
+                if (el.closest('template')) continue;
+                if (!Array.from(el.childNodes).some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+                const s = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                if (el.getClientRects().length === 0 || s.visibility === 'hidden' || r.width < 4 || r.height < 4) continue;
+                let onOpaque = false;
+                for (let a = el; a && a !== hero; a = a.parentElement) if (opaque(a)) { onOpaque = true; break; }
+                if (onOpaque) continue;
+                const index = items.length;
+                el.setAttribute('data-contrast-probe', String(index));
+                const cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/)[0] : '';
+                items.push({
+                    index,
+                    name: el.tagName.toLowerCase() + cls,
+                    text: el.textContent.trim().replace(/\s+/g, ' ').slice(0, 40),
+                    color: s.color,
+                    large: parseFloat(s.fontSize) >= 24 || (parseFloat(s.fontSize) >= 18.66 && parseInt(s.fontWeight, 10) >= 700),
+                });
+            }
+            return items;
+        }
+        """);
+
+    var lowest = double.MaxValue;
+    foreach (var (picture, fill) in new[] { ("white", "#ffffff"), ("black", "#000000") })
+    {
+        await page.EvaluateAsync(
+            """
+            async fill => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 160; canvas.height = 90;
+                const context = canvas.getContext('2d');
+                context.fillStyle = fill;
+                context.fillRect(0, 0, 160, 90);
+                const art = document.querySelector('.tvdb-hero__art');
+                art.removeAttribute('srcset');
+                art.src = canvas.toDataURL('image/png');
+                await art.decode();
+            }
+            """, fill);
+
+        foreach (var item in items.EnumerateArray())
+        {
+            var index = item.GetProperty("index").GetInt32();
+            var probe = page.Locator($"[data-contrast-probe='{index}']");
+
+            // The box of the element's own text (its line boxes), in the window: what
+            // the glyphs sit on, not the element's padding or border (a chip's edge).
+            var box = await probe.EvaluateAsync<JsonElement>(
+                """
+                el => {
+                    el.scrollIntoView({ block: 'center', behavior: 'instant' });
+                    const range = document.createRange();
+                    let box = null;
+                    for (const node of el.childNodes) {
+                        if (node.nodeType !== 3 || !node.textContent.trim()) continue;
+                        range.selectNodeContents(node);
+                        for (const r of range.getClientRects()) {
+                            if (r.width < 1 || r.height < 1) continue;
+                            box = box
+                                ? { left: Math.min(box.left, r.left), top: Math.min(box.top, r.top), right: Math.max(box.right, r.right), bottom: Math.max(box.bottom, r.bottom) }
+                                : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+                        }
+                    }
+                    if (!box) return null;
+                    el.setAttribute('data-contrast-probe-active', '');
+                    return {
+                        x: Math.max(0, box.left), y: Math.max(0, box.top),
+                        width: Math.min(innerWidth, box.right) - Math.max(0, box.left),
+                        height: Math.min(innerHeight, box.bottom) - Math.max(0, box.top),
+                    };
+                }
+                """);
+            if (box.ValueKind != JsonValueKind.Object || box.GetProperty("width").GetDouble() < 2 || box.GetProperty("height").GetDouble() < 2)
+                continue;
+
+            byte[] png;
+            try
+            {
+                png = await page.ScreenshotAsync(new()
+                {
+                    Clip = new()
+                    {
+                        X = (float)box.GetProperty("x").GetDouble(),
+                        Y = (float)box.GetProperty("y").GetDouble(),
+                        Width = (float)box.GetProperty("width").GetDouble(),
+                        Height = (float)box.GetProperty("height").GetDouble(),
+                    },
+                    Animations = ScreenshotAnimations.Disabled,
+                });
+            }
+            finally
+            {
+                await probe.EvaluateAsync("el => el.removeAttribute('data-contrast-probe-active')");
+            }
+
+            var ratio = await page.EvaluateAsync<double>(
+                """
+                async ({ png, color }) => {
+                    const image = new Image();
+                    image.src = 'data:image/png;base64,' + png;
+                    await image.decode();
+                    const canvas = document.createElement('canvas');
+                    canvas.width = image.width; canvas.height = image.height;
+                    const context = canvas.getContext('2d');
+                    context.drawImage(image, 0, 0);
+                    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+                    const inset = Math.round(devicePixelRatio);
+                    const channel = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+                    const luminance = ([r, g, b]) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+                    let light = null, dark = null;
+                    for (let y = inset; y < canvas.height - inset; y++) {
+                        for (let x = inset; x < canvas.width - inset; x++) {
+                            const i = (y * canvas.width + x) * 4;
+                            const pixel = [data[i], data[i + 1], data[i + 2]];
+                            const l = luminance(pixel);
+                            if (!light || l > light.l) light = { l, pixel };
+                            if (!dark || l < dark.l) dark = { l, pixel };
+                        }
+                    }
+                    if (!light) return 21;
+                    const parts = color.match(/rgba?\(([^)]+)\)/)[1].split(',').map(Number);
+                    const alpha = parts.length > 3 ? parts[3] : 1;
+                    const contrast = background => {
+                        const text = [0, 1, 2].map(k => parts[k] * alpha + background[k] * (1 - alpha));
+                        const a = luminance(text), b = luminance(background);
+                        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+                    };
+                    return Math.min(contrast(light.pixel), contrast(dark.pixel));
+                }
+                """, new { png = Convert.ToBase64String(png), color = item.GetProperty("color").GetString() });
+
+            lowest = Math.Min(lowest, ratio);
+            var minimum = item.GetProperty("large").GetBoolean() ? 3.0 : 4.5;
+            if (ratio < minimum)
+                result.HeroContrastProblems.Add(
+                    $"{picture}: {item.GetProperty("name").GetString()} \"{item.GetProperty("text").GetString()}\" {ratio:0.00}:1 (needs {minimum:0.0})");
+        }
+    }
+
+    result.HeroContrastChecked = items.GetArrayLength();
+    result.HeroContrastLowest = lowest == double.MaxValue ? 0 : Math.Round(lowest, 2);
+    await page.EvaluateAsync("() => document.getElementById('contrast-probe-style')?.remove()");
+}
+
 static async Task MeasureAsync(IPage page, ShotResult result)
 {
     var metrics = await page.EvaluateAsync<JsonElement>(
@@ -1385,6 +1632,15 @@ static async Task RewatchLastEpisodeAsync(IPage page)
     await page.Locator(".tvdb-toast-stack .alert-info").WaitForAsync();
     await page.Locator("#primaryAction").ClickAsync();
     await page.Locator(".tvdb-toast-stack .alert-success[data-toast-kind]").WaitForAsync();
+}
+
+// Opens the episode a link on the page points at, also one inside a closed season card.
+static async Task OpenEpisodeLinkAsync(IPage page, string selector)
+{
+    var href = await page.Locator(selector).First.GetAttributeAsync("href")
+               ?? throw new InvalidOperationException($"No episode link matches {selector}.");
+    await page.GotoAsync(new Uri(new Uri(page.Url), href).ToString());
+    await SettleAsync(page);
 }
 
 static async Task OpenFirstEpisodeAsync(IPage page)
@@ -1500,6 +1756,15 @@ class ShotResult
 
     /// <summary>Round buttons on a picture that are not 8±2px from their corner (CheckCornerButtonsAsync).</summary>
     public List<string> CornerButtonProblems { get; set; } = [];
+
+    /// <summary>Hero texts below WCAG AA over a white or a black picture (CheckHeroContrastAsync).</summary>
+    public List<string> HeroContrastProblems { get; set; } = [];
+
+    /// <summary>How many hero texts were measured (0: no hero over art on the page).</summary>
+    public int HeroContrastChecked { get; set; }
+
+    /// <summary>The lowest contrast measured in the hero, as a ratio to 1.</summary>
+    public double HeroContrastLowest { get; set; }
     public string? Error { get; set; }
 }
 

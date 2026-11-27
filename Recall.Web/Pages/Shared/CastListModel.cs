@@ -76,6 +76,36 @@ public static class CastBuilder
             ? !string.IsNullOrWhiteSpace(character.Name)
             : OnScreenTypes.Contains(character.PeopleType.Trim());
 
+    // The people on screen in one episode who are not the series' own cast.
+    private static readonly HashSet<string> GuestTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Guest Star", "Host", "Musical Guest"
+    };
+
+    /// <summary>
+    /// An episode's guests, from its own record's people (<see cref="Episode.Characters"/>):
+    /// guest stars, hosts and musical guests, in TheTVDB's order, one entry per
+    /// person. Underneath the name, the character ("Kitty"); without one, what
+    /// they are on the episode ("Host", "Musical guest"). The series' regular
+    /// cast (TheTVDB's "Actor") and the crew are left out.
+    /// </summary>
+    public static IReadOnlyList<CastPerson> GuestStars(IEnumerable<Character> characters) =>
+        Merge(
+            characters
+                .Where(c => !string.IsNullOrWhiteSpace(c.PersonName)
+                            && !string.IsNullOrWhiteSpace(c.PeopleType)
+                            && GuestTypes.Contains(c.PeopleType.Trim()))
+                .OrderBy(c => c.Sort ?? int.MaxValue),
+            c => string.IsNullOrWhiteSpace(c.Name) ? RoleName(c.PeopleType) : c.Name,
+            " / ");
+
+    /// <summary>"Host", "Musical guest", "Guest star": TheTVDB's type in sentence case.</summary>
+    private static string? RoleName(string? peopleType)
+    {
+        var type = peopleType?.Trim();
+        return string.IsNullOrEmpty(type) ? null : type[..1].ToUpperInvariant() + type[1..].ToLowerInvariant();
+    }
+
     private static int JobRank(string? job)
     {
         var index = Array.FindIndex(JobOrder, j => string.Equals(j, job?.Trim(), StringComparison.OrdinalIgnoreCase));

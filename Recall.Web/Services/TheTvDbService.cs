@@ -217,6 +217,21 @@ public sealed class TheTvDbService(
         return episode?.WithNormalizedImages();
     }
 
+    public async Task<Episode?> GetCachedEpisodeDetailsAsync(
+        int episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        // As GetCachedSeriesAggregateAsync: the two cache tiers and no API.
+        var episode = await GetLayeredAsync<Episode>(
+            TvdbCacheKeys.EpisodeExtended(episodeId, Language),
+            ct => store.GetEpisodeExtendedAsync(episodeId, ct),
+            _ => Task.FromResult<Episode?>(null),
+            _ => Task.CompletedTask,
+            cancellationToken);
+
+        return episode?.WithNormalizedImages();
+    }
+
     public async Task<bool> RefreshEpisodeDetailsByIdAsync(
         int episodeId,
         CancellationToken cancellationToken = default)

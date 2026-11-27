@@ -133,6 +133,19 @@ public class EpisodeDetailsOmdbTests
     }
 
     [Test]
+    public async Task TheVoteCount_Should_HaveThousandsSeparators_ThoughOmdbSendsAnEpisodesWithout()
+    {
+        _snapshotStore
+            .Setup(x => x.GetAsync(EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OmdbEpisode { Title = "Pilot", ImdbRating = "8.8", ImdbVotes = "16180", Response = "True" });
+        var sut = CreateSut();
+
+        await sut.OnGetAsync(EpisodeId, CancellationToken.None);
+
+        sut.ImdbVotes.Should().Be("16,180");
+    }
+
+    [Test]
     public async Task SignedIn_Should_StillFetchFromOmdb_WhenTheEpisodeHasNeverBeenLookedUp()
     {
         SignIn();

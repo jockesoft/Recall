@@ -38,7 +38,6 @@ public static class Icons
     public const string Stopped = "ph ph-pause-circle";
     public const string Resume = "ph ph-play";
     public const string SignIn = "ph ph-sign-in";
-    public const string NoImage = "ph ph-image";
     public const string Unsupported = "ph ph-prohibit";
     public const string Upload = "ph ph-upload-simple";
     public const string SignOut = "ph ph-sign-out";

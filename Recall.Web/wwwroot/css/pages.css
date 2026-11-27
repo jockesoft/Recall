@@ -594,23 +594,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
 
 /* ---- Details pages (series, episode, movie) ------------------------------------------ */
 
-/* Episode Details: the summary line under its title (on phones), and its
-   row of buttons. (Series and Movie Details use _TitleHero and _TitleActions;
-   their styles are in components.css.) */
-.tvdb-title__summary {
-    margin-bottom: var(--tvdb-space-3);
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
-}
-
-/* Buttons that act on the title, in one wrapping row. */
-.tvdb-action-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--tvdb-space-2);
-}
-
 /* Shown to a visitor in place of the action row (_TitleActions). */
 .tvdb-signin-card {
     display: flex;
@@ -623,22 +606,6 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     border: 1px solid var(--tvdb-ink-line);
     border-radius: var(--tvdb-radius-md);
     font-size: var(--tvdb-text-sm);
-}
-
-/* Series name above an episode title. */
-.tvdb-episode-series-link {
-    display: inline-block;
-    margin-bottom: var(--tvdb-space-1);
-    font-size: var(--tvdb-text-md);
-    font-weight: 600;
-    color: var(--tvdb-text);
-    text-decoration: none;
-}
-
-.tvdb-episode-series-link:hover,
-.tvdb-episode-series-link:focus-visible {
-    color: var(--tvdb-signal-text);
-    text-decoration: underline;
 }
 
 /* OMDb awards line. */
@@ -1116,97 +1083,106 @@ a.tvdb-stat-item:focus-visible .tvdb-stat-item__label {
     color: var(--tvdb-text-muted);
 }
 
-/* Episode Details. Desktop: the still with the episode's facts under it on the
-   left, everything else on the right. Phone: still, main, then the facts. */
-.tvdb-episode-page {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    grid-template-areas:
-        "still main"
-        "facts main";
-    grid-template-rows: auto 1fr;
-    column-gap: var(--tvdb-space-6);
-    row-gap: var(--tvdb-space-4);
-    align-items: start;
+/* ---- Episode Details: the hero and Up next are _TitleHero's (components.css);
+   the panel is the overview beside the guest stars (the Series layout), then
+   the previous and next episodes as two cards across it. */
+
+.tvdb-episode-awards__heading {
+    margin-top: var(--tvdb-space-5);
 }
 
-.tvdb-episode-page__still { grid-area: still; }
-.tvdb-episode-page__main { grid-area: main; min-width: 0; }
-.tvdb-episode-page__facts { grid-area: facts; }
-
-@media (max-width: 767.98px) {
-    .tvdb-episode-page {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas:
-            "still"
-            "main"
-            "facts";
-        grid-template-rows: auto;
-    }
-
-    .tvdb-episode-page__facts {
-        padding-top: var(--tvdb-space-4);
-        border-top: 1px solid var(--tvdb-ink-line);
-    }
-}
-
-/* Previous / next episode. */
-.tvdb-epnav-bar {
+.tvdb-episode-awards {
     display: flex;
-    justify-content: space-between;
-    gap: var(--tvdb-space-4);
-    border-top: 1px solid var(--tvdb-ink-line);
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+    margin: 0;
 }
 
-.tvdb-epnav {
-    display: inline-flex;
-    align-items: center;
+.tvdb-episode-awards li {
+    display: flex;
+    align-items: flex-start;
     gap: var(--tvdb-space-2);
-    padding: var(--tvdb-space-2) var(--tvdb-space-3);
-    background: var(--tvdb-paper-dim);
+}
+
+.tvdb-episode-awards .tvdb-badge {
+    flex: none;
+}
+
+/* Two equal cards from 576px; a missing side keeps its space. */
+.tvdb-episode-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--tvdb-space-3);
+    margin-top: var(--tvdb-space-6);
+}
+
+.tvdb-episode-nav__card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tvdb-space-1);
+    min-width: 0;
+    padding: var(--tvdb-space-3) var(--tvdb-space-4);
     border: 1px solid var(--tvdb-ink-line);
     border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-paper-dim);
     color: var(--tvdb-text);
     text-decoration: none;
-    transition: border-color var(--tvdb-ease), color var(--tvdb-ease);
+    transition: border-color var(--tvdb-ease);
 }
 
-.tvdb-epnav--next {
+.tvdb-episode-nav__card--next {
+    align-items: flex-end;
     text-align: right;
 }
 
-.tvdb-epnav:hover,
-.tvdb-epnav:focus-visible {
-    border-color: var(--tvdb-signal);
-    color: var(--tvdb-signal-ink);
+.tvdb-episode-nav__card:hover,
+.tvdb-episode-nav__card:focus-visible {
+    border-color: var(--tvdb-signal-text);
+    color: var(--tvdb-text);
 }
 
-.tvdb-epnav.is-disabled {
-    color: var(--tvdb-text-muted);
-    border-style: dashed;
-    background: transparent;
-    pointer-events: none;
-}
-
-.tvdb-epnav-text {
-    display: flex;
-    flex-direction: column;
-    line-height: var(--tvdb-leading-snug);
-}
-
-.tvdb-epnav-label {
-    font-size: var(--tvdb-text-sm);
-    font-weight: 600;
-}
-
-.tvdb-epnav-slate {
+.tvdb-episode-nav__label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tvdb-space-1);
     font-size: var(--tvdb-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--tvdb-text-muted);
 }
 
-.tvdb-epnav-arrow {
-    flex: none;
-    font-size: var(--tvdb-text-lg);
+.tvdb-episode-nav__title {
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* On a phone the cards are stacked, Previous first, each across the panel, so
+   a title is not cut short: it may take two lines, then ends in an ellipsis.
+   The empty side takes no room. */
+@media (max-width: 575.98px) {
+    .tvdb-episode-nav {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .tvdb-episode-nav__gap {
+        display: none;
+    }
+
+    .tvdb-episode-nav__card--next {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .tvdb-episode-nav__title {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        white-space: normal;
+    }
 }
 
 /* ---- Notifications --------------------------------------------------------------------- */

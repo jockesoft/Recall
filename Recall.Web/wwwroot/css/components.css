@@ -122,20 +122,6 @@
     --bs-btn-active-border-color: var(--tvdb-danger-ink);
 }
 
-/* A watched toggle that is on ("Watched Fri, Sep 11"): solid green, and brick
-   on hover to say "press to undo". The action itself is a .btn-primary. */
-.btn-watch--on {
-    --bs-btn-color: var(--tvdb-on-ok);
-    --bs-btn-bg: var(--tvdb-ok);
-    --bs-btn-border-color: var(--tvdb-ok);
-    --bs-btn-hover-color: var(--tvdb-on-danger);
-    --bs-btn-hover-bg: var(--tvdb-danger);
-    --bs-btn-hover-border-color: var(--tvdb-danger);
-    --bs-btn-active-color: var(--tvdb-on-danger);
-    --bs-btn-active-bg: var(--tvdb-danger);
-    --bs-btn-active-border-color: var(--tvdb-danger);
-}
-
 /* ---- Alerts ---------------------------------------------------------------- */
 
 .alert {
@@ -562,10 +548,6 @@ h1.tvdb-empty-state__title {
     border-radius: var(--tvdb-radius-lg);
 }
 
-.tvdb-media.is-wide {
-    aspect-ratio: 16 / 9;
-}
-
 .tvdb-media img {
     display: block;
     width: 100%;
@@ -596,53 +578,18 @@ h1.tvdb-empty-state__title {
     .tvdb-media { min-height: 0; }
 }
 
-/* A still that does not exist yet gets a low strip, not an empty 16:9 box. */
-.tvdb-media.is-wide.is-empty {
-    aspect-ratio: auto;
-    min-height: 0;
-    height: 6rem;
-}
-
-.tvdb-media.is-wide.is-empty::after {
-    content: none;
-}
-
-.tvdb-media__placeholder {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--tvdb-space-2);
-    padding-bottom: var(--tvdb-space-5);
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-on-ink-faint);
-}
-
-.tvdb-slate,
 .tvdb-slate--inline {
     display: inline-flex;
     align-items: center;
     gap: var(--tvdb-space-2);
+    padding: 0.1rem var(--tvdb-space-2);
     border: 1px solid var(--tvdb-signal-halo);
     border-radius: var(--tvdb-radius-sm);
+    background: var(--tvdb-ink-2);
     font-family: var(--tvdb-font-mono);
     font-size: var(--tvdb-text-xs);
     letter-spacing: 0.04em;
     color: var(--tvdb-on-ink);
-}
-
-.tvdb-slate {
-    position: absolute;
-    left: var(--tvdb-space-3);
-    bottom: var(--tvdb-space-3);
-    padding: var(--tvdb-space-1) var(--tvdb-space-2);
-    background: var(--tvdb-scrim-strong);
-}
-
-.tvdb-slate--inline {
-    padding: 0.1rem var(--tvdb-space-2);
-    background: var(--tvdb-ink-2);
 }
 
 .tvdb-dot {
@@ -737,31 +684,6 @@ h1.tvdb-empty-state__title {
     flex-wrap: wrap;
     align-items: center;
     gap: var(--tvdb-space-2) var(--tvdb-space-5);
-}
-
-/* Secondary facts as a quiet label–value list. */
-.tvdb-facts-quiet {
-    display: flex;
-    flex-direction: column;
-    gap: var(--tvdb-space-1);
-    margin: 0;
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
-}
-
-.tvdb-facts-quiet > div {
-    display: flex;
-    gap: var(--tvdb-space-3);
-}
-
-.tvdb-facts-quiet dt {
-    flex: 0 0 6.5rem;
-    font-weight: 500;
-}
-
-.tvdb-facts-quiet dd {
-    margin: 0;
-    color: var(--tvdb-text);
 }
 
 /* The last line of a detail page: where the data comes from. */
@@ -939,44 +861,9 @@ dl.row dd a.tvdb-inline-edit {
 
 /* ---- Ratings ------------------------------------------------------------------ */
 
-.tvdb-rating {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0 var(--tvdb-space-2);
-}
-
 .tvdb-rating-star {
     align-self: center;
     color: var(--tvdb-signal);
-}
-
-.tvdb-rating-score {
-    font-family: var(--tvdb-font-mono);
-    white-space: nowrap;
-}
-
-.tvdb-rating-score strong {
-    font-size: 1.1em;
-    font-weight: 500;
-    color: var(--tvdb-text);
-}
-
-.tvdb-rating-votes {
-    font-size: var(--tvdb-text-sm);
-    color: var(--tvdb-text-muted);
-}
-
-/* Everything rating-related on an episode, in one tile. */
-.tvdb-rating-panel {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--tvdb-space-2) var(--tvdb-space-5);
-    padding: var(--tvdb-space-3) var(--tvdb-space-4);
-    background: var(--tvdb-paper-dim);
-    border: 1px solid var(--tvdb-ink-line);
-    border-radius: var(--tvdb-radius-md);
 }
 
 /* "Your rating": ten pills, each a submit button (the _RatingWidget partial).
@@ -1160,7 +1047,7 @@ dl.row dd a.tvdb-inline-edit {
 /* ---- Titles in lists and on cards ---------------------------------------------------
    Two styles and no others. A row in a list (episode, search result, import
    row, notification, push device) has a title at body size; a card (poster, upcoming,
-   liked episode, person) has one a step smaller. Both are the UI face,
+   liked episode, person, Episode Details' Up next and previous/next) has one a step smaller. Both are the UI face,
    semibold. */
 .tvdb-ep__title,
 .tvdb-result__title,
@@ -1178,7 +1065,9 @@ dl.row dd a.tvdb-inline-edit {
 .tvdb-upcoming-series,
 .tvdb-series-title,
 .tvdb-fav-episode-show,
-.tvdb-person__name {
+.tvdb-person__name,
+.tvdb-up-next__title,
+.tvdb-episode-nav__title {
     font-size: var(--tvdb-text-sm);
     font-weight: 600;
     line-height: var(--tvdb-leading-snug);
@@ -1931,12 +1820,50 @@ dl.row dd a.tvdb-inline-edit {
     object-position: center 20%;
 }
 
-.tvdb-hero.has-art::before {
+/* Three shades over the art (see --tvdb-hero-shade in tokens.css), all at
+   z-index -1 in the hero's stacking context, painted in this order: the top
+   shade, the heading block's (.tvdb-hero__head::before, from the title down,
+   whatever the title's height in the hero), and the end shade. */
+.tvdb-hero.has-art::before,
+.tvdb-hero.has-art::after {
     content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
+    pointer-events: none;
+}
+
+.tvdb-hero.has-art::before {
     background: var(--tvdb-hero-shade);
+}
+
+.tvdb-hero.has-art::after {
+    background: var(--tvdb-hero-end-shade);
+}
+
+/* From the heading block down, across the whole hero (its overflow clips it). */
+.tvdb-hero.has-art .tvdb-hero__head::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: calc(var(--tvdb-space-6) * -1);
+    right: -100vw;
+    bottom: -100vh;
+    left: -100vw;
+    background: var(--tvdb-hero-text-shade);
+    pointer-events: none;
+}
+
+/* With art, a band between the way back and the title where the picture shows:
+   on a phone only when there is no poster (a poster's row is that band). */
+.tvdb-hero--no-poster.has-art .tvdb-hero__back {
+    margin-bottom: var(--tvdb-space-7);
+}
+
+@media (min-width: 576px) {
+    .tvdb-hero.has-art .tvdb-hero__back {
+        margin-bottom: calc(var(--tvdb-space-7) * 2);
+    }
 }
 
 .tvdb-hero__inner {
@@ -1950,8 +1877,17 @@ dl.row dd a.tvdb-inline-edit {
 
 .tvdb-hero__back {
     align-self: flex-start;
+    max-width: 100%;
     margin-bottom: 0;
     color: var(--tvdb-on-ink-muted);
+}
+
+/* One line, so it stays on the shade behind it (an episode's way back is its series' name). */
+.tvdb-hero__back-text {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .tvdb-hero__back:hover,
@@ -1968,8 +1904,8 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 .tvdb-hero__poster {
-    flex: 0 0 132px;
-    width: 132px;
+    flex: 0 0 var(--tvdb-width-hero-poster);
+    width: var(--tvdb-width-hero-poster);
     min-height: 0;
     margin-inline: 0;
     border-radius: var(--tvdb-radius-md);
@@ -1977,8 +1913,30 @@ dl.row dd a.tvdb-inline-edit {
 }
 
 .tvdb-hero__head {
+    position: relative;
     flex: 1 1 18rem;
     min-width: 0;
+}
+
+/* No poster (an episode): the heading block keeps the poster's height, so the
+   hero is as tall as a series' and the title sits at the same place. */
+.tvdb-hero--no-poster .tvdb-hero__title-row {
+    min-height: calc(var(--tvdb-width-hero-poster) * 3 / 2);
+}
+
+/* What the title belongs to (an episode's series), above it. */
+.tvdb-hero__parent {
+    display: inline-block;
+    margin-bottom: var(--tvdb-space-1);
+    font-size: var(--tvdb-text-md);
+    font-weight: 600;
+    color: var(--tvdb-on-ink);
+    text-shadow: var(--tvdb-text-shadow-on-art);
+}
+
+.tvdb-hero__parent:hover,
+.tvdb-hero__parent:focus-visible {
+    color: var(--tvdb-signal);
 }
 
 .tvdb-hero__chips {
@@ -2129,6 +2087,69 @@ dl.row dd a.tvdb-inline-edit {
     color: var(--tvdb-on-ink-muted);
 }
 
+/* ---- Up next (the _UpNextCard partial) -------------------------------------------------
+   Episode Details' next episode, under the action row: on paper like the
+   sign-in card. The still, the text (one line for the title, with an
+   ellipsis), then the 44px control of Series Details' rows (.tvdb-ep-mark). */
+
+.tvdb-up-next {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--tvdb-space-3);
+    padding: var(--tvdb-space-2) var(--tvdb-space-3) var(--tvdb-space-2) var(--tvdb-space-2);
+    border: 1px solid var(--tvdb-ink-line);
+    border-radius: var(--tvdb-radius-md);
+    background: var(--tvdb-paper);
+    color: var(--tvdb-text);
+}
+
+.tvdb-up-next__still {
+    position: relative;
+    width: 112px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--tvdb-radius-sm);
+    background: var(--tvdb-media-bg);
+}
+
+.tvdb-up-next__still img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tvdb-up-next__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.tvdb-up-next__eyebrow {
+    margin: 0;
+}
+
+.tvdb-up-next__title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.tvdb-up-next__date {
+    font-size: var(--tvdb-text-sm);
+}
+
+.tvdb-up-next__control {
+    display: flex;
+}
+
+@media (max-width: 575.98px) {
+    .tvdb-up-next__still {
+        width: 88px;
+    }
+}
+
 /* ---- Title actions (the _TitleActions partial) -------------------------------------------
    One full-width primary button (or the quiet status box), then three 56px
    square icon buttons: "⋯", the heart and Share. On the dark frame. */
@@ -2191,6 +2212,16 @@ dl.row dd a.tvdb-inline-edit {
     border: 1px solid var(--tvdb-ok-edge);
     border-radius: var(--tvdb-radius-md);
     background: var(--tvdb-ok-tint);
+}
+
+/* Something still to come, not something done: the frame's quiet colours. */
+.tvdb-status-box--neutral {
+    border-color: var(--tvdb-on-ink-line);
+    background: var(--tvdb-on-ink-wash);
+}
+
+.tvdb-status-box--neutral .tvdb-status-box__icon {
+    color: var(--tvdb-on-ink-muted);
 }
 
 .tvdb-status-box__icon {

@@ -32,6 +32,14 @@ public sealed record Episode
     public IReadOnlyList<EpisodeAward> Awards { get; init; } = [];
     public IReadOnlyList<EpisodeContentRating> ContentRatings { get; init; } = [];
     public IReadOnlyList<EpisodeRemoteId> RemoteIds { get; init; } = [];
+
+    /// <summary>
+    /// The people TheTVDB credits on this episode (its extended record's
+    /// <c>characters</c>): guest stars, hosts and musical guests, and the
+    /// episode's directors and writers. Empty on a record cached before
+    /// 2026-11-27, until it is next refreshed.
+    /// </summary>
+    public IReadOnlyList<Character> Characters { get; init; } = [];
 }
 
 public sealed class EpisodeRemoteId
