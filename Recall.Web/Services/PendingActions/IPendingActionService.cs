@@ -25,8 +25,12 @@ public interface IPendingActionService
     Task<PendingActionOutcome> CompleteAsync(Guid userId, PendingAction action, CancellationToken cancellationToken = default);
 }
 
-/// <summary>The sign-in page's context: the sentence, the one after it, and the title's poster when it is cached.</summary>
-public sealed record PendingActionPrompt(string Lead, string Detail, string? PosterUrl);
+/// <summary>
+/// The sign-in page's context: the sentence, the one after it, and the title's
+/// poster when it is cached; and for "Check your inbox", what happens once the
+/// visitor has signed in ("Once you're signed in, we'll add Silo to your library.").
+/// </summary>
+public sealed record PendingActionPrompt(string Lead, string Detail, string? PosterUrl, string AfterSignIn);
 
 public enum PendingOutcomeTone
 {

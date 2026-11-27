@@ -96,6 +96,19 @@ public sealed class PendingActionServiceTests
         prompt.PosterUrl.Should().NotBeNull("the series' or the movie's poster");
     }
 
+    [TestCase(PendingActionKind.AddSeries, SeriesId, null, "Once you're signed in, we'll add Breaking Bad to your library.")]
+    [TestCase(PendingActionKind.RateSeries, SeriesId, 9, "Once you're signed in, we'll rate Breaking Bad 9 out of 10.")]
+    [TestCase(PendingActionKind.LikeMovie, MovieId, null, "Once you're signed in, we'll add Heat to your favorites.")]
+    [TestCase(PendingActionKind.AddMovieToWatchlist, MovieId, null, "Once you're signed in, we'll add Heat to your watchlist.")]
+    [TestCase(PendingActionKind.MarkMovieWatched, MovieId, null, "Once you're signed in, we'll mark Heat as watched.")]
+    [TestCase(PendingActionKind.MarkEpisodeWatched, EpisodeId, null, "Once you're signed in, we'll mark S03E01 as watched.")]
+    public async Task DescribeAsync_Should_SayWhatHappensAfterSignIn_ForCheckYourInbox(PendingActionKind kind, int id, int? rating, string after)
+    {
+        Cached();
+
+        (await _sut.DescribeAsync(new PendingAction(kind, id, rating))).AfterSignIn.Should().Be(after);
+    }
+
     [Test]
     public async Task DescribeAsync_Should_SpeakGenerally_WhenTheTitleIsNotCached()
     {
@@ -104,7 +117,8 @@ public sealed class PendingActionServiceTests
         (await _sut.DescribeAsync(new PendingAction(PendingActionKind.AddSeries, SeriesId))).Lead
             .Should().Be("Sign in to add this series to your library.");
         (await _sut.DescribeAsync(new PendingAction(PendingActionKind.MarkEpisodeWatched, EpisodeId))).Should()
-            .Be(new PendingActionPrompt("Sign in to mark this episode as watched.", "Recall keeps your place in every series you watch. Free, no password.", null));
+            .Be(new PendingActionPrompt("Sign in to mark this episode as watched.", "Recall keeps your place in every series you watch. Free, no password.", null,
+                "Once you're signed in, we'll mark this episode as watched."));
     }
 
     // ---- doing it after sign-in -------------------------------------------------------

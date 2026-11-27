@@ -58,6 +58,20 @@ public sealed class PendingActionService(
         var movie1 = name ?? "this movie";
         var episode1 = name ?? "this episode";
 
+        var after = "Once you're signed in, we'll " + action.Kind switch
+        {
+            PendingActionKind.AddSeries => $"add {series1} to your library.",
+            PendingActionKind.AddMovieToWatchlist => $"add {movie1} to your watchlist.",
+            PendingActionKind.MarkMovieWatched => $"mark {movie1} as watched.",
+            PendingActionKind.MarkEpisodeWatched => $"mark {episode1} as watched.",
+            PendingActionKind.LikeSeries => $"add {series1} to your favorites.",
+            PendingActionKind.LikeMovie => $"add {movie1} to your favorites.",
+            PendingActionKind.LikeEpisode => $"add {episode1} to your favorites.",
+            PendingActionKind.RateSeries => $"rate {series1} {action.Rating} out of 10.",
+            PendingActionKind.RateMovie => $"rate {movie1} {action.Rating} out of 10.",
+            _ => $"rate {episode1} {action.Rating} out of 10."
+        };
+
         var (lead, detail) = action.Kind switch
         {
             PendingActionKind.AddSeries => ($"Sign in to add {series1} to your library.", "You'll get a notification when new episodes air."),
@@ -73,7 +87,7 @@ public sealed class PendingActionService(
             _ => ($"Sign in to rate {episode1} {action.Rating} out of 10.", "Your rating counts towards the Recall rating.")
         };
 
-        return new PendingActionPrompt(lead, $"{detail} {FreeNoPassword}", string.IsNullOrWhiteSpace(poster) ? null : poster);
+        return new PendingActionPrompt(lead, $"{detail} {FreeNoPassword}", string.IsNullOrWhiteSpace(poster) ? null : poster, after);
     }
 
     public async Task<PendingActionOutcome> CompleteAsync(Guid userId, PendingAction action, CancellationToken cancellationToken = default)

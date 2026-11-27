@@ -344,4 +344,50 @@ public sealed class SignUpPathPipelineTests : PendingActionPipelineFixture
         });
         Counted().Should().NotContainKey(SiteMetricKeys.SignedInDirect);
     }
+
+    [Test]
+    public async Task CheckYourInbox_Should_SayWhatHappensAfterSignIn_TheSameForAnyAddress()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.AppUsers.Add(new AppUserEntity { Id = Guid.NewGuid(), Username = "inbox-known", Email = "inbox-known@test.local" });
+            await db.SaveChangesAsync();
+        }
+
+        string Inbox(string html) => Regex.Replace(Decoded(html), "inbox-(known|fresh|second)@test.local", "ADDRESS");
+
+        // The same address again (an account now) and a new one: the page must read the same.
+        var pages = new List<string>();
+        foreach (var address in new[] { "inbox-known@test.local", "inbox-fresh@test.local" })
+        {
+            using var browser = Browser();
+            var pressed = await PressAsync(browser, $"/Series/Details/{SeriesId}", "ToggleLibrary");
+            var login = await browser.GetStringAsync(pressed.Headers.Location!.OriginalString);
+            var sent = await browser.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["Email"] = address,
+                ["ReturnUrl"] = $"/Series/Details/{SeriesId}",
+                ["FormRenderedAtUtc"] = DateTimeOffset.UtcNow.AddSeconds(-30).ToUnixTimeMilliseconds().ToString(),
+                ["__RequestVerificationToken"] = Antiforgery(login)
+            }));
+            pages.Add(Inbox(await sent.Content.ReadAsStringAsync()));
+        }
+
+        Regex.Match(pages[0], "<p class=\"tvdb-signin-after\" id=\"signInAfter\">.*?</p>").Value
+            .Should().Contain($"Once you're signed in, we'll add {RecallWebApplicationFactory.KnownSeriesName} to your library.");
+        pages[0].Should().Contain("Check your inbox").And.Contain("If this address can sign in, a link is on its way to");
+        Regex.Replace(pages[0], "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"[^\"]+\"", "")
+            .Should().Be(Regex.Replace(pages[1], "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"[^\"]+\"", ""),
+                "nothing on the page says which address has an account");
+
+        using var plain = Browser();
+        var noPress = Decoded(await (await plain.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = "inbox-plain@test.local",
+            ["FormRenderedAtUtc"] = DateTimeOffset.UtcNow.AddSeconds(-30).ToUnixTimeMilliseconds().ToString(),
+            ["__RequestVerificationToken"] = Antiforgery(await plain.GetStringAsync("/Account/Login"))
+        }))).Content.ReadAsStringAsync());
+        noPress.Should().Contain("Check your inbox").And.NotContain("signInAfter", "without a press the page is as it was");
+    }
 }

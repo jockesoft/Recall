@@ -23,6 +23,14 @@
                 The link and the code in it expire in @Model.LinkLifetimeMinutes minute@(Model.LinkLifetimeMinutes == 1 ? "" : "s") and work once.
                 Nothing after a few minutes? Check your spam folder.
             </p>
+            @if (Model.Prompt is { } waiting)
+            {
+                @* What the visitor pressed, done once they have signed in in this browser. The same
+                   line whatever the address, so it says nothing about whether it has an account. *@
+                <p class="tvdb-signin-after" id="signInAfter">
+                    <i class="@Icons.Check" aria-hidden="true"></i> @waiting.AfterSignIn
+                </p>
+            }
 
             @* For where the link doesn't open (a Home Screen app keeps its own sign-in):
                the address rides along in the form, so no cookie of ours is needed. *@
