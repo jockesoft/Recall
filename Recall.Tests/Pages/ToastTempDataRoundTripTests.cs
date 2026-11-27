@@ -133,6 +133,18 @@ public sealed class ToastTempDataRoundTripTests
     }
 
     [Test]
+    public void AnActionAlreadyDoneAfterSignIn_Should_BeAnInfoToast_WithNothingToPress()
+    {
+        var tempData = CookieTempData.RoundTrip(p =>
+            p.SetPendingActionToast(new PendingActionOutcome(PendingOutcomeTone.Info, "Heat is already on your watchlist."), Today));
+
+        var toast = ToastMessagesModel.From(tempData).Toasts.Should().ContainSingle().Subject;
+        toast.Kind.Should().Be(ToastKind.Info);
+        toast.HasAction.Should().BeFalse("no Undo: the account had it before signing in");
+        tempData.Keys.Should().NotContain(k => k.StartsWith("Toast.Undo", StringComparison.Ordinal));
+    }
+
+    [Test]
     public void TheUndoOfADiscoverHide_Should_SurviveTheCookie()
     {
         var tempData = CookieTempData.RoundTrip(p =>

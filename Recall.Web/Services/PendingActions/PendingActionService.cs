@@ -239,6 +239,10 @@ public sealed class PendingActionService(
     private async Task<PendingActionOutcome> RateAsync(
         Guid userId, RatingTargetType type, int targetId, int seriesId, string name, int value, CancellationToken cancellationToken)
     {
+        // Nothing to change, and nothing to say it was changed: the account had this rating already.
+        if (await ratingRepository.GetRatingAsync(userId, type, targetId, cancellationToken) == value)
+            return new PendingActionOutcome(PendingOutcomeTone.Info, $"You had already rated {name} {value} out of 10.");
+
         await ratingRepository.RateAsync(userId, type, targetId, seriesId, value, cancellationToken);
         return new PendingActionOutcome(PendingOutcomeTone.Success, $"Rated {name} {value} out of 10.");
     }

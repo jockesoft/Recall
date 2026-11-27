@@ -19,7 +19,13 @@ public interface IPendingActionService
     /// <summary>
     /// Does the action for <paramref name="userId"/> through the same services
     /// the Details pages use, with their checks, and says what happened for the
-    /// toast. Never throws for a failure of the action itself (the sign-in has
+    /// toast. When the account already had what the action asks for (the series
+    /// in the library, the movie on the watchlist or watched, the episode
+    /// watched, the like, the same rating) nothing is changed and the toast is
+    /// an info one with no Undo: an Undo is only ever offered for something this
+    /// action itself added (<see cref="PendingActionOutcome.UndoAdd"/>, or the
+    /// rows of the mark's own batch), so it can never take away anything the
+    /// account had before signing in. Never throws for a failure of the action itself (the sign-in has
     /// already happened); the caller's own cancellation still propagates.
     /// </summary>
     Task<PendingActionOutcome> CompleteAsync(Guid userId, PendingAction action, CancellationToken cancellationToken = default);

@@ -225,6 +225,33 @@ public sealed class PendingActionPipelineTests : PendingActionPipelineFixture
     }
 
     [Test]
+    public async Task AMovieAlreadyOnTheWatchlist_Should_LandWithAnAlreadyToast_NoUndo_AndStayThere()
+    {
+        var userId = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.AppUsers.Add(new AppUserEntity { Id = userId, Username = "had-it", Email = "had-it@test.local" });
+            db.TrackedMovies.Add(new TrackedMovieEntity { Id = Guid.NewGuid(), UserId = userId, TvdbId = MovieId, Name = MovieName });
+            await db.SaveChangesAsync();
+        }
+
+        using var browser = Browser();
+        var press = await PressAsync(browser, $"/Movies/Details/{MovieId}", "ToggleWatchlist");
+        var (_, link, _) = await RequestEmailAsync(browser, press.Headers.Location!.OriginalString, "had-it@test.local");
+        var signIn = await browser.GetAsync(link);
+
+        signIn.Headers.Location!.OriginalString.Should().Be($"/Movies/Details/{MovieId}");
+        var landed = Decoded(await browser.GetStringAsync(signIn.Headers.Location.OriginalString));
+        landed.Should().Contain($"{MovieName} is already on your watchlist.");
+        landed.Should().NotContain("handler=UndoWatchlist", "there is nothing this sign-in added to take back");
+
+        using var check = _factory.Services.CreateScope();
+        (await check.ServiceProvider.GetRequiredService<AppDbContext>().TrackedMovies.CountAsync(m => m.UserId == userId && m.TvdbId == MovieId))
+            .Should().Be(1, "the watchlist entry the account had is still there");
+    }
+
+    [Test]
     public async Task ARating_Should_KeepItsValue_AndBeSaved()
     {
         using var browser = Browser();

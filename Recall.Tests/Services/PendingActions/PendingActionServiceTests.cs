@@ -182,6 +182,7 @@ public sealed class PendingActionServiceTests
     public async Task RateMovie_Should_SaveTheRating()
     {
         Exists();
+        _ratings.Setup(x => x.GetRatingAsync(UserId, RatingTargetType.Movie, MovieId, It.IsAny<CancellationToken>())).ReturnsAsync(6);
         _ratings.Setup(x => x.RateAsync(UserId, RatingTargetType.Movie, MovieId, MovieId, 8, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
@@ -249,6 +250,83 @@ public sealed class PendingActionServiceTests
 
         (await _sut.CompleteAsync(UserId, new PendingAction(PendingActionKind.LikeEpisode, EpisodeId))).Tone
             .Should().Be(PendingOutcomeTone.Error);
+    }
+
+    // ---- already done for the account: an info toast, nothing changed, no Undo ----------
+
+    public static IEnumerable<TestCaseData> AlreadyDone()
+    {
+        yield return new TestCaseData(new PendingAction(PendingActionKind.AddSeries, SeriesId),
+            (Action<PendingActionServiceTests>)(t => t._library.Setup(x => x.AddAsync(UserId, SeriesId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new AddSeriesResult(AddSeriesOutcome.AlreadyInLibrary))),
+            "Breaking Bad is already in your library.").SetName("Already in the library");
+        yield return new TestCaseData(new PendingAction(PendingActionKind.AddMovieToWatchlist, MovieId),
+            (Action<PendingActionServiceTests>)(t => t._movies.Setup(x => x.AddToWatchlistAsync(UserId, MovieId, "Heat", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(MovieWatchlistOutcome.AlreadyOnWatchlist)),
+            "Heat is already on your watchlist.").SetName("Already on the watchlist");
+        yield return new TestCaseData(new PendingAction(PendingActionKind.AddMovieToWatchlist, MovieId),
+            (Action<PendingActionServiceTests>)(t => t._movies.Setup(x => x.AddToWatchlistAsync(UserId, MovieId, "Heat", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(MovieWatchlistOutcome.AlreadyWatched)),
+            "You've already watched Heat.").SetName("On the watchlist asked for, the movie already watched");
+        yield return new TestCaseData(new PendingAction(PendingActionKind.MarkMovieWatched, MovieId),
+            (Action<PendingActionServiceTests>)(t => t._movies.Setup(x => x.MarkWatchedAsync(UserId, MovieId, WatchSource.Single, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true)),
+            "You had already watched Heat.").SetName("The movie already watched");
+        yield return new TestCaseData(new PendingAction(PendingActionKind.MarkEpisodeWatched, EpisodeId),
+            (Action<PendingActionServiceTests>)(t => t._progress.Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, new WatchedBatch(0, Guid.NewGuid())))),
+            "You had already watched S03E01.").SetName("The episode already watched");
+        foreach (var (kind, type, id, name) in new[]
+                 {
+                     (PendingActionKind.LikeSeries, LikeTargetType.Series, SeriesId, "Breaking Bad"),
+                     (PendingActionKind.LikeMovie, LikeTargetType.Movie, MovieId, "Heat"),
+                     (PendingActionKind.LikeEpisode, LikeTargetType.Episode, EpisodeId, "S03E01")
+                 })
+        {
+            yield return new TestCaseData(new PendingAction(kind, id),
+                (Action<PendingActionServiceTests>)(t => t._likes.Setup(x => x.IsLikedAsync(UserId, type, id, It.IsAny<CancellationToken>())).ReturnsAsync(true)),
+                $"You already like {name}.").SetName($"Already liked: {kind}");
+        }
+        yield return new TestCaseData(new PendingAction(PendingActionKind.RateEpisode, EpisodeId, 9),
+            (Action<PendingActionServiceTests>)(t => t._ratings.Setup(x => x.GetRatingAsync(UserId, RatingTargetType.Episode, EpisodeId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(9)),
+            "You had already rated S03E01 9 out of 10.").SetName("Already given the same rating");
+    }
+
+    [TestCaseSource(nameof(AlreadyDone))]
+    public async Task AnActionTheAccountHadAlready_Should_ChangeNothing_AndOfferNoUndo(
+        PendingAction action, Action<PendingActionServiceTests> already, string message)
+    {
+        Exists();
+        already(this);
+
+        var outcome = await _sut.CompleteAsync(UserId, action);
+
+        // The mocks are strict: a write that was not set up up there would have thrown.
+        outcome.Should().Be(new PendingActionOutcome(PendingOutcomeTone.Info, message));
+        outcome.UndoAdd.Should().BeNull();
+        outcome.Batch.Should().BeNull();
+        outcome.WatchedSeriesId.Should().BeNull();
+        _likes.Verify(x => x.ToggleAsync(It.IsAny<Guid>(), It.IsAny<LikeTargetType>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _ratings.Verify(x => x.RateAsync(It.IsAny<Guid>(), It.IsAny<RatingTargetType>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AnUndo_Should_OnlyEverBeOffered_ForWhatTheActionItselfAdded()
+    {
+        Exists();
+        _library.Setup(x => x.AddAsync(UserId, SeriesId, It.IsAny<CancellationToken>())).ReturnsAsync(new AddSeriesResult(AddSeriesOutcome.Added, "Breaking Bad"));
+        _movies.Setup(x => x.AddToWatchlistAsync(UserId, MovieId, "Heat", It.IsAny<CancellationToken>())).ReturnsAsync(MovieWatchlistOutcome.Added);
+        var batch = new WatchedBatch(1, Guid.NewGuid());
+        _progress.Setup(x => x.MarkEpisodeWatchedUndoablyAsync(UserId, SeriesId, EpisodeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UndoableEpisodeWatch(EpisodeWatchOutcome.MarkedWatched, batch));
+
+        (await _sut.CompleteAsync(UserId, new PendingAction(PendingActionKind.AddSeries, SeriesId))).UndoAdd
+            .Should().Be(new PendingUndo(PendingTitle.Series, SeriesId), "the library row was made by this action");
+        (await _sut.CompleteAsync(UserId, new PendingAction(PendingActionKind.AddMovieToWatchlist, MovieId))).UndoAdd
+            .Should().Be(new PendingUndo(PendingTitle.Movie, MovieId), "the watchlist row was made by this action");
+        (await _sut.CompleteAsync(UserId, new PendingAction(PendingActionKind.MarkEpisodeWatched, EpisodeId))).Batch
+            .Should().Be(batch, "the Undo of a mark removes only the rows of its own batch");
     }
 
     [Test]
