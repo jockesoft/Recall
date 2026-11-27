@@ -231,6 +231,7 @@ public sealed class EpisodeDetailsPageTests
         actions.Primary.Should().BeNull();
         actions.Status!.Text.Should().Be("Airs");
         actions.Status.ReleaseInLabel.Should().BeTrue("\"Airs Sat, Dec 5 · 11:30 PM ET\" on one line");
+        actions.Status.Neutral.Should().BeTrue("green is for something done, not something to come");
         actions.Status.Release!.Release.DateTimeAttribute.Should().Be("2026-12-06T04:30:00Z");
         actions.Menu.Should().BeEmpty();
     }
@@ -275,6 +276,15 @@ public sealed class EpisodeDetailsPageTests
         _sut.Position.WatchedText.Should().Be("1 of 2 watched");
         _sut.Position.HasBar.Should().BeTrue();
         _sut.Position.Percent.Should().Be(50);
+    }
+
+    [Test]
+    public void ASeasonWithNothingReleased_Should_SayNoWatchedCount_AndHaveNoBar()
+    {
+        var position = new TitlePositionModel("Episode 1 of 1 · Season 53", WatchedCount: 0, ReleasedCount: 0, SeasonNumber: 53);
+
+        position.WatchedText.Should().BeNull("not \"0 of 0 watched\"");
+        position.HasBar.Should().BeFalse();
     }
 
     [Test]

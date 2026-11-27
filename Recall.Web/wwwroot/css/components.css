@@ -2166,6 +2166,16 @@ dl.row dd a.tvdb-inline-edit {
     background: var(--tvdb-ok-tint);
 }
 
+/* Something still to come, not something done: the frame's quiet colours. */
+.tvdb-status-box--neutral {
+    border-color: var(--tvdb-on-ink-line);
+    background: var(--tvdb-on-ink-wash);
+}
+
+.tvdb-status-box--neutral .tvdb-status-box__icon {
+    color: var(--tvdb-on-ink-muted);
+}
+
 .tvdb-status-box__icon {
     flex: none;
     font-size: var(--tvdb-text-xl);

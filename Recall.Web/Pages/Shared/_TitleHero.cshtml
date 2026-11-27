@@ -66,7 +66,20 @@
                 {
                     @* "S52 · E1 · 1 h 8 min · Airs <time>": the code is data (mono), the release time the viewer's own. *@
                     <p class="tvdb-hero__meta">@if (hasCode)
-                        {<span class="tvdb-mono">@Model.MetaCode</span>}@if (hasCode && (hasText || metaRelease is not null))
+                        {
+                            @* The codes in mono, the dots between them and a word ("Special") not: "S52 · E1". *@
+                            var codeParts = Model.MetaCode!.Split(" · ");
+                            for (var i = 0; i < codeParts.Length; i++)
+                            {
+                                var part = codeParts[i];
+                                if (i > 0)
+                                {<text> · </text>}
+                                if (part.Length > 1 && char.IsDigit(part[1]))
+                                {<span class="tvdb-mono">@part</span>}
+                                else
+                                {<text>@part</text>}
+                            }
+                        }@if (hasCode && (hasText || metaRelease is not null))
                         {<text> · </text>}@Model.Meta@if (hasText && metaRelease is not null)
                         {<text> · </text>}@if (metaRelease is not null)
                         {<text>@metaRelease.Prefix </text><partial name="_ReleaseTime" model="metaRelease.Release" />}</p>

@@ -130,7 +130,8 @@ public sealed class EpisodeDetailsPipelineTests
         html.Should().Contain("<a class=\"tvdb-back-link tvdb-hero__back\" href=\"/Series/Details/79\">");
         html.Should().Contain("<a class=\"tvdb-hero__parent tvdb-link-plain\" href=\"/Series/Details/79\">Episode Test Series</a>");
         html.Should().Contain("<h1 class=\"tvdb-hero__title\">Pilot</h1>");
-        html.Should().Contain("<p class=\"tvdb-hero__meta\"><span class=\"tvdb-mono\">S01 · E1</span> · 1 h 8 min · Aired Jan 5, 2020</p>");
+        html.Should().Contain("<p class=\"tvdb-hero__meta\"><span class=\"tvdb-mono\">S01</span> · <span class=\"tvdb-mono\">E1</span> · 1 h 8 min · Aired Jan 5, 2020</p>",
+            "the code is data in mono, the dot between its parts is not");
     }
 
     [Test]

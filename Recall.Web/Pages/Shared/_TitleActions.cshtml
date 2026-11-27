@@ -52,7 +52,7 @@
         }
         else if (Model.Status is { } status)
         {
-            <div class="tvdb-status-box tvdb-title-actions__primary">
+            <div class="tvdb-status-box tvdb-title-actions__primary @(status.Neutral ? "tvdb-status-box--neutral" : "")">
                 <i class="@status.Icon tvdb-status-box__icon" aria-hidden="true"></i>
                 <div class="tvdb-status-box__text">
                     @if (status.ReleaseInLabel && status.Release is not null)

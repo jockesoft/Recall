@@ -97,6 +97,7 @@ public sealed record TitleMetaRelease(string Prefix, ReleaseTimeModel Release);
 /// <param name="WatchedCount">Null for a visitor and for a special: no watched line, no bar.</param>
 public sealed record TitlePositionModel(string Label, int? WatchedCount = null, int ReleasedCount = 0, int? SeasonNumber = null)
 {
+    /// <summary>Nothing of the season released yet: no "0 of 0", no bar.</summary>
     public bool HasBar => WatchedCount is not null && ReleasedCount > 0;
 
     /// <summary>Whole percent, rounded down, like the series' progress.</summary>
@@ -105,7 +106,7 @@ public sealed record TitlePositionModel(string Label, int? WatchedCount = null, 
         : (int)Math.Floor(100.0 * watched / ReleasedCount);
 
     /// <summary>"3 of 21 watched".</summary>
-    public string? WatchedText => WatchedCount is { } watched
+    public string? WatchedText => WatchedCount is { } watched && ReleasedCount > 0
         ? $"{StatsFormat.Number(watched)} of {StatsFormat.Number(ReleasedCount)} watched"
         : null;
 }
@@ -306,7 +307,12 @@ public sealed record TitleNotice(string Text, string Icon);
 /// With <paramref name="ReleaseInLabel"/> the release time ends the first line
 /// instead ("Airs Fri, Nov 27 · 8:00 PM ET": an episode not released yet).
 /// </remarks>
-public sealed record TitleStatusBox(string Text, string Icon, string? Detail = null, ReleaseTimeModel? Release = null, bool ReleaseInLabel = false);
+/// <remarks>
+/// <paramref name="Neutral"/>: a box that is not something done (green), but
+/// something still to come ("Airs …" on an episode not released yet).
+/// </remarks>
+public sealed record TitleStatusBox(
+    string Text, string Icon, string? Detail = null, ReleaseTimeModel? Release = null, bool ReleaseInLabel = false, bool Neutral = false);
 
 /// <summary>
 /// One entry in the "⋯" menu: a POST to a page handler, or (with

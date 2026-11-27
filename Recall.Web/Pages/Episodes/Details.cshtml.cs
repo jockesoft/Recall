@@ -266,8 +266,8 @@ public sealed class DetailsModel(
             // Marking goes by the air date anywhere on Earth (AirDate.MayBeMarked):
             // before that, the box says when it is released, in the viewer's time.
             status = Release is { } release
-                ? new TitleStatusBox("Airs", Icons.NotAiredYet, Release: new ReleaseTimeModel(release, Today), ReleaseInLabel: true)
-                : new TitleStatusBox("Not aired yet", Icons.NotAiredYet);
+                ? new TitleStatusBox("Airs", Icons.NotAiredYet, Release: new ReleaseTimeModel(release, Today), ReleaseInLabel: true, Neutral: true)
+                : new TitleStatusBox("Not aired yet", Icons.NotAiredYet, Neutral: true);
         }
         else
         {
